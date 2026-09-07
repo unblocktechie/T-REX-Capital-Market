@@ -47,7 +47,15 @@
     { "key": "roleUid", "value": "", "type": "string" },
     { "key": "menuUid", "value": "", "type": "string" },
     { "key": "permissionUid", "value": "", "type": "string" },
-    { "key": "settingUid", "value": "", "type": "string" }
+    { "key": "settingUid", "value": "", "type": "string" },
+    { "key": "countryUid", "value": "", "type": "string" },
+    { "key": "stateUid", "value": "", "type": "string" },
+    { "key": "cityUid", "value": "", "type": "string" },
+    { "key": "entityTypeUid", "value": "", "type": "string" },
+    { "key": "industryUid", "value": "", "type": "string" },
+    { "key": "documentTypeUid", "value": "", "type": "string" },
+    { "key": "documentUid", "value": "", "type": "string" },
+    { "key": "walletAddress", "value": "0x1111111111111111111111111111111111111111", "type": "string" }
   ],
   "item": [
     {
@@ -385,6 +393,225 @@
           "name": "Delete Permission",
           "request": { "method": "DELETE", "header": [], "url": "{{baseUrl}}/api/v1/permissions/{{permissionUid}}" },
           "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Permission is soft-deleted', () => pm.response.to.have.status(200));"] } }]
+        }
+      ]
+    },
+    {
+      "name": "Organization Onboarding",
+      "description": "Run Organization Options, Countries, States, and Cities first. Run User Login with a verified issuer account to populate userToken. Draft saves allow partial data; completed step saves and final submission enforce the full validation rules.",
+      "auth": {
+        "type": "bearer",
+        "bearer": [{ "key": "token", "value": "{{userToken}}", "type": "string" }]
+      },
+      "item": [
+        {
+          "name": "Organization Options",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/organization-options"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Organization options are returned', () => pm.response.to.have.status(200));",
+            "const data = pm.response.json().data;",
+            "if (data.entityTypes.length) pm.collectionVariables.set('entityTypeUid', data.entityTypes[0].entityTypeUid);",
+            "if (data.industries.length) pm.collectionVariables.set('industryUid', data.industries[0].industryUid);",
+            "const required = data.documentTypes.find((item) => item.isRequired);",
+            "if (required) pm.collectionVariables.set('documentTypeUid', required.documentTypeUid);"
+          ] } }]
+        },
+        {
+          "name": "List Countries",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/locations/countries?page=1&limit=50&search=United%20States"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Countries are returned', () => pm.response.to.have.status(200));",
+            "const rows = pm.response.json().data;",
+            "const country = rows.find((item) => item.countryCode === 'US') || rows[0];",
+            "if (country) pm.collectionVariables.set('countryUid', country.countryUid);"
+          ] } }]
+        },
+        {
+          "name": "List States by Country",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/locations/countries/{{countryUid}}/states?page=1&limit=50&search=California"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('States are returned', () => pm.response.to.have.status(200));",
+            "const rows = pm.response.json().data;",
+            "if (rows.length) pm.collectionVariables.set('stateUid', rows[0].stateUid);"
+          ] } }]
+        },
+        {
+          "name": "List Cities by State",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/locations/states/{{stateUid}}/cities?page=1&limit=50&search=San%20Francisco"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Cities are returned', () => pm.response.to.have.status(200));",
+            "const rows = pm.response.json().data;",
+            "if (rows.length) pm.collectionVariables.set('cityUid', rows[0].cityUid);"
+          ] } }]
+        },
+        {
+          "name": "Get My Organization Form",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/organizations/me"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Organization form is returned', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "Save Company Information Draft",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"legalCompanyName\": \"Acme Financial Holdings Ltd.\",\n  \"isDraft\": true\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/organizations/me/company-information"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Partial company draft is saved', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "Mark Organization User Notified",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/organizations/me/user-notified",
+            "description": "Idempotently sets isUserNotified to true for the current issuer organization."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Organization user is marked notified', () => pm.response.to.have.status(200));",
+            "pm.expect(Boolean(pm.response.json().data.isUserNotified)).to.eql(true);"
+          ] } }]
+        },
+        {
+          "name": "Complete Company Information",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"legalCompanyName\": \"Acme Financial Holdings Ltd.\",\n  \"entityTypeUid\": \"{{entityTypeUid}}\",\n  \"registrationNumber\": \"LEI-5493001KJTIIGC8Y1R12\",\n  \"streetAddress\": \"123 Financial District\",\n  \"countryUid\": \"{{countryUid}}\",\n  \"stateUid\": \"{{stateUid}}\",\n  \"cityUid\": \"{{cityUid}}\",\n  \"postalCode\": \"94105\",\n  \"isDraft\": false\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/organizations/me/company-information"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Company step is completed', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "Complete Jurisdiction",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"countryOfIncorporationUid\": \"{{countryUid}}\",\n  \"dateOfIncorporation\": \"2020-05-16\",\n  \"taxIdentificationNumber\": \"US123456789\",\n  \"industryUid\": \"{{industryUid}}\",\n  \"businessActivity\": \"Asset tokenization and regulated financial services.\",\n  \"website\": \"https://acme.example\",\n  \"isDraft\": false\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/organizations/me/jurisdiction"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Jurisdiction step is completed', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "Complete Beneficial Owners",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"owners\": [\n    {\n      \"fullName\": \"Jane Doe\",\n      \"dateOfBirth\": \"1985-06-15\",\n      \"nationalityCountryUid\": \"{{countryUid}}\",\n      \"ownershipPercentage\": 45,\n      \"isPrimary\": true\n    },\n    {\n      \"fullName\": \"John Doe\",\n      \"dateOfBirth\": \"1980-03-11\",\n      \"nationalityCountryUid\": \"{{countryUid}}\",\n      \"ownershipPercentage\": 30,\n      \"isPrimary\": false\n    }\n  ],\n  \"isDraft\": false\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/organizations/me/beneficial-owners"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Beneficial owners are saved', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "Upload Organization Documents",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "documentTypeUid", "value": "{{documentTypeUid}}", "type": "text" },
+                { "key": "documents", "type": "file", "src": [], "description": "Select one or more PDF, PNG, JPG, or JPEG files (10 MB each by default)." }
+              ]
+            },
+            "url": "{{baseUrl}}/api/v1/organizations/me/documents",
+            "description": "Repeat for every required document type. Set documentTypeUid from Organization Options before each upload."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Documents are uploaded', () => pm.response.to.have.status(201));",
+            "const rows = pm.response.json().data;",
+            "if (rows.length) pm.collectionVariables.set('documentUid', rows[0].documentUid);"
+          ] } }]
+        },
+        {
+          "name": "List Organization Documents",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/organizations/me/documents"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Documents are listed', () => pm.response.to.have.status(200));",
+            "const rows = pm.response.json().data;",
+            "if (rows.length) pm.collectionVariables.set('documentUid', rows[0].documentUid);"
+          ] } }]
+        },
+        {
+          "name": "Download Organization Document",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/organizations/me/documents/{{documentUid}}/download"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Document downloads', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "Optional - Delete Organization Document",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/organizations/me/documents/{{documentUid}}",
+            "description": "Optional destructive test. Run before submission, then re-upload that required document type before submitting."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Document is deleted', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "Submit Organization",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"walletAddress\": \"{{walletAddress}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/organizations/me/submit",
+            "description": "Upload every required document type before submission. Successful submission makes the form read-only."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Organization is submitted', () => pm.response.to.have.status(200));",
+            "pm.expect(pm.response.json().data.status).to.eql('submitted');"
+          ] } }]
         }
       ]
     },

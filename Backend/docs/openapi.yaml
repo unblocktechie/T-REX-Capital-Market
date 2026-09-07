@@ -13,6 +13,8 @@ tags:
   - name: Menus
   - name: Permissions
   - name: General Settings
+  - name: Locations
+  - name: Organization
 
 x-list-operation: &listOperation
   security: [{ bearerAuth: [] }]
@@ -215,6 +217,149 @@ paths:
       responses: { '200': { description: Setting updated }, '404': { $ref: '#/components/responses/NotFound' } }
     delete: { <<: *deleteOperation, tags: [General Settings], summary: Soft-delete a setting }
 
+  /api/v1/locations/countries:
+    get:
+      tags: [Locations]
+      summary: List and search countries
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/LocationLimit' }
+        - { $ref: '#/components/parameters/Search' }
+      responses: { '200': { description: Paginated countries } }
+  /api/v1/locations/countries/{countryUid}/states:
+    get:
+      tags: [Locations]
+      summary: List and search states for a country
+      parameters:
+        - { $ref: '#/components/parameters/CountryUid' }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/LocationLimit' }
+        - { $ref: '#/components/parameters/Search' }
+      responses: { '200': { description: Paginated states }, '404': { $ref: '#/components/responses/NotFound' } }
+  /api/v1/locations/states/{stateUid}/cities:
+    get:
+      tags: [Locations]
+      summary: List and search cities for a state
+      parameters:
+        - { $ref: '#/components/parameters/StateUid' }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/LocationLimit' }
+        - { $ref: '#/components/parameters/Search' }
+      responses: { '200': { description: Paginated cities }, '404': { $ref: '#/components/responses/NotFound' } }
+  /api/v1/organization-options:
+    get:
+      tags: [Organization]
+      summary: Get entity types, industries, and document types
+      responses: { '200': { description: Active organization form options } }
+  /api/v1/organizations/me:
+    get:
+      tags: [Organization]
+      summary: Get the current issuer organization form
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Complete organization form or null }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/organizations/me/user-notified:
+    patch:
+      tags: [Organization]
+      summary: Mark the current organization user as notified
+      description: Idempotently sets isUserNotified to true for the authenticated issuer's organization.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Organization notification flag updated }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/organizations/me/company-information:
+    put:
+      tags: [Organization]
+      summary: Save company information or a partial draft
+      security: [{ bearerAuth: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CompanyInformationInput' } } } }
+      responses:
+        '200': { description: Company information saved }
+        '400': { description: Completed step is incomplete or has an invalid location hierarchy }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/organizations/me/jurisdiction:
+    put:
+      tags: [Organization]
+      summary: Save jurisdiction information or a partial draft
+      security: [{ bearerAuth: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/JurisdictionInput' } } } }
+      responses:
+        '200': { description: Jurisdiction information saved }
+        '400': { description: Completed step is incomplete or contains invalid references }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/organizations/me/beneficial-owners:
+    put:
+      tags: [Organization]
+      summary: Replace beneficial owners or save a partial draft
+      security: [{ bearerAuth: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/BeneficialOwnersInput' } } } }
+      responses:
+        '200': { description: Beneficial owners saved }
+        '400': { description: Owner or ownership rules failed }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/organizations/me/documents:
+    get:
+      tags: [Organization]
+      summary: List uploaded organization documents
+      security: [{ bearerAuth: [] }]
+      responses: { '200': { description: Organization document metadata } }
+    post:
+      tags: [Organization]
+      summary: Upload one or more organization documents
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [documentTypeUid, documents]
+              properties:
+                documentTypeUid: { type: string, format: uuid }
+                documents:
+                  type: array
+                  items: { type: string, format: binary }
+      responses:
+        '201': { description: Documents uploaded }
+        '422': { description: Invalid multipart fields, file type, size, or count }
+  /api/v1/organizations/me/documents/{documentUid}/download:
+    get:
+      tags: [Organization]
+      summary: Download an organization document
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/DocumentUid' }]
+      responses:
+        '200': { description: Document file, content: { application/octet-stream: { schema: { type: string, format: binary } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/organizations/me/documents/{documentUid}:
+    delete:
+      tags: [Organization]
+      summary: Soft-delete an organization document
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/DocumentUid' }]
+      responses:
+        '200': { description: Document deleted }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/organizations/me/submit:
+    post:
+      tags: [Organization]
+      summary: Validate and submit the organization for review
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OrganizationSubmitInput' }
+      responses:
+        '200': { description: Organization submitted }
+        '400': { description: Required form data, owners, or documents are missing }
+        '409': { description: Organization is no longer editable }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -224,12 +369,16 @@ components:
     Search: { in: query, name: search, schema: { type: string, maxLength: 100 } }
     SortBy: { in: query, name: sortBy, schema: { type: string, default: createdAt } }
     SortOrder: { in: query, name: sortOrder, schema: { type: string, enum: [asc, desc], default: desc } }
+    LocationLimit: { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 250, default: 50 } }
     Token: { in: query, name: token, required: true, schema: { type: string, minLength: 64, maxLength: 64 } }
     UserUid: { in: path, name: userUid, required: true, schema: { type: string, format: uuid } }
     RoleUid: { in: path, name: roleUid, required: true, schema: { type: string, format: uuid } }
     MenuUid: { in: path, name: menuUid, required: true, schema: { type: string, format: uuid } }
     PermissionUid: { in: path, name: permissionUid, required: true, schema: { type: string, format: uuid } }
     SettingUid: { in: path, name: settingUid, required: true, schema: { type: string, format: uuid } }
+    CountryUid: { in: path, name: countryUid, required: true, schema: { type: string, format: uuid } }
+    StateUid: { in: path, name: stateUid, required: true, schema: { type: string, format: uuid } }
+    DocumentUid: { in: path, name: documentUid, required: true, schema: { type: string, format: uuid } }
   responses:
     Unauthorized: { description: Missing, invalid, expired, or stale JWT }
     Forbidden: { description: Account or role is not allowed to perform the operation }
@@ -330,3 +479,51 @@ components:
         description: { type: string }
         isPublic: { type: boolean }
         isActive: { type: boolean }
+    CompanyInformationInput:
+      type: object
+      required: [isDraft]
+      properties:
+        legalCompanyName: { type: string, maxLength: 200, example: Acme Financial Holdings Ltd. }
+        entityTypeUid: { type: string, format: uuid }
+        registrationNumber: { type: string, maxLength: 100, example: LEI-5493001KJTIIGC8Y1R12 }
+        streetAddress: { type: string, maxLength: 255, example: 123 Financial District }
+        countryUid: { type: string, format: uuid }
+        stateUid: { type: string, format: uuid }
+        cityUid: { type: string, format: uuid }
+        postalCode: { type: string, maxLength: 20, example: '94105' }
+        isDraft: { type: boolean, example: false }
+    JurisdictionInput:
+      type: object
+      required: [isDraft]
+      properties:
+        countryOfIncorporationUid: { type: string, format: uuid }
+        dateOfIncorporation: { type: string, format: date, example: '2020-05-16' }
+        taxIdentificationNumber: { type: string, maxLength: 100, example: US123456789 }
+        industryUid: { type: string, format: uuid }
+        businessActivity: { type: string, maxLength: 5000, example: Asset tokenization }
+        website: { type: string, format: uri, example: https://acme.example }
+        isDraft: { type: boolean, example: false }
+    BeneficialOwnersInput:
+      type: object
+      required: [owners, isDraft]
+      properties:
+        owners:
+          type: array
+          maxItems: 20
+          items:
+            type: object
+            properties:
+              fullName: { type: string, maxLength: 120, example: Jane Doe }
+              dateOfBirth: { type: string, format: date, example: '1985-06-15' }
+              nationalityCountryUid: { type: string, format: uuid }
+              ownershipPercentage: { type: number, minimum: 25, maximum: 100, example: 45 }
+              isPrimary: { type: boolean, example: true }
+        isDraft: { type: boolean, example: false }
+    OrganizationSubmitInput:
+      type: object
+      required: [walletAddress]
+      properties:
+        walletAddress:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+          example: '0x1111111111111111111111111111111111111111'

@@ -199,6 +199,118 @@ Filters: `parentMenuUid`, `isVisible`, `isActive`. Search: `menuName`, `menuCode
 
 `valueType` is `string`, `number`, `boolean`, or `json`. Filters: `settingGroup`, `valueType`, `isPublic`, `isActive`. Search covers key, value, group, and description.
 
+## Organization onboarding
+
+Organization onboarding is available only to authenticated users whose role is `Issuer`. One issuer owns one organization form. Every section save remains a draft; only `POST /organizations/me/submit` changes it to `submitted`.
+
+### Public form reference APIs
+
+```text
+GET /locations/countries?page=1&limit=50&search=United
+GET /locations/countries/{countryUid}/states?page=1&limit=50&search=California
+GET /locations/states/{stateUid}/cities?page=1&limit=50&search=San
+GET /organization-options
+```
+
+The location responses are paginated. `organization-options` returns active `entityTypes`, `industries`, and `documentTypes`; each document type includes `isRequired`.
+
+### `GET /organizations/me`
+
+Returns the issuer's complete form, beneficial owners, and document metadata. Returns `data: null` before the form is started.
+
+### `PATCH /organizations/me/user-notified`
+
+No request body. Idempotently sets the current issuer organization's `isUserNotified` value to `true` (`1` in MySQL) and returns the updated organization. Returns `404` when the issuer has not started an organization form.
+
+### `PUT /organizations/me/company-information`
+
+```json
+{
+  "legalCompanyName": "Acme Financial Holdings Ltd.",
+  "entityTypeUid": "<entityTypeUid>",
+  "registrationNumber": "LEI-5493001KJTIIGC8Y1R12",
+  "streetAddress": "123 Financial District",
+  "countryUid": "<countryUid>",
+  "stateUid": "<stateUid>",
+  "cityUid": "<cityUid>",
+  "postalCode": "94105",
+  "isDraft": false
+}
+```
+
+With `isDraft: true`, all business fields are optional and partial progress is saved. With `false`, every field shown above is required and country/state/city membership is validated.
+
+### `PUT /organizations/me/jurisdiction`
+
+```json
+{
+  "countryOfIncorporationUid": "<countryUid>",
+  "dateOfIncorporation": "2020-05-16",
+  "taxIdentificationNumber": "US123456789",
+  "industryUid": "<industryUid>",
+  "businessActivity": "Asset tokenization and regulated financial services.",
+  "website": "https://acme.example",
+  "isDraft": false
+}
+```
+
+The incorporation date cannot be in the future. Website is optional but must use HTTP or HTTPS.
+
+### `PUT /organizations/me/beneficial-owners`
+
+```json
+{
+  "owners": [
+    {
+      "fullName": "Jane Doe",
+      "dateOfBirth": "1985-06-15",
+      "nationalityCountryUid": "<countryUid>",
+      "ownershipPercentage": 45,
+      "isPrimary": true
+    },
+    {
+      "fullName": "John Doe",
+      "dateOfBirth": "1980-03-11",
+      "nationalityCountryUid": "<countryUid>",
+      "ownershipPercentage": 30,
+      "isPrimary": false
+    }
+  ],
+  "isDraft": false
+}
+```
+
+Up to 20 owners can be stored. A completed section requires at least one adult owner, each declared owner must hold at least 25%, the total cannot exceed 100%, and no more than one owner can be primary. Saving replaces the current owner list atomically.
+
+### Organization documents
+
+Upload one or more files of the same document type using `multipart/form-data`:
+
+```text
+POST /organizations/me/documents
+documentTypeUid=<documentTypeUid>
+documents=<PDF, PNG, JPG, or JPEG file>
+documents=<another file>
+```
+
+The default limit is 10 files per request and 10 MB per file; both are environment-configurable. The API stores document metadata and a SHA-256 checksum and returns `201`.
+
+```text
+GET    /organizations/me/documents
+GET    /organizations/me/documents/{documentUid}/download
+DELETE /organizations/me/documents/{documentUid}
+```
+
+### `POST /organizations/me/submit`
+
+```json
+{
+  "walletAddress": "0x1111111111111111111111111111111111111111"
+}
+```
+
+`walletAddress` is required and must be a valid EVM address (`0x` followed by 40 hexadecimal characters). Final submission saves it on the organization and revalidates every required company and jurisdiction field, location hierarchy, entity/industry references, owners, and every required document type. A successful response sets `isDraft: false`, `status: submitted`, `currentStep: completed`, and `submittedAt`. Submitted forms are read-only.
+
 ## Status codes
 
 - `200` success/update/delete; `201` created

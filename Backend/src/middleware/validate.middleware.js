@@ -1,4 +1,15 @@
+const fs = require('node:fs');
 const { ApiError } = require('../core/errors/api-error');
+
+const cleanupUploadedFiles = (req) => {
+  const files = Array.isArray(req.files)
+    ? req.files
+    : Object.values(req.files || {}).flat();
+  if (req.file) files.push(req.file);
+  for (const file of files) {
+    if (file?.path) fs.unlink(file.path, () => {});
+  }
+};
 
 const validate = (schemas) => (req, res, next) => {
   const errors = [];
@@ -18,8 +29,11 @@ const validate = (schemas) => (req, res, next) => {
       Object.defineProperty(req, location, { value, writable: true, configurable: true, enumerable: true });
     }
   }
-  if (errors.length) return next(new ApiError(422, 'Request validation failed.', errors, 'VALIDATION_ERROR'));
+  if (errors.length) {
+    cleanupUploadedFiles(req);
+    return next(new ApiError(422, 'Request validation failed.', errors, 'VALIDATION_ERROR'));
+  }
   return next();
 };
 
-module.exports = { validate };
+module.exports = { validate, cleanupUploadedFiles };

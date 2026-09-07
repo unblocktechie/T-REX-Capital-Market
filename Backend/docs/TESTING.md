@@ -8,13 +8,14 @@ The examples use `curl` and assume `BASE_URL=http://localhost:3000`. JSON respon
 npm install
 copy .env.example .env
 mysql -u root -p < database/trex-capital-market.sql
+npm run seed:locations
 npm run seed:admin
 npm run check
 npm test
 npm run dev
 ```
 
-For an existing database, run `mysql -u root -p trexCapitalMarket < database/migrations/20260907_add_issuer_investor_roles.sql` before starting the updated API.
+For an existing database, rerun the idempotent main schema and `npm run seed:locations` before starting the updated API.
 
 Expected startup log: `T-REX Capital Market Backend started`. If environment validation, MySQL, or SMTP configuration is invalid, startup fails clearly.
 
@@ -147,3 +148,54 @@ curl http://localhost:3000/api/v1/general-settings/public
 ```
 
 Expected: `application.pageSize` is returned as number `25`. After soft delete or `isPublic: false`, it is absent.
+
+## 16. Organization onboarding flow
+
+Use a verified issuer account (`isIssuer: true`) and save its login token as `ISSUER_TOKEN`. An Investor token must receive `403` for all `/organizations/*` endpoints.
+
+First load the reference values and copy the required UIDs:
+
+```bash
+curl "http://localhost:3000/api/v1/organization-options"
+curl "http://localhost:3000/api/v1/locations/countries?search=United%20States"
+curl "http://localhost:3000/api/v1/locations/countries/COUNTRY_UID/states?search=California"
+curl "http://localhost:3000/api/v1/locations/states/STATE_UID/cities?search=San%20Francisco"
+```
+
+Save a partial draft:
+
+```bash
+curl -X PUT http://localhost:3000/api/v1/organizations/me/company-information -H "Authorization: Bearer ISSUER_TOKEN" -H "Content-Type: application/json" -d '{"legalCompanyName":"Acme Financial Holdings Ltd.","isDraft":true}'
+```
+
+Expected: `200`, `status: draft`. Repeat with all company fields and `isDraft: false`, then save the jurisdiction and beneficial-owner payloads from `docs/API.md`.
+
+Upload each required document type returned by `/organization-options`:
+
+```bash
+curl -X POST http://localhost:3000/api/v1/organizations/me/documents -H "Authorization: Bearer ISSUER_TOKEN" -F "documentTypeUid=DOCUMENT_TYPE_UID" -F "documents=@C:/path/to/document.pdf"
+```
+
+Multiple `documents=@...` parts are accepted in one call. Verify list, download, and delete:
+
+```bash
+curl http://localhost:3000/api/v1/organizations/me/documents -H "Authorization: Bearer ISSUER_TOKEN"
+curl http://localhost:3000/api/v1/organizations/me/documents/DOCUMENT_UID/download -H "Authorization: Bearer ISSUER_TOKEN" --output downloaded-document.pdf
+curl -X DELETE http://localhost:3000/api/v1/organizations/me/documents/DOCUMENT_UID -H "Authorization: Bearer ISSUER_TOKEN"
+```
+
+Finally submit:
+
+```bash
+curl -X POST http://localhost:3000/api/v1/organizations/me/submit -H "Authorization: Bearer ISSUER_TOKEN" -H "Content-Type: application/json" -d '{"walletAddress":"0x1111111111111111111111111111111111111111"}'
+```
+
+Expected: `200`, the submitted wallet address, `status: submitted`, `isDraft: false`, and a UTC `submittedAt`. Missing or invalid wallet addresses return `422`. Missing organization fields, invalid location relationships, owners under 18, ownership over 100%, or missing required document types return a standardized `400`; invalid file type/size returns `422`.
+
+Mark the current issuer as notified:
+
+```bash
+curl -X PATCH http://localhost:3000/api/v1/organizations/me/user-notified -H "Authorization: Bearer ISSUER_TOKEN"
+```
+
+Expected: `200` and `data.isUserNotified` is `true`/`1`. Repeated calls remain successful. An issuer without an organization receives `404`.

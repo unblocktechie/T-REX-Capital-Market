@@ -61,6 +61,11 @@ const env = Object.freeze({
     level: process.env.LOG_LEVEL || 'info',
     retentionDays: Number(process.env.LOG_RETENTION_DAYS || 30),
   },
+  uploads: {
+    directory: path.resolve(process.cwd(), process.env.UPLOAD_DIR || 'storage/organization-documents'),
+    maxFileSizeBytes: Number(process.env.UPLOAD_MAX_FILE_SIZE_MB || 10) * 1024 * 1024,
+    maxFiles: Number(process.env.UPLOAD_MAX_FILES || 10),
+  },
 });
 
 const requiredSchema = Joi.object({
