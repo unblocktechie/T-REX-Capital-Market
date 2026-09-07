@@ -2,7 +2,7 @@ import { forwardRef, useId } from 'react';
 import { cn } from '@/utils/cn';
 
 export const Input = forwardRef(function Input(
-  { label, error, hint, leading: Leading, trailing, className, id, ...props },
+  { label, error, hint, leading: Leading, trailing, className, id, required = false, ...props },
   ref,
 ) {
   const generatedId = useId();
@@ -14,6 +14,7 @@ export const Input = forwardRef(function Input(
       {label ? (
         <label className="text-[13px] font-bold text-[var(--text)]" htmlFor={inputId}>
           {label}
+          {required ? <span className="org-required-mark" aria-hidden="true">*</span> : null}
         </label>
       ) : null}
       <div
@@ -34,7 +35,9 @@ export const Input = forwardRef(function Input(
           className="min-w-0 flex-1 border-0 bg-transparent text-[var(--text)] outline-none placeholder:text-[var(--text-muted)]"
           aria-invalid={Boolean(error)}
           aria-describedby={describedBy}
+          aria-required={required || undefined}
           {...props}
+          required={required}
         />
         {trailing}
       </div>

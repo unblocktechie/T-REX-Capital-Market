@@ -76,6 +76,12 @@ export const setupAxiosInterceptors = () => {
       if (token && !isPublicAuthRequest(config.url)) {
         config.headers.Authorization = `${TOKEN_TYPES.bearer} ${token}`;
       }
+
+      if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+        if (typeof config.headers?.delete === 'function') config.headers.delete('Content-Type');
+        else if (config.headers) delete config.headers['Content-Type'];
+      }
+
       return config;
     },
     (error) => {

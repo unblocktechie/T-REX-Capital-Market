@@ -25,3 +25,39 @@ export const getErrorMessage = (error, fallback = 'Something went wrong. Please 
     fallback
   );
 };
+
+export const getApiFieldErrors = (error) => {
+  const payload = error?.response?.data;
+  const details = payload?.error?.details ?? payload?.errors;
+  const normalizedDetails = Array.isArray(details)
+    ? details
+    : details && typeof details === 'object'
+      ? Object.entries(details).flatMap(([field, messages]) =>
+          (Array.isArray(messages) ? messages : [messages]).map((message) => ({
+            field,
+            message: typeof message === 'string' ? message : message?.message,
+          })),
+        )
+      : [];
+
+  return normalizedDetails
+    .map((item) => ({
+      field: String(item?.field || '')
+        .replace(/^body\./, '')
+        .replace(/\[(\d+)\]/g, '.$1'),
+      message: item?.message || item?.msg || '',
+    }))
+    .filter((item) => item.field && item.message);
+};
+
+export const applyApiFieldErrors = (error, setError, fieldMap = {}) => {
+  const fieldErrors = getApiFieldErrors(error);
+  fieldErrors.forEach(({ field, message }) => {
+    const normalizedField = field
+      .replace(/^owners\.(\d+)\./, 'beneficialOwners.$1.')
+      .replace(/^beneficialOwners\.(\d+)\.nationalityCountryUid$/, 'beneficialOwners.$1.nationality');
+    const target = fieldMap[normalizedField] || fieldMap[field] || normalizedField;
+    setError(target, { type: 'server', message });
+  });
+  return fieldErrors.length > 0;
+};

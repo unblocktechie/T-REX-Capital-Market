@@ -1,6 +1,7 @@
 import {
   ArrowLeftRight,
   BarChart3,
+  Building2,
   BriefcaseBusiness,
   FileText,
   LayoutDashboard,
@@ -25,6 +26,14 @@ export const navigationGroups = Object.freeze([
         to: ROUTES.dashboard,
         icon: LayoutDashboard,
         permission: PERMISSIONS.dashboardView,
+      },
+      {
+        label: 'Create Organization',
+        shortLabel: 'Organization',
+        to: ROUTES.organization,
+        icon: Building2,
+        permission: PERMISSIONS.dashboardView,
+        dynamicOrganization: true,
       },
       {
         label: 'Token projects',
@@ -126,6 +135,7 @@ export const navigationGroups = Object.freeze([
 export const routeMeta = Object.freeze({
   [ROUTES.dashboard]: { title: 'Overview', description: 'Issuer launchpad dashboard' },
   [ROUTES.projects]: { title: 'Token projects', description: 'Manage security token offerings' },
+  [ROUTES.organization]: { title: 'Organization', description: 'Institutional KYB onboarding and verification' },
   [ROUTES.createToken]: { title: 'Create token', description: 'Guided ERC-3643 deployment' },
   [ROUTES.identity]: { title: 'Identity registry', description: 'Claims and trusted identities' },
   [ROUTES.compliance]: {

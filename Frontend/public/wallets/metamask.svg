@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">MetaMask</title>
+  <rect width="64" height="64" rx="16" fill="#fff7f2"/>
+  <path fill="#e2761b" d="M9 11l18 13-7 13-9-4zM55 11L37 24l7 13 9-4z"/>
+  <path fill="#f6851b" d="M27 24l5-7 5 7-1 17h-8z"/>
+  <path fill="#763d16" d="M9 11l18 13-8-1zM55 11L37 24l8-1z"/>
+  <path fill="#e4751f" d="M20 37l8 4-3 10-9-5zM44 37l-8 4 3 10 9-5z"/>
+  <path fill="#f6851b" d="M16 33l12 8-3 10-10-3zM48 33l-12 8 3 10 10-3z"/>
+  <path fill="#c0ad9e" d="M25 51l7-4 7 4-2 6H27z"/>
+  <path fill="#161616" d="M22 34l6 2-3 3zM42 34l-6 2 3 3z"/>
+  <path fill="#fff" d="M25 41l7 6-7 4zM39 41l-7 6 7 4z"/>
+  <path fill="#d7c1b3" d="M27 57l5-3 5 3-5 3z"/>
+</svg>

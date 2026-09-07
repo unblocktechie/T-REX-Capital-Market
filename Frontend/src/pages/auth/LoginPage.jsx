@@ -9,6 +9,7 @@ import { AuthButton } from '@/components/auth/AuthButton';
 import { Input } from '@/components/ui/Input';
 import { PasswordInput } from '@/components/ui/PasswordInput';
 import { ROUTES } from '@/config/routes';
+import { ROLES } from '@/config/permissions';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { loginSchema } from '@/validations/auth.schemas';
 
@@ -31,9 +32,11 @@ export default function LoginPage() {
 
   const login = useMutation({
     mutationFn: authService.login,
-    onSuccess: () => {
+    onSuccess: (session) => {
       toast.success('Welcome back.');
-      navigate(from, { replace: true });
+      const destination =
+        session?.user?.role === ROLES.admin ? ROUTES.adminReviewQueue : from;
+      navigate(destination, { replace: true });
     },
   });
 
@@ -47,7 +50,7 @@ export default function LoginPage() {
           Sign in to T-REX Capital Market
         </h2>
         <p className="m-0 text-sm leading-6 text-[var(--text-soft)]">
-          Access your issuer or investor workspace securely.
+          Access your issuer, investor, or compliance admin workspace securely.
         </p>
       </div>
       {emailVerified ? (

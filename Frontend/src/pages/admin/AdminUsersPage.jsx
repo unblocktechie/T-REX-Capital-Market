@@ -1,0 +1,20 @@
+import { useQuery } from '@tanstack/react-query';
+import { Mail, Plus, ShieldCheck, UsersRound } from 'lucide-react';
+import { adminApi } from '@/api/admin';
+import { AdminPanel } from '@/components/admin/AdminPanel';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+
+export default function AdminUsersPage() {
+  useDocumentTitle('Admin Users');
+  const reviewers = useQuery({ queryKey: ['admin', 'reviewers'], queryFn: adminApi.listReviewers });
+  return (
+    <div className="space-y-6">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="mb-2 text-[11px] font-semibold tracking-[0.16em] text-blue-600 uppercase dark:text-blue-400">Access management</p><h2 className="m-0 text-3xl font-semibold tracking-normal text-slate-950 sm:text-4xl dark:text-white">Admin Users</h2><p className="mt-3 mb-0 text-sm leading-6 text-slate-500 dark:text-slate-400">Manage compliance reviewers and operational responsibilities.</p></div><button type="button" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 text-sm font-semibold text-white dark:bg-white dark:text-slate-950"><Plus className="size-4" />Invite admin</button></header>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        {(reviewers.data || []).map((reviewer) => <article key={reviewer.id} className="rounded-[20px] border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-xl dark:border-slate-800 dark:bg-slate-900 dark:hover:shadow-none"><div className="flex items-start justify-between gap-3"><span className="grid size-12 place-items-center rounded-2xl bg-slate-950 text-sm font-semibold text-white dark:bg-white dark:text-slate-950">{reviewer.avatar}</span><span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"><ShieldCheck className="size-3" />Active</span></div><h3 className="mt-4 mb-1 text-base font-semibold text-slate-950 dark:text-white">{reviewer.name}</h3><p className="m-0 text-xs font-semibold text-blue-600 dark:text-blue-400">{reviewer.role}</p><div className="mt-4 flex items-center gap-2 text-xs text-slate-500"><Mail className="size-3.5" /><span className="truncate">{reviewer.email}</span></div><div className="mt-5 grid grid-cols-2 gap-2"><div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-950/60"><small className="text-[10px] font-bold text-slate-400 uppercase">Open reviews</small><strong className="mt-1 block text-lg text-slate-950 dark:text-white">{Number(reviewer.id.slice(-1)) + 2}</strong></div><div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-950/60"><small className="text-[10px] font-bold text-slate-400 uppercase">Approval rate</small><strong className="mt-1 block text-lg text-slate-950 dark:text-white">{88 + Number(reviewer.id.slice(-1)) * 2}%</strong></div></div></article>)}
+      </div>
+      <AdminPanel title="Role governance" description="Administrative access follows least-privilege compliance controls."><div className="grid gap-4 md:grid-cols-3"><GovernanceCard icon={UsersRound} title="Reviewer" text="Review organizations, documents, UBOs, and screening results." /><GovernanceCard icon={ShieldCheck} title="Compliance Lead" text="Approve or reject applications and manage escalations." /><GovernanceCard icon={ShieldCheck} title="Platform Admin" text="Manage users, policies, security logs, and system settings." /></div></AdminPanel>
+    </div>
+  );
+}
+function GovernanceCard({ icon: Icon, title, text }) { return <div className="rounded-2xl border border-slate-200 p-4 dark:border-slate-800"><span className="grid size-10 place-items-center rounded-xl bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300"><Icon className="size-5" /></span><strong className="mt-3 block text-sm text-slate-950 dark:text-white">{title}</strong><p className="mt-1 mb-0 text-xs leading-5 text-slate-500">{text}</p></div>; }

@@ -3,12 +3,17 @@ import { Building2, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { TrexLogo } from '@/components/branding/TrexLogo';
 import { navigationGroups } from '@/config/navigation';
+import { ROLES } from '@/config/permissions';
+import { OrganizationStatusBadge } from '@/components/organization/OrganizationStatusBadge';
 import { useAuth } from '@/hooks/useAuth';
 import { useUiStore } from '@/store/ui.store';
+import { useOrganization } from '@/hooks/useOrganization';
+import { ORGANIZATION_STATUSES } from '@/services/organizationStorageService';
 import { cn } from '@/utils/cn';
 
 export function Sidebar() {
   const { user } = useAuth();
+  const { organization } = useOrganization();
   const open = useUiStore((state) => state.sidebarOpen);
   const collapsed = useUiStore((state) => state.sidebarCollapsed);
   const close = useUiStore((state) => state.closeSidebar);
@@ -63,26 +68,50 @@ export function Sidebar() {
 
         <nav className="sidebar__nav" aria-label="Primary navigation">
           {navigationGroups.map((group) => {
-            const visibleItems = group.items.filter((item) => canSee(item.permission));
+            const visibleItems = group.items.filter(
+              (item) =>
+                canSee(item.permission) &&
+                (!item.dynamicOrganization || user?.role === ROLES.issuer),
+            );
             if (!visibleItems.length) return null;
             return (
               <div className="sidebar-group" key={group.label}>
                 <p>{group.label}</p>
-                {visibleItems.map((item) => (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    onClick={close}
-                    title={collapsed ? item.label : undefined}
-                    className={({ isActive }) => cn('sidebar-link', isActive && 'is-active')}
-                  >
-                    <item.icon size={19} aria-hidden="true" />
-                    <span className="sidebar-link__label">{item.label}</span>
-                    {item.badge ? (
-                      <small className="sidebar-link__badge">{item.badge}</small>
-                    ) : null}
-                  </NavLink>
-                ))}
+                {visibleItems.map((item) => {
+                  const isOrganizationItem = item.dynamicOrganization;
+                  const organizationLabel =
+                    organization.status === ORGANIZATION_STATUSES.NOT_STARTED
+                      ? 'Create Organization'
+                      : organization.status === ORGANIZATION_STATUSES.DRAFT
+                        ? 'Continue Organization'
+                        : 'Organization';
+                  const label = isOrganizationItem ? organizationLabel : item.label;
+                  const showOrganizationBadge =
+                    isOrganizationItem &&
+                    [
+                      ORGANIZATION_STATUSES.SUBMITTED,
+                      ORGANIZATION_STATUSES.VERIFIED_SUCCESS_PENDING,
+                      ORGANIZATION_STATUSES.VERIFIED,
+                    ].includes(organization.status);
+
+                  return (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      onClick={close}
+                      title={collapsed ? label : undefined}
+                      className={({ isActive }) => cn('sidebar-link', isActive && 'is-active')}
+                    >
+                      <item.icon size={19} aria-hidden="true" />
+                      <span className="sidebar-link__label">{label}</span>
+                      {showOrganizationBadge ? (
+                        <OrganizationStatusBadge status={organization.status} compact />
+                      ) : item.badge ? (
+                        <small className="sidebar-link__badge">{item.badge}</small>
+                      ) : null}
+                    </NavLink>
+                  );
+                })}
               </div>
             );
           })}

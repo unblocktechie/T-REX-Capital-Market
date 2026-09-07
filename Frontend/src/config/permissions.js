@@ -12,6 +12,10 @@ export const PERMISSIONS = Object.freeze({
   usersManage: 'users:manage',
   settingsView: 'settings:view',
   settingsManage: 'settings:manage',
+  organizationReviewView: 'organization-review:view',
+  organizationReviewManage: 'organization-review:manage',
+  auditLogsView: 'audit-logs:view',
+  securityLogsView: 'security-logs:view',
 });
 
 export const ROLE_PERMISSIONS = Object.freeze({

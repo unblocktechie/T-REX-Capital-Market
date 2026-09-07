@@ -1,27 +1,30 @@
 import {
   Bell,
-  ChevronDown,
   LogOut,
   Menu,
   Plus,
   Search,
-  WalletCards,
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { authService } from '@/api/auth';
+import { TrexLogo } from '@/components/branding/TrexLogo';
 import { Button } from '@/components/ui/Button';
+import { WalletControl } from '@/components/wallet/WalletControl';
 import { routeMeta } from '@/config/navigation';
 import { ROUTES } from '@/config/routes';
 import { useAuth } from '@/hooks/useAuth';
 import { useUiStore } from '@/store/ui.store';
 
-export function Header() {
+export function Header({ onboardingOnly = false }) {
   const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const toggleSidebar = useUiStore((state) => state.toggleSidebar);
   const toggleSidebarCollapsed = useUiStore((state) => state.toggleSidebarCollapsed);
-  const currentMeta = routeMeta[location.pathname] || routeMeta[ROUTES.dashboard];
+  const currentMeta =
+    routeMeta[location.pathname] ||
+    (location.pathname.startsWith(ROUTES.organization) ? routeMeta[ROUTES.organization] : null) ||
+    routeMeta[ROUTES.dashboard];
 
   const handleNavigationToggle = () => {
     if (window.matchMedia('(max-width: 900px)').matches) {
@@ -41,6 +44,34 @@ export function Header() {
     .map((part) => part[0])
     .slice(0, 2)
     .join('');
+
+  if (onboardingOnly) {
+    return (
+      <header className="app-header app-header--onboarding">
+        <div className="onboarding-header__brand" aria-label="T-REX Capital Market">
+          <TrexLogo />
+        </div>
+        <div className="onboarding-header__account">
+          <WalletControl onboarding />
+          <div className="onboarding-profile max-sm:!hidden" aria-label="Signed-in user">
+            <span className="avatar">{initials || 'U'}</span>
+            <span className="onboarding-profile__copy">
+              <strong>{user?.name || 'Issuer'}</strong>
+              <small>{user?.role || 'Issuer'}</small>
+            </span>
+          </div>
+          <button
+            className="icon-button onboarding-header__logout"
+            onClick={handleLogout}
+            aria-label="Sign out"
+            title="Sign out"
+          >
+            <LogOut size={18} />
+          </button>
+        </div>
+      </header>
+    );
+  }
 
   return (
     <header className="app-header">
@@ -76,22 +107,7 @@ export function Header() {
         >
           <Search size={18} />
         </button>
-        <button
-          className="mobile-wallet-button icon-button"
-          type="button"
-          aria-label="Network and wallet"
-        >
-          <WalletCards size={18} />
-        </button>
-
-        <button className="network-selector" type="button" aria-label="Select blockchain network">
-          <span className="network-selector__dot" />
-          <span className="network-selector__copy">
-            <small>Network</small>
-            <strong>Polygon Amoy</strong>
-          </span>
-          <ChevronDown size={15} />
-        </button>
+        <WalletControl />
 
         <Button
           className="header-create-button"

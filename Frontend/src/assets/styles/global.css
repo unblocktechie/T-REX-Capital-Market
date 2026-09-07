@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
 :root {
@@ -1828,7 +1829,7 @@ h3 {
   }
 }
 
-/* T-REX Capital Market application shell */
+/* T-REX Launchpad application shell */
 .app-shell--sidebar-collapsed .app-shell__main {
   margin-left: var(--sidebar-collapsed-width);
 }
@@ -3790,9 +3791,27 @@ button {
   flex: 0 0 40px;
   place-items: center;
   border-radius: 12px;
-  background: linear-gradient(135deg, var(--primary-400), var(--primary-600));
-  color: #fff;
-  box-shadow: 0 10px 28px rgba(22, 119, 210, 0.28);
+  overflow: hidden;
+  background: linear-gradient(145deg, #f8fafc, #cfd5db);
+  color: #1f2933;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.18);
+}
+
+.trex-mark-image {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 3px rgba(15, 23, 42, 0.2));
+  pointer-events: none;
+  user-select: none;
+}
+
+.auth-trex-logo .trex-mark-image {
+  width: auto;
+  height: 31px;
+  margin-inline: auto;
+  object-position: center;
 }
 
 .trex-logo__copy {
@@ -4094,8 +4113,8 @@ button {
   }
 }
 
-.auth-mobile-brand .trex-logo__mark svg {
-  color: #fff;
+.auth-mobile-brand .trex-logo__mark .trex-mark-image {
+  filter: drop-shadow(0 2px 3px rgba(15, 23, 42, 0.2));
 }
 
 @media (max-width: 900px) {
@@ -4639,10 +4658,10 @@ body { color: var(--text); }
 .auth-mobile-brand .trex-logo__copy strong,
 .auth-mobile-brand .trex-logo__copy small { color: var(--text); }
 .auth-mobile-brand .trex-logo__mark {
-  border-color: color-mix(in srgb, var(--primary-500) 30%, var(--border));
-  background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
-  color: #ffffff;
-  box-shadow: 0 10px 25px color-mix(in srgb, var(--primary-500) 27%, transparent);
+  border-color: color-mix(in srgb, var(--text) 16%, var(--border));
+  background: linear-gradient(145deg, #f8fafc, #d5d9dd);
+  color: #1f2933;
+  box-shadow: 0 10px 25px color-mix(in srgb, var(--text) 15%, transparent);
 }
 .auth-brand .trex-logo__mark {
   border-color: var(--brand-panel-border);
@@ -5488,4 +5507,317 @@ body,
     animation-duration: 1ms !important;
     animation-iteration-count: 1 !important;
   }
+}
+
+/* Preserve the original portrait aspect ratio of the T-REX shield in the sidebar. */
+.brand .trex-logo__mark {
+  padding: 3px;
+}
+
+.brand .trex-mark-image {
+  width: auto;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  margin-inline: auto;
+  object-fit: contain;
+  object-position: center;
+}
+
+
+/* Organization onboarding access shell ------------------------------------- */
+.app-shell--onboarding .app-shell__main,
+.app-shell--onboarding.app-shell--sidebar-collapsed .app-shell__main {
+  width: 100%;
+  margin-left: 0;
+}
+
+.app-header--onboarding {
+  min-height: 72px;
+  height: 72px;
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding-inline: clamp(18px, 4vw, 44px);
+}
+
+.onboarding-header__brand,
+.onboarding-header__account,
+.onboarding-profile {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.onboarding-header__brand {
+  color: var(--text);
+}
+
+.onboarding-header__brand .trex-logo__mark {
+  width: 48px;
+  height: 48px;
+  flex-basis: 48px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.09);
+}
+
+/* Keep the complete portrait shield visible instead of rendering the small
+   intrinsic image inside a square mark. */
+.onboarding-header__brand .trex-mark-image {
+  width: auto;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  margin-inline: auto;
+  object-fit: contain;
+  object-position: center;
+}
+
+.onboarding-header__brand .trex-logo__copy strong {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.onboarding-header__brand .trex-logo__copy small {
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+.onboarding-header__account {
+  flex: 0 1 auto;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.onboarding-profile {
+  max-width: min(300px, 42vw);
+  gap: 10px;
+  border-left: 1px solid var(--border);
+  padding-left: 16px;
+}
+
+.onboarding-profile .avatar {
+  flex: 0 0 auto;
+}
+
+.onboarding-profile__copy {
+  min-width: 0;
+  display: grid;
+  line-height: 1.18;
+}
+
+.onboarding-profile__copy strong,
+.onboarding-profile__copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.onboarding-profile__copy strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.onboarding-profile__copy small {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 10px;
+  text-transform: capitalize;
+}
+
+.onboarding-header__logout {
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-soft);
+}
+
+.onboarding-header__logout:hover {
+  border-color: color-mix(in srgb, var(--danger-500) 35%, var(--border));
+  background: color-mix(in srgb, var(--danger-500) 7%, var(--surface));
+  color: var(--danger-500);
+}
+
+.app-shell--onboarding .page-container {
+  width: min(1440px, 100%);
+  padding-right: clamp(14px, 3vw, 32px);
+  padding-left: clamp(14px, 3vw, 32px);
+}
+
+@media (max-width: 720px) {
+  .app-header--onboarding {
+    min-height: 64px;
+    height: 64px;
+    padding-inline: max(12px, env(safe-area-inset-left));
+  }
+
+  .onboarding-header__brand .trex-logo {
+    gap: 8px;
+  }
+
+  .onboarding-header__brand .trex-logo__mark {
+    width: 42px;
+    height: 42px;
+    flex-basis: 42px;
+    padding: 2px;
+    border-radius: 11px;
+  }
+
+  .onboarding-header__brand .trex-logo__copy strong {
+    font-size: 13px;
+  }
+
+  .onboarding-header__brand .trex-logo__copy small {
+    margin-top: 2px;
+    font-size: 7px;
+  }
+
+  .onboarding-header__account {
+    gap: 7px;
+  }
+
+  .onboarding-profile {
+    max-width: min(150px, 42vw);
+    gap: 7px;
+    border-left: 0;
+    padding-left: 0;
+  }
+
+  .onboarding-profile .avatar {
+    width: 34px;
+    height: 34px;
+  }
+
+  .onboarding-profile__copy strong {
+    font-size: 11px;
+  }
+
+  .onboarding-profile__copy small {
+    font-size: 9px;
+  }
+
+  .onboarding-header__logout {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+@media (max-width: 430px) {
+  .onboarding-header__brand .trex-logo__copy small,
+  .onboarding-profile__copy small {
+    display: none;
+  }
+
+  .onboarding-profile {
+    max-width: 112px;
+  }
+}
+
+@media (max-width: 360px) {
+  .onboarding-header__brand .trex-logo__copy {
+    display: none;
+  }
+
+  .onboarding-profile {
+    max-width: 104px;
+  }
+}
+
+/* Application brand lockup ---------------------------------------------------
+   Match the clear auth-page logo treatment in the organization header and the
+   main project sidebar without changing the auth layouts themselves. */
+.onboarding-header__brand .trex-logo__mark,
+.brand .trex-logo__mark {
+  width: 42px;
+  height: 42px;
+  flex-basis: 42px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--text) 14%, var(--border));
+  background: linear-gradient(145deg, #ffffff, #e4e7ea);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.12);
+}
+
+.onboarding-header__brand .trex-mark-image,
+.brand .trex-mark-image {
+  display: block;
+  width: auto;
+  height: 33px;
+  max-width: 100%;
+  max-height: 100%;
+  margin-inline: auto;
+  object-fit: contain;
+  object-position: center;
+  filter: drop-shadow(0 2px 3px rgba(15, 23, 42, 0.16));
+}
+
+.brand .trex-logo__copy strong {
+  color: #ffffff;
+}
+
+@media (max-width: 720px) {
+  .onboarding-header__brand .trex-logo__mark {
+    width: 40px;
+    height: 40px;
+    flex-basis: 40px;
+    border-radius: 11px;
+  }
+
+  .onboarding-header__brand .trex-mark-image {
+    height: 31px;
+  }
+}
+
+/* Admin shell branding: match the correctly rendered organization/auth logo. */
+.admin-trex-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-trex-logo .trex-logo__mark {
+  width: 42px;
+  height: 42px;
+  flex-basis: 42px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--text) 14%, var(--border));
+  background: linear-gradient(145deg, #ffffff, #e4e7ea);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.12);
+}
+
+.admin-trex-logo .trex-mark-image {
+  display: block;
+  width: auto;
+  height: 33px;
+  max-width: 100%;
+  max-height: 100%;
+  margin-inline: auto;
+  object-fit: contain;
+  object-position: center;
+  filter: drop-shadow(0 2px 3px rgba(15, 23, 42, 0.16));
+}
+
+.admin-trex-logo .trex-logo__copy {
+  line-height: 1.08;
+}
+
+.admin-trex-logo .trex-logo__copy strong {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.admin-trex-logo .trex-logo__copy small {
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+.trex-logo--compact.admin-trex-logo .trex-logo__mark {
+  width: 42px;
+  height: 42px;
+  flex-basis: 42px;
 }

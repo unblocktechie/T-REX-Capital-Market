@@ -12,6 +12,8 @@ A responsive React application for issuers and investors to access compliant dig
 - Session restoration, JWT expiry handling, automatic `401` logout and protected routes
 - Responsive layouts for desktop, laptop, tablet, mobile and narrow mobile screens
 - Guided issuer dashboard, identity, compliance and investor-management modules
+- Backend-powered organization KYB onboarding with server drafts, location UIDs, UBOs, document vault and final submission
+- Wagmi-powered MetaMask and WalletConnect organization wallet flow restricted to Sepolia testnet
 
 ## Authentication backend
 
@@ -36,14 +38,18 @@ For an investor account, `isIssuer` is `false`.
 
 See [`docs/AUTH_BACKEND_INTEGRATION.md`](docs/AUTH_BACKEND_INTEGRATION.md) for endpoint, token-storage, CORS and email-link details.
 
+Organization onboarding integration is documented in [`docs/ORGANIZATION_BACKEND_INTEGRATION.md`](docs/ORGANIZATION_BACKEND_INTEGRATION.md). Wallet setup, environment variables, and the backend wallet contract are documented in [`docs/WALLET_INTEGRATION.md`](docs/WALLET_INTEGRATION.md).
+
 ## Run locally
 
-Use Node.js `22.22.1` or newer, then run:
+Use Node.js `22.22.1` or newer, add a WalletConnect project ID to `.env` when QR/mobile wallet support is required, then run:
 
 ```bash
 npm install
 npm run dev
 ```
+
+`npm install` generates the dependency lockfile for the newly added Wagmi, Viem, MetaMask Connect, and WalletConnect packages.
 
 Production checks:
 
@@ -57,3 +63,23 @@ The browser running the frontend must be able to reach `192.168.29.90:3000`, and
 ## Email verification links
 
 Verification emails must link to the React route rather than directly to the JSON API. See `docs/EMAIL_VERIFICATION_FRONTEND_FLOW.md` for the required backend email URL and complete redirect flow.
+
+## ERC-3643 Admin Review Panel
+
+A dedicated role-protected compliance workspace is available under `/admin` for backend users whose normalized role is `admin`.
+
+Key routes:
+
+- `/admin/dashboard`
+- `/admin/reviews`
+- `/admin/organizations`
+- `/admin/organizations/:organizationId`
+- `/admin/users`
+- `/admin/audit-logs`
+- `/admin/settings`
+
+See `docs/ADMIN_REVIEW_PANEL.md` for admin login steps, API contracts, mock-mode behavior, and production integration details.
+
+## Admin review API update
+
+The admin Review Queue and Organizations directory now use the real T-REX admin organization API with server-side status filtering, submission-date sorting, pagination, complete detail loading, and secure PATCH approval/rejection decisions. See `docs/ADMIN_BACKEND_REVIEW_INTEGRATION.md` for the exact request contract and environment setup.

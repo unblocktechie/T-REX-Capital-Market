@@ -2,8 +2,23 @@ import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { getErrorMessage } from '@/utils/error';
 
+const isUserCancelledWalletRequest = (error) => {
+  const message = [error?.shortMessage, error?.details, error?.message]
+    .filter(Boolean)
+    .join(' ');
+
+  return (
+    error?.code === 4001 ||
+    /user rejected|user denied|request rejected|request was cancelled|request was canceled/i.test(
+      message,
+    )
+  );
+};
+
 const shouldNotify = (meta, error) =>
-  meta?.silent !== true && error?.__skipGlobalErrorToast !== true;
+  meta?.silent !== true &&
+  error?.__skipGlobalErrorToast !== true &&
+  !isUserCancelledWalletRequest(error);
 
 export const queryClient = new QueryClient({
   queryCache: new QueryCache({

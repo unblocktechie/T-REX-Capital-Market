@@ -17,6 +17,15 @@ const labels = {
   team: 'Team & access',
   profile: 'Profile',
   settings: 'Settings',
+  organization: 'Organization',
+  'company-information': 'Company Information',
+  jurisdiction: 'Jurisdiction',
+  ubo: 'UBO Details',
+  review: 'Final Review',
+  pending: 'Verification in Progress',
+  verified: 'Organization Verified',
+  overview: 'Verified Overview',
+  'mock-admin': 'Mock Admin',
 };
 
 export function Breadcrumbs() {
