@@ -1,0 +1,437 @@
+{
+  "info": {
+    "_postman_id": "857fb97d-5b0e-40b0-9ef6-b64061c87724",
+    "name": "T-REX Capital Market Backend",
+    "description": "Complete T-REX Capital Market API collection. Configure the collection variables, run Admin Login to capture an administrator JWT, and run create requests before their get/update/delete requests. Verification and reset tokens must be copied from their respective emails into the collection variables.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      { "key": "token", "value": "{{adminToken}}", "type": "string" }
+    ]
+  },
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test('Response has a request ID', function () {",
+          "  pm.expect(pm.response.headers.get('x-request-id')).to.be.a('string');",
+          "});",
+          "pm.test('Response time is below 5 seconds', function () {",
+          "  pm.expect(pm.response.responseTime).to.be.below(5000);",
+          "});"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000", "type": "string" },
+    { "key": "adminEmail", "value": "admin@example.com", "type": "string" },
+    { "key": "adminPassword", "value": "ReplaceMe123!", "type": "string" },
+    { "key": "signupEmail", "value": "ada.lovelace@example.com", "type": "string" },
+    { "key": "signupPassword", "value": "Launch!234", "type": "string" },
+    { "key": "newPassword", "value": "NewLaunch!567", "type": "string" },
+    { "key": "verificationToken", "value": "PASTE_64_CHARACTER_TOKEN_FROM_EMAIL", "type": "string" },
+    { "key": "resetToken", "value": "PASTE_64_CHARACTER_TOKEN_FROM_EMAIL", "type": "string" },
+    { "key": "adminToken", "value": "", "type": "string" },
+    { "key": "userToken", "value": "", "type": "string" },
+    { "key": "issuerRoleUid", "value": "00000000-0000-4000-8000-000000000003", "type": "string" },
+    { "key": "investorRoleUid", "value": "00000000-0000-4000-8000-000000000004", "type": "string" },
+    { "key": "adminRoleUid", "value": "00000000-0000-4000-8000-000000000001", "type": "string" },
+    { "key": "usersMenuUid", "value": "10000000-0000-4000-8000-000000000001", "type": "string" },
+    { "key": "managedUserUid", "value": "", "type": "string" },
+    { "key": "managedUserEmail", "value": "", "type": "string" },
+    { "key": "roleUid", "value": "", "type": "string" },
+    { "key": "menuUid", "value": "", "type": "string" },
+    { "key": "permissionUid", "value": "", "type": "string" },
+    { "key": "settingUid", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/health",
+            "description": "Unversioned health endpoint. Returns status, uptime, environment, UTC timestamp, and version."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('API is healthy', function () {",
+            "  pm.response.to.have.status(200);",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.success).to.eql(true);",
+            "  pm.expect(json.data.status).to.eql('UP');",
+            "});"
+          ] } }]
+        },
+        {
+          "name": "Versioned Health Check",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/health"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 200', () => pm.response.to.have.status(200));"] } }]
+        }
+      ]
+    },
+    {
+      "name": "Authentication",
+      "auth": { "type": "noauth" },
+      "item": [
+        {
+          "name": "Signup (Issuer Example)",
+          "event": [
+            { "listen": "prerequest", "script": { "type": "text/javascript", "exec": [
+              "const email = `ada.lovelace.${Date.now()}@example.com`;",
+              "pm.collectionVariables.set('signupEmail', email);"
+            ] } },
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('Account is created', function () {",
+              "  pm.response.to.have.status(201);",
+              "  const json = pm.response.json();",
+              "  pm.expect(json.success).to.eql(true);",
+              "  pm.expect(json.data.email).to.eql(pm.collectionVariables.get('signupEmail'));",
+              "  pm.expect(json.data.roleUid).to.eql(pm.collectionVariables.get('issuerRoleUid'));",
+              "  pm.expect(json.data).not.to.have.property('passwordHash');",
+              "});"
+            ] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"fullName\": \"Ada Lovelace\",\n  \"email\": \"{{signupEmail}}\",\n  \"password\": \"{{signupPassword}}\",\n  \"isIssuer\": true\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/auth/signup",
+            "description": "Generates a unique sample email, assigns the Issuer role, and sends the verification email. Set isIssuer to false to test Investor assignment."
+          }
+        },
+        {
+          "name": "Resend Verification Email",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{signupEmail}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/auth/resend-verification"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Request is accepted', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "Verify Email",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/auth/verify-email?token={{verificationToken}}",
+            "description": "Copy the latest token from the verification email into verificationToken before sending."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Email is verified', function () {",
+            "  pm.response.to.have.status(200);",
+            "  pm.expect(pm.response.json().data.emailVerified).to.eql(true);",
+            "});"
+          ] } }]
+        },
+        {
+          "name": "User Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{signupEmail}}\",\n  \"password\": \"{{signupPassword}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/auth/login"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('User login succeeds', () => pm.response.to.have.status(200));",
+            "const json = pm.response.json();",
+            "if (json.data && json.data.accessToken) pm.collectionVariables.set('userToken', json.data.accessToken);"
+          ] } }]
+        },
+        {
+          "name": "Admin Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/auth/login",
+            "description": "Run after npm run seed:admin. Automatically saves adminToken for every protected request."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Admin login succeeds', () => pm.response.to.have.status(200));",
+            "const json = pm.response.json();",
+            "pm.expect(json.data.accessToken).to.be.a('string');",
+            "pm.collectionVariables.set('adminToken', json.data.accessToken);"
+          ] } }]
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{signupEmail}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/auth/forgot-password"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Reset email request succeeds for registered user', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "Verify Reset Token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/auth/verify-reset-token?token={{resetToken}}",
+            "description": "Copy the token from the password-reset email into resetToken before sending."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Reset token is valid', function () {",
+            "  pm.response.to.have.status(200);",
+            "  pm.expect(pm.response.json().data.valid).to.eql(true);",
+            "});"
+          ] } }]
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"token\": \"{{resetToken}}\",\n  \"newPassword\": \"{{newPassword}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/auth/reset-password"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Password is reset', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "Login With New Password",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{signupEmail}}\",\n  \"password\": \"{{newPassword}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/auth/login"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('New password works', () => pm.response.to.have.status(200));",
+            "const json = pm.response.json();",
+            "if (json.data && json.data.accessToken) pm.collectionVariables.set('userToken', json.data.accessToken);"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "User Management",
+      "item": [
+        {
+          "name": "Create User",
+          "event": [
+            { "listen": "prerequest", "script": { "type": "text/javascript", "exec": [
+              "pm.collectionVariables.set('managedUserEmail', `grace.hopper.${Date.now()}@example.com`);"
+            ] } },
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('User is created', () => pm.response.to.have.status(201));",
+              "const json = pm.response.json();",
+              "if (json.data) pm.collectionVariables.set('managedUserUid', json.data.userUid);"
+            ] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"roleUid\": \"{{investorRoleUid}}\",\n  \"fullName\": \"Grace Hopper\",\n  \"email\": \"{{managedUserEmail}}\",\n  \"password\": \"Compiler!123\",\n  \"emailVerified\": true,\n  \"isActive\": true\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/users"
+          }
+        },
+        {
+          "name": "List Users",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/v1/users?page=1&limit=20&search=Grace&sortBy=fullName&sortOrder=asc&roleUid={{investorRoleUid}}&emailVerified=true&isActive=true" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Users are listed', () => pm.response.to.have.status(200));", "pm.expect(pm.response.json().meta.pagination).to.be.an('object');"] } }]
+        },
+        {
+          "name": "Get User By UID",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/v1/users/{{managedUserUid}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('User is returned', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"fullName\": \"Rear Admiral Grace Hopper\",\n  \"isActive\": true\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/users/{{managedUserUid}}"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('User is updated', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "Delete User",
+          "request": { "method": "DELETE", "header": [], "url": "{{baseUrl}}/api/v1/users/{{managedUserUid}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('User is soft-deleted', () => pm.response.to.have.status(200));"] } }]
+        }
+      ]
+    },
+    {
+      "name": "Role Management",
+      "item": [
+        {
+          "name": "Create Role",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"roleName\": \"Operations {{$timestamp}}\",\n  \"description\": \"Launch operations team\",\n  \"isSystem\": false,\n  \"isActive\": true\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/roles"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Role is created', () => pm.response.to.have.status(201));", "const json = pm.response.json();", "if (json.data) pm.collectionVariables.set('roleUid', json.data.roleUid);"] } }]
+        },
+        {
+          "name": "List Roles",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/v1/roles?page=1&limit=20&search=Operations&sortBy=roleName&sortOrder=asc&isSystem=false&isActive=true" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Roles are listed', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "Get Role By UID",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/v1/roles/{{roleUid}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Role is returned', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "Update Role",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"description\": \"Updated launch operations team\",\n  \"isActive\": true\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/roles/{{roleUid}}"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Role is updated', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "Delete Role",
+          "request": { "method": "DELETE", "header": [], "url": "{{baseUrl}}/api/v1/roles/{{roleUid}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Role is soft-deleted', () => pm.response.to.have.status(200));"] } }]
+        }
+      ]
+    },
+    {
+      "name": "Menu Management",
+      "item": [
+        {
+          "name": "Create Menu",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"parentMenuUid\": null,\n  \"menuName\": \"Launches {{$timestamp}}\",\n  \"menuCode\": \"LAUNCHES_{{$timestamp}}\",\n  \"routePath\": \"/launches\",\n  \"icon\": \"rocket\",\n  \"displayOrder\": 10,\n  \"isVisible\": true,\n  \"isActive\": true\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/menus"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Menu is created', () => pm.response.to.have.status(201));", "const json = pm.response.json();", "if (json.data) pm.collectionVariables.set('menuUid', json.data.menuUid);"] } }]
+        },
+        {
+          "name": "List Menus",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/v1/menus?page=1&limit=20&search=Launches&sortBy=displayOrder&sortOrder=asc&isVisible=true&isActive=true" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Menus are listed', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "Get Menu By UID",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/v1/menus/{{menuUid}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Menu is returned', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "Update Menu",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"menuName\": \"Token Launches\",\n  \"displayOrder\": 15,\n  \"isVisible\": true\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/menus/{{menuUid}}"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Menu is updated', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "Delete Menu",
+          "request": { "method": "DELETE", "header": [], "url": "{{baseUrl}}/api/v1/menus/{{menuUid}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Menu is soft-deleted', () => pm.response.to.have.status(200));"] } }]
+        }
+      ]
+    },
+    {
+      "name": "Permission Management",
+      "item": [
+        {
+          "name": "Create Permission",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"roleUid\": \"{{adminRoleUid}}\",\n  \"menuUid\": \"{{usersMenuUid}}\",\n  \"permissionName\": \"Access sample API\",\n  \"permissionCode\": \"SAMPLE_API_{{$timestamp}}\",\n  \"httpMethod\": \"GET\",\n  \"apiPath\": \"/api/v1/sample/{{$timestamp}}\",\n  \"isAllowed\": true,\n  \"isActive\": true\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/permissions"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Permission is created', () => pm.response.to.have.status(201));", "const json = pm.response.json();", "if (json.data) pm.collectionVariables.set('permissionUid', json.data.permissionUid);"] } }]
+        },
+        {
+          "name": "List Permissions",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/v1/permissions?page=1&limit=20&search=sample&sortBy=permissionName&sortOrder=asc&roleUid={{adminRoleUid}}&httpMethod=GET&isAllowed=true&isActive=true" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Permissions are listed', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "Get Permission By UID",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/v1/permissions/{{permissionUid}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Permission is returned', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "Update Permission",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"permissionName\": \"Access updated sample API\",\n  \"isAllowed\": true,\n  \"isActive\": true\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/permissions/{{permissionUid}}"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Permission is updated', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "Delete Permission",
+          "request": { "method": "DELETE", "header": [], "url": "{{baseUrl}}/api/v1/permissions/{{permissionUid}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Permission is soft-deleted', () => pm.response.to.have.status(200));"] } }]
+        }
+      ]
+    },
+    {
+      "name": "General Settings",
+      "item": [
+        {
+          "name": "Get Public Settings",
+          "request": { "auth": { "type": "noauth" }, "method": "GET", "header": [], "url": "{{baseUrl}}/api/v1/general-settings/public" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Public settings are returned', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "Create General Setting",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"settingKey\": \"application.pageSize.{{$timestamp}}\",\n  \"settingValue\": \"25\",\n  \"valueType\": \"number\",\n  \"settingGroup\": \"application\",\n  \"description\": \"Default frontend page size\",\n  \"isPublic\": true,\n  \"isActive\": true\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/general-settings"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Setting is created', () => pm.response.to.have.status(201));", "const json = pm.response.json();", "if (json.data) pm.collectionVariables.set('settingUid', json.data.settingUid);"] } }]
+        },
+        {
+          "name": "List General Settings",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/v1/general-settings?page=1&limit=20&search=pageSize&sortBy=settingKey&sortOrder=asc&settingGroup=application&valueType=number&isPublic=true&isActive=true" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Settings are listed', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "Get General Setting By UID",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/v1/general-settings/{{settingUid}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Setting is returned', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "Update General Setting",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"settingValue\": \"50\",\n  \"description\": \"Updated default frontend page size\",\n  \"isPublic\": true\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/general-settings/{{settingUid}}"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Setting is updated', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "Delete General Setting",
+          "request": { "method": "DELETE", "header": [], "url": "{{baseUrl}}/api/v1/general-settings/{{settingUid}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Setting is soft-deleted', () => pm.response.to.have.status(200));"] } }]
+        }
+      ]
+    }
+  ]
+}

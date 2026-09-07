@@ -1,0 +1,381 @@
+{
+  "type": "excalidraw",
+  "version": 2,
+  "source": "https://excalidraw.com",
+  "elements": [
+    {
+      "id": "title", "type": "text", "x": 50, "y": 25, "width": 850, "height": 36, "angle": 0,
+      "strokeColor": "#1e293b", "backgroundColor": "transparent", "fillStyle": "solid", "strokeWidth": 1,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "a0",
+      "roundness": null, "seed": 1001, "version": 1, "versionNonce": 2001, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false,
+      "fontSize": 28, "fontFamily": 1, "text": "T-REX Capital Market — Database Structure & Soft Relationships",
+      "rawText": "T-REX Capital Market — Database Structure & Soft Relationships", "originalText": "T-REX Capital Market — Database Structure & Soft Relationships",
+      "textAlign": "left", "verticalAlign": "top", "containerId": null, "lineHeight": 1.25, "autoResize": true
+    },
+    {
+      "id": "subtitle", "type": "text", "x": 52, "y": 72, "width": 1190, "height": 44, "angle": 0,
+      "strokeColor": "#475569", "backgroundColor": "transparent", "fillStyle": "solid", "strokeWidth": 1,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "a1",
+      "roundness": null, "seed": 1002, "version": 1, "versionNonce": 2002, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false,
+      "fontSize": 16, "fontFamily": 1,
+      "text": "PK = primary key   UQ = unique   IDX = index   REL = application-managed relationship\nNo database foreign keys. All timestamps are UTC; all entities use UUID-style string identifiers.",
+      "rawText": "PK = primary key   UQ = unique   IDX = index   REL = application-managed relationship\nNo database foreign keys. All timestamps are UTC; all entities use UUID-style string identifiers.",
+      "originalText": "PK = primary key   UQ = unique   IDX = index   REL = application-managed relationship\nNo database foreign keys. All timestamps are UTC; all entities use UUID-style string identifiers.",
+      "textAlign": "left", "verticalAlign": "top", "containerId": null, "lineHeight": 1.35, "autoResize": true
+    },
+
+    {
+      "id": "roleBox", "type": "rectangle", "x": 60, "y": 170, "width": 450, "height": 390, "angle": 0,
+      "strokeColor": "#2563eb", "backgroundColor": "#dbeafe", "fillStyle": "solid", "strokeWidth": 2,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "b0",
+      "roundness": { "type": 3 }, "seed": 1101, "version": 1, "versionNonce": 2101, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false
+    },
+    {
+      "id": "roleHeader", "type": "rectangle", "x": 60, "y": 170, "width": 450, "height": 54, "angle": 0,
+      "strokeColor": "#2563eb", "backgroundColor": "#2563eb", "fillStyle": "solid", "strokeWidth": 2,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "b1",
+      "roundness": { "type": 3 }, "seed": 1102, "version": 1, "versionNonce": 2102, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false
+    },
+    {
+      "id": "roleTitle", "type": "text", "x": 80, "y": 184, "width": 150, "height": 28, "angle": 0,
+      "strokeColor": "#ffffff", "backgroundColor": "transparent", "fillStyle": "solid", "strokeWidth": 1,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "b2",
+      "roundness": null, "seed": 1103, "version": 1, "versionNonce": 2103, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false,
+      "fontSize": 22, "fontFamily": 1, "text": "userRole", "rawText": "userRole", "originalText": "userRole",
+      "textAlign": "left", "verticalAlign": "top", "containerId": null, "lineHeight": 1.25, "autoResize": true
+    },
+    {
+      "id": "roleBody", "type": "text", "x": 82, "y": 244, "width": 405, "height": 290, "angle": 0,
+      "strokeColor": "#172554", "backgroundColor": "transparent", "fillStyle": "solid", "strokeWidth": 1,
+      "strokeStyle": "solid", "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null, "index": "b3",
+      "roundness": null, "seed": 1104, "version": 1, "versionNonce": 2104, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false,
+      "fontSize": 15, "fontFamily": 3,
+      "text": "PK  roleUid       CHAR(36)\nUQ  roleName      VARCHAR(80)\n    description   VARCHAR(500) NULL\n    isSystem      BOOLEAN DEFAULT false\n    isActive      BOOLEAN DEFAULT true\n    isDeleted     BOOLEAN DEFAULT false\n    createdAt     DATETIME(3) UTC\n    updatedAt     DATETIME(3) UTC\n\nIDX ukUserRoleRoleName (roleName)\nIDX idxUserRoleStatus (isActive, isDeleted)\n\nSeeds: Super Administrator, User, Issuer, Investor",
+      "rawText": "PK  roleUid       CHAR(36)\nUQ  roleName      VARCHAR(80)\n    description   VARCHAR(500) NULL\n    isSystem      BOOLEAN DEFAULT false\n    isActive      BOOLEAN DEFAULT true\n    isDeleted     BOOLEAN DEFAULT false\n    createdAt     DATETIME(3) UTC\n    updatedAt     DATETIME(3) UTC\n\nIDX ukUserRoleRoleName (roleName)\nIDX idxUserRoleStatus (isActive, isDeleted)\n\nSeeds: Super Administrator, User, Issuer, Investor",
+      "originalText": "PK  roleUid       CHAR(36)\nUQ  roleName      VARCHAR(80)\n    description   VARCHAR(500) NULL\n    isSystem      BOOLEAN DEFAULT false\n    isActive      BOOLEAN DEFAULT true\n    isDeleted     BOOLEAN DEFAULT false\n    createdAt     DATETIME(3) UTC\n    updatedAt     DATETIME(3) UTC\n\nIDX ukUserRoleRoleName (roleName)\nIDX idxUserRoleStatus (isActive, isDeleted)\n\nSeeds: Super Administrator, User, Issuer, Investor",
+      "textAlign": "left", "verticalAlign": "top", "containerId": null, "lineHeight": 1.3, "autoResize": true
+    },
+
+    {
+      "id": "userBox", "type": "rectangle", "x": 720, "y": 170, "width": 510, "height": 450, "angle": 0,
+      "strokeColor": "#059669", "backgroundColor": "#d1fae5", "fillStyle": "solid", "strokeWidth": 2,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "c0",
+      "roundness": { "type": 3 }, "seed": 1201, "version": 1, "versionNonce": 2201, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false
+    },
+    {
+      "id": "userHeader", "type": "rectangle", "x": 720, "y": 170, "width": 510, "height": 54, "angle": 0,
+      "strokeColor": "#059669", "backgroundColor": "#059669", "fillStyle": "solid", "strokeWidth": 2,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "c1",
+      "roundness": { "type": 3 }, "seed": 1202, "version": 1, "versionNonce": 2202, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false
+    },
+    {
+      "id": "userTitle", "type": "text", "x": 740, "y": 184, "width": 165, "height": 28, "angle": 0,
+      "strokeColor": "#ffffff", "backgroundColor": "transparent", "fillStyle": "solid", "strokeWidth": 1,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "c2",
+      "roundness": null, "seed": 1203, "version": 1, "versionNonce": 2203, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false,
+      "fontSize": 22, "fontFamily": 1, "text": "userMaster", "rawText": "userMaster", "originalText": "userMaster",
+      "textAlign": "left", "verticalAlign": "top", "containerId": null, "lineHeight": 1.25, "autoResize": true
+    },
+    {
+      "id": "userBody", "type": "text", "x": 742, "y": 244, "width": 465, "height": 350, "angle": 0,
+      "strokeColor": "#064e3b", "backgroundColor": "transparent", "fillStyle": "solid", "strokeWidth": 1,
+      "strokeStyle": "solid", "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null, "index": "c3",
+      "roundness": null, "seed": 1204, "version": 1, "versionNonce": 2204, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false,
+      "fontSize": 15, "fontFamily": 3,
+      "text": "PK  userUid          CHAR(36)\nREL roleUid          CHAR(36) → userRole.roleUid\n    fullName         VARCHAR(120)\nUQ  email            VARCHAR(254)\n    passwordHash     VARCHAR(255)\n    emailVerified    BOOLEAN DEFAULT false\n    emailVerifiedAt  DATETIME(3) NULL\n    isActive         BOOLEAN DEFAULT true\n    isDeleted        BOOLEAN DEFAULT false\n    lastLoginAt      DATETIME(3) NULL\n    createdAt        DATETIME(3) UTC\n    updatedAt        DATETIME(3) UTC\n\nIDX ukUserMasterEmail (email)\nIDX idxUserMasterRoleUid (roleUid)\nIDX idxUserMasterStatus (isActive, isDeleted)\nIDX idxUserMasterFullName (fullName)",
+      "rawText": "PK  userUid          CHAR(36)\nREL roleUid          CHAR(36) → userRole.roleUid\n    fullName         VARCHAR(120)\nUQ  email            VARCHAR(254)\n    passwordHash     VARCHAR(255)\n    emailVerified    BOOLEAN DEFAULT false\n    emailVerifiedAt  DATETIME(3) NULL\n    isActive         BOOLEAN DEFAULT true\n    isDeleted        BOOLEAN DEFAULT false\n    lastLoginAt      DATETIME(3) NULL\n    createdAt        DATETIME(3) UTC\n    updatedAt        DATETIME(3) UTC\n\nIDX ukUserMasterEmail (email)\nIDX idxUserMasterRoleUid (roleUid)\nIDX idxUserMasterStatus (isActive, isDeleted)\nIDX idxUserMasterFullName (fullName)",
+      "originalText": "PK  userUid          CHAR(36)\nREL roleUid          CHAR(36) → userRole.roleUid\n    fullName         VARCHAR(120)\nUQ  email            VARCHAR(254)\n    passwordHash     VARCHAR(255)\n    emailVerified    BOOLEAN DEFAULT false\n    emailVerifiedAt  DATETIME(3) NULL\n    isActive         BOOLEAN DEFAULT true\n    isDeleted        BOOLEAN DEFAULT false\n    lastLoginAt      DATETIME(3) NULL\n    createdAt        DATETIME(3) UTC\n    updatedAt        DATETIME(3) UTC\n\nIDX ukUserMasterEmail (email)\nIDX idxUserMasterRoleUid (roleUid)\nIDX idxUserMasterStatus (isActive, isDeleted)\nIDX idxUserMasterFullName (fullName)",
+      "textAlign": "left", "verticalAlign": "top", "containerId": null, "lineHeight": 1.3, "autoResize": true
+    },
+
+    {
+      "id": "tokenBox", "type": "rectangle", "x": 1450, "y": 170, "width": 470, "height": 430, "angle": 0,
+      "strokeColor": "#7c3aed", "backgroundColor": "#ede9fe", "fillStyle": "solid", "strokeWidth": 2,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "d0",
+      "roundness": { "type": 3 }, "seed": 1301, "version": 1, "versionNonce": 2301, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false
+    },
+    {
+      "id": "tokenHeader", "type": "rectangle", "x": 1450, "y": 170, "width": 470, "height": 54, "angle": 0,
+      "strokeColor": "#7c3aed", "backgroundColor": "#7c3aed", "fillStyle": "solid", "strokeWidth": 2,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "d1",
+      "roundness": { "type": 3 }, "seed": 1302, "version": 1, "versionNonce": 2302, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false
+    },
+    {
+      "id": "tokenTitle", "type": "text", "x": 1470, "y": 184, "width": 140, "height": 28, "angle": 0,
+      "strokeColor": "#ffffff", "backgroundColor": "transparent", "fillStyle": "solid", "strokeWidth": 1,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "d2",
+      "roundness": null, "seed": 1303, "version": 1, "versionNonce": 2303, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false,
+      "fontSize": 22, "fontFamily": 1, "text": "authToken", "rawText": "authToken", "originalText": "authToken",
+      "textAlign": "left", "verticalAlign": "top", "containerId": null, "lineHeight": 1.25, "autoResize": true
+    },
+    {
+      "id": "tokenBody", "type": "text", "x": 1472, "y": 244, "width": 425, "height": 330, "angle": 0,
+      "strokeColor": "#4c1d95", "backgroundColor": "transparent", "fillStyle": "solid", "strokeWidth": 1,
+      "strokeStyle": "solid", "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null, "index": "d3",
+      "roundness": null, "seed": 1304, "version": 1, "versionNonce": 2304, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false,
+      "fontSize": 15, "fontFamily": 3,
+      "text": "PK  tokenUid     CHAR(36)\nREL userUid      CHAR(36) → userMaster.userUid\n    tokenType    ENUM(emailVerification,\n                      passwordReset)\nUQ  tokenHash    CHAR(64) SHA-256\n    expiresAt    DATETIME(3) UTC\n    usedAt       DATETIME(3) NULL\n    revokedAt    DATETIME(3) NULL\n    isActive     BOOLEAN DEFAULT true\n    isDeleted    BOOLEAN DEFAULT false\n    createdAt    DATETIME(3) UTC\n    updatedAt    DATETIME(3) UTC\n\nIDX ukAuthTokenHash (tokenHash)\nIDX idxAuthTokenLookup\n    (userUid, tokenType, expiresAt, usedAt, revokedAt)",
+      "rawText": "PK  tokenUid     CHAR(36)\nREL userUid      CHAR(36) → userMaster.userUid\n    tokenType    ENUM(emailVerification,\n                      passwordReset)\nUQ  tokenHash    CHAR(64) SHA-256\n    expiresAt    DATETIME(3) UTC\n    usedAt       DATETIME(3) NULL\n    revokedAt    DATETIME(3) NULL\n    isActive     BOOLEAN DEFAULT true\n    isDeleted    BOOLEAN DEFAULT false\n    createdAt    DATETIME(3) UTC\n    updatedAt    DATETIME(3) UTC\n\nIDX ukAuthTokenHash (tokenHash)\nIDX idxAuthTokenLookup\n    (userUid, tokenType, expiresAt, usedAt, revokedAt)",
+      "originalText": "PK  tokenUid     CHAR(36)\nREL userUid      CHAR(36) → userMaster.userUid\n    tokenType    ENUM(emailVerification,\n                      passwordReset)\nUQ  tokenHash    CHAR(64) SHA-256\n    expiresAt    DATETIME(3) UTC\n    usedAt       DATETIME(3) NULL\n    revokedAt    DATETIME(3) NULL\n    isActive     BOOLEAN DEFAULT true\n    isDeleted    BOOLEAN DEFAULT false\n    createdAt    DATETIME(3) UTC\n    updatedAt    DATETIME(3) UTC\n\nIDX ukAuthTokenHash (tokenHash)\nIDX idxAuthTokenLookup\n    (userUid, tokenType, expiresAt, usedAt, revokedAt)",
+      "textAlign": "left", "verticalAlign": "top", "containerId": null, "lineHeight": 1.3, "autoResize": true
+    },
+
+    {
+      "id": "menuBox", "type": "rectangle", "x": 60, "y": 760, "width": 500, "height": 455, "angle": 0,
+      "strokeColor": "#ea580c", "backgroundColor": "#ffedd5", "fillStyle": "solid", "strokeWidth": 2,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "e0",
+      "roundness": { "type": 3 }, "seed": 1401, "version": 1, "versionNonce": 2401, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false
+    },
+    {
+      "id": "menuHeader", "type": "rectangle", "x": 60, "y": 760, "width": 500, "height": 54, "angle": 0,
+      "strokeColor": "#ea580c", "backgroundColor": "#ea580c", "fillStyle": "solid", "strokeWidth": 2,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "e1",
+      "roundness": { "type": 3 }, "seed": 1402, "version": 1, "versionNonce": 2402, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false
+    },
+    {
+      "id": "menuTitle", "type": "text", "x": 80, "y": 774, "width": 165, "height": 28, "angle": 0,
+      "strokeColor": "#ffffff", "backgroundColor": "transparent", "fillStyle": "solid", "strokeWidth": 1,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "e2",
+      "roundness": null, "seed": 1403, "version": 1, "versionNonce": 2403, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false,
+      "fontSize": 22, "fontFamily": 1, "text": "menuMaster", "rawText": "menuMaster", "originalText": "menuMaster",
+      "textAlign": "left", "verticalAlign": "top", "containerId": null, "lineHeight": 1.25, "autoResize": true
+    },
+    {
+      "id": "menuBody", "type": "text", "x": 82, "y": 834, "width": 455, "height": 355, "angle": 0,
+      "strokeColor": "#7c2d12", "backgroundColor": "transparent", "fillStyle": "solid", "strokeWidth": 1,
+      "strokeStyle": "solid", "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null, "index": "e3",
+      "roundness": null, "seed": 1404, "version": 1, "versionNonce": 2404, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false,
+      "fontSize": 15, "fontFamily": 3,
+      "text": "PK  menuUid        CHAR(36)\nREL parentMenuUid  CHAR(36) NULL → menuMaster.menuUid\n    menuName       VARCHAR(100)\nUQ  menuCode       VARCHAR(80)\n    routePath      VARCHAR(255) NULL\n    icon           VARCHAR(100) NULL\n    displayOrder   INT UNSIGNED DEFAULT 0\n    isVisible      BOOLEAN DEFAULT true\n    isActive       BOOLEAN DEFAULT true\n    isDeleted      BOOLEAN DEFAULT false\n    createdAt      DATETIME(3) UTC\n    updatedAt      DATETIME(3) UTC\n\nIDX ukMenuMasterMenuCode (menuCode)\nIDX idxMenuMasterParentMenuUid (parentMenuUid)\nIDX idxMenuMasterOrder\n    (displayOrder, isActive, isDeleted)",
+      "rawText": "PK  menuUid        CHAR(36)\nREL parentMenuUid  CHAR(36) NULL → menuMaster.menuUid\n    menuName       VARCHAR(100)\nUQ  menuCode       VARCHAR(80)\n    routePath      VARCHAR(255) NULL\n    icon           VARCHAR(100) NULL\n    displayOrder   INT UNSIGNED DEFAULT 0\n    isVisible      BOOLEAN DEFAULT true\n    isActive       BOOLEAN DEFAULT true\n    isDeleted      BOOLEAN DEFAULT false\n    createdAt      DATETIME(3) UTC\n    updatedAt      DATETIME(3) UTC\n\nIDX ukMenuMasterMenuCode (menuCode)\nIDX idxMenuMasterParentMenuUid (parentMenuUid)\nIDX idxMenuMasterOrder\n    (displayOrder, isActive, isDeleted)",
+      "originalText": "PK  menuUid        CHAR(36)\nREL parentMenuUid  CHAR(36) NULL → menuMaster.menuUid\n    menuName       VARCHAR(100)\nUQ  menuCode       VARCHAR(80)\n    routePath      VARCHAR(255) NULL\n    icon           VARCHAR(100) NULL\n    displayOrder   INT UNSIGNED DEFAULT 0\n    isVisible      BOOLEAN DEFAULT true\n    isActive       BOOLEAN DEFAULT true\n    isDeleted      BOOLEAN DEFAULT false\n    createdAt      DATETIME(3) UTC\n    updatedAt      DATETIME(3) UTC\n\nIDX ukMenuMasterMenuCode (menuCode)\nIDX idxMenuMasterParentMenuUid (parentMenuUid)\nIDX idxMenuMasterOrder\n    (displayOrder, isActive, isDeleted)",
+      "textAlign": "left", "verticalAlign": "top", "containerId": null, "lineHeight": 1.3, "autoResize": true
+    },
+
+    {
+      "id": "permissionBox", "type": "rectangle", "x": 720, "y": 760, "width": 555, "height": 510, "angle": 0,
+      "strokeColor": "#dc2626", "backgroundColor": "#fee2e2", "fillStyle": "solid", "strokeWidth": 2,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "f0",
+      "roundness": { "type": 3 }, "seed": 1501, "version": 1, "versionNonce": 2501, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false
+    },
+    {
+      "id": "permissionHeader", "type": "rectangle", "x": 720, "y": 760, "width": 555, "height": 54, "angle": 0,
+      "strokeColor": "#dc2626", "backgroundColor": "#dc2626", "fillStyle": "solid", "strokeWidth": 2,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "f1",
+      "roundness": { "type": 3 }, "seed": 1502, "version": 1, "versionNonce": 2502, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false
+    },
+    {
+      "id": "permissionTitle", "type": "text", "x": 740, "y": 774, "width": 220, "height": 28, "angle": 0,
+      "strokeColor": "#ffffff", "backgroundColor": "transparent", "fillStyle": "solid", "strokeWidth": 1,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "f2",
+      "roundness": null, "seed": 1503, "version": 1, "versionNonce": 2503, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false,
+      "fontSize": 22, "fontFamily": 1, "text": "permissionMaster", "rawText": "permissionMaster", "originalText": "permissionMaster",
+      "textAlign": "left", "verticalAlign": "top", "containerId": null, "lineHeight": 1.25, "autoResize": true
+    },
+    {
+      "id": "permissionBody", "type": "text", "x": 742, "y": 834, "width": 510, "height": 410, "angle": 0,
+      "strokeColor": "#7f1d1d", "backgroundColor": "transparent", "fillStyle": "solid", "strokeWidth": 1,
+      "strokeStyle": "solid", "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null, "index": "f3",
+      "roundness": null, "seed": 1504, "version": 1, "versionNonce": 2504, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false,
+      "fontSize": 15, "fontFamily": 3,
+      "text": "PK  permissionUid    CHAR(36)\nREL roleUid          CHAR(36) → userRole.roleUid\nREL menuUid          CHAR(36) NULL → menuMaster.menuUid\n    permissionName   VARCHAR(120)\n    permissionCode   VARCHAR(120)\n    httpMethod       ENUM(GET, POST, PUT, PATCH, DELETE)\n    apiPath          VARCHAR(255) route template\n    isAllowed        BOOLEAN DEFAULT true\n    isActive         BOOLEAN DEFAULT true\n    isDeleted        BOOLEAN DEFAULT false\n    createdAt        DATETIME(3) UTC\n    updatedAt        DATETIME(3) UTC\n\nUQ  (roleUid, httpMethod, apiPath)\nUQ  (roleUid, permissionCode)\nIDX idxPermissionMasterMenuUid (menuUid)\nIDX idxPermissionMasterLookup\n    (roleUid, isAllowed, isActive, isDeleted)\n\nIssuer + Investor seed: GET menu list / detail",
+      "rawText": "PK  permissionUid    CHAR(36)\nREL roleUid          CHAR(36) → userRole.roleUid\nREL menuUid          CHAR(36) NULL → menuMaster.menuUid\n    permissionName   VARCHAR(120)\n    permissionCode   VARCHAR(120)\n    httpMethod       ENUM(GET, POST, PUT, PATCH, DELETE)\n    apiPath          VARCHAR(255) route template\n    isAllowed        BOOLEAN DEFAULT true\n    isActive         BOOLEAN DEFAULT true\n    isDeleted        BOOLEAN DEFAULT false\n    createdAt        DATETIME(3) UTC\n    updatedAt        DATETIME(3) UTC\n\nUQ  (roleUid, httpMethod, apiPath)\nUQ  (roleUid, permissionCode)\nIDX idxPermissionMasterMenuUid (menuUid)\nIDX idxPermissionMasterLookup\n    (roleUid, isAllowed, isActive, isDeleted)\n\nIssuer + Investor seed: GET menu list / detail",
+      "originalText": "PK  permissionUid    CHAR(36)\nREL roleUid          CHAR(36) → userRole.roleUid\nREL menuUid          CHAR(36) NULL → menuMaster.menuUid\n    permissionName   VARCHAR(120)\n    permissionCode   VARCHAR(120)\n    httpMethod       ENUM(GET, POST, PUT, PATCH, DELETE)\n    apiPath          VARCHAR(255) route template\n    isAllowed        BOOLEAN DEFAULT true\n    isActive         BOOLEAN DEFAULT true\n    isDeleted        BOOLEAN DEFAULT false\n    createdAt        DATETIME(3) UTC\n    updatedAt        DATETIME(3) UTC\n\nUQ  (roleUid, httpMethod, apiPath)\nUQ  (roleUid, permissionCode)\nIDX idxPermissionMasterMenuUid (menuUid)\nIDX idxPermissionMasterLookup\n    (roleUid, isAllowed, isActive, isDeleted)\n\nIssuer + Investor seed: GET menu list / detail",
+      "textAlign": "left", "verticalAlign": "top", "containerId": null, "lineHeight": 1.3, "autoResize": true
+    },
+
+    {
+      "id": "settingsBox", "type": "rectangle", "x": 1450, "y": 760, "width": 470, "height": 455, "angle": 0,
+      "strokeColor": "#0891b2", "backgroundColor": "#cffafe", "fillStyle": "solid", "strokeWidth": 2,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "g0",
+      "roundness": { "type": 3 }, "seed": 1601, "version": 1, "versionNonce": 2601, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false
+    },
+    {
+      "id": "settingsHeader", "type": "rectangle", "x": 1450, "y": 760, "width": 470, "height": 54, "angle": 0,
+      "strokeColor": "#0891b2", "backgroundColor": "#0891b2", "fillStyle": "solid", "strokeWidth": 2,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "g1",
+      "roundness": { "type": 3 }, "seed": 1602, "version": 1, "versionNonce": 2602, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false
+    },
+    {
+      "id": "settingsTitle", "type": "text", "x": 1470, "y": 774, "width": 205, "height": 28, "angle": 0,
+      "strokeColor": "#ffffff", "backgroundColor": "transparent", "fillStyle": "solid", "strokeWidth": 1,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "g2",
+      "roundness": null, "seed": 1603, "version": 1, "versionNonce": 2603, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false,
+      "fontSize": 22, "fontFamily": 1, "text": "generalSettings", "rawText": "generalSettings", "originalText": "generalSettings",
+      "textAlign": "left", "verticalAlign": "top", "containerId": null, "lineHeight": 1.25, "autoResize": true
+    },
+    {
+      "id": "settingsBody", "type": "text", "x": 1472, "y": 834, "width": 425, "height": 355, "angle": 0,
+      "strokeColor": "#164e63", "backgroundColor": "transparent", "fillStyle": "solid", "strokeWidth": 1,
+      "strokeStyle": "solid", "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null, "index": "g3",
+      "roundness": null, "seed": 1604, "version": 1, "versionNonce": 2604, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false,
+      "fontSize": 15, "fontFamily": 3,
+      "text": "PK  settingUid     CHAR(36)\nUQ  settingKey     VARCHAR(120)\n    settingValue   TEXT\n    valueType      ENUM(string, number, boolean, json)\n    settingGroup   VARCHAR(80) DEFAULT application\n    description    VARCHAR(500) NULL\n    isPublic       BOOLEAN DEFAULT false\n    isActive       BOOLEAN DEFAULT true\n    isDeleted      BOOLEAN DEFAULT false\n    createdAt      DATETIME(3) UTC\n    updatedAt      DATETIME(3) UTC\n\nIDX ukGeneralSettingsKey (settingKey)\nIDX idxGeneralSettingsGroup\n    (settingGroup, isPublic, isActive, isDeleted)\n\nStandalone typed key-value configuration",
+      "rawText": "PK  settingUid     CHAR(36)\nUQ  settingKey     VARCHAR(120)\n    settingValue   TEXT\n    valueType      ENUM(string, number, boolean, json)\n    settingGroup   VARCHAR(80) DEFAULT application\n    description    VARCHAR(500) NULL\n    isPublic       BOOLEAN DEFAULT false\n    isActive       BOOLEAN DEFAULT true\n    isDeleted      BOOLEAN DEFAULT false\n    createdAt      DATETIME(3) UTC\n    updatedAt      DATETIME(3) UTC\n\nIDX ukGeneralSettingsKey (settingKey)\nIDX idxGeneralSettingsGroup\n    (settingGroup, isPublic, isActive, isDeleted)\n\nStandalone typed key-value configuration",
+      "originalText": "PK  settingUid     CHAR(36)\nUQ  settingKey     VARCHAR(120)\n    settingValue   TEXT\n    valueType      ENUM(string, number, boolean, json)\n    settingGroup   VARCHAR(80) DEFAULT application\n    description    VARCHAR(500) NULL\n    isPublic       BOOLEAN DEFAULT false\n    isActive       BOOLEAN DEFAULT true\n    isDeleted      BOOLEAN DEFAULT false\n    createdAt      DATETIME(3) UTC\n    updatedAt      DATETIME(3) UTC\n\nIDX ukGeneralSettingsKey (settingKey)\nIDX idxGeneralSettingsGroup\n    (settingGroup, isPublic, isActive, isDeleted)\n\nStandalone typed key-value configuration",
+      "textAlign": "left", "verticalAlign": "top", "containerId": null, "lineHeight": 1.3, "autoResize": true
+    },
+
+    {
+      "id": "signupRoleNote", "type": "rectangle", "x": 1340, "y": 640, "width": 580, "height": 80, "angle": 0,
+      "strokeColor": "#0f766e", "backgroundColor": "#ccfbf1", "fillStyle": "solid", "strokeWidth": 1,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "g4",
+      "roundness": { "type": 3 }, "seed": 1605, "version": 1, "versionNonce": 2605, "isDeleted": false,
+      "boundElements": null, "updated": 1784793600000, "link": null, "locked": false
+    },
+    {
+      "id": "signupRoleNoteText", "type": "text", "x": 1360, "y": 657, "width": 540, "height": 45, "angle": 0,
+      "strokeColor": "#134e4a", "backgroundColor": "transparent", "fillStyle": "solid", "strokeWidth": 1,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "g5",
+      "roundness": null, "seed": 1606, "version": 1, "versionNonce": 2606, "isDeleted": false,
+      "boundElements": null, "updated": 1784793600000, "link": null, "locked": false,
+      "fontSize": 16, "fontFamily": 1,
+      "text": "Signup role mapping\nisIssuer = true → Issuer   |   isIssuer = false → Investor",
+      "rawText": "Signup role mapping\nisIssuer = true → Issuer   |   isIssuer = false → Investor",
+      "originalText": "Signup role mapping\nisIssuer = true → Issuer   |   isIssuer = false → Investor",
+      "textAlign": "left", "verticalAlign": "top", "containerId": null, "lineHeight": 1.25, "autoResize": true
+    },
+    {
+      "id": "roleUserArrow", "type": "arrow", "x": 510, "y": 275, "width": 210, "height": 0, "angle": 0,
+      "strokeColor": "#334155", "backgroundColor": "transparent", "fillStyle": "solid", "strokeWidth": 2,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "h0",
+      "roundness": { "type": 2 }, "seed": 1701, "version": 1, "versionNonce": 2701, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false,
+      "points": [[0, 0], [210, 0]], "lastCommittedPoint": null, "startBinding": null, "endBinding": null,
+      "startArrowhead": null, "endArrowhead": "arrow", "elbowed": false
+    },
+    {
+      "id": "roleUserLabel", "type": "text", "x": 542, "y": 237, "width": 145, "height": 42, "angle": 0,
+      "strokeColor": "#334155", "backgroundColor": "transparent", "fillStyle": "solid", "strokeWidth": 1,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "h1",
+      "roundness": null, "seed": 1702, "version": 1, "versionNonce": 2702, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false,
+      "fontSize": 14, "fontFamily": 1, "text": "1 role → many users\nroleUid", "rawText": "1 role → many users\nroleUid", "originalText": "1 role → many users\nroleUid",
+      "textAlign": "center", "verticalAlign": "top", "containerId": null, "lineHeight": 1.25, "autoResize": true
+    },
+    {
+      "id": "userTokenArrow", "type": "arrow", "x": 1230, "y": 275, "width": 220, "height": 0, "angle": 0,
+      "strokeColor": "#334155", "backgroundColor": "transparent", "fillStyle": "solid", "strokeWidth": 2,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "h2",
+      "roundness": { "type": 2 }, "seed": 1703, "version": 1, "versionNonce": 2703, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false,
+      "points": [[0, 0], [220, 0]], "lastCommittedPoint": null, "startBinding": null, "endBinding": null,
+      "startArrowhead": null, "endArrowhead": "arrow", "elbowed": false
+    },
+    {
+      "id": "userTokenLabel", "type": "text", "x": 1260, "y": 237, "width": 160, "height": 42, "angle": 0,
+      "strokeColor": "#334155", "backgroundColor": "transparent", "fillStyle": "solid", "strokeWidth": 1,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "h3",
+      "roundness": null, "seed": 1704, "version": 1, "versionNonce": 2704, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false,
+      "fontSize": 14, "fontFamily": 1, "text": "1 user → many tokens\nuserUid", "rawText": "1 user → many tokens\nuserUid", "originalText": "1 user → many tokens\nuserUid",
+      "textAlign": "center", "verticalAlign": "top", "containerId": null, "lineHeight": 1.25, "autoResize": true
+    },
+    {
+      "id": "menuPermissionArrow", "type": "arrow", "x": 560, "y": 875, "width": 160, "height": 0, "angle": 0,
+      "strokeColor": "#334155", "backgroundColor": "transparent", "fillStyle": "solid", "strokeWidth": 2,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "h4",
+      "roundness": { "type": 2 }, "seed": 1705, "version": 1, "versionNonce": 2705, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false,
+      "points": [[0, 0], [160, 0]], "lastCommittedPoint": null, "startBinding": null, "endBinding": null,
+      "startArrowhead": null, "endArrowhead": "arrow", "elbowed": false
+    },
+    {
+      "id": "menuPermissionLabel", "type": "text", "x": 575, "y": 835, "width": 130, "height": 42, "angle": 0,
+      "strokeColor": "#334155", "backgroundColor": "transparent", "fillStyle": "solid", "strokeWidth": 1,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "h5",
+      "roundness": null, "seed": 1706, "version": 1, "versionNonce": 2706, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false,
+      "fontSize": 14, "fontFamily": 1, "text": "1 menu → many\npermissions (optional)", "rawText": "1 menu → many\npermissions (optional)", "originalText": "1 menu → many\npermissions (optional)",
+      "textAlign": "center", "verticalAlign": "top", "containerId": null, "lineHeight": 1.25, "autoResize": true
+    },
+    {
+      "id": "rolePermissionArrow", "type": "arrow", "x": 420, "y": 560, "width": 420, "height": 200, "angle": 0,
+      "strokeColor": "#334155", "backgroundColor": "transparent", "fillStyle": "solid", "strokeWidth": 2,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "h6",
+      "roundness": { "type": 2 }, "seed": 1707, "version": 1, "versionNonce": 2707, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false,
+      "points": [[0, 0], [0, 90], [300, 90], [420, 200]], "lastCommittedPoint": null, "startBinding": null, "endBinding": null,
+      "startArrowhead": null, "endArrowhead": "arrow", "elbowed": false
+    },
+    {
+      "id": "rolePermissionLabel", "type": "text", "x": 455, "y": 610, "width": 225, "height": 42, "angle": 0,
+      "strokeColor": "#334155", "backgroundColor": "transparent", "fillStyle": "solid", "strokeWidth": 1,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "h7",
+      "roundness": null, "seed": 1708, "version": 1, "versionNonce": 2708, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false,
+      "fontSize": 14, "fontFamily": 1, "text": "1 role → many API permissions\nroleUid", "rawText": "1 role → many API permissions\nroleUid", "originalText": "1 role → many API permissions\nroleUid",
+      "textAlign": "center", "verticalAlign": "top", "containerId": null, "lineHeight": 1.25, "autoResize": true
+    },
+    {
+      "id": "menuSelfArrow", "type": "arrow", "x": 40, "y": 1030, "width": 45, "height": 135, "angle": 0,
+      "strokeColor": "#334155", "backgroundColor": "transparent", "fillStyle": "solid", "strokeWidth": 2,
+      "strokeStyle": "dashed", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "h8",
+      "roundness": { "type": 2 }, "seed": 1709, "version": 1, "versionNonce": 2709, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false,
+      "points": [[45, 0], [0, 0], [0, 135], [45, 135]], "lastCommittedPoint": null, "startBinding": null, "endBinding": null,
+      "startArrowhead": null, "endArrowhead": "arrow", "elbowed": false
+    },
+    {
+      "id": "menuSelfLabel", "type": "text", "x": 5, "y": 1070, "width": 105, "height": 42, "angle": 0,
+      "strokeColor": "#334155", "backgroundColor": "transparent", "fillStyle": "solid", "strokeWidth": 1,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "h9",
+      "roundness": null, "seed": 1710, "version": 1, "versionNonce": 2710, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false,
+      "fontSize": 13, "fontFamily": 1, "text": "parent / child\nself relation", "rawText": "parent / child\nself relation", "originalText": "parent / child\nself relation",
+      "textAlign": "center", "verticalAlign": "top", "containerId": null, "lineHeight": 1.25, "autoResize": true
+    },
+    {
+      "id": "relationNote", "type": "rectangle", "x": 1360, "y": 1280, "width": 560, "height": 100, "angle": 0,
+      "strokeColor": "#64748b", "backgroundColor": "#f1f5f9", "fillStyle": "solid", "strokeWidth": 1,
+      "strokeStyle": "dashed", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "i0",
+      "roundness": { "type": 3 }, "seed": 1801, "version": 1, "versionNonce": 2801, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false
+    },
+    {
+      "id": "relationNoteText", "type": "text", "x": 1380, "y": 1300, "width": 520, "height": 58, "angle": 0,
+      "strokeColor": "#334155", "backgroundColor": "transparent", "fillStyle": "solid", "strokeWidth": 1,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "i1",
+      "roundness": null, "seed": 1802, "version": 1, "versionNonce": 2802, "isDeleted": false,
+      "boundElements": null, "updated": 1784707200000, "link": null, "locked": false,
+      "fontSize": 15, "fontFamily": 1,
+      "text": "Soft relationship policy\nRepositories/services validate references and deletion rules. MySQL intentionally defines no FOREIGN KEY constraints.",
+      "rawText": "Soft relationship policy\nRepositories/services validate references and deletion rules. MySQL intentionally defines no FOREIGN KEY constraints.",
+      "originalText": "Soft relationship policy\nRepositories/services validate references and deletion rules. MySQL intentionally defines no FOREIGN KEY constraints.",
+      "textAlign": "left", "verticalAlign": "top", "containerId": null, "lineHeight": 1.25, "autoResize": true
+    }
+  ],
+  "appState": {
+    "gridSize": 20,
+    "gridStep": 5,
+    "gridModeEnabled": false,
+    "viewBackgroundColor": "#f8fafc"
+  },
+  "files": {}
+}

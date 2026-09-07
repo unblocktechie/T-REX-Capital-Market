@@ -1,0 +1,332 @@
+openapi: 3.0.3
+info:
+  title: T-REX Capital Market Backend API
+  version: 1.0.0
+  description: Versioned authentication, RBAC, and master-data APIs for T-REX Capital Market.
+servers:
+  - url: http://localhost:3000
+tags:
+  - name: Health
+  - name: Authentication
+  - name: Users
+  - name: Roles
+  - name: Menus
+  - name: Permissions
+  - name: General Settings
+
+x-list-operation: &listOperation
+  security: [{ bearerAuth: [] }]
+  parameters:
+    - { $ref: '#/components/parameters/Page' }
+    - { $ref: '#/components/parameters/Limit' }
+    - { $ref: '#/components/parameters/Search' }
+    - { $ref: '#/components/parameters/SortBy' }
+    - { $ref: '#/components/parameters/SortOrder' }
+  responses:
+    '200': { description: Paginated records, content: { application/json: { schema: { $ref: '#/components/schemas/SuccessResponse' } } } }
+    '401': { $ref: '#/components/responses/Unauthorized' }
+    '403': { $ref: '#/components/responses/Forbidden' }
+x-get-operation: &getOperation
+  security: [{ bearerAuth: [] }]
+  responses:
+    '200': { description: Record returned, content: { application/json: { schema: { $ref: '#/components/schemas/SuccessResponse' } } } }
+    '401': { $ref: '#/components/responses/Unauthorized' }
+    '403': { $ref: '#/components/responses/Forbidden' }
+    '404': { $ref: '#/components/responses/NotFound' }
+x-delete-operation: &deleteOperation
+  security: [{ bearerAuth: [] }]
+  responses:
+    '200': { description: Record soft-deleted, content: { application/json: { schema: { $ref: '#/components/schemas/SuccessResponse' } } } }
+    '401': { $ref: '#/components/responses/Unauthorized' }
+    '403': { $ref: '#/components/responses/Forbidden' }
+    '404': { $ref: '#/components/responses/NotFound' }
+
+paths:
+  /api/health:
+    get:
+      tags: [Health]
+      summary: API health check
+      responses:
+        '200':
+          description: API is running
+          content:
+            application/json:
+              example:
+                success: true
+                message: T-REX Capital Market API is healthy.
+                data: { status: UP, uptimeSeconds: 42.5, environment: development, utcTimestamp: '2026-07-22T10:00:00.000Z', version: 1.0.0 }
+  /api/v1/health:
+    get:
+      tags: [Health]
+      summary: Versioned health check
+      responses:
+        '200': { description: API is running }
+  /api/v1/auth/signup:
+    post:
+      tags: [Authentication]
+      summary: Create an account and send a verification email
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/SignupRequest' } } }
+      responses:
+        '201': { description: Account created, content: { application/json: { schema: { $ref: '#/components/schemas/SuccessResponse' } } } }
+        '409': { description: Email already exists }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/auth/resend-verification:
+    post:
+      tags: [Authentication]
+      summary: Resend an email verification link
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/EmailRequest' } } } }
+      responses: { '200': { description: Generic accepted response }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /api/v1/auth/verify-email:
+    get:
+      tags: [Authentication]
+      summary: Consume an email verification token
+      parameters: [{ $ref: '#/components/parameters/Token' }]
+      responses: { '200': { description: Email verified }, '400': { description: Invalid or expired token } }
+  /api/v1/auth/login:
+    post:
+      tags: [Authentication]
+      summary: Log in and receive a JWT
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/LoginRequest' } } } }
+      responses:
+        '200': { description: Login successful, content: { application/json: { schema: { $ref: '#/components/schemas/LoginResponse' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/auth/forgot-password:
+    post:
+      tags: [Authentication]
+      summary: Request a password reset link
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/EmailRequest' } } } }
+      responses:
+        '200': { description: Password reset email sent }
+        '403': { description: Registered account is inactive }
+        '404': { description: Email is not registered }
+  /api/v1/auth/verify-reset-token:
+    get:
+      tags: [Authentication]
+      summary: Validate a password reset token
+      parameters: [{ $ref: '#/components/parameters/Token' }]
+      responses: { '200': { description: Token is valid }, '400': { description: Invalid or expired token } }
+  /api/v1/auth/reset-password:
+    post:
+      tags: [Authentication]
+      summary: Consume a token and replace the password
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ResetPasswordRequest' } } } }
+      responses: { '200': { description: Password reset }, '400': { description: Invalid or expired token }, '422': { $ref: '#/components/responses/ValidationError' } }
+
+  /api/v1/users:
+    get: { <<: *listOperation, tags: [Users], summary: List users }
+    post:
+      tags: [Users]
+      summary: Create a managed user
+      security: [{ bearerAuth: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UserInput' } } } }
+      responses: { '201': { description: User created }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /api/v1/users/{userUid}:
+    parameters: [{ $ref: '#/components/parameters/UserUid' }]
+    get: { <<: *getOperation, tags: [Users], summary: Get a user }
+    put:
+      tags: [Users]
+      summary: Update a user
+      security: [{ bearerAuth: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UserInput' } } } }
+      responses: { '200': { description: User updated }, '404': { $ref: '#/components/responses/NotFound' }, '422': { $ref: '#/components/responses/ValidationError' } }
+    delete: { <<: *deleteOperation, tags: [Users], summary: Soft-delete a user }
+
+  /api/v1/roles:
+    get: { <<: *listOperation, tags: [Roles], summary: List roles }
+    post:
+      tags: [Roles]
+      summary: Create a role
+      security: [{ bearerAuth: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RoleInput' } } } }
+      responses: { '201': { description: Role created }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /api/v1/roles/{roleUid}:
+    parameters: [{ $ref: '#/components/parameters/RoleUid' }]
+    get: { <<: *getOperation, tags: [Roles], summary: Get a role }
+    put:
+      tags: [Roles]
+      summary: Update a role
+      security: [{ bearerAuth: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RoleInput' } } } }
+      responses: { '200': { description: Role updated }, '404': { $ref: '#/components/responses/NotFound' } }
+    delete: { <<: *deleteOperation, tags: [Roles], summary: Soft-delete a role }
+
+  /api/v1/menus:
+    get: { <<: *listOperation, tags: [Menus], summary: List menus }
+    post:
+      tags: [Menus]
+      summary: Create a menu
+      security: [{ bearerAuth: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/MenuInput' } } } }
+      responses: { '201': { description: Menu created }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /api/v1/menus/{menuUid}:
+    parameters: [{ $ref: '#/components/parameters/MenuUid' }]
+    get: { <<: *getOperation, tags: [Menus], summary: Get a menu }
+    put:
+      tags: [Menus]
+      summary: Update a menu
+      security: [{ bearerAuth: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/MenuInput' } } } }
+      responses: { '200': { description: Menu updated }, '404': { $ref: '#/components/responses/NotFound' } }
+    delete: { <<: *deleteOperation, tags: [Menus], summary: Soft-delete a menu }
+
+  /api/v1/permissions:
+    get: { <<: *listOperation, tags: [Permissions], summary: List permissions }
+    post:
+      tags: [Permissions]
+      summary: Create an API permission
+      security: [{ bearerAuth: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PermissionInput' } } } }
+      responses: { '201': { description: Permission created }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /api/v1/permissions/{permissionUid}:
+    parameters: [{ $ref: '#/components/parameters/PermissionUid' }]
+    get: { <<: *getOperation, tags: [Permissions], summary: Get a permission }
+    put:
+      tags: [Permissions]
+      summary: Update a permission
+      security: [{ bearerAuth: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PermissionInput' } } } }
+      responses: { '200': { description: Permission updated }, '404': { $ref: '#/components/responses/NotFound' } }
+    delete: { <<: *deleteOperation, tags: [Permissions], summary: Soft-delete a permission }
+
+  /api/v1/general-settings/public:
+    get:
+      tags: [General Settings]
+      summary: Get active public settings
+      responses: { '200': { description: Typed key-value settings } }
+  /api/v1/general-settings:
+    get: { <<: *listOperation, tags: [General Settings], summary: List settings }
+    post:
+      tags: [General Settings]
+      summary: Create a setting
+      security: [{ bearerAuth: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SettingInput' } } } }
+      responses: { '201': { description: Setting created }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /api/v1/general-settings/{settingUid}:
+    parameters: [{ $ref: '#/components/parameters/SettingUid' }]
+    get: { <<: *getOperation, tags: [General Settings], summary: Get a setting }
+    put:
+      tags: [General Settings]
+      summary: Update a setting
+      security: [{ bearerAuth: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SettingInput' } } } }
+      responses: { '200': { description: Setting updated }, '404': { $ref: '#/components/responses/NotFound' } }
+    delete: { <<: *deleteOperation, tags: [General Settings], summary: Soft-delete a setting }
+
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  parameters:
+    Page: { in: query, name: page, schema: { type: integer, minimum: 1, default: 1 } }
+    Limit: { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+    Search: { in: query, name: search, schema: { type: string, maxLength: 100 } }
+    SortBy: { in: query, name: sortBy, schema: { type: string, default: createdAt } }
+    SortOrder: { in: query, name: sortOrder, schema: { type: string, enum: [asc, desc], default: desc } }
+    Token: { in: query, name: token, required: true, schema: { type: string, minLength: 64, maxLength: 64 } }
+    UserUid: { in: path, name: userUid, required: true, schema: { type: string, format: uuid } }
+    RoleUid: { in: path, name: roleUid, required: true, schema: { type: string, format: uuid } }
+    MenuUid: { in: path, name: menuUid, required: true, schema: { type: string, format: uuid } }
+    PermissionUid: { in: path, name: permissionUid, required: true, schema: { type: string, format: uuid } }
+    SettingUid: { in: path, name: settingUid, required: true, schema: { type: string, format: uuid } }
+  responses:
+    Unauthorized: { description: Missing, invalid, expired, or stale JWT }
+    Forbidden: { description: Account or role is not allowed to perform the operation }
+    NotFound: { description: Resource does not exist }
+    ValidationError: { description: Body, query, or route validation failed }
+  schemas:
+    SuccessResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        message: { type: string }
+        data: {}
+        timestamp: { type: string, format: date-time }
+        requestId: { type: string, format: uuid }
+    SignupRequest:
+      type: object
+      required: [fullName, email, password, isIssuer]
+      properties:
+        fullName: { type: string, example: Ada Lovelace }
+        email: { type: string, format: email, example: ada@example.com }
+        password: { type: string, format: password, example: 'Launch!234' }
+        isIssuer:
+          type: boolean
+          example: true
+          description: When true assigns the Issuer role; when false assigns the Investor role.
+    EmailRequest:
+      type: object
+      required: [email]
+      properties: { email: { type: string, format: email, example: ada@example.com } }
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, example: ada@example.com }
+        password: { type: string, format: password, example: 'Launch!234' }
+    LoginResponse:
+      allOf:
+        - { $ref: '#/components/schemas/SuccessResponse' }
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                accessToken: { type: string }
+                tokenType: { type: string, example: Bearer }
+                expiresIn: { type: string, example: 1h }
+    ResetPasswordRequest:
+      type: object
+      required: [token, newPassword]
+      properties:
+        token: { type: string, minLength: 64, maxLength: 64 }
+        newPassword: { type: string, format: password, example: 'NewLaunch!567' }
+    UserInput:
+      type: object
+      properties:
+        roleUid: { type: string, format: uuid }
+        fullName: { type: string, example: Grace Hopper }
+        email: { type: string, format: email, example: grace@example.com }
+        password: { type: string, format: password, example: 'Compiler!123' }
+        emailVerified: { type: boolean }
+        isActive: { type: boolean }
+    RoleInput:
+      type: object
+      properties:
+        roleName: { type: string, example: Operations }
+        description: { type: string, example: Launch operations team }
+        isSystem: { type: boolean, default: false }
+        isActive: { type: boolean, default: true }
+    MenuInput:
+      type: object
+      properties:
+        parentMenuUid: { type: string, format: uuid, nullable: true }
+        menuName: { type: string, example: Launches }
+        menuCode: { type: string, example: LAUNCHES }
+        routePath: { type: string, example: /launches }
+        icon: { type: string, example: rocket }
+        displayOrder: { type: integer, example: 10 }
+        isVisible: { type: boolean }
+        isActive: { type: boolean }
+    PermissionInput:
+      type: object
+      properties:
+        roleUid: { type: string, format: uuid }
+        menuUid: { type: string, format: uuid, nullable: true }
+        permissionName: { type: string, example: List launches }
+        permissionCode: { type: string, example: LAUNCH_LIST }
+        httpMethod: { type: string, enum: [GET, POST, PUT, PATCH, DELETE] }
+        apiPath: { type: string, example: /api/v1/launches }
+        isAllowed: { type: boolean }
+        isActive: { type: boolean }
+    SettingInput:
+      type: object
+      properties:
+        settingKey: { type: string, example: application.pageSize }
+        settingValue: { type: string, example: '25' }
+        valueType: { type: string, enum: [string, number, boolean, json] }
+        settingGroup: { type: string, example: application }
+        description: { type: string }
+        isPublic: { type: boolean }
+        isActive: { type: boolean }
