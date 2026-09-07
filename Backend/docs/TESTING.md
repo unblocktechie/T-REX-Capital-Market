@@ -199,3 +199,39 @@ curl -X PATCH http://localhost:3000/api/v1/organizations/me/user-notified -H "Au
 ```
 
 Expected: `200` and `data.isUserNotified` is `true`/`1`. Repeated calls remain successful. An issuer without an organization receives `404`.
+
+## 17. Admin review and one-time rejection retry
+
+List pending submissions using `ADMIN_TOKEN`:
+
+```bash
+curl "http://localhost:3000/api/v1/admin/organizations?page=1&limit=20&status=submitted&sortBy=submittedAt&sortOrder=desc" -H "Authorization: Bearer ADMIN_TOKEN"
+curl "http://localhost:3000/api/v1/admin/organizations/ORGANIZATION_UID" -H "Authorization: Bearer ADMIN_TOKEN"
+```
+
+Preview or download a document UID returned by the detail API:
+
+```bash
+curl "http://localhost:3000/api/v1/admin/organizations/ORGANIZATION_UID/documents/DOCUMENT_UID/file" -H "Authorization: Bearer ADMIN_TOKEN" --output preview.pdf
+curl "http://localhost:3000/api/v1/admin/organizations/ORGANIZATION_UID/documents/DOCUMENT_UID/file?disposition=attachment" -H "Authorization: Bearer ADMIN_TOKEN" --output downloaded-document.pdf
+```
+
+Expected: `200`; preview uses `Content-Disposition: inline`, download uses `attachment`. A document from another organization or missing stored file returns `404`.
+
+First rejection:
+
+```bash
+curl -X PATCH http://localhost:3000/api/v1/admin/organizations/ORGANIZATION_UID/status -H "Authorization: Bearer ADMIN_TOKEN" -H "Content-Type: application/json" -d '{"status":"rejected","rejectionReason":"Please replace the expired incorporation document."}'
+```
+
+Expected: `status: rejected`, `rejectionCount: 1`, and `canResubmit: true`. `GET /organizations/me` returns the same reason. The issuer can edit and submit once using the normal onboarding APIs.
+
+After the issuer submits the revision, expect `status: resubmitted`. Admin lists can filter with `status=resubmitted`. Reject that resubmitted application again with a new reason. Expected: `rejectionCount: 2`, `canResubmit: false`. Company, jurisdiction, UBO, document mutation, and submit endpoints now return `409` with Contact Sales guidance.
+
+Approval example:
+
+```bash
+curl -X PATCH http://localhost:3000/api/v1/admin/organizations/ORGANIZATION_UID/status -H "Authorization: Bearer ADMIN_TOKEN" -H "Content-Type: application/json" -d '{"status":"approved"}'
+```
+
+Expected: `status: approved`, `canResubmit: false`, and `rejectionReason: null`.

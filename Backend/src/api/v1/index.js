@@ -4,6 +4,7 @@ const { createAuthRouter } = require('./routes/auth.routes');
 const { createMasterRouter } = require('./routes/master.routes');
 const { health } = require('./controllers/health.controller');
 const { createReferenceRouter, createOrganizationRouter } = require('./routes/organization.routes');
+const { createOrganizationAdminRouter } = require('./routes/organization-admin.routes');
 
 const createV1Router = () => {
   const router = express.Router();
@@ -15,6 +16,11 @@ const createV1Router = () => {
   }));
   router.use('/organizations', createOrganizationRouter({
     controller: dependencies.controllers.organizations,
+    authenticate: dependencies.authenticate,
+    authorize: dependencies.authorize,
+  }));
+  router.use('/admin/organizations', createOrganizationAdminRouter({
+    controller: dependencies.controllers.organizationAdmin,
     authenticate: dependencies.authenticate,
     authorize: dependencies.authorize,
   }));

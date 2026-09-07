@@ -15,11 +15,13 @@ const { GeneralSettingService } = require('../services/general-setting.service')
 const { AuthService } = require('../services/auth.service');
 const { LocationService } = require('../services/location.service');
 const { OrganizationService } = require('../services/organization.service');
+const { OrganizationAdminService } = require('../services/organization-admin.service');
 const emailService = require('../services/common/email.service');
 const { createCrudController } = require('../api/v1/controllers/crud.controller');
 const { createAuthController } = require('../api/v1/controllers/auth.controller');
 const { createLocationController } = require('../api/v1/controllers/location.controller');
 const { createOrganizationController } = require('../api/v1/controllers/organization.controller');
+const { createOrganizationAdminController } = require('../api/v1/controllers/organization-admin.controller');
 const { createAuthenticate } = require('../middleware/authenticate.middleware');
 const { createAuthorize } = require('../middleware/authorize.middleware');
 
@@ -45,6 +47,7 @@ const organizationService = new OrganizationService({
   optionRepository: organizationOptionRepository,
   locationService,
 });
+const organizationAdminService = new OrganizationAdminService(organizationRepository);
 
 const controllers = {
   auth: createAuthController(authService),
@@ -55,11 +58,15 @@ const controllers = {
   settings: createCrudController(settingService, { singular: 'General setting', plural: 'General settings', uidParam: 'settingUid' }),
   locations: createLocationController(locationService),
   organizations: createOrganizationController(organizationService, organizationOptionRepository),
+  organizationAdmin: createOrganizationAdminController(organizationAdminService),
 };
 
 module.exports = {
   controllers,
-  services: { authService, userService, roleService, menuService, permissionService, settingService, locationService, organizationService },
+  services: {
+    authService, userService, roleService, menuService, permissionService, settingService,
+    locationService, organizationService, organizationAdminService,
+  },
   repositories: {
     userRepository, roleRepository, menuRepository, permissionRepository, settingRepository, authTokenRepository,
     locationRepository, organizationOptionRepository, organizationRepository,

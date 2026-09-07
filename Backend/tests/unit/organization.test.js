@@ -123,6 +123,8 @@ test('organization submission persists the wallet address', async () => {
   );
 
   assert.equal(update.fields.walletAddress, walletAddress);
+  assert.equal(update.fields.rejectionReason, null);
+  assert.equal(update.fields.canResubmit, false);
   assert.equal(result.walletAddress, walletAddress);
   assert.equal(result.status, 'submitted');
 });

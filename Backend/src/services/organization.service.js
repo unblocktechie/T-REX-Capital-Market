@@ -31,9 +31,25 @@ class OrganizationService {
   }
 
   assertEditable(organization) {
-    if (organization && ['submitted', 'underReview', 'approved'].includes(organization.status)) {
+    if (organization && ['submitted', 'resubmitted', 'underReview', 'approved'].includes(organization.status)) {
       throw ApiError.conflict(`Organization cannot be edited while its status is ${organization.status}.`);
     }
+    if (organization?.status === 'rejected' && !organization.canResubmit) {
+      throw ApiError.conflict('The organization revision opportunity has already been used. Please contact Sales for assistance.');
+    }
+  }
+
+  draftState(organization) {
+    const isRejectedRevision = organization?.status === 'rejected' && Boolean(organization.canResubmit);
+    return {
+      isDraft: true,
+      status: isRejectedRevision ? 'rejected' : 'draft',
+      submittedAt: isRejectedRevision ? organization.submittedAt : null,
+    };
+  }
+
+  submissionStatus(organization) {
+    return Number(organization?.rejectionCount || 0) > 0 ? 'resubmitted' : 'submitted';
   }
 
   async getFullForm(user) {
@@ -67,7 +83,7 @@ class OrganizationService {
     await this.locationService.validateHierarchy(input.countryUid, input.stateUid, input.cityUid);
     const { isDraft, ...fields } = input;
     const nextStep = isDraft ? (current?.currentStep || 'companyInformation') : 'jurisdiction';
-    const data = { ...fields, currentStep: nextStep, isDraft: true, status: 'draft', submittedAt: null };
+    const data = { ...fields, currentStep: nextStep, ...this.draftState(current) };
     return current
       ? this.repository.updateByUserUid(user.userUid, data)
       : this.repository.createForUser(user.userUid, data);
@@ -90,9 +106,7 @@ class OrganizationService {
     const data = {
       ...fields,
       currentStep: isDraft ? (current?.currentStep || 'jurisdiction') : 'beneficialOwners',
-      isDraft: true,
-      status: 'draft',
-      submittedAt: null,
+      ...this.draftState(current),
     };
     return current
       ? this.repository.updateByUserUid(user.userUid, data)
@@ -129,7 +143,8 @@ class OrganizationService {
       }, connection);
       const owners = await this.repository.replaceBeneficialOwners(organization.organizationUid, input.owners, connection);
       await this.repository.updateByUserUid(user.userUid, {
-        currentStep: input.isDraft ? organization.currentStep : 'documents', isDraft: true, status: 'draft', submittedAt: null,
+        currentStep: input.isDraft ? organization.currentStep : 'documents',
+        ...this.draftState(current),
       }, connection);
       return owners;
     });
@@ -155,7 +170,9 @@ class OrganizationService {
     return withTransaction(async (connection) => {
       const documents = [];
       for (const record of fileRecords) documents.push(await this.repository.createDocument(record, connection));
-      await this.repository.updateByUserUid(user.userUid, { currentStep: 'documents', isDraft: true }, connection);
+      await this.repository.updateByUserUid(user.userUid, {
+        currentStep: 'documents', ...this.draftState(current),
+      }, connection);
       return documents;
     });
   }
@@ -191,6 +208,9 @@ class OrganizationService {
       throw ApiError.badRequest('The document storage path is invalid.');
     }
     await this.repository.softDeleteDocument(document.organizationUid, documentUid);
+    await this.repository.updateByUserUid(user.userUid, {
+      ...this.draftState(organization),
+    });
     fs.promises.unlink(filePath).catch((error) => {
       if (error.code !== 'ENOENT') logger.warn('Could not remove organization document file', { documentUid, error });
     });
@@ -221,7 +241,14 @@ class OrganizationService {
       })));
     }
     return this.repository.updateByUserUid(user.userUid, {
-      walletAddress, currentStep: 'completed', isDraft: false, status: 'submitted', submittedAt: new Date(),
+      walletAddress,
+      currentStep: 'completed',
+      isDraft: false,
+      status: this.submissionStatus(organization),
+      submittedAt: new Date(),
+      rejectionReason: null,
+      canResubmit: false,
+      isUserNotified: false,
     });
   }
 }

@@ -50,12 +50,40 @@ const submitOrganization = Joi.object({
   }),
 });
 
+const adminOrganizationListQuery = Joi.object({
+  page: Joi.number().integer().min(1).default(1),
+  limit: Joi.number().integer().min(1).max(100).default(20),
+  search: Joi.string().trim().max(100),
+  status: Joi.string().valid('submitted', 'resubmitted', 'underReview', 'approved', 'rejected'),
+  sortBy: Joi.string().valid('legalCompanyName', 'status', 'submittedAt', 'updatedAt').default('submittedAt'),
+  sortOrder: Joi.string().lowercase().valid('asc', 'desc').default('desc'),
+});
+
+const reviewOrganization = Joi.object({
+  status: Joi.string().valid('approved', 'rejected').required(),
+  rejectionReason: Joi.when('status', {
+    is: 'rejected',
+    then: Joi.string().trim().min(10).max(2000).required(),
+    otherwise: Joi.forbidden(),
+  }),
+});
+
 const documentUpload = Joi.object({ documentTypeUid: uid.required() });
 const documentParams = Joi.object({ documentUid: uid.required() });
+const organizationParams = Joi.object({ organizationUid: uid.required() });
+const adminDocumentParams = Joi.object({
+  organizationUid: uid.required(),
+  documentUid: uid.required(),
+});
+const adminDocumentFileQuery = Joi.object({
+  disposition: Joi.string().valid('inline', 'attachment').default('inline'),
+});
 const countryParams = Joi.object({ countryUid: uid.required() });
 const stateParams = Joi.object({ stateUid: uid.required() });
 
 module.exports = {
   locationListQuery, companyInformation, jurisdiction, beneficialOwners, documentUpload,
-  submitOrganization, documentParams, countryParams, stateParams,
+  submitOrganization, adminOrganizationListQuery, reviewOrganization,
+  documentParams, organizationParams, adminDocumentParams, adminDocumentFileQuery,
+  countryParams, stateParams,
 };

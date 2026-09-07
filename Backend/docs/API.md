@@ -201,7 +201,7 @@ Filters: `parentMenuUid`, `isVisible`, `isActive`. Search: `menuName`, `menuCode
 
 ## Organization onboarding
 
-Organization onboarding is available only to authenticated users whose role is `Issuer`. One issuer owns one organization form. Every section save remains a draft; only `POST /organizations/me/submit` changes it to `submitted`.
+Organization onboarding is available only to authenticated users whose role is `Issuer`. One issuer owns one organization form. Every section save remains a draft; `POST /organizations/me/submit` changes an initial application to `submitted` and a revised application to `resubmitted`.
 
 ### Public form reference APIs
 
@@ -309,7 +309,65 @@ DELETE /organizations/me/documents/{documentUid}
 }
 ```
 
-`walletAddress` is required and must be a valid EVM address (`0x` followed by 40 hexadecimal characters). Final submission saves it on the organization and revalidates every required company and jurisdiction field, location hierarchy, entity/industry references, owners, and every required document type. A successful response sets `isDraft: false`, `status: submitted`, `currentStep: completed`, and `submittedAt`. Submitted forms are read-only.
+`walletAddress` is required and must be a valid EVM address (`0x` followed by 40 hexadecimal characters). Final submission saves it on the organization and revalidates every required company and jurisdiction field, location hierarchy, entity/industry references, owners, and every required document type. An initial submission sets `status: submitted`; the allowed revised submission sets `status: resubmitted`. Both set `isDraft: false`, `currentStep: completed`, and `submittedAt`.
+
+## Admin organization review
+
+These APIs require an administrator JWT and the seeded Super Administrator permissions.
+
+### `GET /admin/organizations`
+
+Returns all organization applications that have reached submission, including pending, approved, and rejected applications. A first-rejection application remains visible while its issuer prepares the allowed revision.
+
+```text
+GET /admin/organizations?page=1&limit=20&search=acme&status=submitted&sortBy=submittedAt&sortOrder=desc
+```
+
+`status` is optional and supports `submitted`, `resubmitted`, `underReview`, `approved`, and `rejected`. Search covers company name, registration number, wallet address, issuer name, and issuer email.
+
+### `GET /admin/organizations/{organizationUid}`
+
+Returns the complete submitted application, issuer identity, resolved form labels, beneficial owners, and document metadata. Document-level review status is intentionally not used; review status belongs only to `organizationMaster`.
+
+### `GET /admin/organizations/{organizationUid}/documents/{documentUid}/file`
+
+Securely returns a document belonging to the selected organization.
+
+```text
+GET /admin/organizations/{organizationUid}/documents/{documentUid}/file
+GET /admin/organizations/{organizationUid}/documents/{documentUid}/file?disposition=attachment
+```
+
+`disposition=inline` is the default and supports browser preview for PDF/PNG/JPG files. Use `attachment` to download using the original filename. The request requires the administrator Bearer token and returns binary file content, not the JSON response envelope.
+
+### `PATCH /admin/organizations/{organizationUid}/status`
+
+Approve:
+
+```json
+{
+  "status": "approved"
+}
+```
+
+Reject:
+
+```json
+{
+  "status": "rejected",
+  "rejectionReason": "Please replace the expired incorporation document and verify the registration number."
+}
+```
+
+`rejectionReason` is required only for rejection and must be 10–2,000 characters.
+
+Rejection lifecycle:
+
+- First rejection: `rejectionCount: 1`, `canResubmit: true`. The reason is returned by `GET /organizations/me`; the issuer can edit any section and resubmit once.
+- During revision the main `status` remains `rejected` and `isDraft` becomes true, so the rejection remains visible but cannot be reviewed again yet.
+- Resubmission: status becomes `resubmitted`, `canResubmit` becomes `false`, and `rejectionReason` is cleared.
+- Second rejection: `rejectionCount: 2`, `canResubmit: false`. All issuer edits and further submission attempts return `409`; the frontend should show Contact Sales.
+- Approval: the application becomes read-only and rejection data is cleared.
 
 ## Status codes
 

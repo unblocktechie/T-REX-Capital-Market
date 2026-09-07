@@ -15,6 +15,7 @@ tags:
   - name: General Settings
   - name: Locations
   - name: Organization
+  - name: Admin Organizations
 
 x-list-operation: &listOperation
   security: [{ bearerAuth: [] }]
@@ -359,6 +360,80 @@ paths:
         '400': { description: Required form data, owners, or documents are missing }
         '409': { description: Organization is no longer editable }
         '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/admin/organizations:
+    get:
+      tags: [Admin Organizations]
+      summary: List submitted organization applications
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Search' }
+        - in: query
+          name: status
+          schema: { type: string, enum: [submitted, resubmitted, underReview, approved, rejected] }
+        - in: query
+          name: sortBy
+          schema: { type: string, enum: [legalCompanyName, status, submittedAt, updatedAt], default: submittedAt }
+        - { $ref: '#/components/parameters/SortOrder' }
+      responses:
+        '200': { description: Paginated submitted organization applications }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/admin/organizations/{organizationUid}:
+    get:
+      tags: [Admin Organizations]
+      summary: Get a complete submitted organization application
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/OrganizationUid' }]
+      responses:
+        '200': { description: Organization, issuer, beneficial owners, and document metadata }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/admin/organizations/{organizationUid}/documents/{documentUid}/file:
+    get:
+      tags: [Admin Organizations]
+      summary: Preview or download an organization document
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/OrganizationUid' }
+        - { $ref: '#/components/parameters/DocumentUid' }
+        - in: query
+          name: disposition
+          schema: { type: string, enum: [inline, attachment], default: inline }
+          description: Inline previews the file; attachment downloads it using its original filename.
+      responses:
+        '200':
+          description: Organization document binary content
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+          content:
+            application/pdf: { schema: { type: string, format: binary } }
+            image/png: { schema: { type: string, format: binary } }
+            image/jpeg: { schema: { type: string, format: binary } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/admin/organizations/{organizationUid}/status:
+    patch:
+      tags: [Admin Organizations]
+      summary: Approve or reject a submitted organization application
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/OrganizationUid' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OrganizationReviewInput' }
+      responses:
+        '200': { description: Organization application reviewed }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: Only submitted or resubmitted applications can be reviewed }
+        '422': { $ref: '#/components/responses/ValidationError' }
 
 components:
   securitySchemes:
@@ -379,6 +454,7 @@ components:
     CountryUid: { in: path, name: countryUid, required: true, schema: { type: string, format: uuid } }
     StateUid: { in: path, name: stateUid, required: true, schema: { type: string, format: uuid } }
     DocumentUid: { in: path, name: documentUid, required: true, schema: { type: string, format: uuid } }
+    OrganizationUid: { in: path, name: organizationUid, required: true, schema: { type: string, format: uuid } }
   responses:
     Unauthorized: { description: Missing, invalid, expired, or stale JWT }
     Forbidden: { description: Account or role is not allowed to perform the operation }
@@ -527,3 +603,14 @@ components:
           type: string
           pattern: '^0x[a-fA-F0-9]{40}$'
           example: '0x1111111111111111111111111111111111111111'
+    OrganizationReviewInput:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [approved, rejected] }
+        rejectionReason:
+          type: string
+          minLength: 10
+          maxLength: 2000
+          description: Required when status is rejected and forbidden when status is approved.
+          example: Please replace the expired incorporation document.

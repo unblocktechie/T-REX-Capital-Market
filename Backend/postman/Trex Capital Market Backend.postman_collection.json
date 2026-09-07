@@ -55,7 +55,10 @@
     { "key": "industryUid", "value": "", "type": "string" },
     { "key": "documentTypeUid", "value": "", "type": "string" },
     { "key": "documentUid", "value": "", "type": "string" },
-    { "key": "walletAddress", "value": "0x1111111111111111111111111111111111111111", "type": "string" }
+    { "key": "walletAddress", "value": "0x1111111111111111111111111111111111111111", "type": "string" },
+    { "key": "adminOrganizationUid", "value": "", "type": "string" },
+    { "key": "adminDocumentUid", "value": "", "type": "string" },
+    { "key": "adminOrganizationStatus", "value": "submitted", "type": "string" }
   ],
   "item": [
     {
@@ -610,7 +613,86 @@
           },
           "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
             "pm.test('Organization is submitted', () => pm.response.to.have.status(200));",
-            "pm.expect(pm.response.json().data.status).to.eql('submitted');"
+            "pm.expect(pm.response.json().data.status).to.be.oneOf(['submitted', 'resubmitted']);"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "Admin Organization Review",
+      "description": "Requires adminToken. The list request captures the first pending organization UID for detail and review.",
+      "item": [
+        {
+          "name": "List Submitted Organizations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/admin/organizations?page=1&limit=20&status={{adminOrganizationStatus}}&sortBy=submittedAt&sortOrder=desc",
+            "description": "Set adminOrganizationStatus to submitted or resubmitted for the corresponding review queue."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Submitted organizations are listed', () => pm.response.to.have.status(200));",
+            "const rows = pm.response.json().data;",
+            "if (rows.length) pm.collectionVariables.set('adminOrganizationUid', rows[0].organizationUid);"
+          ] } }]
+        },
+        {
+          "name": "Get Complete Organization Details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/admin/organizations/{{adminOrganizationUid}}"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Complete organization details are returned', () => pm.response.to.have.status(200));",
+            "const data = pm.response.json().data;",
+            "pm.expect(data).to.have.property('beneficialOwners');",
+            "pm.expect(data).to.have.property('documents');",
+            "if (data.documents.length) pm.collectionVariables.set('adminDocumentUid', data.documents[0].documentUid);"
+          ] } }]
+        },
+        {
+          "name": "Preview Organization Document",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/admin/organizations/{{adminOrganizationUid}}/documents/{{adminDocumentUid}}/file?disposition=inline",
+            "description": "Returns binary content with Content-Disposition inline. Use Postman's Visualize/Preview or save the response."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Document is available for preview', () => pm.response.to.have.status(200));",
+            "pm.expect(pm.response.headers.get('Content-Disposition')).to.include('inline');"
+          ] } }]
+        },
+        {
+          "name": "Download Organization Document",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/admin/organizations/{{adminOrganizationUid}}/documents/{{adminDocumentUid}}/file?disposition=attachment",
+            "description": "Use Send and Download in Postman. The original filename is supplied through Content-Disposition."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Document is available for download', () => pm.response.to.have.status(200));",
+            "pm.expect(pm.response.headers.get('Content-Disposition')).to.include('attachment');"
+          ] } }]
+        },
+        {
+          "name": "Review Organization (Reject Example)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"rejected\",\n  \"rejectionReason\": \"Please replace the expired incorporation document and verify the registration number.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/admin/organizations/{{adminOrganizationUid}}/status",
+            "description": "For approval, send only { \"status\": \"approved\" }. rejectionReason is required only for rejected."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Organization is reviewed', () => pm.response.to.have.status(200));",
+            "pm.expect(pm.response.json().data.status).to.be.oneOf(['approved', 'rejected']);"
           ] } }]
         }
       ]

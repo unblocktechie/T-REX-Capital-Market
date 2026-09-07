@@ -221,8 +221,11 @@ CREATE TABLE IF NOT EXISTS `organizationMaster` (
   `walletAddress` VARCHAR(42) NULL,
   `currentStep` ENUM('companyInformation', 'jurisdiction', 'beneficialOwners', 'documents', 'completed') NOT NULL DEFAULT 'companyInformation',
   `isDraft` BOOLEAN NOT NULL DEFAULT TRUE,
-  `status` ENUM('draft', 'submitted', 'underReview', 'approved', 'rejected') NOT NULL DEFAULT 'draft',
+  `status` ENUM('draft', 'submitted', 'resubmitted', 'underReview', 'approved', 'rejected') NOT NULL DEFAULT 'draft',
   `submittedAt` DATETIME(3) NULL,
+  `rejectionReason` TEXT NULL,
+  `rejectionCount` TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  `canResubmit` BOOLEAN NOT NULL DEFAULT FALSE,
   `isUserNotified` BOOLEAN NOT NULL DEFAULT FALSE,
   `isActive` BOOLEAN NOT NULL DEFAULT TRUE,
   `isDeleted` BOOLEAN NOT NULL DEFAULT FALSE,
@@ -262,7 +265,6 @@ CREATE TABLE IF NOT EXISTS `organizationDocument` (
   `mimeType` VARCHAR(100) NOT NULL,
   `fileSize` BIGINT UNSIGNED NOT NULL,
   `checksumSha256` CHAR(64) NOT NULL,
-  `verificationStatus` ENUM('pending', 'verified', 'rejected') NOT NULL DEFAULT 'pending',
   `isActive` BOOLEAN NOT NULL DEFAULT TRUE,
   `isDeleted` BOOLEAN NOT NULL DEFAULT FALSE,
   `createdAt` DATETIME(3) NOT NULL DEFAULT (UTC_TIMESTAMP(3)),
@@ -363,7 +365,11 @@ VALUES
   (UUID(), '00000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000006', 'Download organization document', 'ORG_DOWNLOAD_DOCUMENT', 'GET', '/api/v1/organizations/me/documents/:documentUid/download'),
   (UUID(), '00000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000006', 'Delete organization document', 'ORG_DELETE_DOCUMENT', 'DELETE', '/api/v1/organizations/me/documents/:documentUid'),
   (UUID(), '00000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000006', 'Submit organization', 'ORG_SUBMIT', 'POST', '/api/v1/organizations/me/submit'),
-  (UUID(), '00000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000006', 'Mark organization user notified', 'ORG_MARK_USER_NOTIFIED', 'PATCH', '/api/v1/organizations/me/user-notified')
+  (UUID(), '00000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000006', 'Mark organization user notified', 'ORG_MARK_USER_NOTIFIED', 'PATCH', '/api/v1/organizations/me/user-notified'),
+  (UUID(), '00000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000006', 'List submitted organizations', 'ADMIN_ORG_LIST', 'GET', '/api/v1/admin/organizations'),
+  (UUID(), '00000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000006', 'View submitted organization', 'ADMIN_ORG_VIEW', 'GET', '/api/v1/admin/organizations/:organizationUid'),
+  (UUID(), '00000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000006', 'Preview or download organization document', 'ADMIN_ORG_DOCUMENT_FILE', 'GET', '/api/v1/admin/organizations/:organizationUid/documents/:documentUid/file'),
+  (UUID(), '00000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000006', 'Review submitted organization', 'ADMIN_ORG_REVIEW', 'PATCH', '/api/v1/admin/organizations/:organizationUid/status')
 ON DUPLICATE KEY UPDATE `permissionName` = VALUES(`permissionName`), `menuUid` = VALUES(`menuUid`), `isAllowed` = TRUE, `isActive` = TRUE, `isDeleted` = FALSE;
 
 INSERT INTO `generalSettings`
