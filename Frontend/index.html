@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#d5d9dd" />
+    <script>
+      (() => {
+        try {
+          const stored = JSON.parse(localStorage.getItem('nova.theme-state') || '{}');
+          const savedTheme = stored?.state?.theme;
+          const theme =
+            savedTheme === 'light' || savedTheme === 'dark'
+              ? savedTheme
+              : window.matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light';
+          document.documentElement.dataset.theme = theme;
+          document.documentElement.style.colorScheme = theme;
+        } catch {
+          document.documentElement.dataset.theme = 'light';
+          document.documentElement.style.colorScheme = 'light';
+        }
+      })();
+    </script>
+    <meta
+      name="description"
+      content="T-REX Capital Market for compliant digital securities, identity verification and token lifecycle management"
+    />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <title>T-REX Capital Market</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
