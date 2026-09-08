@@ -6,7 +6,10 @@ export function DeploymentProgress({ activeStage, status }) {
   return (
     <ol className="deployment-stage-list">
       {DEPLOYMENT_STAGES.map((stage, index) => {
-        const complete = index < activeStage || status === 'success';
+        const complete =
+          index < activeStage ||
+          status === 'success' ||
+          (status === 'preview' && index <= activeStage);
         const active = index === activeStage && status === 'processing';
         const failed = index === activeStage && status === 'error';
         return (

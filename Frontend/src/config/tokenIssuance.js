@@ -172,12 +172,10 @@ export const COUNTRY_OPTIONS = Object.freeze([
 ]);
 
 export const DEPLOYMENT_STAGES = Object.freeze([
-  'Validating configuration',
-  'Requesting wallet confirmation',
-  'Deploying identity infrastructure',
-  'Deploying compliance contracts',
-  'Deploying token contract',
-  'Assigning agents',
-  'Finalizing configuration',
-  'Waiting for blockchain confirmation',
+  'Checking authorized wallet and Sepolia network',
+  'Preparing ONCHAINID, claims and compliance',
+  'Building the T-REX Gateway deployment payload',
+  'Signing and confirming the Sepolia transaction',
+  'Submitting the confirmed transaction hash',
 ]);
+

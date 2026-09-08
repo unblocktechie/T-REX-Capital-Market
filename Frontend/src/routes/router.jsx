@@ -1,18 +1,18 @@
 import { lazy, Suspense } from 'react';
 import { Navigate, createBrowserRouter } from 'react-router-dom';
 import { TrexLoader } from '@/components/loaders/TrexLoader';
+import { TokenCreationAccessGuard } from '@/components/token-issuance/TokenCreationAccessGuard';
 import {
   OrganizationDataGuard,
   OrganizationEditableGuard,
 } from '@/components/organization/OrganizationRouteGuards';
 import { ROUTES } from '@/config/routes';
-import { PERMISSIONS, ROLES } from '@/config/permissions';
+import { ROLES } from '@/config/permissions';
 import { AuthLayout } from '@/layouts/AuthLayout';
 import { MainLayout } from '@/layouts/MainLayout';
 import { AdminLayout } from '@/layouts/admin/AdminLayout';
 import { AuthMiddleware } from '@/middleware/AuthMiddleware';
 import { GuestMiddleware } from '@/middleware/GuestMiddleware';
-import { PermissionMiddleware } from '@/middleware/PermissionMiddleware';
 import { OrganizationAccessMiddleware } from '@/middleware/OrganizationAccessMiddleware';
 import { RoleMiddleware } from '@/middleware/RoleMiddleware';
 import { WorkspaceMiddleware } from '@/middleware/WorkspaceMiddleware';
@@ -25,9 +25,7 @@ const ForgotPasswordPage = lazy(() => import('@/pages/auth/ForgotPasswordPage'))
 const ResetPasswordPage = lazy(() => import('@/pages/auth/ResetPasswordPage'));
 const DashboardPage = lazy(() => import('@/pages/dashboard/DashboardPage'));
 const ModulePage = lazy(() => import('@/pages/common/ModulePage'));
-const UsersPage = lazy(() => import('@/pages/users/UsersPage'));
 const ProfilePage = lazy(() => import('@/pages/profile/ProfilePage'));
-const SettingsPage = lazy(() => import('@/pages/settings/SettingsPage'));
 const NotFoundPage = lazy(() => import('@/pages/errors/NotFoundPage'));
 const ForbiddenPage = lazy(() => import('@/pages/errors/ForbiddenPage'));
 const UnauthorizedPage = lazy(() => import('@/pages/errors/UnauthorizedPage'));
@@ -55,12 +53,7 @@ const AdminDashboardPage = lazy(() => import('@/pages/admin/AdminDashboardPage')
 const ReviewQueuePage = lazy(() => import('@/pages/admin/ReviewQueuePage'));
 const AdminOrganizationsPage = lazy(() => import('@/pages/admin/AdminOrganizationsPage'));
 const OrganizationReviewPage = lazy(() => import('@/pages/admin/OrganizationReviewPage'));
-const AdminUsersPage = lazy(() => import('@/pages/admin/AdminUsersPage'));
-const AdminAuditLogsPage = lazy(() => import('@/pages/admin/AdminAuditLogsPage'));
-const AdminSettingsPage = lazy(() => import('@/pages/admin/AdminSettingsPage'));
 const AdminProfilePage = lazy(() => import('@/pages/admin/AdminProfilePage'));
-const AdminDocumentationPage = lazy(() => import('@/pages/admin/AdminDocumentationPage'));
-const AdminSecurityLogsPage = lazy(() => import('@/pages/admin/AdminSecurityLogsPage'));
 
 function HomeRedirect() {
   const { isAuthenticated, user } = useAuth();
@@ -116,12 +109,12 @@ export const router = createBrowserRouter([
               { path: 'reviews', element: withSuspense(<ReviewQueuePage />) },
               { path: 'organizations', element: withSuspense(<AdminOrganizationsPage />) },
               { path: 'organizations/:organizationId', element: withSuspense(<OrganizationReviewPage />) },
-              { path: 'users', element: withSuspense(<AdminUsersPage />) },
-              { path: 'audit-logs', element: withSuspense(<AdminAuditLogsPage />) },
-              { path: 'settings', element: withSuspense(<AdminSettingsPage />) },
               { path: 'profile', element: withSuspense(<AdminProfilePage />) },
-              { path: 'documentation', element: withSuspense(<AdminDocumentationPage />) },
-              { path: 'security-logs', element: withSuspense(<AdminSecurityLogsPage />) },
+              { path: 'users', element: <Navigate to={ROUTES.adminReviewQueue} replace /> },
+              { path: 'audit-logs', element: <Navigate to={ROUTES.adminReviewQueue} replace /> },
+              { path: 'settings', element: <Navigate to={ROUTES.adminReviewQueue} replace /> },
+              { path: 'documentation', element: <Navigate to={ROUTES.adminReviewQueue} replace /> },
+              { path: 'security-logs', element: <Navigate to={ROUTES.adminReviewQueue} replace /> },
             ],
           },
         ],
@@ -138,24 +131,22 @@ export const router = createBrowserRouter([
             children: [
               { index: true, element: <Navigate to={ROUTES.dashboard} replace /> },
               { path: 'dashboard', element: withSuspense(<DashboardPage />) },
-              { path: 'projects', element: withSuspense(<ModulePage moduleKey="projects" />) },
-              { path: 'tokens/new', element: withSuspense(<TokenIssuanceOverviewPage />) },
-              { path: 'tokens/new/token-information', element: withSuspense(<TokenInformationPage />) },
-              { path: 'tokens/new/supply-pricing', element: <Navigate to={ROUTES.tokenIssuanceStep('token-information')} replace /> },
-              { path: 'tokens/new/identity-claims', element: withSuspense(<IdentityClaimsPage />) },
-              { path: 'tokens/new/compliance', element: withSuspense(<ComplianceRulesPage />) },
-              { path: 'tokens/new/agents', element: withSuspense(<AgentsPage />) },
-              { path: 'tokens/new/review', element: withSuspense(<ReviewDeployPage />) },
-              { path: 'tokens/new/deploying', element: withSuspense(<DeploymentProcessingPage />) },
+              {
+                element: <TokenCreationAccessGuard />,
+                children: [
+                  { path: 'tokens/new', element: withSuspense(<TokenIssuanceOverviewPage />) },
+                  { path: 'tokens/new/token-information', element: withSuspense(<TokenInformationPage />) },
+                  { path: 'tokens/new/supply-pricing', element: <Navigate to={ROUTES.tokenIssuanceStep('token-information')} replace /> },
+                  { path: 'tokens/new/identity-claims', element: withSuspense(<IdentityClaimsPage />) },
+                  { path: 'tokens/new/compliance', element: withSuspense(<ComplianceRulesPage />) },
+                  { path: 'tokens/new/agents', element: withSuspense(<AgentsPage />) },
+                  { path: 'tokens/new/review', element: withSuspense(<ReviewDeployPage />) },
+                  { path: 'tokens/new/deploying', element: withSuspense(<DeploymentProcessingPage />) },
+                ],
+              },
               { path: 'tokens/:tokenAddress/success', element: withSuspense(<DeploymentSuccessPage />) },
               { path: 'tokens/:tokenAddress', element: withSuspense(<TokenDetailsPage />) },
-              { path: 'identity', element: withSuspense(<ModulePage moduleKey="identity" />) },
-              { path: 'compliance', element: withSuspense(<ModulePage moduleKey="compliance" />) },
               { path: 'investors', element: withSuspense(<ModulePage moduleKey="investors" />) },
-              { path: 'transactions', element: withSuspense(<ModulePage moduleKey="transactions" />) },
-              { path: 'corporate-actions', element: withSuspense(<ModulePage moduleKey="corporateActions" />) },
-              { path: 'documents', element: withSuspense(<ModulePage moduleKey="documents" />) },
-              { path: 'reports', element: withSuspense(<ModulePage moduleKey="reports" />) },
               {
                 element: <RoleMiddleware roles={[ROLES.issuer]} />,
                 children: [
@@ -181,14 +172,42 @@ export const router = createBrowserRouter([
                   },
                 ],
               },
-              {
-                element: <PermissionMiddleware permissions={[PERMISSIONS.usersView]} />,
-                children: [{ path: 'team', element: withSuspense(<UsersPage />) }],
-              },
               { path: 'profile', element: withSuspense(<ProfilePage />) },
               {
-                element: <PermissionMiddleware permissions={[PERMISSIONS.settingsView]} />,
-                children: [{ path: 'settings', element: withSuspense(<SettingsPage />) }],
+                path: 'projects',
+                element: <Navigate to={ROUTES.dashboard} replace />,
+              },
+              {
+                path: 'identity',
+                element: <Navigate to={ROUTES.dashboard} replace />,
+              },
+              {
+                path: 'compliance',
+                element: <Navigate to={ROUTES.dashboard} replace />,
+              },
+              {
+                path: 'transactions',
+                element: <Navigate to={ROUTES.dashboard} replace />,
+              },
+              {
+                path: 'corporate-actions',
+                element: <Navigate to={ROUTES.dashboard} replace />,
+              },
+              {
+                path: 'documents',
+                element: <Navigate to={ROUTES.dashboard} replace />,
+              },
+              {
+                path: 'reports',
+                element: <Navigate to={ROUTES.dashboard} replace />,
+              },
+              {
+                path: 'team',
+                element: <Navigate to={ROUTES.dashboard} replace />,
+              },
+              {
+                path: 'settings',
+                element: <Navigate to={ROUTES.dashboard} replace />,
               },
             ],
               },

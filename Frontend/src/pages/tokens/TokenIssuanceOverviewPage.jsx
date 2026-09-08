@@ -7,10 +7,12 @@ import {
   ShieldCheck,
   Zap,
 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { ROUTES } from '@/config/routes';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { useTokenIssuanceStore } from '@/store/tokenIssuance.store';
 
 const roadmap = [
   {
@@ -49,7 +51,15 @@ const standardBenefits = [
 
 export default function TokenIssuanceOverviewPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const resetIssuance = useTokenIssuanceStore((state) => state.resetIssuance);
   useDocumentTitle('Asset Issuance Wizard');
+
+  const startWizard = () => {
+    resetIssuance();
+    queryClient.removeQueries({ queryKey: ['token-issuance', 'bootstrap'] });
+    navigate(ROUTES.tokenIssuanceStep('token-information'));
+  };
 
   return (
     <div className="issuance-overview-page">
@@ -65,7 +75,7 @@ export default function TokenIssuanceOverviewPage() {
         <Button
           icon={Rocket}
           size="lg"
-          onClick={() => navigate(ROUTES.tokenIssuanceStep('token-information'))}
+          onClick={startWizard}
         >
           Start Wizard
         </Button>
@@ -81,8 +91,8 @@ export default function TokenIssuanceOverviewPage() {
               <span className="eyebrow">Deployment Roadmap</span>
               <h2>Five focused stages from setup to deployment</h2>
               <p>
-                Each step keeps the required information clear and preserves the current draft as
-                you move through the wizard.
+                Each completed step is saved to the backend, so the server remains the only source
+                of truth as you move through the wizard.
               </p>
             </div>
           </div>

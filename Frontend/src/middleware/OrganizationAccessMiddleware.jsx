@@ -9,6 +9,8 @@ import { isOrganizationWorkspaceUnlocked } from '@/services/organizationStorageS
 const isOrganizationPath = (pathname) =>
   pathname === ROUTES.organization || pathname.startsWith(`${ROUTES.organization}/`);
 
+const isAlwaysAvailableAccountPath = (pathname) => pathname === ROUTES.profile;
+
 export function OrganizationAccessMiddleware() {
   const { user } = useAuth();
   const { organization, isLoading, error } = useOrganization();
@@ -38,7 +40,8 @@ export function OrganizationAccessMiddleware() {
 
   if (
     !isOrganizationWorkspaceUnlocked(organization) &&
-    !isOrganizationPath(location.pathname)
+    !isOrganizationPath(location.pathname) &&
+    !isAlwaysAvailableAccountPath(location.pathname)
   ) {
     return <Navigate to={ROUTES.organization} replace />;
   }

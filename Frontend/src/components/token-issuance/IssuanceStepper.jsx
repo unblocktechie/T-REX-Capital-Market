@@ -5,6 +5,13 @@ import { cn } from '@/utils/cn';
 export function IssuanceStepper({ currentStepKey, completedSteps, stepErrors = {}, onStepClick }) {
   const currentIndex = TOKEN_ISSUANCE_STEPS.findIndex((step) => step.key === currentStepKey);
   const current = TOKEN_ISSUANCE_STEPS[currentIndex] || TOKEN_ISSUANCE_STEPS[0];
+  const completedStepSet = new Set(completedSteps);
+
+  const isStepUnlocked = (targetIndex) =>
+    targetIndex === 0 ||
+    TOKEN_ISSUANCE_STEPS.slice(0, targetIndex).every((step) =>
+      completedStepSet.has(step.key),
+    );
 
   const selectStep = (targetStep) => {
     if (!targetStep || !onStepClick) return;
@@ -30,8 +37,9 @@ export function IssuanceStepper({ currentStepKey, completedSteps, stepErrors = {
           {TOKEN_ISSUANCE_STEPS.map((step, index) => {
             const complete = completedSteps.includes(step.key);
             const active = step.key === currentStepKey;
-            const visited = complete || index <= currentIndex;
-            const clickable = Boolean(onStepClick) && visited && !active;
+            const unlocked = isStepUnlocked(index);
+            const visited = complete || active || index <= currentIndex || unlocked;
+            const clickable = Boolean(onStepClick) && unlocked && !active;
             const hasError = Boolean(stepErrors?.[step.key]);
 
             return (
@@ -72,8 +80,9 @@ export function IssuanceStepper({ currentStepKey, completedSteps, stepErrors = {
         {TOKEN_ISSUANCE_STEPS.map((step, index) => {
           const complete = completedSteps.includes(step.key);
           const active = step.key === currentStepKey;
-          const visited = complete || index <= currentIndex;
-          const clickable = Boolean(onStepClick) && visited && !active;
+          const unlocked = isStepUnlocked(index);
+          const visited = complete || active || index <= currentIndex || unlocked;
+          const clickable = Boolean(onStepClick) && unlocked && !active;
           const hasError = Boolean(stepErrors?.[step.key]);
           const StepContent = clickable ? 'button' : 'div';
 

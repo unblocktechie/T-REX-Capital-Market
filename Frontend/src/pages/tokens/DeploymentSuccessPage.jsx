@@ -1,129 +1,151 @@
 import {
   ArrowRight,
+  BadgeCheck,
   CheckCircle2,
   ExternalLink,
   Fingerprint,
-  ShieldCheck,
-  UsersRound,
 } from 'lucide-react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
-import { AddressDisplay, StatusBadge } from '@/components/token-issuance/IssuancePrimitives';
+import {
+  AddressDisplay,
+  StatusBadge,
+} from '@/components/token-issuance/IssuancePrimitives';
 import { Button } from '@/components/ui/Button';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { ROUTES } from '@/config/routes';
+import { web3Config } from '@/config/web3';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { useMyToken } from '@/hooks/useMyToken';
 import { useTokenIssuanceStore } from '@/store/tokenIssuance.store';
+import { getDeploymentTransactionHash } from '@/utils/transactionHash';
+
+const firstText = (...values) =>
+  values
+    .map((value) => String(value ?? '').trim())
+    .find(Boolean) || '';
 
 export default function DeploymentSuccessPage() {
   const navigate = useNavigate();
-  const { tokenAddress } = useParams();
-  const result = useTokenIssuanceStore((state) => state.deployment.result);
+  const { tokenAddress: routeTokenId } = useParams();
+  const token = useMyToken();
+  const deployment = useTokenIssuanceStore((state) => state.deployment);
   useDocumentTitle('Deployment Successful');
 
-  if (!result || (result.tokenAddress && tokenAddress !== result.tokenAddress)) {
-    return <Navigate to={ROUTES.tokenDetails(tokenAddress)} replace />;
+  if (token.isPending) {
+    return (
+      <div className="deployment-success-page deployment-success-page--compact">
+        <Skeleton height={390} />
+      </div>
+    );
   }
 
-  const explorerBase = result.explorerUrl?.replace(/\/$/, '');
-  const tokenExplorer =
-    explorerBase && result.tokenAddress
-      ? `${explorerBase}/address/${result.tokenAddress}`
-      : undefined;
-  const transactionExplorer =
-    explorerBase && result.transactionHash
-      ? `${explorerBase}/tx/${result.transactionHash}`
-      : undefined;
-  const explorerUrl = transactionExplorer || tokenExplorer;
+  const raw = token.token || {};
+  const backendTransactionHash = getDeploymentTransactionHash(raw);
+  const confirmedResultHash =
+    deployment.status === 'success'
+      ? getDeploymentTransactionHash(deployment.result)
+      : '';
+  const transactionHash = backendTransactionHash || confirmedResultHash;
+
+  // A readyToDeploy/locked record is not a successful deployment. The success page is
+  // available only after the backend or the completed in-memory deployment result contains
+  // a structurally valid confirmed transaction hash.
+  if (!transactionHash) {
+    const destination =
+      deployment.status === 'processing' || deployment.retryMode === 'backend-sync'
+        ? ROUTES.tokenDeploying
+        : ROUTES.tokenIssuanceStep('review');
+    return <Navigate to={destination} replace />;
+  }
+
+  if (token.tokenUid && routeTokenId && routeTokenId !== token.tokenUid) {
+    return <Navigate to={ROUTES.tokenSuccess(token.tokenUid)} replace />;
+  }
+
+  const information = raw.tokenInformation || raw.information || raw;
+  const tokenName = firstText(information.tokenName, information.name, raw.tokenName, raw.name) ||
+    'Security Token';
+  const symbol = firstText(
+    information.tokenSymbol,
+    information.symbol,
+    raw.tokenSymbol,
+    raw.symbol,
+  ) || 'TOKEN';
+  const network =
+    firstText(raw.network, raw.networkName, information.network, deployment.result?.network) ||
+    web3Config.requiredChain.name;
+  const tokenUid = token.tokenUid || firstText(raw.tokenUid, raw.uid, raw.id, deployment.result?.tokenUid);
+  const deployedAt = firstText(
+    raw.deployedAt,
+    raw.deployment?.deployedAt,
+    deployment.result?.deployedAt,
+    raw.updatedAt,
+  );
+  const explorerBase = web3Config.requiredChain.blockExplorers?.default?.url || '';
+  const transactionExplorer = explorerBase
+    ? `${explorerBase}/tx/${transactionHash}`
+    : undefined;
 
   return (
-    <div className="deployment-success-page">
-      <section className="deployment-success-hero">
-        <span className="deployment-success-icon">
-          <CheckCircle2 size={38} />
-        </span>
-        <StatusBadge status="valid">Blockchain confirmed</StatusBadge>
+    <div className="deployment-success-page deployment-success-page--compact">
+      <section className="deployment-complete-card">
+        <div className="deployment-complete-card__seal" aria-hidden="true">
+          <CheckCircle2 size={31} />
+        </div>
+        <StatusBadge status="valid">Deployed on Sepolia</StatusBadge>
         <h1>Deployment Successful</h1>
         <p>
-          {result.tokenName} ({result.symbol}) has been deployed successfully and is ready for
-          compliant issuer operations.
+          <strong>{tokenName} ({symbol})</strong> was deployed through the T-REX Gateway on
+          {` ${network}`}. The confirmed transaction hash has been accepted by the backend.
         </p>
-        <div className="deployment-success-actions">
+
+        <div className="deployment-complete-card__records deployment-complete-card__records--single">
+          <AddressDisplay
+            label="Transaction hash"
+            address={transactionHash}
+            explorerUrl={transactionExplorer}
+            showFullAddress
+          />
+        </div>
+
+        <div className="deployment-complete-card__actions">
           <Button
             icon={ArrowRight}
-            onClick={() => navigate(ROUTES.tokenDetails(result.tokenAddress))}
+            onClick={() => navigate(ROUTES.tokenDetails(tokenUid || transactionHash))}
           >
             Go to Token Dashboard
           </Button>
-          {explorerUrl ? (
-            <a
-              className="button button--secondary"
-              href={explorerUrl}
-              target="_blank"
-              rel="noreferrer"
-            >
-              <ExternalLink size={17} /> View on Explorer
-            </a>
-          ) : null}
+          <Button
+            variant="secondary"
+            icon={ExternalLink}
+            onClick={() => window.open(transactionExplorer, '_blank', 'noopener,noreferrer')}
+            disabled={!transactionExplorer}
+          >
+            View on Etherscan
+          </Button>
+        </div>
+
+        <div className="deployment-complete-card__meta">
+          <span><BadgeCheck size={17} /> Status: deployed</span>
+          <span>
+            <Fingerprint size={17} />
+            {deployedAt
+              ? `Deployed ${new Date(deployedAt).toLocaleString()}`
+              : 'Deployment confirmed on-chain'}
+          </span>
         </div>
       </section>
 
-      <div className="deployment-success-grid">
-        <section className="issuance-section-card">
-          <header className="issuance-section-card__header">
-            <div>
-              <h2>Deployment Addresses</h2>
-              <p>Confirmed contract addresses returned by the deployment service.</p>
-            </div>
-          </header>
-          <div className="issuance-section-card__body deployment-address-list">
-            <AddressDisplay
-              label="Token Proxy Address"
-              address={result.tokenAddress}
-              explorerUrl={tokenExplorer}
-            />
-            <AddressDisplay
-              label="Identity Registry Address"
-              address={result.identityRegistryAddress}
-              explorerUrl={
-                explorerBase && result.identityRegistryAddress
-                  ? `${explorerBase}/address/${result.identityRegistryAddress}`
-                  : undefined
-              }
-            />
-          </div>
-        </section>
-
-        <section className="issuance-section-card whats-next-card">
-          <header className="issuance-section-card__header">
-            <div>
-              <h2>What’s Next?</h2>
-              <p>Continue with the issuer operations currently available in your workspace.</p>
-            </div>
-          </header>
-          <div className="issuance-section-card__body">
-            <article>
-              <Fingerprint size={19} />
-              <div>
-                <strong>Add or verify investors</strong>
-                <p>Register eligible ONCHAINID identities and required claims.</p>
-              </div>
-            </article>
-            <article>
-              <ShieldCheck size={19} />
-              <div>
-                <strong>Review compliance settings</strong>
-                <p>Confirm investor limits and geographic restrictions before distribution.</p>
-              </div>
-            </article>
-            <article>
-              <UsersRound size={19} />
-              <div>
-                <strong>Review governance access</strong>
-                <p>Confirm the Token Agent and Identity Manager operational wallets.</p>
-              </div>
-            </article>
-          </div>
-        </section>
-      </div>
+      <section className="deployment-next-step-card">
+        <span><Fingerprint size={21} /></span>
+        <div>
+          <strong>What happens next?</strong>
+          <p>
+            Open the token dashboard to review the token and the deployment information stored by
+            the backend from this confirmed transaction.
+          </p>
+        </div>
+      </section>
     </div>
   );
 }

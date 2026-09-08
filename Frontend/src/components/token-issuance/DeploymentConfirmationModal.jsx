@@ -1,11 +1,15 @@
 import { AlertTriangle, Rocket } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { AddressDisplay, InfoCallout } from './IssuancePrimitives';
 
 export function DeploymentConfirmationModal({ open, onClose, onConfirm, data, wallet, loading }) {
   const [acknowledged, setAcknowledged] = useState(false);
+
+  useEffect(() => {
+    if (!open) setAcknowledged(false);
+  }, [open]);
 
   const close = () => {
     if (loading) return;
@@ -17,8 +21,9 @@ export function DeploymentConfirmationModal({ open, onClose, onConfirm, data, wa
     <Modal
       open={open}
       onClose={close}
-      title="Confirm token deployment"
+      title="Confirm T-REX deployment"
       className="issuance-confirmation-modal"
+      bodyClassName="issuance-confirmation-modal__body"
       footer={
         <>
           <Button variant="secondary" onClick={close} disabled={loading}>
@@ -30,15 +35,16 @@ export function DeploymentConfirmationModal({ open, onClose, onConfirm, data, wa
             disabled={!acknowledged}
             loading={loading}
           >
-            Confirm and Deploy
+            Continue to Wallet
           </Button>
         </>
       }
     >
       <div className="issuance-modal-stack">
-        <InfoCallout title="Final authorization" tone="warning" icon={AlertTriangle}>
-          Review the immutable settings below. Your wallet will be asked to authorize the
-          deployment.
+        <InfoCallout title="Wallet signature required" tone="warning" icon={AlertTriangle}>
+          Your connected issuer wallet will open to sign the T-REX Gateway transaction and pay the
+          Sepolia gas fee. The backend submit API is called only after Sepolia confirms the
+          transaction and returns a valid transaction hash.
         </InfoCallout>
         <dl className="issuance-review-list">
           <div>
@@ -52,25 +58,29 @@ export function DeploymentConfirmationModal({ open, onClose, onConfirm, data, wa
             <dd>{wallet.chain?.name || data.tokenInformation.network || '—'}</dd>
           </div>
           <div>
-            <dt>Estimated fee</dt>
+            <dt>Decimals</dt>
+            <dd>{data.tokenInformation.decimals || '—'}</dd>
+          </div>
+          <div>
+            <dt>Maximum holder balance</dt>
             <dd>
-              {wallet.isConnected
-                ? 'Calculated by the wallet before confirmation'
-                : 'Available after wallet connection'}
+              {data.compliance.maximumBalance
+                ? `${data.compliance.maximumBalance} tokens (${data.tokenInformation.decimals || 0} decimals)`
+                : 'Not configured'}
             </dd>
           </div>
         </dl>
         <AddressDisplay
-          label="Treasury wallet"
+          label="Approved organization wallet"
           address={data.tokenInformation.treasuryWallet}
         />
         <AddressDisplay label="Connected wallet" address={wallet.address} />
         <div className="issuance-immutable-list">
-          <strong>Important immutable settings</strong>
+          <strong>On-chain deployment creates</strong>
           <ul>
-            <li>Token name, symbol and decimals</li>
-            <li>Initial identity and compliance infrastructure</li>
-            <li>Selected deployment network</li>
+            <li>ERC-3643 token and identity registry contracts</li>
+            <li>Claim topic and trusted issuer registries</li>
+            <li>Modular compliance with the selected restrictions</li>
           </ul>
         </div>
         <label className="issuance-acknowledgement">
@@ -80,7 +90,8 @@ export function DeploymentConfirmationModal({ open, onClose, onConfirm, data, wa
             onChange={(event) => setAcknowledged(event.target.checked)}
           />
           <span>
-            I understand that certain token parameters cannot be changed after deployment.
+            I confirm the connected wallet is the approved issuer wallet and understand the
+            deployment settings become immutable after the transaction is confirmed.
           </span>
         </label>
       </div>

@@ -1,5 +1,6 @@
 import { isAddress } from 'viem';
 import { TOKEN_CREATION_AGENT_ROLES } from '@/config/tokenIssuance';
+import { getTokenLogoValidationError } from '@/utils/tokenLogo';
 
 const positiveNumber = (value) => Number(value) > 0;
 const optionalPositiveNumber = (value) => value === '' || Number(value) >= 0;
@@ -34,9 +35,12 @@ export const getImpliedValuation = (supply, price) => {
   return totalSupply * initialPrice;
 };
 
-export const validateTokenInformation = (data, supplyPricing = {}) => {
+export const validateTokenInformation = (data, supplyPricing = {}, options = {}) => {
   const errors = {};
   const tokenName = String(data.name || '').trim();
+  const logoError = getTokenLogoValidationError(data.logo);
+
+  if (logoError) errors.logo = logoError;
 
   if (!tokenName) {
     errors.name = 'Token name is required.';
@@ -63,6 +67,11 @@ export const validateTokenInformation = (data, supplyPricing = {}) => {
   if (!data.treasuryWallet.trim()) errors.treasuryWallet = 'Treasury wallet is required.';
   else if (!isAddress(data.treasuryWallet.trim())) {
     errors.treasuryWallet = 'Enter a valid wallet address.';
+  } else if (
+    options.requiredTreasuryWallet &&
+    data.treasuryWallet.trim().toLowerCase() !== options.requiredTreasuryWallet.trim().toLowerCase()
+  ) {
+    errors.treasuryWallet = 'Use the approved organization wallet registered during onboarding.';
   }
   if (!data.description.trim()) errors.description = 'Token description is required.';
   return errors;
@@ -109,12 +118,12 @@ export const validateSupplyPricing = (data) => {
 
 export const validateIdentityClaims = (data) => {
   const errors = {};
-  const supportedClaimIds = new Set(['kyc', 'accredited']);
-  const hasEnabledClaim = data.claimTopics.some(
-    (topic) => supportedClaimIds.has(topic.id) && topic.enabled,
-  );
+  const enabledClaims = (data.claimTopics || []).filter((topic) => topic.enabled);
+  const hasEnabledClaim = enabledClaims.length > 0;
   if (!hasEnabledClaim) {
     errors.claimTopics = 'Enable at least one claim topic before continuing.';
+  } else if (enabledClaims.some((topic) => !topic.claimTopicUid)) {
+    errors.claimTopics = 'The selected claim is not available from the backend token options.';
   }
   if (data.trustedIssuer.mode !== 'organization') {
     errors.trustedIssuer = 'Confirm that your organization will act as the trusted claim issuer.';
@@ -132,18 +141,26 @@ export const validateCompliance = (data) => {
   if (!data.maximumInvestors) {
     errors.maximumInvestors = 'Maximum investors is required.';
   } else if (!Number.isInteger(maximumInvestors) || maximumInvestors < 1) {
-    errors.maximumInvestors = 'Enter a positive whole number.';
+    errors.maximumInvestors = 'Enter a positive whole number. Decimal values are not allowed.';
   }
 
+  const maximumBalance = Number(data.maximumBalance);
   if (!data.maximumBalance) {
     errors.maximumBalance = 'Maximum balance per investor is required.';
-  } else if (!positiveNumber(data.maximumBalance)) {
-    errors.maximumBalance = 'Maximum balance must be greater than zero.';
+  } else if (!Number.isInteger(maximumBalance) || maximumBalance < 1) {
+    errors.maximumBalance = 'Enter a positive whole number. Decimal values are not allowed.';
+  }
+
+  const invalidCountry = (data.countries || []).find(
+    (country) => typeof country === 'string' || !country?.countryUid,
+  );
+  if (invalidCountry) {
+    errors.countries = 'Reload the country options and reselect every restricted country.';
   }
   return errors;
 };
 
-export const validateAgents = (agents) => {
+export const validateAgents = (agents, expectedWallet = '') => {
   const errors = {};
   TOKEN_CREATION_AGENT_ROLES.forEach((role) => {
     const agent = agents[role.key];
@@ -151,6 +168,11 @@ export const validateAgents = (agents) => {
       errors[role.key] = `${role.name} wallet is required.`;
     } else if (!isAddress(agent.address.trim())) {
       errors[role.key] = 'Enter a valid wallet address.';
+    } else if (
+      expectedWallet &&
+      agent.address.trim().toLowerCase() !== expectedWallet.trim().toLowerCase()
+    ) {
+      errors[role.key] = 'This role must use the approved organization wallet.';
     }
   });
   return errors;
@@ -173,12 +195,21 @@ export const validateStep = (stepKey, state) => {
   }
 };
 
-export const buildReviewChecklist = (state, wallet) => {
+export const buildReviewChecklist = (state, wallet, expectedWallet = '') => {
   const tokenValid =
-    Object.keys(validateTokenInformation(state.tokenInformation, state.supplyPricing)).length === 0;
+    Object.keys(
+      validateTokenInformation(state.tokenInformation, state.supplyPricing, {
+        requiredTreasuryWallet: expectedWallet,
+      }),
+    ).length === 0;
   const claimsValid = Object.keys(validateIdentityClaims(state.identityClaims)).length === 0;
   const complianceValid = Object.keys(validateCompliance(state.compliance)).length === 0;
-  const agentsValid = Object.keys(validateAgents(state.agents)).length === 0;
+  const agentsValid = Object.keys(validateAgents(state.agents, expectedWallet)).length === 0;
+  const walletAuthorized = Boolean(
+    wallet.isConnected &&
+      expectedWallet &&
+      wallet.address?.toLowerCase() === expectedWallet.toLowerCase(),
+  );
 
   return [
     {
@@ -207,6 +238,11 @@ export const buildReviewChecklist = (state, wallet) => {
       status: wallet.isConnected ? 'valid' : 'error',
     },
     {
+      id: 'authorized-wallet',
+      label: 'Authorized organization wallet',
+      status: !wallet.isConnected ? 'pending' : walletAuthorized ? 'valid' : 'error',
+    },
+    {
       id: 'network',
       label: 'Network connection',
       status: !wallet.isConnected ? 'pending' : wallet.isCorrectNetwork ? 'valid' : 'error',
@@ -215,7 +251,9 @@ export const buildReviewChecklist = (state, wallet) => {
       id: 'contract-configuration',
       label: 'Smart contract configuration',
       status:
-        tokenValid && claimsValid && complianceValid && agentsValid ? 'valid' : 'pending',
+        tokenValid && claimsValid && complianceValid && agentsValid && walletAuthorized
+          ? 'valid'
+          : 'pending',
     },
   ];
 };
@@ -223,17 +261,23 @@ export const buildReviewChecklist = (state, wallet) => {
 export const hasBlockingReviewErrors = (checks) =>
   checks.some((check) => check.status === 'error' || check.status === 'pending');
 
-export const getTokenDeploymentPayload = (state, connectedWallet) => ({
-  tokenInformation: state.tokenInformation,
-  supplyPricing: state.supplyPricing,
-  identityClaims: state.identityClaims,
-  compliance: state.compliance,
-  agents: Object.entries(state.agents).reduce((result, [key, agent]) => {
-    result[key] = {
-      ...agent,
-      address: agent.address || (agent.autoAssigned ? connectedWallet : ''),
-    };
-    return result;
-  }, {}),
-  connectedWallet,
-});
+export const getTokenDeploymentPayload = (state, connectedWallet) => {
+  // Keep the existing JSON deployment contract unchanged. The logo remains in the saved wizard
+  // draft and review UI until the backend exposes a dedicated image or multipart upload field.
+  const { logo: _logo, ...tokenInformation } = state.tokenInformation;
+
+  return {
+    tokenInformation,
+    supplyPricing: state.supplyPricing,
+    identityClaims: state.identityClaims,
+    compliance: state.compliance,
+    agents: Object.entries(state.agents).reduce((result, [key, agent]) => {
+      result[key] = {
+        ...agent,
+        address: agent.address || (agent.autoAssigned ? connectedWallet : ''),
+      };
+      return result;
+    }, {}),
+    connectedWallet,
+  };
+};

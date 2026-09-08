@@ -27,6 +27,16 @@ export const getWalletErrorMessage = (error, fallback = 'Wallet request could no
   if (/already pending|request of type.*already pending/i.test(message)) {
     return 'A wallet request is already open. Complete it in your wallet and try again.';
   }
+  if (
+    /transport request timed out|transporttimeouterror|metamask:\/\/connect|does not have a registered handler|failed to launch/i.test(
+      message,
+    )
+  ) {
+    return 'MetaMask did not respond. Open and unlock the browser extension, confirm this site is connected, then try again. No transaction was sent.';
+  }
+  if (/provider not found|connector not connected|wallet provider is unavailable/i.test(message)) {
+    return 'The MetaMask browser extension is not available to this tab. Reconnect the wallet and try again.';
+  }
   if (/project id|projectid/i.test(message)) {
     return 'WalletConnect is not configured. Add VITE_WALLETCONNECT_PROJECT_ID to the environment file.';
   }

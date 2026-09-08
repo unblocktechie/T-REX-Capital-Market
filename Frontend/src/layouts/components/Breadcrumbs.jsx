@@ -1,5 +1,6 @@
 import { ChevronRight } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
+import { getTokenRecordSymbol, useMyToken } from '@/hooks/useMyToken';
 
 const labels = {
   app: 'Launchpad',
@@ -36,7 +37,14 @@ const labels = {
 
 export function Breadcrumbs() {
   const location = useLocation();
+  const tokenRecord = useMyToken();
+  const tokenSymbol = getTokenRecordSymbol(tokenRecord.token);
   const parts = location.pathname.split('/').filter(Boolean);
+  const getLabel = (part, index) => {
+    const isTokenIdentifier = parts[index - 1] === 'tokens' && part !== 'new';
+    if (isTokenIdentifier) return tokenSymbol || 'Token details';
+    return labels[part] || part;
+  };
   return (
     <nav className="breadcrumbs" aria-label="Breadcrumb">
       {parts.map((part, index) => {
@@ -46,9 +54,9 @@ export function Breadcrumbs() {
           <span key={path}>
             {index > 0 ? <ChevronRight size={13} aria-hidden="true" /> : null}
             {current ? (
-              <span aria-current="page">{labels[part] || part}</span>
+              <span aria-current="page">{getLabel(part, index)}</span>
             ) : (
-              <Link to={path}>{labels[part] || part}</Link>
+              <Link to={path}>{getLabel(part, index)}</Link>
             )}
           </span>
         );

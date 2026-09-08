@@ -8,17 +8,32 @@ import { OrganizationStatusBadge } from '@/components/organization/OrganizationS
 import { useAuth } from '@/hooks/useAuth';
 import { useUiStore } from '@/store/ui.store';
 import { useOrganization } from '@/hooks/useOrganization';
+import { useMyToken } from '@/hooks/useMyToken';
 import { ORGANIZATION_STATUSES } from '@/services/organizationStorageService';
+import { ROUTES } from '@/config/routes';
 import { cn } from '@/utils/cn';
+
+const formatRole = (role) => {
+  if (!role) return 'Issuer';
+  return role
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+};
 
 export function Sidebar() {
   const { user } = useAuth();
   const { organization } = useOrganization();
+  const tokenRecord = useMyToken({ enabled: user?.role === ROLES.issuer });
   const open = useUiStore((state) => state.sidebarOpen);
   const collapsed = useUiStore((state) => state.sidebarCollapsed);
   const close = useUiStore((state) => state.closeSidebar);
   const toggleCollapsed = useUiStore((state) => state.toggleSidebarCollapsed);
   const canSee = (permission) => !permission || user?.permissions?.includes(permission);
+  const roleLabel = formatRole(user?.role);
+  const isIssuer = user?.role === ROLES.issuer;
+  const workspaceName = isIssuer
+    ? user?.company || 'Your organization'
+    : user?.name || `${roleLabel} account`;
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 900px)');
@@ -60,8 +75,8 @@ export function Sidebar() {
             <Building2 size={17} />
           </span>
           <span className="workspace-pill__copy">
-            <small>Issuer workspace</small>
-            <strong>{user?.company || 'Your organization'}</strong>
+            <small>{roleLabel} workspace</small>
+            <strong>{workspaceName}</strong>
           </span>
           <span className="workspace-pill__network">Testnet</span>
         </div>
@@ -71,7 +86,8 @@ export function Sidebar() {
             const visibleItems = group.items.filter(
               (item) =>
                 canSee(item.permission) &&
-                (!item.dynamicOrganization || user?.role === ROLES.issuer),
+                (!item.dynamicOrganization || user?.role === ROLES.issuer) &&
+                (!item.dynamicToken || user?.role === ROLES.issuer),
             );
             if (!visibleItems.length) return null;
             return (
@@ -79,13 +95,12 @@ export function Sidebar() {
                 <p>{group.label}</p>
                 {visibleItems.map((item) => {
                   const isOrganizationItem = item.dynamicOrganization;
-                  const organizationLabel =
-                    organization.status === ORGANIZATION_STATUSES.NOT_STARTED
-                      ? 'Create Organization'
-                      : organization.status === ORGANIZATION_STATUSES.DRAFT
-                        ? 'Continue Organization'
-                        : 'Organization';
-                  const label = isOrganizationItem ? organizationLabel : item.label;
+                  const isTokenItem = item.dynamicToken;
+                  const label = item.label;
+                  const destination =
+                    isTokenItem && tokenRecord.isLocked
+                      ? ROUTES.tokenDetails(tokenRecord.tokenUid || 'token')
+                      : item.to;
                   const showOrganizationBadge =
                     isOrganizationItem &&
                     [
@@ -93,11 +108,12 @@ export function Sidebar() {
                       ORGANIZATION_STATUSES.VERIFIED_SUCCESS_PENDING,
                       ORGANIZATION_STATUSES.VERIFIED,
                     ].includes(organization.status);
+                  const tokenBadge = tokenRecord.isDeployed ? 'Live' : 'Ready';
 
                   return (
                     <NavLink
                       key={item.to}
-                      to={item.to}
+                      to={destination}
                       onClick={close}
                       title={collapsed ? label : undefined}
                       className={({ isActive }) => cn('sidebar-link', isActive && 'is-active')}
@@ -106,7 +122,11 @@ export function Sidebar() {
                       <span className="sidebar-link__label">{label}</span>
                       {showOrganizationBadge ? (
                         <OrganizationStatusBadge status={organization.status} compact />
-                      ) : item.badge ? (
+                      ) : isTokenItem && tokenRecord.isLocked ? (
+                        <small className="sidebar-link__badge sidebar-link__badge--success">
+                          {tokenBadge}
+                        </small>
+                      ) : item.badge && !(isTokenItem && tokenRecord.isPending) ? (
                         <small className="sidebar-link__badge">{item.badge}</small>
                       ) : null}
                     </NavLink>

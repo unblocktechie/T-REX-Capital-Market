@@ -1,19 +1,20 @@
-import {
-  Bell,
-  LogOut,
-  Menu,
-  Plus,
-  Search,
-} from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ChevronDown, LogOut, Menu, UserRound } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { authService } from '@/api/auth';
 import { TrexLogo } from '@/components/branding/TrexLogo';
-import { Button } from '@/components/ui/Button';
 import { WalletControl } from '@/components/wallet/WalletControl';
 import { routeMeta } from '@/config/navigation';
 import { ROUTES } from '@/config/routes';
 import { useAuth } from '@/hooks/useAuth';
 import { useUiStore } from '@/store/ui.store';
+
+const formatRole = (role) => {
+  if (!role) return 'Issuer';
+  return role
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+};
 
 export function Header({ onboardingOnly = false }) {
   const { user } = useAuth();
@@ -21,10 +22,40 @@ export function Header({ onboardingOnly = false }) {
   const navigate = useNavigate();
   const toggleSidebar = useUiStore((state) => state.toggleSidebar);
   const toggleSidebarCollapsed = useUiStore((state) => state.toggleSidebarCollapsed);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const profileRef = useRef(null);
+
+  const isTokenRecordPage =
+    location.pathname.startsWith('/app/tokens/') &&
+    !location.pathname.startsWith(ROUTES.createToken);
   const currentMeta =
     routeMeta[location.pathname] ||
     (location.pathname.startsWith(ROUTES.organization) ? routeMeta[ROUTES.organization] : null) ||
+    (isTokenRecordPage ? routeMeta.tokenDetails : null) ||
     routeMeta[ROUTES.dashboard];
+
+  useEffect(() => {
+    const closeProfileMenu = (event) => {
+      if (profileRef.current && !profileRef.current.contains(event.target)) {
+        setProfileOpen(false);
+      }
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setProfileOpen(false);
+    };
+
+    document.addEventListener('pointerdown', closeProfileMenu);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeProfileMenu);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, []);
+
+  useEffect(() => {
+    setProfileOpen(false);
+  }, [location.pathname]);
 
   const handleNavigationToggle = () => {
     if (window.matchMedia('(max-width: 900px)').matches) {
@@ -35,15 +66,75 @@ export function Header({ onboardingOnly = false }) {
   };
 
   const handleLogout = async () => {
-    await authService.logout();
-    navigate(ROUTES.login, { replace: true });
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await authService.logout();
+      navigate(ROUTES.login, { replace: true });
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
-  const initials = user?.name
-    ?.split(' ')
+  const initials = (user?.name || 'User')
+    .split(' ')
+    .filter(Boolean)
     .map((part) => part[0])
     .slice(0, 2)
-    .join('');
+    .join('')
+    .toUpperCase();
+  const roleLabel = formatRole(user?.role);
+
+  const accountMenu = (
+    <div className="account-menu" ref={profileRef}>
+      <button
+        type="button"
+        className="account-menu__trigger"
+        onClick={() => setProfileOpen((value) => !value)}
+        aria-label={`Open ${roleLabel} profile menu`}
+        title={`${user?.name || 'User'} · ${roleLabel}`}
+        aria-haspopup="menu"
+        aria-expanded={profileOpen}
+      >
+        <span className="avatar account-menu__avatar">{initials || 'U'}</span>
+        <span className="account-menu__summary">
+          <strong>{user?.name || 'Issuer User'}</strong>
+          <small>{roleLabel}</small>
+        </span>
+        <ChevronDown
+          className={`account-menu__chevron${profileOpen ? ' is-open' : ''}`}
+          size={17}
+          aria-hidden="true"
+        />
+      </button>
+
+      {profileOpen ? (
+        <div className="account-menu__panel" role="menu" aria-label="Profile menu">
+          <div className="account-menu__identity">
+            <span className="avatar account-menu__panel-avatar">{initials || 'U'}</span>
+            <span>
+              <strong>{user?.name || 'Issuer User'}</strong>
+              <small>{user?.email || roleLabel}</small>
+            </span>
+          </div>
+          <Link className="account-menu__item" to={ROUTES.profile} role="menuitem">
+            <UserRound size={18} aria-hidden="true" />
+            <span>Profile</span>
+          </Link>
+          <button
+            type="button"
+            className="account-menu__item account-menu__item--logout"
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            role="menuitem"
+          >
+            <LogOut size={18} aria-hidden="true" />
+            <span>{isLoggingOut ? 'Logging out…' : 'Logout'}</span>
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
 
   if (onboardingOnly) {
     return (
@@ -52,22 +143,10 @@ export function Header({ onboardingOnly = false }) {
           <TrexLogo />
         </div>
         <div className="onboarding-header__account">
-          <WalletControl onboarding />
-          <div className="onboarding-profile max-sm:!hidden" aria-label="Signed-in user">
-            <span className="avatar">{initials || 'U'}</span>
-            <span className="onboarding-profile__copy">
-              <strong>{user?.name || 'Issuer'}</strong>
-              <small>{user?.role || 'Issuer'}</small>
-            </span>
+          <div className="header-wallet-control">
+            <WalletControl onboarding />
           </div>
-          <button
-            className="icon-button onboarding-header__logout"
-            onClick={handleLogout}
-            aria-label="Sign out"
-            title="Sign out"
-          >
-            <LogOut size={18} />
-          </button>
+          {accountMenu}
         </div>
       </header>
     );
@@ -81,7 +160,7 @@ export function Header({ onboardingOnly = false }) {
           onClick={handleNavigationToggle}
           aria-label="Toggle navigation"
         >
-          <Menu size={21} />
+          <Menu size={22} />
         </button>
         <div className="header-page-title">
           <strong>{currentMeta.title}</strong>
@@ -89,54 +168,11 @@ export function Header({ onboardingOnly = false }) {
         </div>
       </div>
 
-      <div className="header-search">
-        <Search size={17} />
-        <input
-          type="search"
-          placeholder="Search projects, investors, transactions…"
-          aria-label="Search launchpad"
-        />
-        <kbd>⌘ K</kbd>
-      </div>
-
       <div className="app-header__actions">
-        <button
-          className="mobile-search-button icon-button"
-          type="button"
-          aria-label="Search launchpad"
-        >
-          <Search size={18} />
-        </button>
-        <WalletControl />
-
-        <Button
-          className="header-create-button"
-          size="sm"
-          icon={Plus}
-          onClick={() => navigate(ROUTES.createToken)}
-        >
-          New token
-        </Button>
-
-        <button className="icon-button notification-button" aria-label="Notifications">
-          <Bell size={19} />
-          <span />
-        </button>
-        <Link to={ROUTES.profile} className="profile-chip">
-          <span className="avatar">{initials}</span>
-          <span>
-            <strong>{user?.name}</strong>
-            <small>{user?.role}</small>
-          </span>
-        </Link>
-        <button
-          className="icon-button header-logout"
-          onClick={handleLogout}
-          aria-label="Sign out"
-          title="Sign out"
-        >
-          <LogOut size={18} />
-        </button>
+        <div className="header-wallet-control">
+          <WalletControl />
+        </div>
+        {accountMenu}
       </div>
     </header>
   );

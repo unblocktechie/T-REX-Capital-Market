@@ -9,6 +9,9 @@ import {
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import { tokenApi } from '@/api/tokens';
+import { toCompliancePayload } from '@/api/tokens/token.mapper';
 import { SelectField } from '@/components/organization/OrganizationFields';
 import {
   FieldWrapper,
@@ -18,46 +21,125 @@ import {
 } from '@/components/token-issuance/IssuancePrimitives';
 import { IssuanceLayout } from '@/components/token-issuance/IssuanceLayout';
 import { Button } from '@/components/ui/Button';
-import { COUNTRY_OPTIONS } from '@/config/tokenIssuance';
 import { ROUTES } from '@/config/routes';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useTokenIssuanceStore } from '@/store/tokenIssuance.store';
+import { mapTokenApiFieldErrors, getTokenApiErrorMessage } from '@/utils/tokenApiValidation';
 import { formatNumber, validateCompliance } from '@/utils/tokenIssuance';
+
+const COMPLIANCE_FIELD_MAP = {
+  maxInvestors: 'maximumInvestors',
+  maxBalancePerInvestor: 'maximumBalance',
+  countryRestrictionMode: 'countries',
+  countryUids: 'countries',
+};
+
+const countryKey = (country) => country?.countryUid || country?.countryName || '';
+const countryName = (country) => country?.countryName || country?.label || String(country || '');
 
 export default function ComplianceRulesPage() {
   const navigate = useNavigate();
   const data = useTokenIssuanceStore((state) => state.compliance);
+  const backend = useTokenIssuanceStore((state) => state.backend);
   const updateSection = useTokenIssuanceStore((state) => state.updateSection);
   const toggleCountry = useTokenIssuanceStore((state) => state.toggleCountry);
   const markStepCompleted = useTokenIssuanceStore((state) => state.markStepCompleted);
   const markStepTouched = useTokenIssuanceStore((state) => state.markStepTouched);
+  const recordBackendSave = useTokenIssuanceStore((state) => state.recordBackendSave);
   const [submitted, setSubmitted] = useState(false);
   const [touched, setTouched] = useState({});
   const [selectedCountry, setSelectedCountry] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [serverErrors, setServerErrors] = useState({});
   const errors = validateCompliance(data);
   useDocumentTitle('Compliance Rules');
 
-  const availableCountries = useMemo(
-    () => COUNTRY_OPTIONS.filter((country) => !data.countries.includes(country)),
+  const countryOptions = useMemo(
+    () =>
+      backend.countryOptions.map((country) => ({
+        label: country.countryName,
+        value: country.countryUid,
+      })),
+    [backend.countryOptions],
+  );
+
+  const selectedKeys = useMemo(
+    () => new Set(data.countries.map(countryKey)),
     [data.countries],
   );
 
-  const update = (name, value) => updateSection('compliance', { [name]: value });
+  const availableCountries = useMemo(
+    () => countryOptions.filter((country) => !selectedKeys.has(country.value)),
+    [countryOptions, selectedKeys],
+  );
+
+  const clearServerError = (name) =>
+    setServerErrors((current) => {
+      if (!current[name]) return current;
+      const next = { ...current };
+      delete next[name];
+      return next;
+    });
+  const update = (name, value) => {
+    clearServerError(name);
+    updateSection('compliance', { [name]: value });
+  };
+  const updateWholeNumber = (name, value) => {
+    if (value === '' || /^\d+$/.test(value)) {
+      update(name, value);
+      return;
+    }
+
+    setTouched((current) => ({ ...current, [name]: true }));
+    setServerErrors((current) => ({
+      ...current,
+      [name]: 'Enter a positive whole number. Decimal values are not allowed.',
+    }));
+  };
   const blur = (name) => setTouched((current) => ({ ...current, [name]: true }));
-  const fieldError = (name) => (submitted || touched[name] ? errors[name] : undefined);
+  const fieldError = (name) =>
+    serverErrors[name] || (submitted || touched[name] ? errors[name] : undefined);
 
   const addCountry = () => {
-    if (!selectedCountry || data.countries.includes(selectedCountry)) return;
-    toggleCountry(selectedCountry);
+    if (!selectedCountry || selectedKeys.has(selectedCountry)) return;
+    const country = backend.countryOptions.find((item) => item.countryUid === selectedCountry);
+    if (!country) {
+      setServerErrors((current) => ({
+        ...current,
+        countries: 'The selected country is no longer available. Reload the page and try again.',
+      }));
+      return;
+    }
+    clearServerError('countries');
+    toggleCountry(country);
     setSelectedCountry('');
   };
 
-  const continueStep = () => {
+  const continueStep = async () => {
+    if (saving || backend.isLocked) return;
     setSubmitted(true);
+    setServerErrors({});
     markStepTouched('compliance');
     if (Object.keys(errors).length) return;
-    markStepCompleted('compliance');
-    navigate(ROUTES.tokenIssuanceStep('agents'));
+
+    setSaving(true);
+    try {
+      const response = await tokenApi.saveCompliance(toCompliancePayload(data, false));
+      recordBackendSave('compliance', response);
+      markStepCompleted('compliance');
+      toast.success('Compliance rules saved securely.');
+      navigate(ROUTES.tokenIssuanceStep('agents'));
+    } catch (error) {
+      setServerErrors(mapTokenApiFieldErrors(error, COMPLIANCE_FIELD_MAP));
+      toast.error('Compliance rules were not saved.', {
+        description: getTokenApiErrorMessage(
+          error,
+          'Review the investor limits and restricted countries before retrying.',
+        ),
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const summary = (
@@ -99,7 +181,7 @@ export default function ComplianceRulesPage() {
           </div>
           <div>
             <dt>Restriction type</dt>
-            <dd className="compliance-summary-status">Blocklist only</dd>
+            <dd className="compliance-summary-status">Blocklist</dd>
           </div>
           <div>
             <dt>Restricted countries</dt>
@@ -124,7 +206,9 @@ export default function ComplianceRulesPage() {
       onContinue={continueStep}
       continueLabel="Save and Continue"
       continueIcon={ArrowRight}
-      stepErrors={{ compliance: submitted ? errors : undefined }}
+      continueLoading={saving}
+      continueDisabled={!backend.countryOptions.length}
+      stepErrors={{ compliance: submitted ? { ...errors, ...serverErrors } : undefined }}
     >
       <SectionCard
         className="compliance-config-card"
@@ -141,23 +225,23 @@ export default function ComplianceRulesPage() {
             label="Max Investors"
             required
             error={fieldError('maximumInvestors')}
-            hint="The absolute maximum number of unique wallets allowed to hold the token."
+            hint="Enter a positive whole number only. Decimals are not allowed."
             htmlFor="maximum-investors"
           >
             <TextInput
               id="maximum-investors"
-              type="number"
-              min="1"
-              step="1"
+              type="text"
               inputMode="numeric"
+              pattern="[0-9]*"
               value={data.maximumInvestors}
-              onChange={(event) => update('maximumInvestors', event.target.value)}
+              onChange={(event) => updateWholeNumber('maximumInvestors', event.target.value)}
               onBlur={() => blur('maximumInvestors')}
               onKeyDown={(event) => {
-                if (['-', '+', 'e', 'E', '.'].includes(event.key)) event.preventDefault();
+                if (['-', '+', 'e', 'E', '.', ','].includes(event.key)) event.preventDefault();
               }}
               placeholder="e.g. 2000"
               error={fieldError('maximumInvestors')}
+              disabled={backend.isLocked}
             />
           </FieldWrapper>
 
@@ -165,23 +249,23 @@ export default function ComplianceRulesPage() {
             label="Max Balance per Investor"
             required
             error={fieldError('maximumBalance')}
-            hint="Prevents excessive concentration by limiting individual wallet weight."
+            hint="Enter a positive whole number only. Decimals are not allowed."
             htmlFor="maximum-balance"
           >
             <TextInput
               id="maximum-balance"
-              type="number"
-              min="0"
-              step="any"
-              inputMode="decimal"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               value={data.maximumBalance}
-              onChange={(event) => update('maximumBalance', event.target.value)}
+              onChange={(event) => updateWholeNumber('maximumBalance', event.target.value)}
               onBlur={() => blur('maximumBalance')}
               onKeyDown={(event) => {
-                if (['-', '+', 'e', 'E'].includes(event.key)) event.preventDefault();
+                if (['-', '+', 'e', 'E', '.', ','].includes(event.key)) event.preventDefault();
               }}
-              placeholder="e.g. 5.00"
+              placeholder="e.g. 5"
               error={fieldError('maximumBalance')}
+              disabled={backend.isLocked}
             />
           </FieldWrapper>
         </div>
@@ -204,7 +288,11 @@ export default function ComplianceRulesPage() {
           <div>
             <span>Restricted jurisdictions</span>
             <strong>{data.countries.length ? `${data.countries.length} restricted` : 'No restricted jurisdictions'}</strong>
-            <p>Residents from all countries are currently allowed to invest, subject to identity verification and other compliance rules.</p>
+            <p>
+              {data.countries.length
+                ? 'Residents of the selected countries will be blocked by the compliance rules.'
+                : 'Residents from all countries are currently allowed, subject to identity and compliance checks.'}
+            </p>
           </div>
         </div>
 
@@ -216,10 +304,11 @@ export default function ComplianceRulesPage() {
               label="Country"
               value={selectedCountry}
               options={availableCountries}
-              placeholder="Select a country…"
-              hint="Select a country to prevent residents of that jurisdiction from investing."
+              placeholder={backend.countryOptions.length ? 'Select a country…' : 'Loading countries…'}
+              hint="Countries are loaded from the backend and saved by their unique identifier."
               searchable
               showEmptyOption
+              disabled={!backend.countryOptions.length || backend.isLocked}
               onChange={(event) => setSelectedCountry(event.target.value)}
             />
             <Button
@@ -227,11 +316,16 @@ export default function ComplianceRulesPage() {
               className="compliance-add-country-button"
               icon={Plus}
               onClick={addCountry}
-              disabled={!selectedCountry}
+              disabled={!selectedCountry || backend.isLocked}
             >
               Add Restriction
             </Button>
           </div>
+          {(serverErrors.countries || (submitted ? errors.countries : '')) ? (
+            <p className="issuance-section-error" role="alert">
+              {serverErrors.countries || errors.countries}
+            </p>
+          ) : null}
         </div>
 
         <div className="restricted-country-list-section">
@@ -242,8 +336,11 @@ export default function ComplianceRulesPage() {
               aria-label="Restricted countries"
             >
               {data.countries.map((country) => (
-                <SelectionChip key={country} onRemove={() => toggleCountry(country)}>
-                  {country}
+                <SelectionChip
+                  key={countryKey(country)}
+                  onRemove={backend.isLocked ? undefined : () => toggleCountry(country)}
+                >
+                  {countryName(country)}
                 </SelectionChip>
               ))}
             </div>
@@ -255,7 +352,6 @@ export default function ComplianceRulesPage() {
           )}
         </div>
       </SectionCard>
-
     </IssuanceLayout>
   );
 }

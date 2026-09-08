@@ -83,3 +83,23 @@ See `docs/ADMIN_REVIEW_PANEL.md` for admin login steps, API contracts, mock-mode
 ## Admin review API update
 
 The admin Review Queue and Organizations directory now use the real T-REX admin organization API with server-side status filtering, submission-date sorting, pagination, complete detail loading, and secure PATCH approval/rejection decisions. See `docs/ADMIN_BACKEND_REVIEW_INTEGRATION.md` for the exact request contract and environment setup.
+
+## Token creation backend integration
+
+The five-step token wizard is connected to the authenticated `/api/v1/tokens/me` workflow:
+
+- `GET /token-options` and `GET /locations/countries` load backend claim topics and country UIDs.
+- `GET /tokens/me` restores the current issuer token form and completed backend step. Browser-local token drafts are not used.
+- Step 1 sends multipart token information and the validated token image to `/tokens/me/information`.
+- Step 2 renders the claim topics returned by `/token-options` and submits their backend UIDs; Steps 3–4 save compliance rules and governance wallets.
+- Step 5 calls `/tokens/me/submit` only after all earlier API saves, local validation, wallet authorization, and Sepolia checks pass.
+
+The current backend contract marks a successful submission as `readyToDeploy`; it does not yet return deployed smart-contract addresses. The UI therefore presents a truthful ready-to-deploy success state and keeps the submitted configuration read-only.
+
+Bearer authentication continues through the centralized Axios interceptor. Multipart boundaries are left to the browser, backend field errors are mapped back to the relevant controls, request IDs are included in displayed API errors when available, and no access token or sensitive payload is logged by the token integration.
+
+Token wizard values are kept only in memory while the current page session is active and are reset when the authenticated user changes. Refreshing or restarting the wizard always reloads the authoritative form from the backend.
+
+## MetaMask deployment transport
+
+Desktop MetaMask deployment uses the injected browser-extension provider. Public Sepolia reads and transaction confirmation use the configured RPC, while only signed writes use the wallet provider. See `docs/METAMASK_TRANSPORT_TIMEOUT_FIX.md`.

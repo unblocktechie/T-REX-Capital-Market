@@ -5821,3 +5821,817 @@ body,
   height: 42px;
   flex-basis: 42px;
 }
+
+.sidebar-link__badge--success {
+  border-color: color-mix(in srgb, var(--success-500) 28%, transparent) !important;
+  background: color-mix(in srgb, var(--success-500) 12%, transparent) !important;
+  color: var(--success-500) !important;
+}
+
+/* ========================================================================== 
+   Simplified issuer navigation and responsive account menu
+   ========================================================================== */
+.app-header {
+  z-index: 50;
+  min-height: 76px;
+  height: 76px;
+  justify-content: space-between;
+  overflow: visible;
+}
+
+.app-header__leading {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.header-page-title strong {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.header-page-title small {
+  max-width: 300px;
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.app-header__actions,
+.onboarding-header__account {
+  position: relative;
+  overflow: visible;
+}
+
+.app-header__actions {
+  margin-left: auto;
+  gap: 12px;
+}
+
+.header-wallet-control {
+  display: flex;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.account-menu {
+  position: relative;
+  z-index: 90;
+  flex: 0 0 auto;
+}
+
+.account-menu__trigger {
+  min-width: 190px;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  padding: 5px 10px 5px 6px;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+  transition:
+    border-color var(--transition),
+    background var(--transition),
+    box-shadow var(--transition),
+    transform var(--transition);
+}
+
+.account-menu__trigger:hover,
+.account-menu__trigger[aria-expanded='true'] {
+  border-color: var(--border-strong);
+  background: var(--surface-muted);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.1);
+}
+
+.account-menu__trigger:focus-visible,
+.account-menu__item:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--primary-500) 22%, transparent);
+  outline-offset: 2px;
+}
+
+.account-menu__avatar {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  border-radius: 11px;
+  font-size: 13px;
+}
+
+.account-menu__summary {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  line-height: 1.25;
+}
+
+.account-menu__summary strong {
+  max-width: 128px;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-menu__summary small {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.account-menu__chevron {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  transition: transform var(--transition);
+}
+
+.account-menu__chevron.is-open {
+  transform: rotate(180deg);
+}
+
+.account-menu__panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: min(280px, calc(100vw - 24px));
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  padding: 8px;
+  box-shadow: 0 22px 55px rgba(15, 23, 42, 0.2);
+  animation: account-menu-enter 150ms ease-out;
+}
+
+@keyframes account-menu-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-5px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.account-menu__identity {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  padding: 10px 9px 13px;
+}
+
+.account-menu__panel-avatar {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+.account-menu__identity > span:last-child {
+  min-width: 0;
+  display: grid;
+  line-height: 1.3;
+}
+
+.account-menu__identity strong,
+.account-menu__identity small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-menu__identity strong {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.account-menu__identity small {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.account-menu__item {
+  width: 100%;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  padding: 0 12px;
+  color: var(--text-soft);
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: left;
+  transition:
+    background var(--transition),
+    color var(--transition);
+}
+
+.account-menu__item:hover {
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.account-menu__item--logout {
+  color: var(--danger-500);
+}
+
+.account-menu__item--logout:hover {
+  background: color-mix(in srgb, var(--danger-500) 9%, var(--surface));
+  color: var(--danger-600, var(--danger-500));
+}
+
+.account-menu__item:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+/* The issuer sidebar intentionally contains only the four primary work areas. */
+.sidebar-group {
+  gap: 6px;
+  margin-bottom: 18px;
+}
+
+.sidebar-group > p {
+  margin: 0 10px 7px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+}
+
+.sidebar-link {
+  min-height: 48px;
+  gap: 12px;
+  border-radius: 11px;
+  padding: 0 12px;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.sidebar-link > svg {
+  width: 20px;
+  height: 20px;
+}
+
+.sidebar-link__badge {
+  padding: 3px 7px;
+  font-size: 9px;
+}
+
+.workspace-pill__copy small {
+  font-size: 10px;
+}
+
+.workspace-pill__copy strong {
+  font-size: 13px;
+}
+
+.workspace-pill__network {
+  font-size: 9px;
+}
+
+.breadcrumbs {
+  font-size: 13px;
+}
+
+@media (max-width: 1100px) and (min-width: 901px) {
+  .account-menu__trigger {
+    min-width: 48px;
+    width: 48px;
+    justify-content: center;
+    padding: 4px;
+  }
+
+  .account-menu__summary,
+  .account-menu__chevron {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .app-header {
+    min-height: 70px;
+    height: auto;
+  }
+
+  .header-page-title {
+    display: grid;
+  }
+
+  .header-page-title strong {
+    font-size: 15px;
+  }
+
+  .header-page-title small {
+    display: none;
+  }
+
+  .sidebar-link {
+    min-height: 50px;
+    font-size: 15px;
+  }
+
+  .sidebar-group > p {
+    font-size: 11px;
+  }
+
+  .account-menu__trigger {
+    min-width: 48px;
+    width: 48px;
+    min-height: 48px;
+    justify-content: center;
+    padding: 4px;
+  }
+
+  .account-menu__summary,
+  .account-menu__chevron {
+    display: none;
+  }
+}
+
+@media (max-width: 680px) {
+  .app-header {
+    gap: 8px;
+    padding-inline: 12px;
+  }
+
+  .app-header__leading {
+    display: flex;
+    flex: 1 1 auto;
+  }
+
+  .header-page-title {
+    display: grid;
+  }
+
+  .header-page-title strong {
+    max-width: 32vw;
+    overflow: hidden;
+    font-size: 14px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .app-header__actions {
+    gap: 7px;
+  }
+
+  .account-menu__panel {
+    top: calc(100% + 8px);
+  }
+}
+
+@media (max-width: 480px) {
+  .header-wallet-control > button {
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+    padding: 4px !important;
+  }
+
+  .header-wallet-control > button > span:nth-child(2),
+  .header-wallet-control > button > svg {
+    display: none;
+  }
+
+  .account-menu__trigger {
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .account-menu__avatar {
+    width: 36px;
+    height: 36px;
+    flex-basis: 36px;
+  }
+
+  .account-menu__panel {
+    width: min(272px, calc(100vw - 20px));
+  }
+}
+
+@media (max-width: 380px) {
+  .header-page-title {
+    display: none;
+  }
+
+  .app-header__leading {
+    flex: 0 0 auto;
+  }
+
+  .app-header__actions {
+    margin-left: auto;
+  }
+}
+
+/* ========================================================================== 
+   Tablet/mobile header and navigation integration
+   - The off-canvas sidebar begins below the responsive header, so neither
+     surface covers the other's controls.
+   - Wallet details and the signed-in account role remain visible at every
+     supported viewport width.
+   ========================================================================== */
+@media (max-width: 1100px) and (min-width: 901px) {
+  .app-shell:not(.app-shell--onboarding) .account-menu__trigger {
+    width: auto;
+    min-width: 154px;
+    justify-content: flex-start;
+    padding: 5px 9px 5px 6px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .account-menu__summary {
+    display: grid;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .account-menu__chevron {
+    display: block;
+  }
+}
+
+@media (max-width: 900px) {
+  .app-shell:not(.app-shell--onboarding) {
+    --responsive-header-height: calc(70px + env(safe-area-inset-top));
+  }
+
+  .app-shell:not(.app-shell--onboarding) .app-header {
+    z-index: 70;
+    height: var(--responsive-header-height);
+    min-height: var(--responsive-header-height);
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: 0;
+  }
+
+  .sidebar,
+  .sidebar--collapsed {
+    top: var(--responsive-header-height, 70px);
+    bottom: 0;
+    height: calc(100dvh - var(--responsive-header-height, 70px));
+    min-height: 0;
+    padding-top: 14px;
+  }
+
+  .sidebar-backdrop {
+    z-index: 35;
+    top: var(--responsive-header-height, 70px);
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: auto;
+  }
+
+  .brand {
+    min-height: 50px;
+    padding-bottom: 10px;
+  }
+
+  .sidebar__close {
+    width: 42px;
+    height: 42px;
+    flex: 0 0 42px;
+  }
+
+  .workspace-pill__copy small {
+    color: color-mix(in srgb, var(--brand-panel-text) 65%, transparent);
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .workspace-pill__copy strong {
+    font-size: 14px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control {
+    flex: 0 1 auto;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control > button {
+    width: auto;
+    min-width: 148px;
+    min-height: 48px;
+    justify-content: flex-start;
+    padding: 6px 10px !important;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control > button > span:nth-child(2) {
+    display: block;
+    max-width: 116px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control > button > svg {
+    display: block;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .account-menu__trigger {
+    width: auto;
+    min-width: 112px;
+    min-height: 48px;
+    justify-content: flex-start;
+    gap: 8px;
+    padding: 4px 9px 4px 5px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .account-menu__summary {
+    display: grid;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .account-menu__summary strong {
+    display: none;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .account-menu__summary small {
+    display: block;
+    margin-top: 0;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .account-menu__chevron {
+    display: none;
+  }
+}
+
+@media (max-width: 680px) {
+  .app-shell:not(.app-shell--onboarding) {
+    --responsive-header-height: calc(126px + env(safe-area-inset-top));
+  }
+
+  .app-shell:not(.app-shell--onboarding) .app-header {
+    height: var(--responsive-header-height);
+    min-height: var(--responsive-header-height);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'leading account'
+      'wallet wallet';
+    align-content: center;
+    column-gap: 10px;
+    row-gap: 9px;
+    padding: calc(9px + env(safe-area-inset-top)) 12px 9px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .app-header__leading {
+    grid-area: leading;
+    width: 100%;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .app-header__actions {
+    display: contents;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control {
+    grid-area: wallet;
+    width: 100%;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control > button {
+    width: 100%;
+    min-width: 0;
+    justify-content: flex-start;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control > button > span:nth-child(2) {
+    max-width: none;
+    flex: 1 1 auto;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .account-menu {
+    grid-area: account;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .account-menu__trigger {
+    min-width: 104px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .account-menu__panel {
+    position: fixed;
+    top: calc(66px + env(safe-area-inset-top));
+    right: 12px;
+  }
+
+  .sidebar,
+  .sidebar--collapsed {
+    border-radius: 0 18px 18px 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control > button {
+    width: 100%;
+    min-width: 0;
+    min-height: 48px;
+    justify-content: flex-start;
+    padding: 6px 10px !important;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control > button > span:nth-child(2),
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control > button > svg {
+    display: block;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .account-menu__trigger {
+    width: auto;
+    min-width: 98px;
+    min-height: 46px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .account-menu__summary {
+    display: grid;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .account-menu__summary small {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 380px) {
+  .app-shell:not(.app-shell--onboarding) .account-menu__trigger {
+    min-width: 94px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .header-page-title {
+    display: none;
+  }
+}
+
+/* ========================================================================== 
+   Simplified compliance-admin navigation
+   - Uses the same dark visual system as the signed-in issuer sidebar.
+   - Keeps the admin header visible while the off-canvas navigation is open.
+   ========================================================================== */
+.admin-sidebar {
+  overflow: hidden;
+  border-right: 1px solid var(--brand-panel-border);
+  background: var(--sidebar-bg);
+  color: var(--brand-panel-text);
+  box-shadow: 18px 0 52px rgba(17, 21, 25, 0.24);
+}
+
+.admin-sidebar::before,
+.admin-sidebar::after {
+  position: absolute;
+  z-index: -1;
+  border-radius: 999px;
+  content: '';
+  pointer-events: none;
+  filter: blur(1px);
+}
+
+.admin-sidebar::before {
+  top: -120px;
+  left: -100px;
+  width: 270px;
+  height: 270px;
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.admin-sidebar::after {
+  right: -150px;
+  bottom: 12%;
+  width: 320px;
+  height: 320px;
+  background: rgba(151, 163, 174, 0.075);
+}
+
+.admin-sidebar__brand,
+.admin-sidebar__workspace,
+.admin-sidebar__nav,
+.admin-sidebar__collapse {
+  position: relative;
+  z-index: 1;
+}
+
+.admin-sidebar .admin-trex-logo .trex-logo__copy strong {
+  color: var(--brand-panel-text);
+}
+
+.admin-sidebar .admin-trex-logo .trex-logo__copy small {
+  color: var(--brand-panel-muted);
+}
+
+.admin-sidebar .admin-trex-logo .trex-logo__mark {
+  border-color: var(--brand-panel-border);
+  background: var(--brand-panel-glass);
+  box-shadow: var(--brand-panel-shadow);
+  backdrop-filter: blur(12px);
+}
+
+.admin-sidebar__close {
+  color: var(--brand-link-muted);
+}
+
+.admin-sidebar__close:hover {
+  background: var(--brand-panel-glass-hover);
+  color: var(--brand-panel-text);
+}
+
+.admin-sidebar__workspace {
+  border: 1px solid var(--brand-panel-border);
+  background: var(--brand-panel-glass);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(14px);
+}
+
+.admin-sidebar__workspace-icon {
+  border: 1px solid var(--brand-panel-border);
+  background: var(--brand-panel-glass-hover);
+  color: var(--brand-accent);
+  box-shadow: var(--brand-panel-shadow);
+}
+
+.admin-sidebar__eyebrow,
+.admin-sidebar__section {
+  color: var(--brand-link-muted);
+}
+
+.admin-sidebar__workspace-title {
+  color: var(--brand-panel-text);
+}
+
+.admin-sidebar__workspace-copy {
+  color: var(--brand-panel-muted);
+}
+
+.admin-sidebar__nav {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--brand-panel-text) 20%, transparent) transparent;
+}
+
+.admin-sidebar__link {
+  color: var(--brand-link-muted);
+}
+
+.admin-sidebar__link:hover {
+  background: var(--brand-hover-bg);
+  color: var(--brand-panel-text);
+}
+
+.admin-sidebar__link.is-active {
+  background: var(--brand-active-bg);
+  color: var(--brand-panel-text);
+  box-shadow: inset 3px 0 0 var(--brand-accent);
+}
+
+.admin-sidebar__badge {
+  display: inline-flex;
+  min-height: 22px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--brand-status) 32%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand-status) 12%, transparent);
+  padding: 2px 8px;
+  color: var(--brand-status);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.admin-sidebar__collapse {
+  border: 1px solid var(--brand-panel-border);
+  background: var(--brand-panel-glass);
+  color: var(--brand-link-muted);
+}
+
+.admin-sidebar__collapse:hover {
+  background: var(--brand-panel-glass-hover);
+  color: var(--brand-panel-text);
+}
+
+.admin-sidebar__backdrop {
+  background: var(--backdrop);
+  backdrop-filter: blur(4px);
+}
+
+@media (max-width: 1023px) {
+  .admin-sidebar {
+    height: calc(100dvh - 76px);
+    border-radius: 0 18px 18px 0;
+    box-shadow: none;
+  }
+}
+
+@media (max-width: 639px) {
+  .admin-sidebar {
+    width: min(294px, calc(100vw - 28px));
+  }
+}

@@ -8,7 +8,6 @@ import {
   RefreshCcw,
   ShieldCheck,
   WalletCards,
-  WifiOff,
 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -87,9 +86,26 @@ export function WalletControl({ onboarding = false, prominent = false, expanded 
   const switchTo = async (chainId) => {
     try {
       await wallet.switchChain(chainId);
-      toast.success('Network switched successfully');
+      toast.success(`Switched to ${wallet.requiredChain.name}`, {
+        description: 'The wallet is ready for the next action.',
+      });
     } catch (error) {
       toast.error('Unable to switch network', {
+        description: `${getWalletErrorMessage(
+          error,
+        )} You can also reconnect the wallet and try again.`,
+      });
+    }
+  };
+
+  const reconnect = async () => {
+    try {
+      await wallet.disconnect();
+      toast.info('Choose a wallet to reconnect', {
+        description: `Reconnect on ${wallet.requiredChain.name} to continue.`,
+      });
+    } catch (error) {
+      toast.error('Unable to reconnect wallet', {
         description: getWalletErrorMessage(error),
       });
     }
@@ -123,6 +139,9 @@ export function WalletControl({ onboarding = false, prominent = false, expanded 
       connectors.findIndex((item) => item.id === connector.id) === index,
   );
   const connectedWalletType = wallet.connector ? getWalletType(wallet.connector) : 'metamask';
+  const currentNetworkLabel =
+    wallet.chain?.name ||
+    `Unsupported network${wallet.chainId ? ` (Chain ID ${wallet.chainId})` : ''}`;
 
   const triggerClasses = prominent
     ? 'min-h-12 w-full justify-center border-transparent bg-[linear-gradient(135deg,var(--primary-500),var(--primary-600))] px-4 text-white shadow-[0_10px_24px_rgba(47,128,237,0.24)] hover:-translate-y-0.5 hover:border-transparent hover:bg-[linear-gradient(135deg,var(--primary-600),var(--primary-700))] hover:text-white hover:shadow-[0_14px_30px_rgba(47,128,237,0.3)]'
@@ -276,7 +295,7 @@ export function WalletControl({ onboarding = false, prominent = false, expanded 
                 <div className="rounded-2xl bg-white/85 p-3.5">
                   <small className="block text-xs font-semibold text-slate-500">Current network</small>
                   <strong className="mt-1 block truncate text-sm font-semibold text-slate-950">
-                    {wallet.chain?.name || 'Unsupported network'}
+                    {currentNetworkLabel}
                   </strong>
                 </div>
               </div>
@@ -284,7 +303,11 @@ export function WalletControl({ onboarding = false, prominent = false, expanded 
 
             {!wallet.isCorrectNetwork ? (
               <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm leading-6 text-rose-800">
-                Please switch the wallet network before submitting the organization.
+                <strong className="block font-semibold">Wrong network connected</strong>
+                <span className="mt-1 block">
+                  Switch to {wallet.requiredChain.name} below, or reconnect the wallet if the
+                  switch request does not open.
+                </span>
               </div>
             ) : null}
 
@@ -298,28 +321,44 @@ export function WalletControl({ onboarding = false, prominent = false, expanded 
                 disabled={wallet.isCorrectNetwork || wallet.isBusy}
                 onClick={() => switchTo(wallet.requiredChain.id)}
                 className={cn(
-                  'flex min-h-14 w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition',
+                  'flex min-h-14 w-full flex-col items-stretch justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition min-[420px]:flex-row min-[420px]:items-center',
                   wallet.isCorrectNetwork
                     ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
                     : 'border-[var(--primary-100)] bg-[var(--primary-50)] text-[var(--primary-700)] hover:border-[var(--primary-400)]',
                 )}
               >
                 <span>
-                  <strong className="block text-sm">Sepolia</strong>
-                  <small className="block text-xs opacity-70">Test network</small>
+                  <strong className="block text-sm">{wallet.requiredChain.name}</strong>
+                  <small className="block text-xs opacity-70">Required deployment network</small>
                 </span>
                 {wallet.isCorrectNetwork ? (
                   <Check size={18} />
                 ) : wallet.switchingChainId === wallet.requiredChain.id ? (
                   <RefreshCcw className="animate-spin" size={18} />
                 ) : (
-                  <span className="rounded-lg bg-[var(--primary-600)] px-2.5 py-1 text-xs font-bold text-white">Switch</span>
+                  <span className="self-start rounded-lg bg-[var(--primary-600)] px-2.5 py-1 text-xs font-bold text-white min-[420px]:self-auto">
+                    Switch to {wallet.requiredChain.name}
+                  </span>
                 )}
               </button>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
-              {wallet.chain?.blockExplorers?.default?.url ? (
+              {!wallet.isCorrectNetwork ? (
+                <button
+                  type="button"
+                  disabled={wallet.isBusy}
+                  onClick={reconnect}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[var(--primary-200)] bg-[var(--primary-50)] px-4 text-sm font-bold text-[var(--primary-700)] transition hover:border-[var(--primary-400)] hover:bg-[var(--primary-100)] disabled:opacity-60"
+                >
+                  {wallet.isBusy ? (
+                    <RefreshCcw className="animate-spin" size={16} />
+                  ) : (
+                    <RefreshCcw size={16} />
+                  )}
+                  Reconnect wallet
+                </button>
+              ) : wallet.chain?.blockExplorers?.default?.url ? (
                 <a
                   className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:border-[var(--primary-400)] hover:bg-[var(--primary-50)] hover:text-[var(--primary-700)]"
                   href={`${wallet.chain.blockExplorers.default.url}/address/${wallet.address}`}
@@ -367,7 +406,7 @@ export function WalletControl({ onboarding = false, prominent = false, expanded 
                     description={
                       walletConnect
                         ? 'Connect from a mobile wallet or scan a QR code.'
-                        : 'Connect using the MetaMask browser extension or mobile app.'
+                        : 'Connect using the MetaMask browser extension. Use WalletConnect for mobile wallets.'
                     }
                     loading={wallet.connectingConnectorId === connector.id}
                     disabled={wallet.isBusy}

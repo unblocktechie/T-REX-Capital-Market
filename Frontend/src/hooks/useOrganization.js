@@ -30,11 +30,11 @@ const withOwnerRelationships = (organization, sourceOwners = []) => ({
   })),
 });
 
-export function useOrganization() {
+export function useOrganization({ enabled: queryEnabled = true } = {}) {
   const queryClient = useQueryClient();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const role = useAuthStore((state) => state.user?.role);
-  const enabled = isAuthenticated && role === ROLES.issuer;
+  const enabled = queryEnabled && isAuthenticated && role === ROLES.issuer;
 
   const getOptions = useCallback(
     () =>

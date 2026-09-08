@@ -120,6 +120,7 @@ export function AddressDisplay({
   explorerUrl,
   emptyLabel = 'Not assigned',
   compact = false,
+  showFullAddress = false,
   className,
 }) {
   const [copied, setCopied] = useState(false);
@@ -134,7 +135,13 @@ export function AddressDisplay({
     <div className={cn('issuance-address', compact && 'issuance-address--compact', className)}>
       <div className="min-w-0">
         {label ? <small>{label}</small> : null}
-        <code title={address || emptyLabel}>{address ? shortenWalletAddress(address, 8, 8) : emptyLabel}</code>
+        <code title={address || emptyLabel}>
+          {address
+            ? showFullAddress
+              ? address
+              : shortenWalletAddress(address, 8, 8)
+            : emptyLabel}
+        </code>
       </div>
       {address ? (
         <div className="issuance-address__actions">

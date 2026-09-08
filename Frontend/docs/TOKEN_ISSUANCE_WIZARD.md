@@ -40,3 +40,9 @@ The deployment backend should return fields such as:
 ```
 
 No fake blockchain success state is generated when the deployment backend is unavailable or returns incomplete confirmation data.
+
+## Token logo field
+
+Token Information now requires a token logo before the step can be completed. The uploader accepts PNG, JPG/JPEG, SVG, and WebP files up to 2 MB, checks for a minimum 256×256 resolution, shows an immediate preview, and offers a centered automatic square crop when the source is not 1:1.
+
+The selected logo remains in the autosaved browser draft and appears on the final review screen. It is intentionally excluded from the existing JSON deployment request until the backend provides a dedicated image or multipart upload contract, preventing changes to the current deployment API.

@@ -22,6 +22,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { ROUTES } from '@/config/routes';
 import { useAuth } from '@/hooks/useAuth';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { useMyToken } from '@/hooks/useMyToken';
 import { formatCurrency, formatNumber } from '@/utils/currency';
 
 const metricIcons = [Building2, Coins, UsersRound, ShieldCheck];
@@ -43,6 +44,10 @@ export default function DashboardPage() {
   useDocumentTitle('Launchpad overview');
   const { user } = useAuth();
   const navigate = useNavigate();
+  const tokenRecord = useMyToken();
+  const tokenDestination = tokenRecord.isLocked
+    ? ROUTES.tokenDetails(tokenRecord.tokenUid || 'token')
+    : ROUTES.createToken;
   const overview = useQuery({
     queryKey: ['dashboard', 'overview'],
     queryFn: dashboardApi.getOverview,
@@ -61,11 +66,11 @@ export default function DashboardPage() {
             and lifecycle management.
           </p>
           <div className="launchpad-hero__actions">
-            <Button icon={Plus} size="lg" onClick={() => navigate(ROUTES.createToken)}>
-              Create security token
+            <Button icon={tokenRecord.isLocked ? Coins : Plus} size="lg" onClick={() => navigate(tokenDestination)}>
+              {tokenRecord.isLocked ? 'View token' : 'Create security token'}
             </Button>
-            <Button variant="secondary" size="lg" onClick={() => navigate(ROUTES.projects)}>
-              View projects <ArrowRight size={18} />
+            <Button variant="secondary" size="lg" onClick={() => navigate(ROUTES.organization)}>
+              View organization <ArrowRight size={18} />
             </Button>
           </div>
         </div>
@@ -158,7 +163,7 @@ export default function DashboardPage() {
                   <small>{step.text}</small>
                 </div>
                 {step.current ? (
-                  <Button size="sm" onClick={() => navigate(ROUTES.compliance)}>
+                  <Button size="sm" onClick={() => navigate(tokenDestination)}>
                     Continue
                   </Button>
                 ) : null}
@@ -199,7 +204,7 @@ export default function DashboardPage() {
           <Button
             variant="secondary"
             className="button--full"
-            onClick={() => navigate(ROUTES.compliance)}
+            onClick={() => navigate(tokenDestination)}
           >
             Review compliance
           </Button>
@@ -214,7 +219,7 @@ export default function DashboardPage() {
               <h2>Token projects</h2>
               <p>Your current issuance pipeline.</p>
             </div>
-            <button className="link-button" onClick={() => navigate(ROUTES.projects)}>
+            <button className="link-button" onClick={() => navigate(tokenDestination)}>
               View all
             </button>
           </header>
