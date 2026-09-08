@@ -13,6 +13,7 @@ import {
   ExternalLink,
   Eye,
   FileText,
+  Fingerprint,
   Globe2,
   LoaderCircle,
   MapPin,
@@ -109,6 +110,12 @@ export default function OrganizationReviewPage() {
     toast.success('Wallet address copied');
   };
 
+  const copyOnChainId = async () => {
+    if (!organization.wallet?.contractAddress) return;
+    await navigator.clipboard.writeText(organization.wallet.contractAddress);
+    toast.success('On-chain ID copied');
+  };
+
   return (
     <div className="space-y-6">
       <motion.header initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-[20px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
@@ -180,6 +187,37 @@ export default function OrganizationReviewPage() {
                   <WalletDetail label="Chain ID" value={organization.wallet.chainId || '11155111'} />
                   <WalletDetail label="Status" value="Connected" />
                 </div>
+                {organization.wallet.contractAddress ? (
+                  <div className="mt-4 rounded-2xl border border-emerald-200 bg-white p-4">
+                    <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0 flex-1">
+                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
+                          <Fingerprint className="size-4" />On-chain ID
+                        </span>
+                        <p className="mt-2 mb-0 break-all font-mono text-xs leading-5 font-semibold text-slate-950 sm:text-sm">
+                          {organization.wallet.contractAddress}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={copyOnChainId}
+                          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700"
+                        >
+                          <Copy className="size-4" />Copy
+                        </button>
+                        <a
+                          href={`https://sepolia.etherscan.io/address/${organization.wallet.contractAddress}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 text-xs font-semibold text-white"
+                        >
+                          <ExternalLink className="size-4" />Contract
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ) : <EmptySection text="No wallet address was returned for this organization." />}
           </AdminPanel>

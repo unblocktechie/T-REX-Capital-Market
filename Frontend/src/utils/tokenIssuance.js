@@ -1,0 +1,239 @@
+import { isAddress } from 'viem';
+import { TOKEN_CREATION_AGENT_ROLES } from '@/config/tokenIssuance';
+
+const positiveNumber = (value) => Number(value) > 0;
+const optionalPositiveNumber = (value) => value === '' || Number(value) >= 0;
+
+export const formatNumber = (value, options = {}) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return '—';
+  return numeric.toLocaleString('en-US', {
+    maximumFractionDigits: 8,
+    ...options,
+  });
+};
+
+export const formatMoney = (value, currency = 'USD') => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return '—';
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency,
+      maximumFractionDigits: 2,
+    }).format(numeric);
+  } catch {
+    return `${formatNumber(numeric)} ${currency}`;
+  }
+};
+
+export const getImpliedValuation = (supply, price) => {
+  const totalSupply = Number(supply);
+  const initialPrice = Number(price);
+  if (!Number.isFinite(totalSupply) || !Number.isFinite(initialPrice)) return null;
+  return totalSupply * initialPrice;
+};
+
+export const validateTokenInformation = (data, supplyPricing = {}) => {
+  const errors = {};
+  const tokenName = String(data.name || '').trim();
+
+  if (!tokenName) {
+    errors.name = 'Token name is required.';
+  } else if (tokenName.length < 3 || tokenName.length > 50) {
+    errors.name = 'Token name must contain 3–50 characters.';
+  } else if (/\s{2,}/.test(tokenName)) {
+    errors.name = 'Token name cannot contain consecutive spaces.';
+  } else if (!/^[A-Za-z0-9][A-Za-z0-9 .'-]{1,48}[A-Za-z0-9]$/.test(tokenName)) {
+    errors.name = "Use letters, numbers, spaces, hyphens, periods, or apostrophes, and begin and end with a letter or number.";
+  }
+
+  if (!data.symbol.trim()) errors.symbol = 'Token symbol is required.';
+  else if (!/^[A-Z0-9]{2,10}$/.test(data.symbol)) {
+    errors.symbol = 'Use 2–10 uppercase letters or numbers.';
+  }
+
+  if (!['2', '6', '8', '18'].includes(String(data.decimals))) {
+    errors.decimals = 'Select one of the supported decimal values: 2, 6, 8, or 18.';
+  }
+
+  if (!positiveNumber(supplyPricing.initialPrice)) {
+    errors.initialPrice = 'Initial token price must be greater than zero.';
+  }
+  if (!data.treasuryWallet.trim()) errors.treasuryWallet = 'Treasury wallet is required.';
+  else if (!isAddress(data.treasuryWallet.trim())) {
+    errors.treasuryWallet = 'Enter a valid wallet address.';
+  }
+  if (!data.description.trim()) errors.description = 'Token description is required.';
+  return errors;
+};
+
+// Retained for compatibility with the previously separated Supply & Pricing page. The active
+// simplified wizard validates only the initial price exposed on Token Information.
+export const validateSupplyPricing = (data) => {
+  const errors = {};
+  if (!positiveNumber(data.totalSupply)) {
+    errors.totalSupply = 'Total supply must be greater than zero.';
+  }
+  if (!positiveNumber(data.initialPrice)) {
+    errors.initialPrice = 'Initial price must be greater than zero.';
+  }
+  if (!data.currency) errors.currency = 'Select a price currency.';
+  if (!positiveNumber(data.minimumInvestment)) {
+    errors.minimumInvestment = 'Minimum investment must be greater than zero.';
+  }
+  if (!positiveNumber(data.maximumInvestment)) {
+    errors.maximumInvestment = 'Maximum investment must be greater than zero.';
+  } else if (Number(data.maximumInvestment) < Number(data.minimumInvestment || 0)) {
+    errors.maximumInvestment = 'Maximum investment must be at least the minimum investment.';
+  }
+  if (!positiveNumber(data.minimumTokenPurchase)) {
+    errors.minimumTokenPurchase = 'Minimum token purchase must be greater than zero.';
+  }
+  if (!positiveNumber(data.maximumTokenPurchase)) {
+    errors.maximumTokenPurchase = 'Maximum token purchase must be greater than zero.';
+  } else if (Number(data.maximumTokenPurchase) < Number(data.minimumTokenPurchase || 0)) {
+    errors.maximumTokenPurchase = 'Maximum token purchase must be at least the minimum purchase.';
+  }
+  if (!data.treasuryWallet.trim() || !isAddress(data.treasuryWallet.trim())) {
+    errors.treasuryWallet = 'Enter a valid treasury wallet address.';
+  }
+  if (!data.allocation.trim()) {
+    errors.allocation = 'Add a short distribution or allocation description.';
+  }
+  if (!optionalPositiveNumber(data.lockupDays)) {
+    errors.lockupDays = 'Lock-up days cannot be negative.';
+  }
+  return errors;
+};
+
+export const validateIdentityClaims = (data) => {
+  const errors = {};
+  const supportedClaimIds = new Set(['kyc', 'accredited']);
+  const hasEnabledClaim = data.claimTopics.some(
+    (topic) => supportedClaimIds.has(topic.id) && topic.enabled,
+  );
+  if (!hasEnabledClaim) {
+    errors.claimTopics = 'Enable at least one claim topic before continuing.';
+  }
+  if (data.trustedIssuer.mode !== 'organization') {
+    errors.trustedIssuer = 'Confirm that your organization will act as the trusted claim issuer.';
+  } else if (!data.trustedIssuer.address.trim()) {
+    errors.trustedIssuer = 'Connect or verify the organization wallet before continuing.';
+  } else if (!isAddress(data.trustedIssuer.address.trim())) {
+    errors.trustedIssuer = 'The organization trusted issuer wallet is invalid.';
+  }
+  return errors;
+};
+
+export const validateCompliance = (data) => {
+  const errors = {};
+  const maximumInvestors = Number(data.maximumInvestors);
+  if (!data.maximumInvestors) {
+    errors.maximumInvestors = 'Maximum investors is required.';
+  } else if (!Number.isInteger(maximumInvestors) || maximumInvestors < 1) {
+    errors.maximumInvestors = 'Enter a positive whole number.';
+  }
+
+  if (!data.maximumBalance) {
+    errors.maximumBalance = 'Maximum balance per investor is required.';
+  } else if (!positiveNumber(data.maximumBalance)) {
+    errors.maximumBalance = 'Maximum balance must be greater than zero.';
+  }
+  return errors;
+};
+
+export const validateAgents = (agents) => {
+  const errors = {};
+  TOKEN_CREATION_AGENT_ROLES.forEach((role) => {
+    const agent = agents[role.key];
+    if (!agent?.address?.trim()) {
+      errors[role.key] = `${role.name} wallet is required.`;
+    } else if (!isAddress(agent.address.trim())) {
+      errors[role.key] = 'Enter a valid wallet address.';
+    }
+  });
+  return errors;
+};
+
+export const validateStep = (stepKey, state) => {
+  switch (stepKey) {
+    case 'token-information':
+      return validateTokenInformation(state.tokenInformation, state.supplyPricing);
+    case 'supply-pricing':
+      return validateSupplyPricing(state.supplyPricing);
+    case 'identity-claims':
+      return validateIdentityClaims(state.identityClaims);
+    case 'compliance':
+      return validateCompliance(state.compliance);
+    case 'agents':
+      return validateAgents(state.agents);
+    default:
+      return {};
+  }
+};
+
+export const buildReviewChecklist = (state, wallet) => {
+  const tokenValid =
+    Object.keys(validateTokenInformation(state.tokenInformation, state.supplyPricing)).length === 0;
+  const claimsValid = Object.keys(validateIdentityClaims(state.identityClaims)).length === 0;
+  const complianceValid = Object.keys(validateCompliance(state.compliance)).length === 0;
+  const agentsValid = Object.keys(validateAgents(state.agents)).length === 0;
+
+  return [
+    {
+      id: 'token-metadata',
+      label: 'Token metadata',
+      status: tokenValid ? 'valid' : 'error',
+    },
+    {
+      id: 'identity-claims',
+      label: 'Required identity claims',
+      status: claimsValid ? 'valid' : 'error',
+    },
+    {
+      id: 'compliance-parameters',
+      label: 'Compliance module parameters',
+      status: complianceValid ? 'valid' : 'error',
+    },
+    {
+      id: 'agent-wallets',
+      label: 'Agent wallet addresses',
+      status: agentsValid ? 'valid' : 'error',
+    },
+    {
+      id: 'wallet',
+      label: 'Wallet connection',
+      status: wallet.isConnected ? 'valid' : 'error',
+    },
+    {
+      id: 'network',
+      label: 'Network connection',
+      status: !wallet.isConnected ? 'pending' : wallet.isCorrectNetwork ? 'valid' : 'error',
+    },
+    {
+      id: 'contract-configuration',
+      label: 'Smart contract configuration',
+      status:
+        tokenValid && claimsValid && complianceValid && agentsValid ? 'valid' : 'pending',
+    },
+  ];
+};
+
+export const hasBlockingReviewErrors = (checks) =>
+  checks.some((check) => check.status === 'error' || check.status === 'pending');
+
+export const getTokenDeploymentPayload = (state, connectedWallet) => ({
+  tokenInformation: state.tokenInformation,
+  supplyPricing: state.supplyPricing,
+  identityClaims: state.identityClaims,
+  compliance: state.compliance,
+  agents: Object.entries(state.agents).reduce((result, [key, agent]) => {
+    result[key] = {
+      ...agent,
+      address: agent.address || (agent.autoAssigned ? connectedWallet : ''),
+    };
+    return result;
+  }, {}),
+  connectedWallet,
+});

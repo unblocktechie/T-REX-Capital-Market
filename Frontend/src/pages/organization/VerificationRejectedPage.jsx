@@ -71,19 +71,24 @@ export default function VerificationRejectedPage() {
             </div>
           </div>
 
-          {!canResubmit ? (
-            <div className="mt-6 inline-flex min-h-12 items-center rounded-2xl border border-slate-200 bg-slate-100 px-5 text-sm font-semibold text-slate-500" aria-disabled="true">
-              Resubmission is not currently enabled
-            </div>
-          ) : null}
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-stretch">
+            {!canResubmit ? (
+              <div
+                className="inline-flex min-h-12 min-w-0 flex-1 items-center rounded-2xl border border-slate-200 bg-slate-100 px-5 text-sm font-semibold leading-5 text-slate-500"
+                aria-disabled="true"
+              >
+                Resubmission is not currently enabled
+              </div>
+            ) : null}
 
-          <a
-            href="mailto:compliance@erc3643.com"
-            className="mt-7 inline-flex items-center gap-2 text-sm font-medium text-slate-600 transition hover:text-slate-950"
-          >
-            <Mail className="size-4" />
-            compliance@erc3643.com
-          </a>
+            <a
+              href="mailto:compliance@erc3643.com"
+              className="inline-flex min-h-12 min-w-0 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 sm:justify-start"
+            >
+              <Mail className="size-4 shrink-0" />
+              <span className="min-w-0 break-all sm:break-normal">compliance@erc3643.com</span>
+            </a>
+          </div>
         </article>
 
         <aside className="grid min-w-0 gap-4">

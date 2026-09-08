@@ -25,6 +25,7 @@ export const createInitialOrganization = () => ({
   walletAddress: '',
   walletChainId: null,
   walletNetwork: '',
+  contractAddress: '',
   company: {
     legalName: '',
     entityType: '',

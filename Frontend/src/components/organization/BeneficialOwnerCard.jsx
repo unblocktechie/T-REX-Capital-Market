@@ -85,7 +85,8 @@ export function BeneficialOwnerCard({
           min="0"
           max="100"
           step="0.01"
-          placeholder="25"
+          placeholder="0"
+          onWheel={(event) => event.currentTarget.blur()}
           trailing={<span className="org-input-suffix">%</span>}
           error={errors?.ownershipPercentage?.message}
           {...register(`beneficialOwners.${index}.ownershipPercentage`)}

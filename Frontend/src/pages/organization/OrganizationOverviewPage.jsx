@@ -6,6 +6,7 @@ import {
   Download,
   ExternalLink,
   FileCheck2,
+  Fingerprint,
   FolderKanban,
   Globe2,
   Rocket,
@@ -14,10 +15,9 @@ import {
   Network,
   Wallet,
 } from 'lucide-react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { OrganizationSummaryHeader } from '@/components/organization/OrganizationSummaryHeader';
-import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ROUTES } from '@/config/routes';
 import { web3Config } from '@/config/web3';
@@ -51,7 +51,6 @@ const initialsFor = (name) =>
 
 export default function OrganizationOverviewPage() {
   useDocumentTitle('Verified Organization');
-  const navigate = useNavigate();
   const { organization } = useOrganization();
 
   if (organization.status === ORGANIZATION_STATUSES.VERIFIED_SUCCESS_PENDING && !organization.verifiedScreenViewed) {
@@ -102,6 +101,11 @@ export default function OrganizationOverviewPage() {
     organizationWallet && walletChain?.blockExplorers?.default?.url
       ? `${walletChain.blockExplorers.default.url}/address/${organizationWallet}`
       : '';
+  const contractAddress = organization.contractAddress || '';
+  const contractExplorerUrl =
+    contractAddress && walletChain?.blockExplorers?.default?.url
+      ? `${walletChain.blockExplorers.default.url}/address/${contractAddress}`
+      : '';
 
   const copyWalletAddress = async () => {
     if (!organizationWallet) return;
@@ -113,18 +117,20 @@ export default function OrganizationOverviewPage() {
     }
   };
 
+  const copyContractAddress = async () => {
+    if (!contractAddress) return;
+    try {
+      await navigator.clipboard.writeText(contractAddress);
+      toast.success('On-chain ID copied');
+    } catch {
+      toast.error('Unable to copy on-chain ID');
+    }
+  };
+
   return (
     <div className="org-overview-page org-overview-page--enhanced">
       <OrganizationSummaryHeader organization={organization} />
 
-      <div className="org-overview-actions">
-        <Button variant="secondary" onClick={() => navigate(ROUTES.dashboard)}>
-          Go to Dashboard
-        </Button>
-        <Button onClick={() => navigate(ROUTES.createToken)}>
-          Start Token Issuance
-        </Button>
-      </div>
 
       <section className="org-overview-metrics org-overview-metrics--enhanced" aria-label="Organization verification summary">
         {[
@@ -223,87 +229,117 @@ export default function OrganizationOverviewPage() {
           </dl>
         </Card>
 
-        <Card className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 p-0 text-white shadow-2xl shadow-slate-300/30">
-          <header className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-5 sm:px-6">
+        <Card className="org-wallet-card">
+          <header className="org-wallet-card__header">
             <div>
-              <span className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-[var(--primary-100)]">
-                Wallet integration
-              </span>
-              <h2 className="mt-2 mb-0 text-xl font-extrabold text-white">Master Organization Wallet</h2>
+              <span className="org-wallet-card__eyebrow">Wallet integration</span>
+              <h2>Master Organization Wallet</h2>
             </div>
             <span
-              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-extrabold ${
-                organizationWallet
-                  ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300'
-                  : 'border-slate-500/30 bg-slate-500/10 text-slate-300'
+              className={`org-wallet-card__status ${
+                organizationWallet ? 'org-wallet-card__status--active' : 'org-wallet-card__status--inactive'
               }`}
             >
               <ShieldCheck size={14} /> {organizationWallet ? 'Active' : 'Unavailable'}
             </span>
           </header>
 
-          <div className="grid gap-5 p-5 sm:p-6">
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <div className="flex items-start gap-3">
-                <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[var(--primary-500)] text-white">
-                  <Wallet size={20} />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <small className="block text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">
-                    Primary issuer wallet
-                  </small>
-                  <strong className="mt-1 block truncate font-mono text-sm text-white sm:text-base">
-                    {organizationWallet ? shortenWalletAddress(organizationWallet, 9, 9) : 'Wallet address unavailable'}
-                  </strong>
-                  <p className="mt-2 mb-0 text-xs leading-5 text-slate-400">
-                    This verified wallet is used for token creation, contract deployment, and organization issuer actions.
-                  </p>
+          <div className="org-wallet-card__body">
+            <section className="org-wallet-card__address" aria-label="Primary issuer wallet">
+              <span className="org-wallet-card__icon" aria-hidden="true">
+                <Wallet size={20} />
+              </span>
+              <div className="org-wallet-card__address-copy">
+                <small>Primary issuer wallet</small>
+                <strong title={organizationWallet || undefined}>
+                  {organizationWallet
+                    ? shortenWalletAddress(organizationWallet, 9, 9)
+                    : 'Wallet address unavailable'}
+                </strong>
+                <p>
+                  This verified wallet is used for token creation, contract deployment, and
+                  organization issuer actions.
+                </p>
+              </div>
+              {organizationWallet ? (
+                <button
+                  type="button"
+                  className="org-wallet-card__copy-button"
+                  onClick={copyWalletAddress}
+                  aria-label="Copy organization wallet address"
+                  title="Copy organization wallet address"
+                >
+                  <Copy size={16} />
+                </button>
+              ) : null}
+            </section>
+
+            <div className="org-wallet-card__meta">
+              <article>
+                <span><Network size={17} /></span>
+                <div>
+                  <small>Network</small>
+                  <strong>{walletNetworkName}</strong>
                 </div>
-                {organizationWallet ? (
-                  <button
-                    type="button"
-                    className="grid size-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/5 text-slate-300 transition hover:border-[var(--primary-400)] hover:bg-[color:rgba(47,128,237,0.12)] hover:text-[var(--primary-100)]"
-                    onClick={copyWalletAddress}
-                    aria-label="Copy organization wallet address"
+              </article>
+              <article>
+                <span><ShieldCheck size={17} /></span>
+                <div>
+                  <small>Verification status</small>
+                  <strong>{verifiedDate}</strong>
+                </div>
+              </article>
+            </div>
+
+            <article className="org-wallet-card__contract">
+              <div className="org-wallet-card__contract-copy">
+                <span className="org-wallet-card__contract-label">
+                  <Fingerprint size={15} /> On-chain ID
+                </span>
+                <strong title={contractAddress || undefined}>
+                  {contractAddress || 'Not assigned by the backend'}
+                </strong>
+                <p>Smart-contract address assigned to this organization after approval.</p>
+              </div>
+              {contractAddress ? (
+                <button
+                  type="button"
+                  className="org-wallet-card__copy-button org-wallet-card__copy-button--contract"
+                  onClick={copyContractAddress}
+                  aria-label="Copy organization on-chain ID"
+                  title="Copy on-chain ID"
+                >
+                  <Copy size={16} />
+                </button>
+              ) : null}
+            </article>
+          </div>
+
+          <footer className="org-wallet-card__footer">
+            <div className="org-wallet-card__jurisdiction">
+              <small>Primary jurisdiction</small>
+              <b>{primaryJurisdiction}</b>
+            </div>
+            {walletExplorerUrl || contractExplorerUrl ? (
+              <div className="org-wallet-card__actions">
+                {walletExplorerUrl ? (
+                  <a href={walletExplorerUrl} target="_blank" rel="noreferrer">
+                    <ExternalLink size={15} /> View wallet
+                  </a>
+                ) : null}
+                {contractExplorerUrl ? (
+                  <a
+                    className="org-wallet-card__action--contract"
+                    href={contractExplorerUrl}
+                    target="_blank"
+                    rel="noreferrer"
                   >
-                    <Copy size={16} />
-                  </button>
+                    <ExternalLink size={15} /> View contract
+                  </a>
                 ) : null}
               </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <article className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <span className="flex items-center gap-2 text-xs font-semibold text-slate-400">
-                  <Network size={15} /> Network
-                </span>
-                <strong className="mt-2 block text-sm font-extrabold text-white">{walletNetworkName}</strong>
-              </article>
-              <article className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <span className="flex items-center gap-2 text-xs font-semibold text-slate-400">
-                  <ShieldCheck size={15} /> Verification status
-                </span>
-                <strong className="mt-2 block text-sm font-extrabold text-white">{verifiedDate}</strong>
-              </article>
-            </div>
-
-            <div className="flex flex-col gap-3 border-t border-white/10 pt-5 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <small className="block text-xs text-slate-400">Primary jurisdiction</small>
-                <b className="mt-1 block text-sm text-white">{primaryJurisdiction}</b>
-              </div>
-              {walletExplorerUrl ? (
-                <a
-                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-[var(--primary-400)] bg-[color:rgba(47,128,237,0.12)] px-4 text-sm font-extrabold text-[var(--primary-100)] transition hover:bg-[var(--primary-500)] hover:text-white"
-                  href={walletExplorerUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <ExternalLink size={16} /> View wallet
-                </a>
-              ) : null}
-            </div>
-          </div>
+            ) : null}
+          </footer>
         </Card>
       </section>
 

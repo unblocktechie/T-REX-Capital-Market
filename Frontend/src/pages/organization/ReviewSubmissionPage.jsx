@@ -44,6 +44,9 @@ export default function ReviewSubmissionPage() {
   const [confirmations, setConfirmations] = useState(organization.confirmations);
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const currentWalletNetwork = wallet.isCorrectNetwork
+    ? wallet.chain?.name || wallet.requiredChain.name
+    : 'Unsupported network';
 
   useEffect(() => {
     refresh().catch(() => undefined);
@@ -52,6 +55,23 @@ export default function ReviewSubmissionPage() {
   useEffect(() => {
     setConfirmations(organization.confirmations);
   }, [organization.confirmations]);
+
+  useEffect(() => {
+    const toastId = 'organization-wallet-network-warning';
+
+    if (!wallet.isConnected || wallet.isCorrectNetwork) {
+      toast.dismiss(toastId);
+      return;
+    }
+
+    toast.warning('Switch network', {
+      id: toastId,
+      description: 'Please switch the wallet network to continue.',
+      duration: 7000,
+    });
+
+    return () => toast.dismiss(toastId);
+  }, [wallet.isConnected, wallet.isCorrectNetwork]);
 
   const allConfirmed = Object.values(confirmations).every(Boolean);
   const applicationComplete = isOrganizationReadyForSubmission(organization);
@@ -76,7 +96,7 @@ export default function ReviewSubmissionPage() {
   const switchToRequiredNetwork = async () => {
     try {
       await wallet.switchChain(wallet.requiredChain.id);
-      toast.success(`Switched to ${wallet.requiredChain.name}`);
+      toast.success('Network switched successfully');
     } catch (error) {
       toast.error('Unable to switch network', {
         description: getWalletErrorMessage(error),
@@ -120,7 +140,7 @@ export default function ReviewSubmissionPage() {
       description="Verify the organization details, connect the wallet that will control token issuance, and confirm the final declarations before submission."
       onStepChange={submitting ? undefined : goToStep}
     >
-      <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(330px,360px)]">
         <div className="grid min-w-0 gap-4">
           <ReadOnlyDetailSection
             title="Company Information"
@@ -185,7 +205,7 @@ export default function ReviewSubmissionPage() {
           <Card className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-0 shadow-sm">
             <header className="relative block border-b border-slate-200 px-5 py-4 pr-24 sm:px-6 sm:pr-28">
               <div>
-                <h2 className="m-0 text-lg font-extrabold text-slate-950">Ultimate Beneficial Owners</h2>
+                <h2 className="m-0 text-lg font-semibold text-slate-950">Ultimate Beneficial Owners</h2>
                 <p className="mt-1 mb-0 text-sm text-slate-500">Individuals disclosed as owners or controlling persons.</p>
               </div>
               <div className="absolute top-4 right-5 sm:right-6 [&_.button]:!w-auto">
@@ -204,7 +224,7 @@ export default function ReviewSubmissionPage() {
                   className="grid grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-3 sm:p-4"
                   key={owner.id || `${owner.fullName}-${index}`}
                 >
-                  <span className="grid size-10 place-items-center rounded-xl bg-slate-950 text-xs font-extrabold text-white">
+                  <span className="grid size-10 place-items-center rounded-xl bg-slate-950 text-xs font-semibold text-white">
                     {owner.fullName
                       ?.split(/\s+/)
                       .slice(0, 2)
@@ -213,7 +233,7 @@ export default function ReviewSubmissionPage() {
                       .toUpperCase() || 'UB'}
                   </span>
                   <div className="min-w-0">
-                    <strong className="block truncate text-sm font-extrabold text-slate-950">{owner.fullName}</strong>
+                    <strong className="block truncate text-sm font-semibold text-slate-950">{owner.fullName}</strong>
                     <small className="mt-1 block truncate text-xs text-slate-500">
                       {owner.nationalityName || owner.nationality} ·{' '}
                       {owner.relationship || (owner.isPrimary ? 'Primary beneficial owner' : 'Beneficial owner')}
@@ -230,7 +250,7 @@ export default function ReviewSubmissionPage() {
           <Card className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-0 shadow-sm">
             <header className="relative block border-b border-slate-200 px-5 py-4 pr-24 sm:px-6 sm:pr-28">
               <div>
-                <h2 className="m-0 text-lg font-extrabold text-slate-950">Submitted Documents</h2>
+                <h2 className="m-0 text-lg font-semibold text-slate-950">Submitted Documents</h2>
                 <p className="mt-1 mb-0 text-sm text-slate-500">Legal filings prepared for the compliance review.</p>
               </div>
               <div className="absolute top-4 right-5 sm:right-6 [&_.button]:!w-auto">
@@ -254,31 +274,31 @@ export default function ReviewSubmissionPage() {
         </div>
 
         <aside className="min-w-0 xl:sticky xl:top-24 xl:self-start">
-          <Card className="overflow-hidden rounded-3xl border border-slate-200 bg-white p-0 shadow-xl shadow-slate-200/60">
+          <Card className="min-w-0 overflow-hidden rounded-3xl border border-slate-200 bg-white p-0 shadow-xl shadow-slate-200/60">
             <div className="bg-slate-950 p-5 text-white sm:p-6">
               <span className="grid size-12 place-items-center rounded-2xl bg-[var(--primary-500)] text-white">
                 <ShieldCheck size={25} />
               </span>
-              <span className="mt-5 block text-[11px] font-extrabold uppercase tracking-[0.18em] text-[var(--primary-100)]">
+              <span className="mt-5 block text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--primary-100)]">
                 Final authorization
               </span>
-              <h2 className="mt-2 mb-2 text-2xl font-extrabold text-white">Ready to submit?</h2>
+              <h2 className="mt-2 mb-2 text-2xl font-semibold text-white">Ready to submit?</h2>
               <p className="m-0 text-sm leading-6 text-slate-300">
                 Connect the wallet that the organization will use for token creation and issuer operations.
               </p>
             </div>
 
-            <div className="grid gap-5 p-5 sm:p-6">
+            <div className="grid min-w-0 gap-5 p-5 sm:p-6">
               {!applicationComplete ? (
                 <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm leading-6 text-rose-800" role="alert">
                   Complete all required company, jurisdiction, and UBO fields, then upload at least one document before submission.
                 </div>
               ) : null}
 
-              <div className="grid gap-3">
+              <div className="grid min-w-0 gap-3">
                 <div className="flex items-center gap-2">
                   <WalletCards size={17} className="text-slate-500" />
-                  <h3 className="m-0 text-sm font-extrabold text-slate-950">Organization wallet</h3>
+                  <h3 className="m-0 text-sm font-semibold text-slate-950">Organization wallet</h3>
                 </div>
 
                 {!wallet.isConnected ? (
@@ -289,51 +309,46 @@ export default function ReviewSubmissionPage() {
                     </p>
                   </>
                 ) : (
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <small className="block text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
-                          Connected wallet
-                        </small>
-                        <strong className="mt-1 block truncate font-mono text-sm text-slate-950">
-                          {wallet.shortAddress}
-                        </strong>
-                        <span className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-slate-500">
-                          <Network size={13} /> {wallet.chain?.name || `Chain ${wallet.chainId}`} · {wallet.balanceLabel}
+                  <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 p-3.5 sm:p-4">
+                    <div className="grid min-w-0 gap-3.5">
+                      <span className="flex min-w-0 items-center gap-1.5 text-xs font-semibold leading-5 text-slate-500">
+                        <Network size={13} className="shrink-0" />
+                        <span className="min-w-0 break-words">
+                          {currentWalletNetwork} · {wallet.balanceLabel}
                         </span>
+                      </span>
+                      <div className="min-w-0">
+                        <WalletControl expanded />
                       </div>
-                      <WalletControl />
                     </div>
                   </div>
                 )}
 
                 {wallet.isConnected && !wallet.isCorrectNetwork ? (
-                  <div className="grid gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4">
-                    <div className="flex gap-2 text-sm leading-6 text-rose-800">
+                  <div className="grid min-w-0 gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4">
+                    <div className="flex min-w-0 gap-2 text-sm leading-6 text-rose-800">
                       <WifiOff className="mt-1 shrink-0" size={17} />
-                      <span>
-                        Wrong network. Switch to <strong>{wallet.requiredChain.name}</strong> before submission.
-                      </span>
+                      <span className="min-w-0 break-words">Please switch the wallet network before submission.</span>
                     </div>
                     <button
                       type="button"
                       disabled={wallet.isBusy}
                       onClick={switchToRequiredNetwork}
-                      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 text-sm font-extrabold text-white transition hover:bg-rose-700 disabled:opacity-60"
+                      className="inline-flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 text-center text-sm font-semibold text-white transition hover:bg-rose-700 disabled:opacity-60"
                     >
                       {wallet.switchingChainId === wallet.requiredChain.id ? (
                         <RefreshCcw className="animate-spin" size={16} />
                       ) : (
                         <Network size={16} />
                       )}
-                      Switch to {wallet.requiredChain.name}
+                      Switch Network
                     </button>
                   </div>
                 ) : null}
               </div>
 
-              <div className="grid gap-3 border-t border-slate-200 pt-5">
-                <h3 className="m-0 text-sm font-extrabold text-slate-950">Required declarations</h3>
+              <div className="grid min-w-0 gap-3 border-t border-slate-200 pt-5">
+                <h3 className="m-0 text-sm font-semibold text-slate-950">Required declarations</h3>
                 {[
                   ['ownershipAccurate', 'I confirm all beneficial ownership details are current and accurate.'],
                   ['processingTimeAccepted', 'I understand that verification may take 2–3 business days.'],
@@ -341,7 +356,7 @@ export default function ReviewSubmissionPage() {
                 ].map(([key, label]) => (
                   <label
                     key={key}
-                    className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-3 transition hover:border-[var(--primary-400)] hover:bg-[var(--primary-50)]"
+                    className="flex min-w-0 cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-3 transition hover:border-[var(--primary-400)] hover:bg-[var(--primary-50)]"
                   >
                     <input
                       type="checkbox"
@@ -351,7 +366,7 @@ export default function ReviewSubmissionPage() {
                       onChange={(event) => updateConfirmation(key, event.target.checked)}
                       className="mt-1 size-4 shrink-0 accent-[var(--primary-500)]"
                     />
-                    <span className="text-xs leading-5 text-slate-700">
+                    <span className="min-w-0 break-words text-xs leading-5 text-slate-700">
                       {label} <span className="font-bold text-rose-600">*</span>
                     </span>
                   </label>

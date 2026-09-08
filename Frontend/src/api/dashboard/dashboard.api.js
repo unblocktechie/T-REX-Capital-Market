@@ -91,13 +91,43 @@ const mockDashboard = {
   ],
 };
 
+
+const emptyDashboard = {
+  metrics: mockDashboard.metrics.map((metric) => ({
+    ...metric,
+    value: 0,
+    change: 0,
+    helper: 'No dashboard data available yet',
+  })),
+  projects: [],
+  activity: [],
+};
+
+const normalizeDashboard = (payload) => ({
+  metrics: Array.isArray(payload?.metrics) ? payload.metrics : emptyDashboard.metrics,
+  projects: Array.isArray(payload?.projects) ? payload.projects : [],
+  activity: Array.isArray(payload?.activity) ? payload.activity : [],
+});
+
 export const dashboardApi = {
   async getOverview() {
     if (env.features.mockApi) {
       await wait();
       return mockDashboard;
     }
-    const response = await apiClient.get('/dashboard/overview');
-    return response.data?.data ?? response.data;
+
+    try {
+      const response = await apiClient.get('/dashboard/overview', {
+        skipGlobalLoader: true,
+      });
+      return normalizeDashboard(response.data?.data ?? response.data);
+    } catch (error) {
+      if (error?.response?.status === 404) {
+        // The current backend does not expose this optional aggregate endpoint yet. Resolve with
+        // a safe empty dashboard so login does not surface a technical route-not-found toast.
+        return emptyDashboard;
+      }
+      throw error;
+    }
   },
 };

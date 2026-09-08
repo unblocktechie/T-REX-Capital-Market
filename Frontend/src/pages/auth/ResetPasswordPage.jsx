@@ -85,7 +85,7 @@ export default function ResetPasswordPage() {
         <KeyRound size={25} />
       </div>
       <div className="mb-5">
-        <span className="text-[11px] font-extrabold tracking-[0.12em] text-[var(--primary-500)] uppercase">
+        <span className="text-[11px] font-semibold tracking-[0.12em] text-[var(--primary-500)] uppercase">
           Create a new password
         </span>
         <h2 className="my-[7px] font-[var(--font-display)] text-[clamp(28px,3vw,38px)] leading-[1.16] tracking-[-0.025em] text-[var(--text)]">

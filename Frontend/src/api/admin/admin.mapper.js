@@ -61,6 +61,21 @@ const mapWallet = (data) => {
       null,
     ),
     verified: address ? truthy(first(data?.walletVerified, data?.organizationWallet?.verified, true)) : false,
+    contractAddress: text(
+      data?.contractAddress,
+      data?.contractaddress,
+      data?.contract_address,
+      data?.organizationContractAddress,
+      data?.organization_contract_address,
+      data?.onChainId,
+      data?.onchainId,
+      data?.onchainid,
+      data?.on_chain_id,
+      data?.organizationWallet?.contractAddress,
+      data?.organizationWallet?.contractaddress,
+      data?.wallet?.contractAddress,
+      data?.wallet?.contractaddress,
+    ),
   };
 };
 

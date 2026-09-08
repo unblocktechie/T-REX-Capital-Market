@@ -111,7 +111,7 @@ export default function SignupPage() {
   return (
     <div className="mx-auto w-full max-w-[560px]">
       <div className="mb-4">
-        <span className="text-[11px] font-extrabold tracking-[0.12em] text-[var(--primary-500)] uppercase">
+        <span className="text-[11px] font-semibold tracking-[0.12em] text-[var(--primary-500)] uppercase">
           Join T-REX Capital Market
         </span>
         <h2 className="my-1.5 font-[var(--font-display)] text-[clamp(27px,3vw,36px)] leading-[1.14] tracking-[-0.025em] text-[var(--text)]">

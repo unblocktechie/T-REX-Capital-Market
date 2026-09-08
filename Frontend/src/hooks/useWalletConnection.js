@@ -12,16 +12,23 @@ import { formatWalletBalance, shortenWalletAddress } from '@/utils/wallet';
 export function useWalletConnection() {
   const connection = useConnection();
   const connectors = useConnectors();
-  const connectMutation = useConnect();
-  const disconnectMutation = useDisconnect();
-  const switchMutation = useSwitchChain();
+  const connectMutation = useConnect({ mutation: { meta: { silent: true } } });
+  const disconnectMutation = useDisconnect({ mutation: { meta: { silent: true } } });
+  const switchMutation = useSwitchChain({ mutation: { meta: { silent: true } } });
+  const isSupportedChain = web3Config.supportedChains.some(
+    (chain) => chain.id === connection.chainId,
+  );
 
   const balanceQuery = useBalance({
     address: connection.address,
-    chainId: connection.chainId,
+    chainId: isSupportedChain ? connection.chainId : undefined,
     query: {
-      enabled: Boolean(connection.address && connection.chainId),
+      // Wagmi throws a technical ChainNotConfiguredError when a connected wallet
+      // is on a chain that is not registered in the app config. Avoid making the
+      // balance request until the wallet is on one of the supported chains.
+      enabled: Boolean(connection.address && connection.chainId && isSupportedChain),
       refetchInterval: 20_000,
+      meta: { silent: true },
     },
   });
 
@@ -63,6 +70,8 @@ export function useWalletConnection() {
     supportedChains: web3Config.supportedChains,
     walletConnectConfigured: web3Config.walletConnectConfigured,
     isCorrectNetwork,
+    isSupportedChain,
+    isUnsupportedNetwork: connection.isConnected && !isSupportedChain,
     isBusy:
       connectMutation.isPending ||
       disconnectMutation.isPending ||
@@ -72,9 +81,11 @@ export function useWalletConnection() {
       : undefined,
     switchingChainId: switchMutation.variables?.chainId,
     balance: balanceQuery.data,
-    balanceLabel: balanceQuery.isPending
-      ? 'Loading balance…'
-      : formatWalletBalance(balanceQuery.data),
+    balanceLabel: !isSupportedChain && connection.isConnected
+      ? 'Unavailable on this network'
+      : balanceQuery.isPending
+        ? 'Loading balance…'
+        : formatWalletBalance(balanceQuery.data),
     shortAddress: shortenWalletAddress(connection.address),
   };
 }

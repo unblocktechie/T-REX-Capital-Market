@@ -67,13 +67,13 @@ export function SubmissionConfirmationModal({
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl bg-white/[0.07] p-4">
               <small className="block text-xs text-slate-400">Wallet balance</small>
-              <strong className="mt-1 block text-sm font-extrabold">{walletBalance}</strong>
+              <strong className="mt-1 block text-sm font-semibold">{walletBalance}</strong>
             </div>
             <div className="rounded-2xl bg-white/[0.07] p-4">
               <small className="flex items-center gap-1.5 text-xs text-slate-400">
                 <Network size={13} /> Network
               </small>
-              <strong className="mt-1 block text-sm font-extrabold">{networkName}</strong>
+              <strong className="mt-1 block text-sm font-semibold">{networkName}</strong>
             </div>
           </div>
         </div>

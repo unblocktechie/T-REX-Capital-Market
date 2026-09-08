@@ -9,6 +9,7 @@ import { queryClient } from '@/lib/queryClient';
 import { wagmiConfig } from '@/config/web3';
 import '@/assets/styles/global.css';
 import '@/assets/styles/organization.css';
+import '@/assets/styles/token-issuance.css';
 
 setupAxiosInterceptors();
 

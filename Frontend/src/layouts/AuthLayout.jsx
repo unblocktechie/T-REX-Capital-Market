@@ -91,7 +91,7 @@ export function AuthLayout() {
             <div className="mb-5 hidden rounded-2xl border border-[rgba(148,163,184,0.18)] bg-[linear-gradient(135deg,rgba(15,23,42,0.96),rgba(51,65,85,0.92))] p-4 text-white shadow-[0_14px_34px_rgba(15,23,42,0.16)] max-[900px]:block">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.18em] text-white/65">Secure access</p>
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/65">Secure access</p>
                   <h3 className="m-0 text-base font-semibold tracking-[-0.03em] text-white">Welcome to T-REX Capital Market</h3>
                   <p className="mt-1 mb-0 text-xs leading-5 text-white/70">Responsive, secure access for issuers and investors on every device.</p>
                 </div>

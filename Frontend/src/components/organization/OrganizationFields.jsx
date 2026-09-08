@@ -46,6 +46,7 @@ export const SelectField = forwardRef(function SelectField(
     onBlur,
     disabled = false,
     searchable,
+    showEmptyOption = true,
     required = false,
     ...props
   },
@@ -276,7 +277,7 @@ export const SelectField = forwardRef(function SelectField(
             </div>
           ) : null}
           <div className="org-select-options" id={listboxId} role="listbox" aria-labelledby={`${fieldId}-label`}>
-            {!query ? (
+            {!query && showEmptyOption ? (
               <button
                 type="button"
                 className={cn('org-select-option', selectedValue === '' && 'is-selected')}

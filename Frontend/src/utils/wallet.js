@@ -30,6 +30,13 @@ export const getWalletErrorMessage = (error, fallback = 'Wallet request could no
   if (/project id|projectid/i.test(message)) {
     return 'WalletConnect is not configured. Add VITE_WALLETCONNECT_PROJECT_ID to the environment file.';
   }
+  if (
+    /chain not configured|chainnotconfigurederror|unsupported chain|unsupported network|switch chain not supported/i.test(
+      message,
+    )
+  ) {
+    return 'This wallet network is not supported. Please switch the network and try again.';
+  }
 
-  return message;
+  return message.replace(/\s*Version:\s*@?wagmi\/core@[^\s]+.*$/i, '').trim() || fallback;
 };

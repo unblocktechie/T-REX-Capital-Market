@@ -32,6 +32,15 @@ const NotFoundPage = lazy(() => import('@/pages/errors/NotFoundPage'));
 const ForbiddenPage = lazy(() => import('@/pages/errors/ForbiddenPage'));
 const UnauthorizedPage = lazy(() => import('@/pages/errors/UnauthorizedPage'));
 const NetworkErrorPage = lazy(() => import('@/pages/errors/NetworkErrorPage'));
+const TokenIssuanceOverviewPage = lazy(() => import('@/pages/tokens/TokenIssuanceOverviewPage'));
+const TokenInformationPage = lazy(() => import('@/pages/tokens/TokenInformationPage'));
+const IdentityClaimsPage = lazy(() => import('@/pages/tokens/IdentityClaimsPage'));
+const ComplianceRulesPage = lazy(() => import('@/pages/tokens/ComplianceRulesPage'));
+const AgentsPage = lazy(() => import('@/pages/tokens/AgentsPage'));
+const ReviewDeployPage = lazy(() => import('@/pages/tokens/ReviewDeployPage'));
+const DeploymentProcessingPage = lazy(() => import('@/pages/tokens/DeploymentProcessingPage'));
+const DeploymentSuccessPage = lazy(() => import('@/pages/tokens/DeploymentSuccessPage'));
+const TokenDetailsPage = lazy(() => import('@/pages/tokens/TokenDetailsPage'));
 const OrganizationEntryPage = lazy(() => import('@/pages/organization/OrganizationEntryPage'));
 const CompanyInformationPage = lazy(() => import('@/pages/organization/CompanyInformationPage'));
 const JurisdictionPage = lazy(() => import('@/pages/organization/JurisdictionPage'));
@@ -130,7 +139,16 @@ export const router = createBrowserRouter([
               { index: true, element: <Navigate to={ROUTES.dashboard} replace /> },
               { path: 'dashboard', element: withSuspense(<DashboardPage />) },
               { path: 'projects', element: withSuspense(<ModulePage moduleKey="projects" />) },
-              { path: 'tokens/new', element: withSuspense(<ModulePage moduleKey="createToken" />) },
+              { path: 'tokens/new', element: withSuspense(<TokenIssuanceOverviewPage />) },
+              { path: 'tokens/new/token-information', element: withSuspense(<TokenInformationPage />) },
+              { path: 'tokens/new/supply-pricing', element: <Navigate to={ROUTES.tokenIssuanceStep('token-information')} replace /> },
+              { path: 'tokens/new/identity-claims', element: withSuspense(<IdentityClaimsPage />) },
+              { path: 'tokens/new/compliance', element: withSuspense(<ComplianceRulesPage />) },
+              { path: 'tokens/new/agents', element: withSuspense(<AgentsPage />) },
+              { path: 'tokens/new/review', element: withSuspense(<ReviewDeployPage />) },
+              { path: 'tokens/new/deploying', element: withSuspense(<DeploymentProcessingPage />) },
+              { path: 'tokens/:tokenAddress/success', element: withSuspense(<DeploymentSuccessPage />) },
+              { path: 'tokens/:tokenAddress', element: withSuspense(<TokenDetailsPage />) },
               { path: 'identity', element: withSuspense(<ModulePage moduleKey="identity" />) },
               { path: 'compliance', element: withSuspense(<ModulePage moduleKey="compliance" />) },
               { path: 'investors', element: withSuspense(<ModulePage moduleKey="investors" />) },

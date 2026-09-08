@@ -32,7 +32,7 @@ export function OTPInput({ value = '', onChange, length = 6 }) {
           ref={(node) => {
             refs.current[index] = node;
           }}
-          className="aspect-square min-w-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] text-center text-xl font-extrabold text-[var(--text)] outline-none transition-[border-color,box-shadow] focus:border-[var(--primary-500)] focus:shadow-[0_0_0_4px_rgba(22,119,210,0.13)] sm:text-[23px]"
+          className="aspect-square min-w-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] text-center text-xl font-semibold text-[var(--text)] outline-none transition-[border-color,box-shadow] focus:border-[var(--primary-500)] focus:shadow-[0_0_0_4px_rgba(22,119,210,0.13)] sm:text-[23px]"
           inputMode="numeric"
           autoComplete={index === 0 ? 'one-time-code' : 'off'}
           maxLength={1}

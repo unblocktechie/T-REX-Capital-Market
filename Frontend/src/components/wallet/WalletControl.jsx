@@ -58,7 +58,7 @@ function WalletOption({ type, title, description, disabled, loading, onClick }) 
         )}
       </span>
       <span className="min-w-0 flex-1">
-        <strong className="block text-sm font-extrabold text-slate-950 sm:text-base">{title}</strong>
+        <strong className="block text-sm font-semibold text-slate-950 sm:text-base">{title}</strong>
         <small className="mt-1 block text-xs leading-5 text-slate-500 sm:text-sm">{description}</small>
       </span>
       <ChevronDown className="-rotate-90 text-slate-400 transition group-hover:text-[var(--primary-600)]" size={18} />
@@ -66,7 +66,7 @@ function WalletOption({ type, title, description, disabled, loading, onClick }) 
   );
 }
 
-export function WalletControl({ onboarding = false, prominent = false }) {
+export function WalletControl({ onboarding = false, prominent = false, expanded = false }) {
   const [open, setOpen] = useState(false);
   const wallet = useWalletConnection();
 
@@ -87,9 +87,7 @@ export function WalletControl({ onboarding = false, prominent = false }) {
   const switchTo = async (chainId) => {
     try {
       await wallet.switchChain(chainId);
-      toast.success('Network switched', {
-        description: `Connected to ${wallet.requiredChain.name}.`,
-      });
+      toast.success('Network switched successfully');
     } catch (error) {
       toast.error('Unable to switch network', {
         description: getWalletErrorMessage(error),
@@ -140,7 +138,10 @@ export function WalletControl({ onboarding = false, prominent = false }) {
         type="button"
         onClick={() => setOpen(true)}
         className={cn(
-          'group flex min-h-10 shrink-0 items-center gap-2 rounded-xl border px-2.5 py-1.5 text-left transition sm:px-3',
+          'group flex max-w-full shrink-0 items-center rounded-xl border text-left transition',
+          expanded
+            ? 'min-h-14 w-full min-w-0 justify-start gap-3 px-3.5 py-2.5'
+            : 'min-h-10 gap-2 px-2.5 py-1.5 sm:px-3',
           triggerClasses,
           onboarding && 'max-w-[220px]',
         )}
@@ -148,7 +149,8 @@ export function WalletControl({ onboarding = false, prominent = false }) {
       >
         <span
           className={cn(
-            'relative grid size-8 shrink-0 place-items-center rounded-lg',
+            'relative grid shrink-0 place-items-center',
+            expanded ? 'size-9 rounded-xl' : 'size-8 rounded-lg',
             wallet.isConnected
               ? 'overflow-hidden border border-slate-200 bg-white shadow-sm'
               : prominent
@@ -158,7 +160,7 @@ export function WalletControl({ onboarding = false, prominent = false }) {
         >
           {wallet.isConnected ? (
             <>
-              <WalletBrandImage type={connectedWalletType} className="size-7" />
+              <WalletBrandImage type={connectedWalletType} className={expanded ? 'size-8' : 'size-7'} />
               <span
                 className={cn(
                   'absolute right-0 bottom-0 size-2 rounded-full border border-white',
@@ -172,25 +174,49 @@ export function WalletControl({ onboarding = false, prominent = false }) {
           )}
         </span>
 
-        <span className={cn('min-w-0', prominent ? 'block' : 'block max-w-[82px] sm:max-w-[132px]')}>
+        <span
+          className={cn(
+            'min-w-0',
+            expanded ? 'block flex-1' : prominent ? 'block' : 'block max-w-[82px] sm:max-w-[132px]',
+          )}
+        >
           {wallet.isConnected ? (
             <>
-              <strong className={cn('block truncate text-[10px] font-extrabold sm:text-xs', prominent ? 'text-white' : 'text-slate-950')}>
+              <strong
+                className={cn(
+                  'block truncate font-semibold',
+                  expanded ? 'text-sm' : 'text-[10px] sm:text-xs',
+                  prominent ? 'text-white' : 'text-slate-950',
+                )}
+              >
                 {wallet.shortAddress}
               </strong>
-              <small className={cn('block max-w-28 truncate text-[9px] font-semibold sm:text-[10px]', prominent ? 'text-white/80' : 'text-slate-500')}>
+              <small
+                className={cn(
+                  'block truncate font-semibold',
+                  expanded ? 'mt-0.5 max-w-none text-[11px] leading-4' : 'max-w-28 text-[9px] sm:text-[10px]',
+                  prominent ? 'text-white/80' : 'text-slate-500',
+                )}
+              >
                 {wallet.balanceLabel}
               </small>
             </>
           ) : (
-            <strong className={cn('block whitespace-nowrap font-extrabold', prominent ? 'text-sm text-white' : 'text-xs text-slate-950')}>
+            <strong className={cn('block whitespace-nowrap font-semibold', prominent ? 'text-sm text-white' : 'text-xs text-slate-950')}>
               Connect Wallet
             </strong>
           )}
         </span>
         <ChevronDown
-          className={cn('shrink-0', prominent ? 'block text-white' : 'hidden text-slate-400 sm:block')}
-          size={14}
+          className={cn(
+            'shrink-0',
+            expanded
+              ? 'ml-auto block text-slate-400 transition group-hover:text-slate-600'
+              : prominent
+                ? 'block text-white'
+                : 'hidden text-slate-400 sm:block',
+          )}
+          size={expanded ? 16 : 14}
         />
       </button>
 
@@ -243,14 +269,14 @@ export function WalletControl({ onboarding = false, prominent = false }) {
               <div className="mt-5 grid grid-cols-1 gap-3 min-[420px]:grid-cols-2">
                 <div className="rounded-2xl bg-white/85 p-3.5">
                   <small className="block text-xs font-semibold text-slate-500">Wallet balance</small>
-                  <strong className="mt-1 block truncate text-sm font-extrabold text-slate-950">
+                  <strong className="mt-1 block truncate text-sm font-semibold text-slate-950">
                     {wallet.balanceLabel}
                   </strong>
                 </div>
                 <div className="rounded-2xl bg-white/85 p-3.5">
                   <small className="block text-xs font-semibold text-slate-500">Current network</small>
-                  <strong className="mt-1 block truncate text-sm font-extrabold text-slate-950">
-                    {wallet.chain?.name || `Chain ${wallet.chainId}`}
+                  <strong className="mt-1 block truncate text-sm font-semibold text-slate-950">
+                    {wallet.chain?.name || 'Unsupported network'}
                   </strong>
                 </div>
               </div>
@@ -258,14 +284,14 @@ export function WalletControl({ onboarding = false, prominent = false }) {
 
             {!wallet.isCorrectNetwork ? (
               <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm leading-6 text-rose-800">
-                Switch to <strong>{wallet.requiredChain.name}</strong> before submitting the organization. Only Sepolia is supported for the organization wallet.
+                Please switch the wallet network before submitting the organization.
               </div>
             ) : null}
 
             <div>
               <div className="mb-3 flex items-center gap-2">
                 <Network size={17} className="text-[var(--primary-600)]" />
-                <h3 className="m-0 text-sm font-extrabold text-slate-950">Required network</h3>
+                <h3 className="m-0 text-sm font-semibold text-slate-950">Required network</h3>
               </div>
               <button
                 type="button"
@@ -280,7 +306,7 @@ export function WalletControl({ onboarding = false, prominent = false }) {
               >
                 <span>
                   <strong className="block text-sm">Sepolia</strong>
-                  <small className="block text-xs opacity-70">Test network · Chain ID 11155111</small>
+                  <small className="block text-xs opacity-70">Test network</small>
                 </span>
                 {wallet.isCorrectNetwork ? (
                   <Check size={18} />
@@ -320,7 +346,7 @@ export function WalletControl({ onboarding = false, prominent = false }) {
               <span className="grid size-11 place-items-center rounded-2xl bg-[var(--primary-600)] text-white shadow-sm">
                 <ShieldCheck size={22} />
               </span>
-              <h3 className="mt-4 mb-1 text-lg font-extrabold text-slate-950">Choose a secure wallet</h3>
+              <h3 className="mt-4 mb-1 text-lg font-semibold text-slate-950">Choose a secure wallet</h3>
               <p className="m-0 text-sm leading-6 text-slate-600">
                 This wallet becomes the primary organization wallet and will be used for token creation and future issuer actions.
               </p>

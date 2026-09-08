@@ -65,7 +65,7 @@ export const beneficialOwnerSchema = z.object({
     .pipe(
       z
         .number()
-        .min(25, 'Each declared beneficial owner must hold at least 25%.')
+        .min(0, 'Ownership Percentage cannot be less than 0%.')
         .max(100, 'Ownership Percentage cannot exceed 100%.'),
     ),
   relationship: z.string().trim().optional().default(''),
@@ -93,14 +93,12 @@ export const beneficialOwnersSchema = z
     const fieldIndex = Math.max(0, owners.length - 1);
     let message;
 
-    if (owners.length === 1) {
-      message = 'A single UBO must hold 100% ownership. Enter 100% to continue.';
-    } else if (totalOwnership < 100) {
+    if (totalOwnership < 100) {
       const remaining = 100 - totalOwnership;
-      message = `Combined ownership is ${totalOwnership.toFixed(2)}%. Add the remaining ${remaining.toFixed(2)}% so the total equals 100%.`;
+      message = `Total ownership must equal 100%. The current total is ${totalOwnership.toFixed(2)}%; add the remaining ${remaining.toFixed(2)}%.`;
     } else {
       const excess = totalOwnership - 100;
-      message = `Combined ownership is ${totalOwnership.toFixed(2)}%. Reduce ownership by ${excess.toFixed(2)}% so the total equals 100%.`;
+      message = `Total ownership must equal 100%. The current total is ${totalOwnership.toFixed(2)}%; reduce it by ${excess.toFixed(2)}%.`;
     }
 
     context.addIssue({

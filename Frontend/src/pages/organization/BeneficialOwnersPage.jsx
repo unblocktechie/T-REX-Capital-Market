@@ -133,7 +133,7 @@ export default function BeneficialOwnersPage() {
     <OrganizationPageLayout
       step={3}
       title="Ultimate Beneficial Owners"
-      description="Add all individuals holding 25% or more of the company’s equity or exercising significant control."
+      description="Add all individuals who own part of the company or exercise significant control."
       onStepChange={savingAction ? undefined : goToStep}
       side={
         <OrganizationInfoPanel
