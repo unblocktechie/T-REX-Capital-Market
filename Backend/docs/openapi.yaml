@@ -15,6 +15,7 @@ tags:
   - name: General Settings
   - name: Locations
   - name: Organization
+  - name: Token Creation
   - name: Admin Organizations
 
 x-list-operation: &listOperation
@@ -360,6 +361,99 @@ paths:
         '400': { description: Required form data, owners, or documents are missing }
         '409': { description: Organization is no longer editable }
         '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/token-options:
+    get:
+      tags: [Token Creation]
+      summary: Get decimals, restriction modes, and claim-topic master values
+      responses:
+        '200': { description: Token options including claim topic values 1 and 2 }
+  /api/v1/tokens/me:
+    get:
+      tags: [Token Creation]
+      summary: Get the approved issuer's single token form
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Complete token form or null }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: Organization is not approved }
+  /api/v1/tokens/me/information:
+    put:
+      tags: [Token Creation]
+      summary: Save token information and optionally upload/replace the token image
+      description: The server decodes the actual image, validates 256-4096 dimensions, strips metadata, and stores optimized WebP.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: '#/components/schemas/TokenInformationInput' }
+      responses:
+        '200': { description: Token information or draft saved }
+        '400': { description: Completed token information is incomplete }
+        '409': { description: Token is immutable or symbol already exists }
+        '422': { description: Field or token image validation failed }
+  /api/v1/tokens/me/image:
+    get:
+      tags: [Token Creation]
+      summary: View the optimized token image
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Optimized token image
+          content:
+            image/webp: { schema: { type: string, format: binary } }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/tokens/me/claims:
+    put:
+      tags: [Token Creation]
+      summary: Replace selected claim topics and assign the organization as trusted issuer
+      security: [{ bearerAuth: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TokenClaimsInput' } } } }
+      responses:
+        '200': { description: Claim selections saved }
+        '400': { description: At least one active topic and trusted issuer consent are required for completion }
+        '409': { description: Token is immutable }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/tokens/me/compliance:
+    put:
+      tags: [Token Creation]
+      summary: Save holding limits and multiple ISO 3166-1 numeric country restrictions
+      security: [{ bearerAuth: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TokenComplianceInput' } } } }
+      responses:
+        '200': { description: Compliance rules saved with server-resolved ISO numeric codes }
+        '400': { description: Completed rules or country references are invalid }
+        '409': { description: Token is immutable }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/tokens/me/governance:
+    put:
+      tags: [Token Creation]
+      summary: Save token-agent and identity-manager wallets
+      description: Both addresses must match the approved organization walletAddress.
+      security: [{ bearerAuth: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TokenGovernanceInput' } } } }
+      responses:
+        '200': { description: Governance roles saved }
+        '400': { description: A wallet does not match the organization wallet }
+        '409': { description: Token is immutable }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/tokens/me/submit:
+    post:
+      tags: [Token Creation]
+      summary: Verify the frontend TREX deployment transaction and save suite addresses
+      description: Requires a confirmed transaction whose receipt contains TREXSuiteDeployed from the configured TREX factory.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TokenSubmitInput' }
+      responses:
+        '200': { description: Deployment verified and token status changed to deployed }
+        '400': { description: One or more token steps are incomplete }
+        '409': { description: Token is already deployed }
+        '422': { description: Request validation or on-chain deployment verification failed; token status is deploymentFailed for receipt failures }
   /api/v1/admin/organizations:
     get:
       tags: [Admin Organizations]
@@ -620,3 +714,80 @@ components:
           maxLength: 2000
           description: Required when status is rejected and forbidden when status is approved.
           example: Please replace the expired incorporation document.
+    TokenInformationInput:
+      type: object
+      required: [isDraft]
+      properties:
+        tokenName:
+          type: string
+          minLength: 3
+          maxLength: 50
+          pattern: "^[A-Za-z0-9][A-Za-z0-9 .'-]{1,48}[A-Za-z0-9]$"
+          example: Acme Security Token
+        tokenSymbol:
+          type: string
+          minLength: 2
+          maxLength: 10
+          pattern: '^[A-Z0-9]{2,10}$'
+          example: TREX
+        decimals: { type: integer, enum: [2, 6, 8, 18], example: 18 }
+        initialTokenPrice: { type: number, exclusiveMinimum: 0, example: 1 }
+        treasuryWalletAddress:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+        tokenDescription: { type: string, maxLength: 2000 }
+        tokenImage:
+          type: string
+          format: binary
+          description: Required for completed Step 1 unless an image already exists. PNG/JPEG/WebP/SVG, maximum 2 MB.
+        isDraft: { type: boolean, example: false }
+    TokenClaimsInput:
+      type: object
+      required: [claimTopicUids, organizationActsAsTrustedClaimIssuer, isDraft]
+      properties:
+        claimTopicUids:
+          type: array
+          uniqueItems: true
+          maxItems: 20
+          items: { type: string, format: uuid }
+        organizationActsAsTrustedClaimIssuer: { type: boolean, example: true }
+        isDraft: { type: boolean, example: false }
+    TokenComplianceInput:
+      type: object
+      required: [countryUids, isDraft]
+      properties:
+        maxInvestors: { type: integer, minimum: 1, maximum: 1000000000, example: 2000 }
+        maxBalancePerInvestor:
+          type: number
+          minimum: 0
+          exclusiveMinimum: true
+          example: 10000
+          description: Absolute maximum token amount per investor (not a percentage); must be greater than zero and supports up to 18 decimal places.
+        countryRestrictionMode: { type: string, enum: [allowlist, blocklist], example: allowlist }
+        countryUids:
+          type: array
+          uniqueItems: true
+          maxItems: 250
+          description: Server resolves each UID to countryMaster.numericCode (ISO 3166-1 numeric).
+          items: { type: string, format: uuid }
+        isDraft: { type: boolean, example: false }
+    TokenGovernanceInput:
+      type: object
+      required: [isDraft]
+      properties:
+        tokenAgentWalletAddress:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+        identityManagerWalletAddress:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+        isDraft: { type: boolean, example: false }
+    TokenSubmitInput:
+      type: object
+      required: [transactionHash]
+      additionalProperties: false
+      properties:
+        transactionHash:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{64}$'
+          example: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'

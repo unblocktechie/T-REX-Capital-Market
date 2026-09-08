@@ -13,12 +13,12 @@ class LocationRepository {
     const where = ['`isActive` = 1', '`isDeleted` = 0'];
     const params = [];
     if (search) {
-      where.push('(`countryName` LIKE ? OR `countryCode` LIKE ?)');
-      params.push(`%${search}%`, `%${search}%`);
+      where.push('(`countryName` LIKE ? OR `countryCode` LIKE ? OR `numericCode` LIKE ?)');
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
     const clause = where.join(' AND ');
     return this.paginate(
-      `SELECT \`countryUid\`, \`countryCode\`, \`countryName\`, \`phoneCode\`, \`currencyCode\` FROM \`countryMaster\` WHERE ${clause} ORDER BY \`countryName\``,
+      `SELECT \`countryUid\`, \`countryCode\`, \`numericCode\`, \`countryName\`, \`phoneCode\`, \`currencyCode\` FROM \`countryMaster\` WHERE ${clause} ORDER BY \`countryName\``,
       `SELECT COUNT(*) AS \`total\` FROM \`countryMaster\` WHERE ${clause}`,
       params,
       { page, limit },
@@ -60,6 +60,18 @@ class LocationRepository {
   async findCountry(countryUid, executor) {
     const rows = await execute('SELECT * FROM `countryMaster` WHERE `countryUid` = ? AND `isActive` = 1 AND `isDeleted` = 0 LIMIT 1', [countryUid], executor);
     return rows[0] || null;
+  }
+
+  async findCountries(countryUids, executor) {
+    if (!countryUids.length) return [];
+    return execute(
+      `SELECT \`countryUid\`, \`countryCode\`, \`numericCode\`, \`countryName\`
+       FROM \`countryMaster\`
+       WHERE \`countryUid\` IN (${countryUids.map(() => '?').join(', ')})
+         AND \`isActive\` = 1 AND \`isDeleted\` = 0`,
+      countryUids,
+      executor,
+    );
   }
 
   async findState(stateUid, executor) {

@@ -1,5 +1,6 @@
 const crypto = require('node:crypto');
 const { Country, State, City } = require('country-state-city');
+const isoCountries = require('i18n-iso-countries');
 const { getPool, closePool } = require('../src/database/connection');
 
 const deterministicUid = (namespace, value) => {
@@ -29,6 +30,7 @@ const seedLocations = async () => {
     const countryRows = countries.map((country) => [
       deterministicUid('country', country.isoCode),
       country.isoCode,
+      isoCountries.alpha2ToNumeric(country.isoCode),
       country.name,
       country.phonecode || null,
       country.currency || null,
@@ -38,9 +40,9 @@ const seedLocations = async () => {
     await insertBatches(
       connection,
       'countryMaster',
-      ['countryUid', 'countryCode', 'countryName', 'phoneCode', 'currencyCode', 'isActive', 'isDeleted'],
+      ['countryUid', 'countryCode', 'numericCode', 'countryName', 'phoneCode', 'currencyCode', 'isActive', 'isDeleted'],
       countryRows,
-      ['countryName', 'phoneCode', 'currencyCode', 'isActive', 'isDeleted'],
+      ['numericCode', 'countryName', 'phoneCode', 'currencyCode', 'isActive', 'isDeleted'],
     );
 
     let stateCount = 0;
@@ -93,6 +95,7 @@ const seedLocations = async () => {
         console.log(`Seeded ${countryIndex + 1}/${countries.length} countries, ${stateCount} states, ${cityCount} cities.`);
       }
     }
+    await connection.query('ALTER TABLE `countryMaster` MODIFY COLUMN `numericCode` CHAR(3) NOT NULL');
     console.log(`Location seed completed: ${countries.length} countries, ${stateCount} states, ${cityCount} cities.`);
   } finally {
     connection.release();

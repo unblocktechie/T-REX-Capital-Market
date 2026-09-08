@@ -12,10 +12,16 @@ const normalizeError = (error) => {
   if (String(error.code || '').startsWith('ER_')) return new ApiError(500, 'A database operation failed.', undefined, 'DATABASE_ERROR');
   if (error.type === 'entity.parse.failed') return new ApiError(400, 'Request body contains invalid JSON.', undefined, 'INVALID_JSON');
   if (error.name === 'MulterError') {
+    const isTokenImage = error.field === 'tokenImage';
     const message = error.code === 'LIMIT_FILE_SIZE'
-      ? 'A document exceeds the configured maximum file size.'
-      : 'Document upload validation failed.';
-    return new ApiError(422, message, { uploadCode: error.code }, 'DOCUMENT_UPLOAD_ERROR');
+      ? (isTokenImage ? 'Token image exceeds the configured 2 MB limit.' : 'A document exceeds the configured maximum file size.')
+      : (isTokenImage ? 'Token image upload validation failed.' : 'Document upload validation failed.');
+    return new ApiError(
+      422,
+      message,
+      { uploadCode: error.code },
+      isTokenImage ? 'TOKEN_IMAGE_UPLOAD_ERROR' : 'DOCUMENT_UPLOAD_ERROR',
+    );
   }
   return new ApiError(500, 'An unexpected error occurred.', undefined, 'INTERNAL_SERVER_ERROR');
 };

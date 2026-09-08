@@ -9,6 +9,8 @@ A production-oriented Node.js, Express, and MySQL API foundation for T-REX Capit
 - CRUD APIs for users, roles, menus, permissions, and general settings
 - Issuer-only organization onboarding with company, jurisdiction, beneficial-owner, document, draft, and final-submission steps
 - Administrator organization review with OnchainID creation before approval, rejection reasons, and one controlled issuer revision cycle
+- Approved-issuer token creation drafts with claim topics, ISO 3166-1 numeric country rules, governance-wallet validation, and deployment readiness
+- Signature-verified token images re-encoded to optimized metadata-free WebP, with optional ClamAV scanning
 - Searchable country, state, and city reference APIs with validated parent-child relationships
 - Multiple PDF/PNG/JPG organization uploads with file-size limits, checksums, secure storage names, download, and soft delete
 - Pagination, search, sorting, filtering, validation, soft deletion, and camelCase database naming
@@ -64,6 +66,9 @@ Apply `database/migrations/20260907_add_admin_organization_review.sql` to add ad
 Apply `database/migrations/20260907_add_admin_organization_document_access.sql` to grant the administrator preview/download permission.
 Apply `database/migrations/20260907_add_organization_resubmitted_status.sql` to distinguish revised submissions from initial submissions.
 Apply `database/migrations/20260908_add_organization_identity_contract_result.sql` before enabling on-chain organization approval. Configure the Sepolia RPC, identity factory, and a newly rotated deployer key using `.env.example`; never reuse or commit an exposed private key.
+Apply `database/migrations/20260908_add_token_creation_flow.sql`, then rerun `npm run seed:locations`, before using token creation. This adds ISO 3166-1 numeric codes, token/claim/restriction tables, claim values 1 and 2, menu data, and issuer permissions.
+If that migration was applied before `maxBalancePerInvestor` changed from a percentage to an absolute token amount, also apply `database/migrations/20260908_change_token_max_balance_to_amount.sql`.
+Apply `database/migrations/20260908_add_token_deployment_receipt.sql` before accepting frontend TREX deployment transaction hashes. Configure `TREX_FACTORY_ADDRESS` to the Sepolia factory that emits `TREXSuiteDeployed`.
 
 ```bash
 npm run check
@@ -71,7 +76,7 @@ npm test
 npm start
 ```
 
-See [API documentation](docs/API.md), [frontend organization guide](docs/FRONTEND-ORGANIZATION-GUIDE.md), [testing guide](docs/TESTING.md), [OpenAPI specification](docs/openapi.yaml), [editable database diagram](docs/trex-capital-market-database.excalidraw), and the import-ready [Postman collection](postman/Trex%20Capital%20Market%20Backend.postman_collection.json).
+See [API documentation](docs/API.md), [frontend organization guide](docs/FRONTEND-ORGANIZATION-GUIDE.md), [frontend token guide](docs/FRONTEND-TOKEN-CREATION-GUIDE.md), [testing guide](docs/TESTING.md), [OpenAPI specification](docs/openapi.yaml), [editable database diagram](docs/trex-capital-market-database.excalidraw), and the import-ready [Postman collection](postman/Trex%20Capital%20Market%20Backend.postman_collection.json).
 
 ## Response contract
 
@@ -84,4 +89,5 @@ Successful responses contain `success`, `message`, `data`, `timestamp`, and `req
 - Use migrations in deployment after the initial schema. Back up MySQL and ship logs to centralized storage.
 - Set `ALLOWED_ORIGINS` to exact HTTPS frontend origins. There is no wildcard fallback.
 - Configure `UPLOAD_DIR`, `UPLOAD_MAX_FILE_SIZE_MB`, and `UPLOAD_MAX_FILES`; store production uploads on encrypted persistent storage and include them in backup/retention procedures.
+- Configure token-image storage and a ClamAV executable using the `TOKEN_IMAGE_*` variables when malware scanning is required in production.
 - RBAC changes take effect on the next request. Role changes invalidate existing JWTs immediately.

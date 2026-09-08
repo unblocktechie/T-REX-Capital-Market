@@ -311,6 +311,121 @@ DELETE /organizations/me/documents/{documentUid}
 
 `walletAddress` is required and must be a valid EVM address (`0x` followed by 40 hexadecimal characters). Final submission saves it on the organization and revalidates every required company and jurisdiction field, location hierarchy, entity/industry references, owners, and every required document type. An initial submission sets `status: submitted`; the allowed revised submission sets `status: resubmitted`. Both set `isDraft: false`, `currentStep: completed`, and `submittedAt`.
 
+## Token creation
+
+Token creation requires an authenticated Issuer with an approved organization and valid organization `walletAddress`. One token row is uniquely bound to one organization. After the token becomes `readyToDeploy` or `deployed`, issuer edits are rejected; the organization cannot create another token. A `deploymentFailed` token remains eligible for another verified deployment submission.
+
+### `GET /token-options`
+
+Publicly returns:
+
+- `decimals`: `[2, 6, 8, 18]`
+- `countryRestrictionModes`: `allowlist`, `blocklist`
+- Active claim topics from `claimTopicMaster`, including their numeric on-chain `value`. Seeded KYC has value `1`; Accredited Investor has value `2`.
+
+Country choices come from `GET /locations/countries`. Each result includes `countryCode` (alpha-2) and `numericCode` (three-character ISO 3166-1 numeric code, such as `840` for the United States). Token restrictions persist the server-resolved numeric code.
+
+### `GET /tokens/me`
+
+Returns the current issuer's single token form, selected claim topics, country restrictions, organization wallet/identity context, and `imageUrl`. Returns `data: null` before a token draft is started.
+
+### `PUT /tokens/me/information`
+
+Uses `multipart/form-data`:
+
+```text
+tokenName=Acme Security Token
+tokenSymbol=trex
+decimals=18
+initialTokenPrice=1.00
+treasuryWalletAddress=0x1111111111111111111111111111111111111111
+tokenDescription=Institutional security token
+isDraft=false
+tokenImage=<PNG, JPEG, WebP, or SVG file>
+```
+
+`tokenName` is trimmed, 3–50 characters, allows letters/numbers/spaces/hyphens/periods/apostrophes, cannot begin or end with punctuation, and cannot contain consecutive spaces. `tokenSymbol` is automatically uppercased and must contain 2–10 letters/numbers. Completed information requires every field except description and requires an existing or newly uploaded image.
+
+The image limit is 2 MB with dimensions from 256×256 through 4096×4096. The API decodes the actual file rather than trusting its extension, rejects MIME/signature mismatches and corrupted or unsafe SVG files, optionally invokes ClamAV, then re-encodes the image to optimized WebP (maximum optimized dimension 1024) without EXIF metadata.
+
+### `GET /tokens/me/image`
+
+Returns the optimized WebP image inline. The issuer Bearer token is required.
+
+### `PUT /tokens/me/claims`
+
+```json
+{
+  "claimTopicUids": [
+    "30000000-0000-4000-8000-000000000001",
+    "30000000-0000-4000-8000-000000000002"
+  ],
+  "organizationActsAsTrustedClaimIssuer": true,
+  "isDraft": false
+}
+```
+
+A completed step requires at least one active claim topic and `organizationActsAsTrustedClaimIssuer: true`. The trusted issuer address is derived from the approved organization wallet; the client cannot override it. Multiple unique claim topics are supported.
+
+### `PUT /tokens/me/compliance`
+
+```json
+{
+  "maxInvestors": 2000,
+  "maxBalancePerInvestor": 10000,
+  "countryRestrictionMode": "allowlist",
+  "countryUids": [
+    "<countryUid>",
+    "<anotherCountryUid>"
+  ],
+  "isDraft": false
+}
+```
+
+`maxInvestors` must be an integer from 1 through 1,000,000,000. `maxBalancePerInvestor` is the absolute maximum token amount that one investor may hold; it must be greater than 0 and supports up to 18 decimal places. It is not a percentage. A completed step requires at least one unique country; every UID is resolved against active `countryMaster` rows, and `iso3166NumericCode` is persisted from the master.
+
+### `PUT /tokens/me/governance`
+
+```json
+{
+  "tokenAgentWalletAddress": "0x1111111111111111111111111111111111111111",
+  "identityManagerWalletAddress": "0x1111111111111111111111111111111111111111",
+  "isDraft": false
+}
+```
+
+Both addresses must be valid EVM addresses and must match the approved organization's `walletAddress` case-insensitively.
+
+### `POST /tokens/me/submit`
+
+The frontend deploys the TREX suite first, waits for the wallet transaction, and submits its hash:
+
+```json
+{
+  "transactionHash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}
+```
+
+The backend revalidates all completed sections, active claims/countries, the optimized image, trusted issuer, token agent, and identity manager. It then waits for the configured confirmation count, requires a successful receipt, accepts `TREXSuiteDeployed` only from `TREX_FACTORY_ADDRESS`, resolves the block timestamp, and saves:
+
+```json
+{
+  "platformAgentWallet": "0x1111111111111111111111111111111111111111",
+  "tokenAddress": "0x2222222222222222222222222222222222222222",
+  "identityRegistryAddress": "0x3333333333333333333333333333333333333333",
+  "identityRegistryStorageAddress": "0x4444444444444444444444444444444444444444",
+  "trustedIssuersRegistryAddress": "0x5555555555555555555555555555555555555555",
+  "claimTopicsRegistryAddress": "0x6666666666666666666666666666666666666666",
+  "modularComplianceAddress": "0x7777777777777777777777777777777777777777",
+  "deployTxHash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "deployedAtBlock": 9000000,
+  "deployedAt": "2026-07-31T00:00:00.000Z",
+  "status": "deployed"
+}
+```
+
+`platformAgentWallet` is taken from the confirmed transaction sender. The legacy compatibility fields `contractAddress` and `contractTxnHash` mirror `tokenAddress` and `deployTxHash`. If the transaction failed, the factory event is absent, an emitted address is zero/invalid, or block metadata cannot be resolved, the backend stores `status: deploymentFailed` and `contractTxnMessage`, then returns `422 TOKEN_DEPLOYMENT_VERIFICATION_FAILED`. A failed record can be retried with another transaction hash; a deployed record is immutable.
+
 ## Admin organization review
 
 These APIs require an administrator JWT and the seeded Super Administrator permissions.

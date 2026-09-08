@@ -239,3 +239,83 @@ Before testing, configure `SEPOLIA_RPC_URL`, `IDENTITY_FACTORY_ADDRESS`, `DEPLOY
 Expected after a new identity transaction: `200`, `status: approved`, `canResubmit: false`, `rejectionReason: null`, and populated `contractAddress`, `contractTxnHash`, and `contractTxnMessage`. Repeating safely after an identity already exists reuses the factory result and may return a null transaction hash.
 
 To test failure handling, temporarily use an unfunded test deployer or invalid factory address and approve a still-submitted application. Expected: `502`, error code `ORGANIZATION_IDENTITY_CREATION_FAILED`, and `error.details.contractTxnMessage`. Fetch the application again; its status must still be `submitted`, `resubmitted`, or `underReview`, while `contractTxnMessage` and any available `contractTxnHash` are retained for diagnosis.
+
+## 18. Token creation flow
+
+Prerequisite: complete the organization flow and approve it successfully. Use the approved issuer's `ISSUER_TOKEN`. Investor accounts and issuers without approved organizations receive `403` or `409`.
+
+Load claim topics, supported decimals, and countries:
+
+```bash
+curl http://localhost:3000/api/v1/token-options
+curl "http://localhost:3000/api/v1/locations/countries?search=United%20States"
+```
+
+Expected: claim-topic values include `1` for KYC and `2` for Accredited Investor. Country responses include `numericCode: "840"` for the United States.
+
+Save Step 1 with a valid image:
+
+```bash
+curl -X PUT http://localhost:3000/api/v1/tokens/me/information \
+  -H "Authorization: Bearer ISSUER_TOKEN" \
+  -F "tokenName=Acme Security Token" \
+  -F "tokenSymbol=trex" \
+  -F "decimals=18" \
+  -F "initialTokenPrice=1.00" \
+  -F "treasuryWalletAddress=ORGANIZATION_WALLET_ADDRESS" \
+  -F "tokenDescription=Institutional security token" \
+  -F "isDraft=false" \
+  -F "tokenImage=@C:/path/to/token-logo.png"
+```
+
+Expected: `tokenSymbol: TREX`, `currentStep: claims`, optimized `imageMimeType: image/webp`, dimensions, checksum, and `imageVirusScanStatus`. Test PNG, JPEG, WebP, and safe SVG. Spoof the MIME/signature, upload a corrupt file, exceed 2 MB, or use dimensions outside 256–4096; each must return `422`.
+
+Save claims:
+
+```bash
+curl -X PUT http://localhost:3000/api/v1/tokens/me/claims \
+  -H "Authorization: Bearer ISSUER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"claimTopicUids":["CLAIM_TOPIC_UID"],"organizationActsAsTrustedClaimIssuer":true,"isDraft":false}'
+```
+
+Expected: at least one selection and `trustedClaimIssuerWalletAddress` equal to the approved organization wallet. Empty completed selections, inactive UIDs, or a false trusted-issuer flag return `400`.
+
+Save compliance:
+
+```bash
+curl -X PUT http://localhost:3000/api/v1/tokens/me/compliance \
+  -H "Authorization: Bearer ISSUER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"maxInvestors":2000,"maxBalancePerInvestor":10000,"countryRestrictionMode":"allowlist","countryUids":["COUNTRY_UID"],"isDraft":false}'
+```
+
+Expected: the response restriction includes the authoritative three-digit `iso3166NumericCode`. Multiple unique countries are supported.
+
+Save governance using the same organization address in both fields:
+
+```bash
+curl -X PUT http://localhost:3000/api/v1/tokens/me/governance \
+  -H "Authorization: Bearer ISSUER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"tokenAgentWalletAddress":"ORGANIZATION_WALLET_ADDRESS","identityManagerWalletAddress":"ORGANIZATION_WALLET_ADDRESS","isDraft":false}'
+```
+
+A different valid wallet must return `400`.
+
+Review and submit:
+
+```bash
+curl http://localhost:3000/api/v1/tokens/me -H "Authorization: Bearer ISSUER_TOKEN"
+curl http://localhost:3000/api/v1/tokens/me/image -H "Authorization: Bearer ISSUER_TOKEN" --output token.webp
+curl -X POST http://localhost:3000/api/v1/tokens/me/submit \
+  -H "Authorization: Bearer ISSUER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"transactionHash":"0xPASTE_64_HEX_CHARACTER_DEPLOYMENT_HASH"}'
+```
+
+Before submitting, configure `TREX_FACTORY_ADDRESS` with the Sepolia TREX factory used by the frontend. Expected: `status: deployed`, `currentStep: deployed`, `isDraft: false`, all deployment addresses and block metadata populated, and all later mutation attempts return `409`. The unique organization constraint prevents another token row.
+
+Failure check: submit a confirmed failed transaction or a successful hash without the configured factory's `TREXSuiteDeployed` event. Expected: `422 TOKEN_DEPLOYMENT_VERIFICATION_FAILED`; `GET /tokens/me` then returns `status: deploymentFailed`, the attempted `deployTxHash`, and a diagnostic `contractTxnMessage`. A new valid transaction hash can be submitted afterward.
+
+Draft checks: repeat any step with `isDraft: true` and partial fields/empty arrays. Expect `200` and no step advance. Final submit must still reject incomplete data.

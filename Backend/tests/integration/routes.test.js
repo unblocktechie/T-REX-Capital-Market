@@ -34,6 +34,11 @@ test('protected routes require a Bearer token', async () => {
   assert.equal(response.body.error.code, 'UNAUTHORIZED');
 });
 
+test('token creation routes require a Bearer token', async () => {
+  const response = await request(app).get('/api/v1/tokens/me').expect(401);
+  assert.equal(response.body.error.code, 'UNAUTHORIZED');
+});
+
 test('configured CORS policy rejects unknown browser origins', async () => {
   const response = await request(app).get('/api/health').set('Origin', 'https://untrusted.example').expect(403);
   assert.equal(response.body.error.code, 'FORBIDDEN');
