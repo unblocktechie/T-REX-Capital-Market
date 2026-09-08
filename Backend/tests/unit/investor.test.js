@@ -1,0 +1,207 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const schemas = require('../../src/schemas/investor.schema');
+const { InvestorService } = require('../../src/services/investor.service');
+
+const investor = { userUid: 'user-1', roleName: 'Investor' };
+const runner = (work) => work({});
+const locationService = { validateHierarchy: async () => {} };
+
+const COUNTRY_UID = '00000000-0000-4000-8000-000000000840';
+const STATE_UID = '00000000-0000-4000-8000-000000000841';
+const CITY_UID = '00000000-0000-4000-8000-000000000842';
+
+const makeRepo = (seed = null) => ({
+  investor: seed,
+  categories: seed?.investmentCategories || [],
+  kyc: 0,
+  accredited: 0,
+  async findByUserUid() { return this.investor; },
+  async createForUser(userUid, data) {
+    this.investor = { investorUid: 'inv-1', userUid, status: 'draft', currentStep: 'identityDetails', ...data };
+    return { ...this.investor };
+  },
+  async updateByUserUid(userUid, data) { this.investor = { ...this.investor, ...data }; return { ...this.investor }; },
+  async listInvestmentCategories() { return this.categories; },
+  async replaceInvestmentCategories(uid, codes) { this.categories = codes; return codes; },
+  async listDocuments() { return []; },
+  async countDocumentsByCategory(uid, category) { return category === 'kyc' ? this.kyc : this.accredited; },
+  async findActiveDocumentByType() { return null; },
+  async createDocument(record) { return { documentUid: 'doc-1', ...record }; },
+});
+
+const optionRepo = {
+  findDocumentType: async (uid) => {
+    if (uid === 'kyc-type') return { documentTypeUid: uid, documentCategory: 'kyc' };
+    if (uid === 'acc-type') return { documentTypeUid: uid, documentCategory: 'accredited' };
+    return null;
+  },
+};
+
+const IDENTITY_ADDR = `0x${'a'.repeat(40)}`;
+const IDENTITY_TX = `0x${'b'.repeat(64)}`;
+const identityOk = {
+  createOrganizationIdentity: async () => ({ identityAddress: IDENTITY_ADDR, txHash: IDENTITY_TX, alreadyExisted: false }),
+};
+
+const makeService = (repo, overrides = {}) => new InvestorService({
+  repository: repo, optionRepository: optionRepo, locationService,
+  identityService: overrides.identityService || identityOk, transactionRunner: runner,
+});
+
+const completeInvestor = () => ({
+  investorUid: 'inv-1', userUid: 'user-1', status: 'draft', currentStep: 'completed',
+  firstName: 'Lois', lastName: 'Hall', dateOfBirth: '1990-03-10', streetAddress: '221B Baker Street',
+  countryUid: COUNTRY_UID, stateUid: STATE_UID, cityUid: CITY_UID,
+  sourceOfWealth: 'Business Ownership', estimatedNetWorth: 'Below $100,000',
+  annualInvestmentCapacity: '$500,000 – $1,000,000', yearsOfExperience: 5,
+  previousRwaExperience: 'no', accreditationType: 'institutional',
+});
+
+// ---- schema ----
+
+test('identity schema accepts a valid payload and rejects an invalid name', () => {
+  const ok = schemas.identityDetails.validate({
+    firstName: 'Lois', lastName: 'Hall', dateOfBirth: '1990-03-10', gender: 'male',
+    streetAddress: '221B Baker Street', countryUid: COUNTRY_UID, stateUid: STATE_UID,
+    cityUid: CITY_UID, isDraft: false,
+  });
+  assert.equal(ok.error, undefined);
+  assert.ok(schemas.identityDetails.validate({ firstName: '1234', isDraft: true }).error);
+});
+
+test('compliance schema rejects an unknown investment category', () => {
+  assert.ok(schemas.compliance.validate({ investmentCategories: ['nope'], isDraft: true }).error);
+  const ok = schemas.compliance.validate({
+    sourceOfWealth: 'Business Ownership', estimatedNetWorth: 'Below $100,000',
+    annualInvestmentCapacity: '$500,000 – $1,000,000', investmentCategories: ['public_markets', 'digital_assets'],
+    yearsOfExperience: 5, previousRwaExperience: 'no', accreditationType: 'institutional', isDraft: false,
+  });
+  assert.equal(ok.error, undefined);
+});
+
+test('submit schema requires a valid EVM wallet address', () => {
+  assert.equal(schemas.submitInvestor.validate({ walletAddress: `0x${'1'.repeat(40)}` }).error, undefined);
+  assert.ok(schemas.submitInvestor.validate({ walletAddress: '0x1234' }).error);
+});
+
+// ---- service ----
+
+test('only investor accounts can access onboarding', async () => {
+  const service = makeService(makeRepo());
+  await assert.rejects(
+    service.getFullForm({ userUid: 'u', roleName: 'Issuer' }),
+    /available only to investor accounts/i,
+  );
+});
+
+test('saving identity as a draft creates the investor record', async () => {
+  const repo = makeRepo();
+  const service = makeService(repo);
+  const result = await service.saveIdentity(investor, { firstName: 'Lois', isDraft: true });
+  assert.equal(result.status, 'draft');
+  assert.equal(repo.investor.firstName, 'Lois');
+});
+
+test('completing identity requires all fields and advances the step', async () => {
+  const repo = makeRepo();
+  const service = makeService(repo);
+  await assert.rejects(
+    service.saveIdentity(investor, { firstName: 'Lois', isDraft: false }),
+    (error) => error.statusCode === 400,
+  );
+  const ok = await service.saveIdentity(investor, {
+    firstName: 'Lois', lastName: 'Hall', dateOfBirth: '1990-03-10', streetAddress: '221B Baker Street',
+    countryUid: COUNTRY_UID, stateUid: STATE_UID, cityUid: CITY_UID, isDraft: false,
+  });
+  assert.equal(ok.currentStep, 'identityDocuments');
+});
+
+test('identity rejects an applicant under 18', async () => {
+  const service = makeService(makeRepo());
+  await assert.rejects(
+    service.saveIdentity(investor, { firstName: 'Kid', lastName: 'Young', dateOfBirth: '2015-01-01', streetAddress: '1 A Street', countryUid: COUNTRY_UID, stateUid: STATE_UID, cityUid: CITY_UID, isDraft: false }),
+    /at least 18 years old/i,
+  );
+});
+
+test('completing compliance requires categories and replaces them', async () => {
+  const repo = makeRepo({ investorUid: 'inv-1', userUid: 'user-1', status: 'draft', currentStep: 'identityDocuments' });
+  const service = makeService(repo);
+  await assert.rejects(
+    service.saveCompliance(investor, {
+      sourceOfWealth: 'Business Ownership', estimatedNetWorth: 'Below $100,000',
+      annualInvestmentCapacity: '$500,000 – $1,000,000', investmentCategories: [], yearsOfExperience: 5,
+      previousRwaExperience: 'no', accreditationType: 'institutional', isDraft: false,
+    }),
+    /at least one investment category/i,
+  );
+  const ok = await service.saveCompliance(investor, {
+    sourceOfWealth: 'Business Ownership', estimatedNetWorth: 'Below $100,000',
+    annualInvestmentCapacity: '$500,000 – $1,000,000', investmentCategories: ['public_markets', 'digital_assets'],
+    yearsOfExperience: 5, previousRwaExperience: 'no', accreditationType: 'institutional', isDraft: false,
+  });
+  assert.equal(ok.currentStep, 'completed');
+  assert.deepEqual(repo.categories, ['public_markets', 'digital_assets']);
+});
+
+test('uploading a KYC document advances from identityDetails to identityDocuments', async () => {
+  const repo = makeRepo({ investorUid: 'inv-1', userUid: 'user-1', status: 'draft', currentStep: 'identityDetails' });
+  const service = makeService(repo);
+  const docs = await service.uploadDocuments(investor, 'kyc-type', [{ originalname: 'id.pdf', filename: 'stored.pdf', mimetype: 'application/pdf', size: 1234, path: __filename }]);
+  assert.equal(docs[0].documentCategory, 'kyc');
+  assert.equal(repo.investor.currentStep, 'identityDocuments');
+});
+
+test('submit fails without the required documents, then succeeds and finalizes as submitted', async () => {
+  const repo = makeRepo(completeInvestor());
+  repo.categories = ['public_markets'];
+  const service = makeService(repo);
+
+  // No documents yet -> rejected.
+  await assert.rejects(service.submit(investor, { walletAddress: `0x${'1'.repeat(40)}` }), /identity \(KYC\) document/i);
+
+  repo.kyc = 1;
+  await assert.rejects(service.submit(investor, { walletAddress: `0x${'1'.repeat(40)}` }), /accreditation document/i);
+
+  repo.accredited = 1;
+  const result = await service.submit(investor, { walletAddress: `0x${'1'.repeat(40)}` });
+  assert.equal(result.status, 'submitted');
+  assert.equal(result.isDraft, false);
+  assert.equal(result.currentStep, 'completed');
+  assert.match(result.profileReference, /^INV-[0-9A-F]{8}$/);
+  assert.equal(result.onchainIdReference, IDENTITY_ADDR);
+  assert.equal(result.contractAddress, IDENTITY_ADDR);
+  assert.equal(result.contractTxnHash, IDENTITY_TX);
+});
+
+test('submit returns 502 and stays draft when on-chain identity creation fails', async () => {
+  const repo = makeRepo(completeInvestor());
+  repo.categories = ['public_markets'];
+  repo.kyc = 1;
+  repo.accredited = 1;
+  const failingHash = `0x${'c'.repeat(64)}`;
+  const failing = {
+    createOrganizationIdentity: async () => {
+      const error = new Error('execution reverted');
+      error.transactionHash = failingHash;
+      throw error;
+    },
+  };
+  const service = makeService(repo, { identityService: failing });
+  await assert.rejects(
+    service.submit(investor, { walletAddress: `0x${'1'.repeat(40)}` }),
+    (error) => error.code === 'INVESTOR_IDENTITY_CREATION_FAILED' && error.statusCode === 502,
+  );
+  assert.equal(repo.investor.status, 'draft');
+  assert.equal(repo.investor.contractTxnHash, failingHash);
+});
+
+test('a submitted investor form can no longer be edited', async () => {
+  const repo = makeRepo({ investorUid: 'inv-1', userUid: 'user-1', status: 'submitted' });
+  const service = makeService(repo);
+  await assert.rejects(
+    service.saveIdentity(investor, { firstName: 'Lois', isDraft: true }),
+    (error) => error.statusCode === 409,
+  );
+});

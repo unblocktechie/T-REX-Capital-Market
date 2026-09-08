@@ -3,6 +3,7 @@ const { createApp } = require('./app');
 const { env, validateEnvironment } = require('./core/config/env');
 const { pingDatabase, closePool } = require('./database/connection');
 const { logger, cleanupOldLogs } = require('./services/common/log.service');
+const { jobs } = require('./dependencies');
 
 const start = async () => {
   validateEnvironment();
@@ -13,8 +14,12 @@ const start = async () => {
     environment: env.nodeEnv, port: env.port, version: env.appVersion,
   }));
 
+  // Background fallback reconciler for missed TREX deployments (read-only).
+  jobs.trexDeploymentSyncRunner.start();
+
   const shutdown = (signal) => {
     logger.info('Graceful shutdown started', { signal });
+    jobs.trexDeploymentSyncRunner.stop();
     server.close(async () => {
       await closePool();
       logger.info('Graceful shutdown completed');

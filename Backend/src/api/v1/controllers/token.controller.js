@@ -1,4 +1,5 @@
 const { sendSuccess } = require('../../../utils/response');
+const { HTTP_STATUS } = require('../../../config/constants');
 
 const createTokenController = (service, optionRepository) => ({
   options: async (req, res) => sendSuccess(req, res, {
@@ -25,10 +26,28 @@ const createTokenController = (service, optionRepository) => ({
     message: req.body.isDraft ? 'Token governance draft saved.' : 'Token governance roles saved.',
     data: await service.saveGovernance(req.user, req.body),
   }),
-  submit: async (req, res) => sendSuccess(req, res, {
-    message: 'Token deployment transaction verified and TREX suite details saved.',
-    data: await service.submit(req.user, req.body),
-  }),
+  submit: async (req, res) => {
+    const result = await service.submit(req.user, req.body);
+    // Two-phase flow: the transaction is broadcast but not yet confirmed on-chain.
+    if (result && result.pending) {
+      return res.status(HTTP_STATUS.ACCEPTED).json({
+        success: false,
+        pending: true,
+        message: 'Deployment transaction is still awaiting confirmation.',
+        data: {
+          deploymentAttemptUid: result.deploymentAttemptUid,
+          status: result.status,
+          transactionHash: result.transactionHash,
+        },
+        timestamp: new Date().toISOString(),
+        requestId: req.id,
+      });
+    }
+    return sendSuccess(req, res, {
+      message: 'Token deployment transaction verified and TREX suite details saved.',
+      data: result,
+    });
+  },
   image: async (req, res, next) => {
     const result = await service.getImage(req.user);
     res.type(result.token.imageMimeType);

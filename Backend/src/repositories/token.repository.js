@@ -9,9 +9,14 @@ const tokenFields = [
   'maxBalancePerInvestor', 'countryRestrictionMode', 'tokenAgentWalletAddress', 'identityManagerWalletAddress',
   'platformAgentWallet', 'tokenAddress', 'identityRegistryAddress', 'identityRegistryStorageAddress',
   'trustedIssuersRegistryAddress', 'claimTopicsRegistryAddress', 'modularComplianceAddress',
-  'deployTxHash', 'deployedAtBlock',
+  'deployTxHash', 'deploymentSalt', 'deployedAtBlock',
   'currentStep', 'isDraft', 'status', 'contractAddress', 'contractTxnHash', 'contractTxnMessage', 'deployedAt',
 ];
+
+// Token statuses from which a finalization (verified deployment) update is allowed.
+// 'deploymentPending' is included so a token that entered the two-phase attempt flow
+// can be finalized; 'draft' preserves the legacy single-call submit path.
+const finalizableStatuses = ['draft', 'readyToDeploy', 'deploymentPending', 'deploymentFailed'];
 
 class TokenRepository {
   async findByUserUid(userUid, executor) {
@@ -23,6 +28,54 @@ class TokenRepository {
          ON o.\`organizationUid\` = t.\`organizationUid\` AND o.\`isDeleted\` = 0
        WHERE t.\`userUid\` = ? AND t.\`isDeleted\` = 0 LIMIT 1`,
       [userUid],
+      executor,
+    );
+    return rows[0] || null;
+  }
+
+  // Full joined token row for a given organization. Used by the background deployment sync.
+  async findByOrganizationUid(organizationUid, executor) {
+    const rows = await execute(
+      `SELECT t.*, o.\`legalCompanyName\`, o.\`walletAddress\` AS \`organizationWalletAddress\`,
+              o.\`contractAddress\` AS \`organizationIdentityAddress\`
+       FROM \`tokenMaster\` t
+       INNER JOIN \`organizationMaster\` o
+         ON o.\`organizationUid\` = t.\`organizationUid\` AND o.\`isDeleted\` = 0
+       WHERE t.\`organizationUid\` = ? AND t.\`isDeleted\` = 0 LIMIT 1`,
+      [organizationUid],
+      executor,
+    );
+    return rows[0] || null;
+  }
+
+  // Row-level lock on the token for the authenticated user. Used to serialize
+  // concurrent deployment-attempt creation/finalization for the same token.
+  async findForUpdateByUserUid(userUid, executor) {
+    const rows = await execute(
+      'SELECT * FROM `tokenMaster` WHERE `userUid` = ? AND `isDeleted` = 0 LIMIT 1 FOR UPDATE',
+      [userUid],
+      executor,
+    );
+    return rows[0] || null;
+  }
+
+  async findByTokenAddressExcept(tokenAddress, exceptTokenUid, executor) {
+    const rows = await execute(
+      `SELECT \`tokenUid\`, \`tokenAddress\`, \`deployTxHash\`
+       FROM \`tokenMaster\`
+       WHERE \`tokenAddress\` = ? AND \`tokenUid\` <> ? AND \`isDeleted\` = 0 LIMIT 1`,
+      [tokenAddress, exceptTokenUid],
+      executor,
+    );
+    return rows[0] || null;
+  }
+
+  async findByDeployTxHashExcept(deployTxHash, exceptTokenUid, executor) {
+    const rows = await execute(
+      `SELECT \`tokenUid\`, \`tokenAddress\`, \`deployTxHash\`
+       FROM \`tokenMaster\`
+       WHERE \`deployTxHash\` = ? AND \`tokenUid\` <> ? AND \`isDeleted\` = 0 LIMIT 1`,
+      [deployTxHash, exceptTokenUid],
       executor,
     );
     return rows[0] || null;
@@ -60,8 +113,8 @@ class TokenRepository {
       `UPDATE \`tokenMaster\`
        SET ${entries.map(([field]) => `${identifier(field)} = ?`).join(', ')}, \`updatedAt\` = UTC_TIMESTAMP(3)
        WHERE \`userUid\` = ? AND \`isDeleted\` = 0
-         AND \`status\` IN ('draft', 'readyToDeploy', 'deploymentFailed')`,
-      [...entries.map(([, value]) => value), userUid],
+         AND \`status\` IN (${finalizableStatuses.map(() => '?').join(', ')})`,
+      [...entries.map(([, value]) => value), userUid, ...finalizableStatuses],
       executor,
     );
     if (!result.affectedRows) return null;
@@ -147,4 +200,4 @@ class TokenRepository {
   }
 }
 
-module.exports = { TokenRepository, tokenFields };
+module.exports = { TokenRepository, tokenFields, finalizableStatuses };

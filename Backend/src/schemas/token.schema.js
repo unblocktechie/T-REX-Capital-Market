@@ -51,6 +51,9 @@ const tokenSubmit = Joi.object({
   transactionHash: Joi.string().trim().pattern(/^0x[a-fA-F0-9]{64}$/).required().messages({
     'string.pattern.base': 'transactionHash must be a 32-byte EVM transaction hash.',
   }),
+  // Optional link to a deployment attempt. When omitted, legacy behavior is preserved
+  // and the backend auto-links any attempt by (tokenUid, transactionHash).
+  deploymentAttemptUid: uid,
 });
 
 module.exports = {

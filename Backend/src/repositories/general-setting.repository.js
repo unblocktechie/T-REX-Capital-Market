@@ -19,6 +19,27 @@ class GeneralSettingRepository extends BaseRepository {
       executor,
     );
   }
+
+  async findByKey(settingKey, executor) {
+    const rows = await execute(
+      `SELECT \`settingUid\`, \`settingKey\`, \`settingValue\`, \`valueType\`, \`settingGroup\`, \`isActive\`, \`isDeleted\`
+       FROM \`generalSettings\` WHERE \`settingKey\` = ? AND \`isDeleted\` = 0 LIMIT 1`,
+      [settingKey],
+      executor,
+    );
+    return rows[0] || null;
+  }
+
+  // Updates the value of an existing setting by key. Returns true when a row was updated.
+  async setValueByKey(settingKey, settingValue, executor) {
+    const result = await execute(
+      `UPDATE \`generalSettings\` SET \`settingValue\` = ?, \`updatedAt\` = UTC_TIMESTAMP(3)
+       WHERE \`settingKey\` = ? AND \`isDeleted\` = 0`,
+      [String(settingValue), settingKey],
+      executor,
+    );
+    return result.affectedRows > 0;
+  }
 }
 
 module.exports = { GeneralSettingRepository };

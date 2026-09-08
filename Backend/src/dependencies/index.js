@@ -9,6 +9,9 @@ const { OrganizationOptionRepository } = require('../repositories/organization-o
 const { OrganizationRepository } = require('../repositories/organization.repository');
 const { TokenRepository } = require('../repositories/token.repository');
 const { TokenOptionRepository } = require('../repositories/token-option.repository');
+const { TokenDeploymentAttemptRepository } = require('../repositories/token-deployment-attempt.repository');
+const { InvestorRepository } = require('../repositories/investor.repository');
+const { InvestorOptionRepository } = require('../repositories/investor-option.repository');
 const { UserService } = require('../services/user.service');
 const { RoleService } = require('../services/role.service');
 const { MenuService } = require('../services/menu.service');
@@ -20,8 +23,12 @@ const { OrganizationService } = require('../services/organization.service');
 const { OrganizationAdminService } = require('../services/organization-admin.service');
 const { OrganizationIdentityService } = require('../services/blockchain/organization-identity.service');
 const { TokenDeploymentReceiptService } = require('../services/blockchain/token-deployment-receipt.service');
+const { TrexDeploymentSyncService } = require('../services/blockchain/trex-deployment-sync.service');
 const { TokenService } = require('../services/token.service');
+const { TokenDeploymentAttemptService } = require('../services/token-deployment-attempt.service');
+const { InvestorService } = require('../services/investor.service');
 const { TokenImageService } = require('../services/common/token-image.service');
+const { TrexDeploymentSyncRunner } = require('../jobs/trex-deployment-sync.runner');
 const emailService = require('../services/common/email.service');
 const { createCrudController } = require('../api/v1/controllers/crud.controller');
 const { createAuthController } = require('../api/v1/controllers/auth.controller');
@@ -29,6 +36,8 @@ const { createLocationController } = require('../api/v1/controllers/location.con
 const { createOrganizationController } = require('../api/v1/controllers/organization.controller');
 const { createOrganizationAdminController } = require('../api/v1/controllers/organization-admin.controller');
 const { createTokenController } = require('../api/v1/controllers/token.controller');
+const { createDeploymentAttemptController } = require('../api/v1/controllers/deployment-attempt.controller');
+const { createInvestorController } = require('../api/v1/controllers/investor.controller');
 const { createAuthenticate } = require('../middleware/authenticate.middleware');
 const { createAuthorize } = require('../middleware/authorize.middleware');
 
@@ -44,6 +53,9 @@ const organizationRepository = new OrganizationRepository();
 const organizationIdentityService = new OrganizationIdentityService();
 const tokenRepository = new TokenRepository();
 const tokenOptionRepository = new TokenOptionRepository();
+const tokenDeploymentAttemptRepository = new TokenDeploymentAttemptRepository();
+const investorRepository = new InvestorRepository();
+const investorOptionRepository = new InvestorOptionRepository();
 const tokenImageService = new TokenImageService();
 const tokenDeploymentReceiptService = new TokenDeploymentReceiptService();
 
@@ -70,6 +82,27 @@ const tokenService = new TokenService({
   locationRepository,
   imageService: tokenImageService,
   deploymentReceiptService: tokenDeploymentReceiptService,
+  attemptRepository: tokenDeploymentAttemptRepository,
+});
+const tokenDeploymentAttemptService = new TokenDeploymentAttemptService({
+  attemptRepository: tokenDeploymentAttemptRepository,
+  tokenRepository,
+  organizationRepository,
+  tokenService,
+  deploymentReceiptService: tokenDeploymentReceiptService,
+});
+const trexDeploymentSyncService = new TrexDeploymentSyncService({
+  settingRepository,
+  organizationRepository,
+  tokenRepository,
+  attemptRepository: tokenDeploymentAttemptRepository,
+});
+const trexDeploymentSyncRunner = new TrexDeploymentSyncRunner(trexDeploymentSyncService);
+const investorService = new InvestorService({
+  repository: investorRepository,
+  optionRepository: investorOptionRepository,
+  locationService,
+  identityService: organizationIdentityService,
 });
 
 const controllers = {
@@ -83,6 +116,8 @@ const controllers = {
   organizations: createOrganizationController(organizationService, organizationOptionRepository),
   organizationAdmin: createOrganizationAdminController(organizationAdminService),
   tokens: createTokenController(tokenService, tokenOptionRepository),
+  deploymentAttempts: createDeploymentAttemptController(tokenDeploymentAttemptService),
+  investors: createInvestorController(investorService, investorOptionRepository),
 };
 
 module.exports = {
@@ -90,11 +125,16 @@ module.exports = {
   services: {
     authService, userService, roleService, menuService, permissionService, settingService,
     locationService, organizationService, organizationAdminService, organizationIdentityService,
-    tokenService, tokenImageService, tokenDeploymentReceiptService,
+    tokenService, tokenDeploymentAttemptService, tokenImageService, tokenDeploymentReceiptService,
+    trexDeploymentSyncService, investorService,
   },
   repositories: {
     userRepository, roleRepository, menuRepository, permissionRepository, settingRepository, authTokenRepository,
     locationRepository, organizationOptionRepository, organizationRepository, tokenRepository, tokenOptionRepository,
+    tokenDeploymentAttemptRepository, investorRepository, investorOptionRepository,
+  },
+  jobs: {
+    trexDeploymentSyncRunner,
   },
   authenticate: createAuthenticate(userRepository),
   authorize: createAuthorize(permissionRepository),

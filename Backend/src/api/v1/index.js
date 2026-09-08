@@ -7,6 +7,7 @@ const { health } = require('./controllers/health.controller');
 const { createReferenceRouter, createOrganizationRouter } = require('./routes/organization.routes');
 const { createOrganizationAdminRouter } = require('./routes/organization-admin.routes');
 const { createTokenRouter } = require('./routes/token.routes');
+const { createInvestorReferenceRouter, createInvestorRouter } = require('./routes/investor.routes');
 
 const createV1Router = () => {
   const router = express.Router();
@@ -29,6 +30,13 @@ const createV1Router = () => {
   }));
   router.use('/tokens', createTokenRouter({
     controller: dependencies.controllers.tokens,
+    deploymentController: dependencies.controllers.deploymentAttempts,
+    authenticate: dependencies.authenticate,
+    authorize: dependencies.authorize,
+  }));
+  router.use(createInvestorReferenceRouter(dependencies.controllers.investors));
+  router.use('/investors', createInvestorRouter({
+    controller: dependencies.controllers.investors,
     authenticate: dependencies.authenticate,
     authorize: dependencies.authorize,
   }));

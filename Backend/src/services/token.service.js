@@ -14,6 +14,38 @@ const requiredFields = (data, fields, section) => {
   }
 };
 
+// Deployment eligibility field set. Shared by the final submit endpoint and the
+// deployment-attempt creation endpoint so the rules live in exactly one place.
+const DEPLOYMENT_REQUIRED_FIELDS = [
+  'tokenName', 'tokenSymbol', 'decimals', 'initialTokenPrice', 'treasuryWalletAddress',
+  'imageStorageKey', 'trustedClaimIssuerWalletAddress', 'maxInvestors', 'maxBalancePerInvestor',
+  'countryRestrictionMode', 'tokenAgentWalletAddress', 'identityManagerWalletAddress',
+];
+
+const ORGANIZATION_WALLET_FIELDS = [
+  'trustedClaimIssuerWalletAddress', 'tokenAgentWalletAddress', 'identityManagerWalletAddress',
+];
+
+const RPC_ERROR_CODES = new Set([
+  'SERVER_ERROR', 'NETWORK_ERROR', 'TIMEOUT', 'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'EAI_AGAIN',
+]);
+
+// The transaction was broadcast but a usable receipt is not yet available. This is
+// a "keep waiting" signal, never a failure.
+const isPendingReceiptError = (error) => {
+  const message = String(error?.message || '');
+  return error?.pending === true
+    || error?.code === 'TRANSACTION_NOT_CONFIRMED'
+    || /was not confirmed before the verification timeout|receipt is not yet available|still awaiting confirmation/i.test(message);
+};
+
+// The RPC endpoint itself is unreachable. Do not mark the transaction failed.
+const isRpcUnavailableError = (error) => {
+  if (RPC_ERROR_CODES.has(error?.code)) return true;
+  return /ECONNREFUSED|ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket hang up|network error|could not detect network|failed to fetch|rpc (?:error|unavailable)/i
+    .test(String(error?.message || ''));
+};
+
 class TokenService {
   constructor({
     repository,
@@ -22,6 +54,7 @@ class TokenService {
     locationRepository,
     imageService,
     deploymentReceiptService,
+    attemptRepository,
     transactionRunner = withTransaction,
   }) {
     this.repository = repository;
@@ -30,6 +63,7 @@ class TokenService {
     this.locationRepository = locationRepository;
     this.imageService = imageService;
     this.deploymentReceiptService = deploymentReceiptService;
+    this.attemptRepository = attemptRepository;
     this.transactionRunner = transactionRunner;
   }
 
@@ -53,9 +87,32 @@ class TokenService {
   }
 
   assertEditable(token) {
-    if (token && ['readyToDeploy', 'deployed'].includes(token.status)) {
+    if (token && ['readyToDeploy', 'deploymentPending', 'deployed'].includes(token.status)) {
       throw ApiError.conflict(`Token cannot be edited while its status is ${token.status}.`);
     }
+  }
+
+  // Reusable pre-deployment eligibility gate. Verifies every configuration field,
+  // that governance wallets equal the approved organization wallet, that at least
+  // one claim topic and one country restriction exist, and that the optimized image
+  // is still present. Returns the loaded claim topics and country restrictions.
+  async assertTokenReadyForDeployment(token, organization) {
+    requiredFields(token, DEPLOYMENT_REQUIRED_FIELDS, 'Token form');
+    for (const field of ORGANIZATION_WALLET_FIELDS) {
+      if (String(token[field]).toLowerCase() !== organization.walletAddress.toLowerCase()) {
+        throw ApiError.badRequest(`${field} must match the approved organization walletAddress.`);
+      }
+    }
+    const [claimTopics, countryRestrictions] = await Promise.all([
+      this.repository.listClaimTopics(token.tokenUid),
+      this.repository.listCountryRestrictions(token.tokenUid),
+    ]);
+    if (!claimTopics.length) throw ApiError.badRequest('At least one active claim topic is required.');
+    if (!countryRestrictions.length) throw ApiError.badRequest('At least one active country restriction is required.');
+    if (!fs.existsSync(this.imageService.resolve(token.imageStorageKey))) {
+      throw ApiError.badRequest('The optimized token image is no longer available.');
+    }
+    return { claimTopics, countryRestrictions };
   }
 
   async getFullToken(user) {
@@ -226,78 +283,121 @@ class TokenService {
     });
   }
 
-  async submit(user, { transactionHash }) {
+  // Final submit. Backward compatible: accepts { transactionHash } alone (legacy),
+  // or { transactionHash, deploymentAttemptUid } for the two-phase flow. Returns
+  // either the finalized token, or a { pending: true, ... } marker for the 202 path.
+  async submit(user, { transactionHash, deploymentAttemptUid }) {
     const organization = await this.approvedOrganization(user);
     const token = await this.repository.findByUserUid(user.userUid);
     if (!token) throw ApiError.badRequest('Token form has not been started.');
+    const normalizedHash = String(transactionHash).toLowerCase();
+
+    // Idempotent short-circuit: an already-deployed token with the same hash succeeds.
     if (token.status === 'deployed') {
+      if (token.deployTxHash && token.deployTxHash.toLowerCase() === normalizedHash) return token;
       throw ApiError.conflict('The token has already been deployed.');
     }
-    requiredFields(token, [
-      'tokenName', 'tokenSymbol', 'decimals', 'initialTokenPrice', 'treasuryWalletAddress',
-      'imageStorageKey', 'trustedClaimIssuerWalletAddress', 'maxInvestors', 'maxBalancePerInvestor',
-      'countryRestrictionMode', 'tokenAgentWalletAddress', 'identityManagerWalletAddress',
-    ], 'Token form');
 
-    for (const field of ['trustedClaimIssuerWalletAddress', 'tokenAgentWalletAddress', 'identityManagerWalletAddress']) {
-      if (token[field].toLowerCase() !== organization.walletAddress.toLowerCase()) {
-        throw ApiError.badRequest(`${field} must match the approved organization walletAddress.`);
+    // Resolve/validate the deployment attempt (explicit uid, or auto-link legacy by hash).
+    let deploymentAttempt = null;
+    if (deploymentAttemptUid) {
+      if (!this.attemptRepository) throw ApiError.badRequest('Deployment attempts are not available in this environment.');
+      deploymentAttempt = await this.attemptRepository.findByUid(deploymentAttemptUid);
+      if (!deploymentAttempt) throw ApiError.notFound('Deployment attempt was not found.');
+      if (
+        deploymentAttempt.userUid !== user.userUid
+        || deploymentAttempt.tokenUid !== token.tokenUid
+        || deploymentAttempt.organizationUid !== token.organizationUid
+      ) {
+        throw ApiError.forbidden('The deployment attempt does not belong to this token.');
+      }
+      if (deploymentAttempt.transactionHash
+        && deploymentAttempt.transactionHash.toLowerCase() !== normalizedHash) {
+        throw new ApiError(409, 'The submitted transaction hash does not match the deployment attempt.', {
+          deploymentAttemptUid: deploymentAttempt.deploymentAttemptUid,
+          transactionHash: deploymentAttempt.transactionHash,
+        }, 'TRANSACTION_HASH_CONFLICT');
+      }
+      if (!['submitted', 'confirming', 'confirmed'].includes(deploymentAttempt.status)) {
+        throw new ApiError(409, 'The deployment attempt is not in a verifiable state.', {
+          deploymentAttemptUid: deploymentAttempt.deploymentAttemptUid,
+          status: deploymentAttempt.status,
+        }, 'DEPLOYMENT_ATTEMPT_NOT_VERIFIABLE');
+      }
+      if (deploymentAttempt.status === 'confirmed' && token.status === 'deployed') return token;
+    } else if (this.attemptRepository) {
+      deploymentAttempt = await this.attemptRepository.findByTokenAndHash(token.tokenUid, normalizedHash);
+    }
+
+    await this.assertTokenReadyForDeployment(token, organization);
+
+    // A broadcast hash already tied to a different token is a hard conflict.
+    if (this.repository.findByDeployTxHashExcept) {
+      const hashOwner = await this.repository.findByDeployTxHashExcept(normalizedHash, token.tokenUid);
+      if (hashOwner) {
+        throw new ApiError(409, 'This transaction hash is already linked to another token.', {
+          transactionHash: normalizedHash,
+        }, 'TRANSACTION_HASH_CONFLICT');
       }
     }
-    const [claimTopics, countryRestrictions] = await Promise.all([
-      this.repository.listClaimTopics(token.tokenUid),
-      this.repository.listCountryRestrictions(token.tokenUid),
-    ]);
-    if (!claimTopics.length) throw ApiError.badRequest('At least one active claim topic is required.');
-    if (!countryRestrictions.length) throw ApiError.badRequest('At least one active country restriction is required.');
-    if (!fs.existsSync(this.imageService.resolve(token.imageStorageKey))) {
-      throw ApiError.badRequest('The optimized token image is no longer available.');
+
+    // Fast, non-blocking confirmation pre-check (when the receipt service supports it):
+    // return 202/confirming instead of blocking on a long wait or failing prematurely.
+    if (typeof this.deploymentReceiptService.checkConfirmation === 'function') {
+      let confirmation;
+      try {
+        confirmation = await this.deploymentReceiptService.checkConfirmation(normalizedHash);
+      } catch (error) {
+        // Treat a pre-check RPC problem as "keep waiting", never as a failure.
+        confirmation = { ready: false };
+        logger.warn('Deployment confirmation pre-check could not reach the RPC provider', {
+          tokenUid: token.tokenUid, error,
+        });
+      }
+      if (!confirmation.ready) {
+        return this.markConfirming(deploymentAttempt, normalizedHash);
+      }
     }
 
     let deployment;
     try {
-      deployment = await this.deploymentReceiptService.verify(transactionHash);
+      deployment = await this.deploymentReceiptService.verify(normalizedHash);
     } catch (error) {
-      const reason = String(error.shortMessage || error.reason || error.message || 'Unknown receipt verification error.')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .slice(0, 2000);
-      const message = `Token deployment verification failed: ${reason}`;
-      const failedToken = await this.repository.updateDeploymentByUserUid(user.userUid, {
-        platformAgentWallet: ethers.isAddress(error.platformAgentWallet) ? error.platformAgentWallet : null,
-        tokenAddress: null,
-        identityRegistryAddress: null,
-        identityRegistryStorageAddress: null,
-        trustedIssuersRegistryAddress: null,
-        claimTopicsRegistryAddress: null,
-        modularComplianceAddress: null,
-        deployTxHash: error.deployTxHash || transactionHash,
-        deployedAtBlock: null,
-        contractAddress: null,
-        contractTxnHash: error.deployTxHash || transactionHash,
-        contractTxnMessage: message,
-        deployedAt: null,
-        currentStep: 'review',
-        isDraft: false,
-        status: 'deploymentFailed',
-      });
-      if (!failedToken) {
-        throw ApiError.conflict('The token deployment status changed while the transaction was being verified.');
+      if (isPendingReceiptError(error)) return this.markConfirming(deploymentAttempt, normalizedHash);
+      if (isRpcUnavailableError(error)) {
+        throw new ApiError(503, 'The blockchain RPC provider is temporarily unavailable. Please retry shortly.', undefined, 'RPC_UNAVAILABLE');
       }
-      logger.warn('Token deployment receipt verification failed', {
-        tokenUid: token.tokenUid,
-        transactionHash,
-        reason,
+      return this.recordVerificationFailure(user, token, deploymentAttempt, error, normalizedHash);
+    }
+
+    // The verified contract address must not already belong to another token.
+    if (this.repository.findByTokenAddressExcept) {
+      const addressOwner = await this.repository.findByTokenAddressExcept(deployment.tokenAddress, token.tokenUid);
+      if (addressOwner) {
+        throw new ApiError(409, 'The deployed contract address is already assigned to another token.', {
+          contractAddress: deployment.tokenAddress,
+        }, 'CONTRACT_ADDRESS_CONFLICT');
+      }
+    }
+
+    // Sender must equal the wallet the attempt was authorized for (attempt flow only,
+    // to preserve behavior of legacy submits that never carried an attempt).
+    if (deploymentAttempt
+      && deployment.platformAgentWallet
+      && deployment.platformAgentWallet.toLowerCase() !== String(deploymentAttempt.walletAddress).toLowerCase()) {
+      await this.attemptRepository.update(deploymentAttempt.deploymentAttemptUid, {
+        status: 'failed',
+        errorCode: 'INVALID_DEPLOYER_WALLET',
+        errorMessage: 'Transaction sender does not match the authorized deployment wallet.',
+        failedAt: new Date(),
       });
-      throw new ApiError(422, message, {
-        status: failedToken.status,
-        deployTxHash: failedToken.deployTxHash,
-        contractTxnMessage: failedToken.contractTxnMessage,
-      }, 'TOKEN_DEPLOYMENT_VERIFICATION_FAILED');
+      throw new ApiError(403, 'The deployment transaction sender does not match the authorized deployment wallet.', {
+        deploymentAttemptUid: deploymentAttempt.deploymentAttemptUid,
+      }, 'INVALID_DEPLOYER_WALLET');
     }
 
     const contractTxnMessage = `TREX suite deployment verified successfully in block ${deployment.deployedAtBlock}.`;
-    const deployedToken = await this.repository.updateDeploymentByUserUid(user.userUid, {
+    const finalizeFields = {
       ...deployment,
       contractAddress: deployment.tokenAddress,
       contractTxnHash: deployment.deployTxHash,
@@ -305,11 +405,100 @@ class TokenService {
       currentStep: 'deployed',
       isDraft: false,
       status: 'deployed',
-    });
+    };
+
+    // Attempt flow: finalize token + attempt atomically under row locks.
+    if (deploymentAttempt && this.attemptRepository) {
+      return this.transactionRunner(async (connection) => {
+        if (this.repository.findForUpdateByUserUid) {
+          const locked = await this.repository.findForUpdateByUserUid(user.userUid, connection);
+          if (locked && locked.status === 'deployed') {
+            return this.repository.findByUserUid(user.userUid, connection);
+          }
+        }
+        const deployedToken = await this.repository.updateDeploymentByUserUid(user.userUid, finalizeFields, connection);
+        if (!deployedToken) {
+          const current = await this.repository.findByUserUid(user.userUid, connection);
+          if (current && current.status === 'deployed') return current;
+          throw ApiError.conflict('The token deployment status changed while the transaction was being verified.');
+        }
+        await this.attemptRepository.update(deploymentAttempt.deploymentAttemptUid, {
+          status: 'confirmed',
+          transactionHash: normalizedHash,
+          contractAddress: deployment.tokenAddress,
+          blockNumber: deployment.deployedAtBlock,
+          confirmedAt: new Date(),
+          errorCode: null,
+          errorMessage: null,
+        }, connection);
+        return deployedToken;
+      });
+    }
+
+    // Legacy single-call finalize (unchanged behavior).
+    const deployedToken = await this.repository.updateDeploymentByUserUid(user.userUid, finalizeFields);
     if (!deployedToken) {
       throw ApiError.conflict('The token deployment status changed while the transaction was being verified.');
     }
     return deployedToken;
+  }
+
+  async markConfirming(deploymentAttempt, transactionHash) {
+    if (deploymentAttempt && this.attemptRepository && deploymentAttempt.status !== 'confirming') {
+      await this.attemptRepository.update(deploymentAttempt.deploymentAttemptUid, { status: 'confirming' });
+    }
+    return {
+      pending: true,
+      deploymentAttemptUid: deploymentAttempt?.deploymentAttemptUid || null,
+      status: 'confirming',
+      transactionHash,
+    };
+  }
+
+  async recordVerificationFailure(user, token, deploymentAttempt, error, transactionHash) {
+    const reason = String(error.shortMessage || error.reason || error.message || 'Unknown receipt verification error.')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 2000);
+    const message = `Token deployment verification failed: ${reason}`;
+    const failureFields = {
+      platformAgentWallet: ethers.isAddress(error.platformAgentWallet) ? error.platformAgentWallet : null,
+      tokenAddress: null,
+      identityRegistryAddress: null,
+      identityRegistryStorageAddress: null,
+      trustedIssuersRegistryAddress: null,
+      claimTopicsRegistryAddress: null,
+      modularComplianceAddress: null,
+      deployTxHash: error.deployTxHash || transactionHash,
+      deployedAtBlock: null,
+      contractAddress: null,
+      contractTxnHash: error.deployTxHash || transactionHash,
+      contractTxnMessage: message,
+      deployedAt: null,
+      currentStep: 'review',
+      isDraft: false,
+      status: 'deploymentFailed',
+    };
+    const failedToken = await this.repository.updateDeploymentByUserUid(user.userUid, failureFields);
+    if (deploymentAttempt && this.attemptRepository) {
+      await this.attemptRepository.update(deploymentAttempt.deploymentAttemptUid, {
+        status: 'failed',
+        errorCode: 'TOKEN_DEPLOYMENT_VERIFICATION_FAILED',
+        errorMessage: reason.slice(0, 1000),
+        failedAt: new Date(),
+      });
+    }
+    if (!failedToken) {
+      throw ApiError.conflict('The token deployment status changed while the transaction was being verified.');
+    }
+    logger.warn('Token deployment receipt verification failed', {
+      tokenUid: token.tokenUid, transactionHash, reason,
+    });
+    throw new ApiError(422, message, {
+      status: failedToken.status,
+      deployTxHash: failedToken.deployTxHash,
+      contractTxnMessage: failedToken.contractTxnMessage,
+    }, 'TOKEN_DEPLOYMENT_VERIFICATION_FAILED');
   }
 
   async getImage(user) {
@@ -322,4 +511,4 @@ class TokenService {
   }
 }
 
-module.exports = { TokenService, requiredFields };
+module.exports = { TokenService, requiredFields, DEPLOYMENT_REQUIRED_FIELDS };

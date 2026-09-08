@@ -399,3 +399,60 @@ test('token image rejects dimensions below 256 by 256', async (context) => {
     (error) => error.code === 'TOKEN_IMAGE_TOO_SMALL',
   );
 });
+
+test('reconcileBySalt recovers the full deployment (all suite addresses + sender + tx) from the event', async () => {
+  const owner = '0x1111111111111111111111111111111111111111';
+  const tokenAddress = '0x2222222222222222222222222222222222222222';
+  const factoryAddr = '0xe221247C52ece62027eb7D01D0f522d7363Fe875';
+  const txHash = `0x${'d'.repeat(64)}`;
+  const iface = new ethers.Interface(trexFactoryEventAbi);
+  const enc = iface.encodeEventLog(iface.getEvent('TREXSuiteDeployed'), [
+    tokenAddress,
+    '0x3333333333333333333333333333333333333333',
+    '0x4444444444444444444444444444444444444444',
+    '0x5555555555555555555555555555555555555555',
+    '0x6666666666666666666666666666666666666666',
+    '0x7777777777777777777777777777777777777777',
+    `${owner}My Token`,
+  ]);
+  const log = { address: factoryAddr, topics: enc.topics, data: enc.data, transactionHash: txHash, blockNumber: 9000000 };
+  const service = new TokenDeploymentReceiptService(
+    { sepoliaRpcUrl: 'https://sepolia.example.test', trexFactoryAddress: factoryAddr, confirmations: 1, transactionTimeoutMs: 30000 },
+    {
+      providerFactory: () => ({
+        getBlockNumber: async () => 9000005,
+        getLogs: async () => [log],
+        getTransaction: async () => ({ from: owner }),
+        getBlock: async () => ({ timestamp: 1785456000 }),
+        destroy() {},
+      }),
+      factoryReaderFactory: () => ({ getToken: async () => tokenAddress }),
+    },
+  );
+
+  const r = await service.reconcileBySalt({ owner, tokenName: 'My Token' });
+  assert.equal(r.deployed, true);
+  assert.equal(r.tokenAddress, tokenAddress);
+  assert.equal(r.transactionHash, txHash);
+  assert.equal(r.deployment.platformAgentWallet, owner);
+  assert.equal(r.deployment.identityRegistryAddress, '0x3333333333333333333333333333333333333333');
+  assert.equal(r.deployment.identityRegistryStorageAddress, '0x4444444444444444444444444444444444444444');
+  assert.equal(r.deployment.trustedIssuersRegistryAddress, '0x5555555555555555555555555555555555555555');
+  assert.equal(r.deployment.claimTopicsRegistryAddress, '0x6666666666666666666666666666666666666666');
+  assert.equal(r.deployment.modularComplianceAddress, '0x7777777777777777777777777777777777777777');
+  assert.equal(r.deployment.deployTxHash, txHash);
+  assert.equal(r.deployment.deployedAtBlock, 9000000);
+});
+
+test('reconcileBySalt reports not-deployed when the factory has no token for the salt', async () => {
+  const service = new TokenDeploymentReceiptService(
+    { sepoliaRpcUrl: 'https://sepolia.example.test', trexFactoryAddress: '0xe221247C52ece62027eb7D01D0f522d7363Fe875', confirmations: 1, transactionTimeoutMs: 30000 },
+    {
+      providerFactory: () => ({ getBlockNumber: async () => 100, getLogs: async () => [], destroy() {} }),
+      factoryReaderFactory: () => ({ getToken: async () => ethers.ZeroAddress }),
+    },
+  );
+  const r = await service.reconcileBySalt({ owner: '0x1111111111111111111111111111111111111111', tokenName: 'My Token' });
+  assert.equal(r.deployed, false);
+  assert.equal(r.tokenAddress, null);
+});

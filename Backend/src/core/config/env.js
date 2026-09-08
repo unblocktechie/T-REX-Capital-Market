@@ -12,6 +12,10 @@ const csv = (value) => String(value || '')
   .map((item) => item.trim())
   .filter(Boolean);
 
+const csvNumbers = (value) => csv(value)
+  .map((item) => Number(item))
+  .filter((item) => Number.isInteger(item) && item > 0);
+
 const env = Object.freeze({
   nodeEnv: process.env.NODE_ENV || 'development',
   port: Number(process.env.PORT || 3000),
@@ -66,6 +70,11 @@ const env = Object.freeze({
     maxFileSizeBytes: Number(process.env.UPLOAD_MAX_FILE_SIZE_MB || 10) * 1024 * 1024,
     maxFiles: Number(process.env.UPLOAD_MAX_FILES || 10),
   },
+  investorUploads: {
+    directory: path.resolve(process.cwd(), process.env.INVESTOR_UPLOAD_DIR || 'storage/investor-documents'),
+    maxFileSizeBytes: Number(process.env.INVESTOR_UPLOAD_MAX_FILE_SIZE_MB || process.env.UPLOAD_MAX_FILE_SIZE_MB || 10) * 1024 * 1024,
+    maxFiles: Number(process.env.INVESTOR_UPLOAD_MAX_FILES || process.env.UPLOAD_MAX_FILES || 10),
+  },
   tokenImages: {
     directory: path.resolve(process.cwd(), process.env.TOKEN_IMAGE_UPLOAD_DIR || 'storage/token-images'),
     maxFileSizeBytes: Number(process.env.TOKEN_IMAGE_MAX_FILE_SIZE_MB || 2) * 1024 * 1024,
@@ -83,6 +92,20 @@ const env = Object.freeze({
     trexFactoryAddress: process.env.TREX_FACTORY_ADDRESS,
     confirmations: Number(process.env.BLOCKCHAIN_CONFIRMATIONS || 1),
     transactionTimeoutMs: Number(process.env.BLOCKCHAIN_TRANSACTION_TIMEOUT_MS || 120000),
+    // Block to start on-chain log lookups from (factory deploy block). 0 = from genesis.
+    trexFactoryStartBlock: Number(process.env.TREX_FACTORY_START_BLOCK || 0),
+    // Salt-reconcile event scan: window size per eth_getLogs (stay under the RPC range cap)
+    // and the maximum blocks to look back when no start block is configured.
+    reconcileBlockOffset: Number(process.env.RECONCILE_BLOCK_OFFSET || 9000),
+    reconcileMaxLookbackBlocks: Number(process.env.RECONCILE_MAX_LOOKBACK_BLOCKS || 1000000),
+    // Chain configuration for the deployment-attempt flow. Sepolia = 11155111.
+    chainId: Number(process.env.BLOCKCHAIN_CHAIN_ID || 11155111),
+    supportedChainIds: csvNumbers(process.env.SUPPORTED_CHAIN_IDS || process.env.BLOCKCHAIN_CHAIN_ID || '11155111'),
+    networkName: process.env.BLOCKCHAIN_NETWORK_NAME || 'sepolia',
+    // How long a pending (pre-broadcast) deployment attempt stays valid.
+    deploymentAttemptTtlMinutes: Number(process.env.DEPLOYMENT_ATTEMPT_TTL_MINUTES || 20),
+    // Master switch for the background deployment-sync runner (overrides the DB setting when false).
+    deploymentSyncEnabled: booleanValue(process.env.TREX_DEPLOYMENT_SYNC_ENABLED, true),
   },
 });
 
@@ -105,4 +128,4 @@ const validateEnvironment = () => {
   }
 };
 
-module.exports = { env, validateEnvironment, csv };
+module.exports = { env, validateEnvironment, csv, csvNumbers };

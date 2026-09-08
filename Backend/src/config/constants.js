@@ -6,6 +6,7 @@ const TOKEN_TYPES = Object.freeze({
 const HTTP_STATUS = Object.freeze({
   OK: 200,
   CREATED: 201,
+  ACCEPTED: 202,
   NO_CONTENT: 204,
   BAD_REQUEST: 400,
   UNAUTHORIZED: 401,
@@ -15,8 +16,41 @@ const HTTP_STATUS = Object.freeze({
   UNPROCESSABLE_ENTITY: 422,
   TOO_MANY_REQUESTS: 429,
   INTERNAL_SERVER_ERROR: 500,
+  SERVICE_UNAVAILABLE: 503,
 });
 
 const SORT_DIRECTIONS = ['asc', 'desc'];
 
-module.exports = { TOKEN_TYPES, HTTP_STATUS, SORT_DIRECTIONS };
+const DEPLOYMENT_ATTEMPT_STATUS = Object.freeze({
+  PENDING: 'pending',
+  SUBMITTED: 'submitted',
+  CONFIRMING: 'confirming',
+  CONFIRMED: 'confirmed',
+  FAILED: 'failed',
+  WALLET_REJECTED: 'wallet_rejected',
+  CANCELLED: 'cancelled',
+  EXPIRED: 'expired',
+});
+
+// Statuses that represent an in-flight attempt blocking a second concurrent attempt.
+const ACTIVE_DEPLOYMENT_ATTEMPT_STATUSES = Object.freeze([
+  DEPLOYMENT_ATTEMPT_STATUS.PENDING,
+  DEPLOYMENT_ATTEMPT_STATUS.SUBMITTED,
+  DEPLOYMENT_ATTEMPT_STATUS.CONFIRMING,
+]);
+
+// Statuses the frontend is permitted to set through the fail endpoint.
+const FRONTEND_FAILURE_STATUSES = Object.freeze([
+  DEPLOYMENT_ATTEMPT_STATUS.WALLET_REJECTED,
+  DEPLOYMENT_ATTEMPT_STATUS.CANCELLED,
+  DEPLOYMENT_ATTEMPT_STATUS.FAILED,
+]);
+
+module.exports = {
+  TOKEN_TYPES,
+  HTTP_STATUS,
+  SORT_DIRECTIONS,
+  DEPLOYMENT_ATTEMPT_STATUS,
+  ACTIVE_DEPLOYMENT_ATTEMPT_STATUSES,
+  FRONTEND_FAILURE_STATUSES,
+};

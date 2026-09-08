@@ -28,6 +28,20 @@ class OrganizationRepository {
     return rows[0] || null;
   }
 
+  // Locate an organization by its on-chain deployer/owner wallet (case-insensitive).
+  // Used by the background deployment sync to map an on-chain token owner back to an org.
+  async findByWalletAddress(walletAddress, executor) {
+    const rows = await execute(
+      `SELECT * FROM \`organizationMaster\`
+       WHERE LOWER(\`walletAddress\`) = LOWER(?) AND \`isDeleted\` = 0
+       ORDER BY (\`status\` = 'approved') DESC, \`updatedAt\` DESC
+       LIMIT 1`,
+      [walletAddress],
+      executor,
+    );
+    return rows[0] || null;
+  }
+
   async createForUser(userUid, data, executor) {
     const organizationUid = createUid();
     const entries = Object.entries(data).filter(([field, value]) => organizationFields.includes(field) && value !== undefined);
