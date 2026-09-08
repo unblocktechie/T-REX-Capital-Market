@@ -1,9 +1,10 @@
 const path = require('node:path');
+const fs = require('node:fs');
 const express = require('express');
 const helmet = require('helmet');
 const compression = require('compression');
 const swaggerUi = require('swagger-ui-express');
-const YAML = require('yamljs');
+const YAML = require('yaml');
 const { env } = require('./core/config/env');
 const { requestContext } = require('./middleware/request-context.middleware');
 const { requestLogger } = require('./middleware/request-logger.middleware');
@@ -28,7 +29,7 @@ const createApp = () => {
   app.use('/api', apiRateLimiter, createApiRouter());
 
   const openApiPath = path.resolve(process.cwd(), 'docs', 'openapi.yaml');
-  const openApiDocument = YAML.load(openApiPath);
+  const openApiDocument = YAML.parse(fs.readFileSync(openApiPath, 'utf8'));
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openApiDocument, { explorer: true }));
 
   app.use(notFoundHandler);

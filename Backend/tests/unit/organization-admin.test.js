@@ -5,6 +5,13 @@ const { OrganizationAdminService } = require('../../src/services/organization-ad
 const { OrganizationService } = require('../../src/services/organization.service');
 
 const immediateTransaction = (callback) => callback({ transaction: true });
+const successfulIdentityService = {
+  createOrganizationIdentity: async () => ({
+    identityAddress: '0x2222222222222222222222222222222222222222',
+    txHash: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    alreadyExisted: false,
+  }),
+};
 
 test('admin rejection requires a meaningful rejection reason', () => {
   assert.ok(schemas.reviewOrganization.validate({ status: 'rejected' }).error);
@@ -37,7 +44,7 @@ test('admin document access rejects storage paths outside the upload directory',
       originalFileName: 'outside.pdf',
       mimeType: 'application/pdf',
     }),
-  }, immediateTransaction);
+  }, successfulIdentityService, immediateTransaction);
 
   await assert.rejects(
     service.getDocumentFile('organization-1', 'document-1'),
@@ -53,7 +60,7 @@ test('first rejection grants exactly one resubmission opportunity', async () => 
       update = { organizationUid, fields };
       return fields;
     },
-  }, immediateTransaction);
+  }, successfulIdentityService, immediateTransaction);
 
   await service.reviewApplication('organization-1', {
     status: 'rejected',
@@ -85,7 +92,7 @@ test('second rejection permanently disables editing and resubmission', async () 
       fields = input;
       return input;
     },
-  }, immediateTransaction);
+  }, successfulIdentityService, immediateTransaction);
 
   await adminService.reviewApplication('organization-1', {
     status: 'rejected',
@@ -106,17 +113,55 @@ test('second rejection permanently disables editing and resubmission', async () 
 test('approved application clears rejection data and remains read-only', async () => {
   let fields;
   const service = new OrganizationAdminService({
-    findForReview: async () => ({ status: 'submitted', rejectionCount: 1 }),
+    findForReview: async () => ({
+      organizationUid: 'organization-1',
+      walletAddress: '0x1111111111111111111111111111111111111111',
+      status: 'submitted',
+      rejectionCount: 1,
+    }),
     updateByOrganizationUid: async (organizationUid, input) => {
       fields = input;
       return input;
     },
-  }, immediateTransaction);
+  }, successfulIdentityService, immediateTransaction);
 
   await service.reviewApplication('organization-1', { status: 'approved' });
   assert.equal(fields.status, 'approved');
   assert.equal(fields.rejectionReason, null);
   assert.equal(fields.canResubmit, false);
+  assert.equal(fields.contractAddress, '0x2222222222222222222222222222222222222222');
+  assert.equal(fields.contractTxnHash, '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+  assert.match(fields.contractTxnMessage, /created/i);
+});
+
+test('failed identity creation is recorded without approving the application', async () => {
+  const updates = [];
+  const failure = new Error('execution reverted');
+  failure.transactionHash = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+  const service = new OrganizationAdminService({
+    findForReview: async () => ({
+      organizationUid: 'organization-1',
+      walletAddress: '0x1111111111111111111111111111111111111111',
+      status: 'submitted',
+    }),
+    updateByOrganizationUid: async (organizationUid, fields) => {
+      updates.push(fields);
+      return { organizationUid, status: 'submitted', ...fields };
+    },
+  }, {
+    createOrganizationIdentity: async () => { throw failure; },
+  }, immediateTransaction);
+
+  await assert.rejects(
+    service.reviewApplication('organization-1', { status: 'approved' }),
+    (error) => error.statusCode === 502
+      && error.code === 'ORGANIZATION_IDENTITY_CREATION_FAILED'
+      && /execution reverted/.test(error.message),
+  );
+  assert.equal(updates.length, 1);
+  assert.equal(updates[0].status, undefined);
+  assert.equal(updates[0].contractTxnHash, failure.transactionHash);
+  assert.match(updates[0].contractTxnMessage, /failed/i);
 });
 
 test('organization uses resubmitted status after its first rejection', () => {

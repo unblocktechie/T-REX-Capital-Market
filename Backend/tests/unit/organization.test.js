@@ -97,7 +97,7 @@ test('organization submission persists the wallet address', async () => {
         fullName: 'Jane Doe',
         dateOfBirth: '1980-01-01',
         nationalityCountryUid: 'country-1',
-        ownershipPercentage: 50,
+        ownershipPercentage: 100,
       }],
       listDocuments: async () => [{ documentTypeUid: 'document-type-1' }],
       updateByUserUid: async (userUid, fields) => {
@@ -129,13 +129,51 @@ test('organization submission persists the wallet address', async () => {
   assert.equal(result.status, 'submitted');
 });
 
-test('beneficial ownership cannot exceed 100 percent', () => {
+test('individual beneficial owners may hold less than 25 percent when total ownership is 100 percent', () => {
+  const schemaResult = schemas.beneficialOwners.validate({
+    owners: [
+      {
+        fullName: 'Owner One',
+        dateOfBirth: '1980-01-01',
+        nationalityCountryUid: '00000000-0000-4000-8000-000000000001',
+        ownershipPercentage: 90,
+      },
+      {
+        fullName: 'Owner Two',
+        dateOfBirth: '1985-01-01',
+        nationalityCountryUid: '00000000-0000-4000-8000-000000000002',
+        ownershipPercentage: 10,
+      },
+    ],
+    isDraft: false,
+  });
+  assert.equal(schemaResult.error, undefined);
+
+  const service = new OrganizationService({});
+  assert.doesNotThrow(() => service.validateOwners(schemaResult.value.owners, false));
+});
+
+test('completed beneficial ownership must equal 100 percent', () => {
   const service = new OrganizationService({});
   assert.throws(
     () => service.validateOwners([
       { fullName: 'Owner One', dateOfBirth: '1980-01-01', nationalityCountryUid: 'country-1', ownershipPercentage: 60 },
-      { fullName: 'Owner Two', dateOfBirth: '1985-01-01', nationalityCountryUid: 'country-2', ownershipPercentage: 50 },
+      { fullName: 'Owner Two', dateOfBirth: '1985-01-01', nationalityCountryUid: 'country-2', ownershipPercentage: 30 },
     ], false),
+    /must equal 100%/,
+  );
+});
+
+test('beneficial-owner drafts may be incomplete but cannot exceed 100 percent', () => {
+  const service = new OrganizationService({});
+  assert.doesNotThrow(() => service.validateOwners([
+    { ownershipPercentage: 10 },
+  ], true));
+  assert.throws(
+    () => service.validateOwners([
+      { ownershipPercentage: 60 },
+      { ownershipPercentage: 50 },
+    ], true),
     /cannot exceed 100%/,
   );
 });

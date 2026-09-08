@@ -8,7 +8,7 @@ A production-oriented Node.js, Express, and MySQL API foundation for T-REX Capit
 - API-level role-based access control loaded from `permissionMaster`
 - CRUD APIs for users, roles, menus, permissions, and general settings
 - Issuer-only organization onboarding with company, jurisdiction, beneficial-owner, document, draft, and final-submission steps
-- Administrator organization review with approval/rejection reasons and one controlled issuer revision cycle
+- Administrator organization review with OnchainID creation before approval, rejection reasons, and one controlled issuer revision cycle
 - Searchable country, state, and city reference APIs with validated parent-child relationships
 - Multiple PDF/PNG/JPG organization uploads with file-size limits, checksums, secure storage names, download, and soft delete
 - Pagination, search, sorting, filtering, validation, soft deletion, and camelCase database naming
@@ -63,6 +63,7 @@ Apply `database/migrations/20260907_add_organization_wallet_address.sql` before 
 Apply `database/migrations/20260907_add_admin_organization_review.sql` to add administrator review, the one-time rejection revision workflow, and remove document-level verification status.
 Apply `database/migrations/20260907_add_admin_organization_document_access.sql` to grant the administrator preview/download permission.
 Apply `database/migrations/20260907_add_organization_resubmitted_status.sql` to distinguish revised submissions from initial submissions.
+Apply `database/migrations/20260908_add_organization_identity_contract_result.sql` before enabling on-chain organization approval. Configure the Sepolia RPC, identity factory, and a newly rotated deployer key using `.env.example`; never reuse or commit an exposed private key.
 
 ```bash
 npm run check

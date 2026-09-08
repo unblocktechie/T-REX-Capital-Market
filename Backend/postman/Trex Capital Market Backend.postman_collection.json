@@ -538,7 +538,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"owners\": [\n    {\n      \"fullName\": \"Jane Doe\",\n      \"dateOfBirth\": \"1985-06-15\",\n      \"nationalityCountryUid\": \"{{countryUid}}\",\n      \"ownershipPercentage\": 45,\n      \"isPrimary\": true\n    },\n    {\n      \"fullName\": \"John Doe\",\n      \"dateOfBirth\": \"1980-03-11\",\n      \"nationalityCountryUid\": \"{{countryUid}}\",\n      \"ownershipPercentage\": 30,\n      \"isPrimary\": false\n    }\n  ],\n  \"isDraft\": false\n}",
+              "raw": "{\n  \"owners\": [\n    {\n      \"fullName\": \"Jane Doe\",\n      \"dateOfBirth\": \"1985-06-15\",\n      \"nationalityCountryUid\": \"{{countryUid}}\",\n      \"ownershipPercentage\": 80,\n      \"isPrimary\": true\n    },\n    {\n      \"fullName\": \"John Doe\",\n      \"dateOfBirth\": \"1980-03-11\",\n      \"nationalityCountryUid\": \"{{countryUid}}\",\n      \"ownershipPercentage\": 20,\n      \"isPrimary\": false\n    }\n  ],\n  \"isDraft\": false\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": "{{baseUrl}}/api/v1/organizations/me/beneficial-owners"
@@ -678,6 +678,27 @@
           ] } }]
         },
         {
+          "name": "Review Organization (Approve + OnchainID Example)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"approved\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/admin/organizations/{{adminOrganizationUid}}/status",
+            "description": "Requires configured Sepolia RPC, identity factory, and funded deployer. Creates or reuses the organization's OnchainID before status becomes approved. Run either this request or the rejection example against a submitted application."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Organization and on-chain identity are approved', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.expect(body.data.status).to.eql('approved');",
+            "pm.expect(body.data.contractAddress).to.match(/^0x[a-fA-F0-9]{40}$/);",
+            "pm.expect(body.data.contractTxnMessage).to.include('approved successfully');"
+          ] } }]
+        },
+        {
           "name": "Review Organization (Reject Example)",
           "request": {
             "method": "PATCH",
@@ -688,7 +709,7 @@
               "options": { "raw": { "language": "json" } }
             },
             "url": "{{baseUrl}}/api/v1/admin/organizations/{{adminOrganizationUid}}/status",
-            "description": "For approval, send only { \"status\": \"approved\" }. rejectionReason is required only for rejected."
+            "description": "rejectionReason is required for rejected. Run either this request or the approval example against a submitted application."
           },
           "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
             "pm.test('Organization is reviewed', () => pm.response.to.have.status(200));",

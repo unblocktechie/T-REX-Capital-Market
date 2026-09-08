@@ -16,6 +16,7 @@ const { AuthService } = require('../services/auth.service');
 const { LocationService } = require('../services/location.service');
 const { OrganizationService } = require('../services/organization.service');
 const { OrganizationAdminService } = require('../services/organization-admin.service');
+const { OrganizationIdentityService } = require('../services/blockchain/organization-identity.service');
 const emailService = require('../services/common/email.service');
 const { createCrudController } = require('../api/v1/controllers/crud.controller');
 const { createAuthController } = require('../api/v1/controllers/auth.controller');
@@ -34,6 +35,7 @@ const authTokenRepository = new AuthTokenRepository();
 const locationRepository = new LocationRepository();
 const organizationOptionRepository = new OrganizationOptionRepository();
 const organizationRepository = new OrganizationRepository();
+const organizationIdentityService = new OrganizationIdentityService();
 
 const userService = new UserService(userRepository, roleRepository);
 const roleService = new RoleService(roleRepository, userRepository, permissionRepository);
@@ -47,7 +49,10 @@ const organizationService = new OrganizationService({
   optionRepository: organizationOptionRepository,
   locationService,
 });
-const organizationAdminService = new OrganizationAdminService(organizationRepository);
+const organizationAdminService = new OrganizationAdminService(
+  organizationRepository,
+  organizationIdentityService,
+);
 
 const controllers = {
   auth: createAuthController(authService),
@@ -65,7 +70,7 @@ module.exports = {
   controllers,
   services: {
     authService, userService, roleService, menuService, permissionService, settingService,
-    locationService, organizationService, organizationAdminService,
+    locationService, organizationService, organizationAdminService, organizationIdentityService,
   },
   repositories: {
     userRepository, roleRepository, menuRepository, permissionRepository, settingRepository, authTokenRepository,

@@ -35,7 +35,7 @@ const beneficialOwner = Joi.object({
   fullName: optionalText(120),
   dateOfBirth: Joi.date().iso().max('now').allow(null),
   nationalityCountryUid: optionalUid,
-  ownershipPercentage: Joi.number().precision(2).min(25).max(100).allow(null),
+  ownershipPercentage: Joi.number().precision(2).min(0).allow(null),
   isPrimary: Joi.boolean().default(false),
 });
 

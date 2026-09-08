@@ -428,12 +428,13 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/OrganizationReviewInput' }
       responses:
-        '200': { description: Organization application reviewed }
+        '200': { description: Application reviewed; approval includes contractAddress, contractTxnHash, and contractTxnMessage }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { description: Only submitted or resubmitted applications can be reviewed }
         '422': { $ref: '#/components/responses/ValidationError' }
+        '502': { description: On-chain identity creation failed and application status was not changed }
 
 components:
   securitySchemes:
@@ -592,7 +593,12 @@ components:
               fullName: { type: string, maxLength: 120, example: Jane Doe }
               dateOfBirth: { type: string, format: date, example: '1985-06-15' }
               nationalityCountryUid: { type: string, format: uuid }
-              ownershipPercentage: { type: number, minimum: 25, maximum: 100, example: 45 }
+              ownershipPercentage:
+                type: number
+                minimum: 0
+                multipleOf: 0.01
+                example: 20
+                description: No individual minimum; completed owner arrays must total exactly 100 percent.
               isPrimary: { type: boolean, example: true }
         isDraft: { type: boolean, example: false }
     OrganizationSubmitInput:

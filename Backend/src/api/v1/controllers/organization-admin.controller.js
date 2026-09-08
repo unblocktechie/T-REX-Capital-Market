@@ -30,10 +30,15 @@ const createOrganizationAdminController = (service) => ({
       if (error && !res.headersSent) next(error);
     });
   },
-  review: async (req, res) => sendSuccess(req, res, {
-    message: `Organization application ${req.body.status} successfully.`,
-    data: await service.reviewApplication(req.params.organizationUid, req.body),
-  }),
+  review: async (req, res) => {
+    const organization = await service.reviewApplication(req.params.organizationUid, req.body);
+    return sendSuccess(req, res, {
+      message: req.body.status === 'approved'
+        ? organization.contractTxnMessage
+        : 'Organization application rejected successfully.',
+      data: organization,
+    });
+  },
 });
 
 module.exports = { createOrganizationAdminController };

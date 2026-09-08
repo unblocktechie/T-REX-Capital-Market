@@ -7,6 +7,7 @@ const organizationFields = [
   'cityUid', 'postalCode', 'countryOfIncorporationUid', 'dateOfIncorporation', 'taxIdentificationNumber',
   'industryUid', 'businessActivity', 'website', 'walletAddress', 'currentStep', 'isDraft', 'status', 'submittedAt',
   'rejectionReason', 'rejectionCount', 'canResubmit', 'isUserNotified',
+  'contractAddress', 'contractTxnHash', 'contractTxnMessage',
 ];
 
 class OrganizationRepository {
@@ -117,7 +118,8 @@ class OrganizationRepository {
     );
     const rows = await execute(
       `SELECT o.\`organizationUid\`, o.\`userUid\`, o.\`legalCompanyName\`, o.\`registrationNumber\`,
-              o.\`walletAddress\`, o.\`status\`, o.\`submittedAt\`, o.\`rejectionReason\`,
+              o.\`walletAddress\`, o.\`contractAddress\`, o.\`contractTxnHash\`, o.\`contractTxnMessage\`,
+              o.\`status\`, o.\`submittedAt\`, o.\`rejectionReason\`,
               o.\`rejectionCount\`, o.\`canResubmit\`, o.\`isUserNotified\`, o.\`updatedAt\`,
               u.\`fullName\` AS \`issuerFullName\`, u.\`email\` AS \`issuerEmail\`,
               et.\`entityTypeName\`, i.\`industryName\`, c.\`countryName\`

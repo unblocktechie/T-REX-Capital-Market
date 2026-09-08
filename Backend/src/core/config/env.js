@@ -66,6 +66,14 @@ const env = Object.freeze({
     maxFileSizeBytes: Number(process.env.UPLOAD_MAX_FILE_SIZE_MB || 10) * 1024 * 1024,
     maxFiles: Number(process.env.UPLOAD_MAX_FILES || 10),
   },
+  blockchain: {
+    sepoliaRpcUrl: process.env.SEPOLIA_RPC_URL,
+    deployerPrivateKey: process.env.DEPLOYER_PRIVATE_KEY,
+    deployerAddress: process.env.DEPLOYER_ADDRESS,
+    identityFactoryAddress: process.env.IDENTITY_FACTORY_ADDRESS,
+    confirmations: Number(process.env.BLOCKCHAIN_CONFIRMATIONS || 1),
+    transactionTimeoutMs: Number(process.env.BLOCKCHAIN_TRANSACTION_TIMEOUT_MS || 120000),
+  },
 });
 
 const requiredSchema = Joi.object({

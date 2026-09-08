@@ -115,15 +115,22 @@ class OrganizationService {
 
   validateOwners(owners, isDraft) {
     if (!isDraft && !owners.length) throw ApiError.badRequest('At least one ultimate beneficial owner is required.');
-    let total = 0;
+    let totalBasisPoints = 0;
     const adultCutoff = new Date();
     adultCutoff.setUTCFullYear(adultCutoff.getUTCFullYear() - 18);
     for (const [index, owner] of owners.entries()) {
       if (!isDraft) requireFields(owner, ['fullName', 'dateOfBirth', 'nationalityCountryUid', 'ownershipPercentage'], `Beneficial owner ${index + 1}`);
       if (owner.dateOfBirth && new Date(owner.dateOfBirth) > adultCutoff) throw ApiError.badRequest(`Beneficial owner ${index + 1} must be at least 18 years old.`);
-      if (owner.ownershipPercentage !== undefined) total += Number(owner.ownershipPercentage);
+      if (owner.ownershipPercentage !== undefined && owner.ownershipPercentage !== null) {
+        totalBasisPoints += Math.round(Number(owner.ownershipPercentage) * 100);
+      }
     }
-    if (total > 100) throw ApiError.badRequest('Total beneficial ownership cannot exceed 100%.');
+    if (isDraft && totalBasisPoints > 10000) {
+      throw ApiError.badRequest('Total beneficial ownership cannot exceed 100%.');
+    }
+    if (!isDraft && totalBasisPoints !== 10000) {
+      throw ApiError.badRequest('Total beneficial ownership must equal 100%.');
+    }
     if (owners.filter((owner) => owner.isPrimary).length > 1) throw ApiError.badRequest('Only one beneficial owner can be marked as primary.');
   }
 

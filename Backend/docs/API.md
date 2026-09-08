@@ -265,14 +265,14 @@ The incorporation date cannot be in the future. Website is optional but must use
       "fullName": "Jane Doe",
       "dateOfBirth": "1985-06-15",
       "nationalityCountryUid": "<countryUid>",
-      "ownershipPercentage": 45,
+      "ownershipPercentage": 80,
       "isPrimary": true
     },
     {
       "fullName": "John Doe",
       "dateOfBirth": "1980-03-11",
       "nationalityCountryUid": "<countryUid>",
-      "ownershipPercentage": 30,
+      "ownershipPercentage": 20,
       "isPrimary": false
     }
   ],
@@ -280,7 +280,7 @@ The incorporation date cannot be in the future. Website is optional but must use
 }
 ```
 
-Up to 20 owners can be stored. A completed section requires at least one adult owner, each declared owner must hold at least 25%, the total cannot exceed 100%, and no more than one owner can be primary. Saving replaces the current owner list atomically.
+Up to 20 owners can be stored. There is no minimum ownership percentage for an individual owner. A completed section requires at least one adult owner and the combined ownership of all owners must equal exactly 100%; no more than one owner can be primary. Drafts may contain an incomplete total but cannot exceed 100%. Saving replaces the current owner list atomically.
 
 ### Organization documents
 
@@ -350,6 +350,23 @@ Approve:
 }
 ```
 
+Approval first checks the configured Sepolia OnchainID factory for the organization's submitted `walletAddress`. If no identity exists, the API creates one with the deterministic salt `org-{organizationUid}` and waits for the configured confirmations. A successful response includes:
+
+```json
+{
+  "success": true,
+  "message": "On-chain organization identity created; application approved successfully.",
+  "data": {
+    "status": "approved",
+    "contractAddress": "0x2222222222222222222222222222222222222222",
+    "contractTxnHash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "contractTxnMessage": "On-chain organization identity created; application approved successfully."
+  }
+}
+```
+
+If the wallet already has an identity, approval reuses that address, returns `contractTxnHash: null`, and reports that it already existed. If lookup, submission, confirmation, or identity verification fails, the API returns `502` with code `ORGANIZATION_IDENTITY_CREATION_FAILED`; `contractTxnMessage` and any available transaction hash are saved, while the application status remains unchanged and can be retried.
+
 Reject:
 
 ```json
@@ -367,7 +384,7 @@ Rejection lifecycle:
 - During revision the main `status` remains `rejected` and `isDraft` becomes true, so the rejection remains visible but cannot be reviewed again yet.
 - Resubmission: status becomes `resubmitted`, `canResubmit` becomes `false`, and `rejectionReason` is cleared.
 - Second rejection: `rejectionCount: 2`, `canResubmit: false`. All issuer edits and further submission attempts return `409`; the frontend should show Contact Sales.
-- Approval: the application becomes read-only and rejection data is cleared.
+- Approval: OnchainID creation/reuse must succeed before the application becomes read-only and rejection data is cleared.
 
 ## Status codes
 
@@ -377,3 +394,4 @@ Rejection lifecycle:
 - `403` inactive/unverified account, CORS denial, or missing permission
 - `404` route/resource absent; `409` duplicate unique value
 - `422` request validation; `429` rate limit; `500` database/unexpected failure
+- `502` on-chain identity creation failed; the organization was not approved

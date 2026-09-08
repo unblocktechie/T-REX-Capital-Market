@@ -313,7 +313,7 @@ Payload:
       "fullName": "Jane Doe",
       "dateOfBirth": "1985-06-15",
       "nationalityCountryUid": "<countryUid>",
-      "ownershipPercentage": 45,
+      "ownershipPercentage": 100,
       "isPrimary": true
     }
   ],
@@ -326,8 +326,9 @@ UI rules:
 - Support adding and removing rows, up to 20.
 - Completed data needs at least one owner.
 - Each completed owner must be at least 18 years old.
-- Each declared owner must own at least 25%.
-- Total ownership cannot exceed 100%.
+- Do not enforce a minimum ownership percentage per owner.
+- Completed data must total exactly 100% across all owners.
+- Draft data may total less than 100%, but must not exceed 100%.
 - Only one owner can be marked primary.
 - Display a live ownership total.
 

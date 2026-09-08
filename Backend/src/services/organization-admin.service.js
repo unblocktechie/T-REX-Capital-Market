@@ -5,8 +5,9 @@ const { env } = require('../core/config/env');
 const { withTransaction } = require('../database/connection');
 
 class OrganizationAdminService {
-  constructor(repository, transactionRunner = withTransaction) {
+  constructor(repository, identityService, transactionRunner = withTransaction) {
     this.repository = repository;
+    this.identityService = identityService;
     this.transactionRunner = transactionRunner;
   }
 
@@ -42,8 +43,8 @@ class OrganizationAdminService {
     return { document, filePath };
   }
 
-  reviewApplication(organizationUid, input) {
-    return this.transactionRunner(async (connection) => {
+  async reviewApplication(organizationUid, input) {
+    const reviewResult = await this.transactionRunner(async (connection) => {
       const organization = await this.repository.findForReview(organizationUid, connection);
       if (!organization) throw ApiError.notFound('Organization application was not found.');
       if (!['submitted', 'resubmitted', 'underReview'].includes(organization.status)) {
@@ -51,19 +52,44 @@ class OrganizationAdminService {
       }
 
       if (input.status === 'approved') {
-        return this.repository.updateByOrganizationUid(organizationUid, {
+        let contractResult;
+        try {
+          contractResult = await this.identityService.createOrganizationIdentity(
+            organization.walletAddress,
+            `org-${organization.organizationUid}`,
+          );
+        } catch (error) {
+          const contractTxnMessage = this.contractFailureMessage(error);
+          const updatedOrganization = await this.repository.updateByOrganizationUid(organizationUid, {
+            contractTxnHash: error.transactionHash || null,
+            contractTxnMessage,
+          }, connection);
+          return {
+            organization: updatedOrganization,
+            contractFailed: true,
+            contractTxnMessage,
+          };
+        }
+        const contractTxnMessage = contractResult.alreadyExisted
+          ? 'On-chain organization identity already existed; application approved successfully.'
+          : 'On-chain organization identity created; application approved successfully.';
+        const updatedOrganization = await this.repository.updateByOrganizationUid(organizationUid, {
           status: 'approved',
           currentStep: 'completed',
           isDraft: false,
           rejectionReason: null,
           canResubmit: false,
           isUserNotified: false,
+          contractAddress: contractResult.identityAddress,
+          contractTxnHash: contractResult.txHash,
+          contractTxnMessage,
         }, connection);
+        return { organization: updatedOrganization, contractFailed: false };
       }
 
       const rejectionCount = Number(organization.rejectionCount || 0) + 1;
       const canResubmit = rejectionCount === 1;
-      return this.repository.updateByOrganizationUid(organizationUid, {
+      const updatedOrganization = await this.repository.updateByOrganizationUid(organizationUid, {
         status: 'rejected',
         currentStep: canResubmit ? 'companyInformation' : 'completed',
         isDraft: false,
@@ -72,7 +98,26 @@ class OrganizationAdminService {
         canResubmit,
         isUserNotified: false,
       }, connection);
+      return { organization: updatedOrganization, contractFailed: false };
     });
+
+    if (reviewResult.contractFailed) {
+      throw new ApiError(
+        502,
+        reviewResult.contractTxnMessage,
+        { contractTxnMessage: reviewResult.contractTxnMessage },
+        'ORGANIZATION_IDENTITY_CREATION_FAILED',
+      );
+    }
+    return reviewResult.organization;
+  }
+
+  contractFailureMessage(error) {
+    const rawMessage = error.shortMessage || error.reason || error.message || 'Unknown blockchain error.';
+    let safeMessage = String(rawMessage);
+    const secrets = [env.blockchain.deployerPrivateKey, env.blockchain.sepoliaRpcUrl].filter(Boolean);
+    for (const secret of secrets) safeMessage = safeMessage.split(secret).join('[REDACTED]');
+    return `On-chain organization identity creation failed: ${safeMessage}`.slice(0, 2000);
   }
 }
 

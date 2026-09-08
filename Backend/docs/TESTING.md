@@ -190,7 +190,7 @@ Finally submit:
 curl -X POST http://localhost:3000/api/v1/organizations/me/submit -H "Authorization: Bearer ISSUER_TOKEN" -H "Content-Type: application/json" -d '{"walletAddress":"0x1111111111111111111111111111111111111111"}'
 ```
 
-Expected: `200`, the submitted wallet address, `status: submitted`, `isDraft: false`, and a UTC `submittedAt`. Missing or invalid wallet addresses return `422`. Missing organization fields, invalid location relationships, owners under 18, ownership over 100%, or missing required document types return a standardized `400`; invalid file type/size returns `422`.
+Expected: `200`, the submitted wallet address, `status: submitted`, `isDraft: false`, and a UTC `submittedAt`. Missing or invalid wallet addresses return `422`. Missing organization fields, invalid location relationships, owners under 18, beneficial ownership that does not total exactly 100%, or missing required document types return a standardized `400`; invalid file type/size returns `422`. Individual owners may hold less than 25%.
 
 Mark the current issuer as notified:
 
@@ -234,4 +234,8 @@ Approval example:
 curl -X PATCH http://localhost:3000/api/v1/admin/organizations/ORGANIZATION_UID/status -H "Authorization: Bearer ADMIN_TOKEN" -H "Content-Type: application/json" -d '{"status":"approved"}'
 ```
 
-Expected: `status: approved`, `canResubmit: false`, and `rejectionReason: null`.
+Before testing, configure `SEPOLIA_RPC_URL`, `IDENTITY_FACTORY_ADDRESS`, `DEPLOYER_PRIVATE_KEY`, and `DEPLOYER_ADDRESS` with a funded Sepolia deployer. Never use the exposed sample key; rotate it first.
+
+Expected after a new identity transaction: `200`, `status: approved`, `canResubmit: false`, `rejectionReason: null`, and populated `contractAddress`, `contractTxnHash`, and `contractTxnMessage`. Repeating safely after an identity already exists reuses the factory result and may return a null transaction hash.
+
+To test failure handling, temporarily use an unfunded test deployer or invalid factory address and approve a still-submitted application. Expected: `502`, error code `ORGANIZATION_IDENTITY_CREATION_FAILED`, and `error.details.contractTxnMessage`. Fetch the application again; its status must still be `submitted`, `resubmitted`, or `underReview`, while `contractTxnMessage` and any available `contractTxnHash` are retained for diagnosis.
