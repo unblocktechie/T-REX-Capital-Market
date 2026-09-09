@@ -25,8 +25,8 @@ import {
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
-  CompleteVerificationModal,
   SubmitInterestModal,
+  UploadMissingDocumentsModal,
 } from '@/components/investor-marketplace/MarketplaceModals';
 import { MarketplaceStatusBadge } from '@/components/investor-marketplace/MarketplaceStatusBadge';
 import { Button } from '@/components/ui/Button';
@@ -79,7 +79,7 @@ function ComplianceStatus({ token }) {
       {topics.map((topic) => (
         <div key={topic.id || topic.claimTopicCode}>
           <span><UserRoundCheck size={15} /> {topic.label || topic.claimTopicCode}</span>
-          <strong>{topic.satisfied ? 'Ready' : 'Missing'}</strong>
+          <strong>{topic.rejected ? 'Re-upload' : topic.satisfied ? 'Ready' : 'Missing'}</strong>
         </div>
       ))}
     </div>
@@ -87,6 +87,11 @@ function ComplianceStatus({ token }) {
 }
 
 function OfferingStatusPanel({ token, onPrimaryAction, onSecondaryAction, actionLoading }) {
+  const rejection = token.eligibility?.rejection || token.interest || {};
+  const canResubmitDocuments = token.status === MARKETPLACE_STATUS.REJECTED
+    && String(rejection.rejectReasonType || '').toUpperCase() === 'DOC_REJECTED'
+    && rejection.canResubmit === true;
+
   return (
     <Card className="marketplace-status-panel">
       <div className="marketplace-status-panel__topline"><span>Investment Status</span><small>{token.interest?.interestUid ? `Request: ${token.interest.interestUid.slice(0, 12)}…` : 'No active request'}</small></div>
@@ -100,8 +105,8 @@ function OfferingStatusPanel({ token, onPrimaryAction, onSecondaryAction, action
 
       {token.status === MARKETPLACE_STATUS.ACTION_REQUIRED ? (
         <>
-          <div className="marketplace-status-callout marketplace-status-callout--warning"><LockKeyhole size={19} /><div><strong>Documents Required</strong><span>One or more claim-topic documents required by this token are missing from your profile.</span></div></div>
-          <Button className="marketplace-status-panel__primary" onClick={onPrimaryAction}>Complete Required Documents</Button>
+          <div className="marketplace-status-callout marketplace-status-callout--warning"><LockKeyhole size={19} /><div><strong>Documents Required</strong><span>Upload the missing claim-topic documents requested for this offering.</span></div></div>
+          <Button className="marketplace-status-panel__primary" onClick={onPrimaryAction} loading={actionLoading}>Upload Missing Documents</Button>
         </>
       ) : null}
 
@@ -110,6 +115,13 @@ function OfferingStatusPanel({ token, onPrimaryAction, onSecondaryAction, action
           <div className="marketplace-status-callout marketplace-status-callout--pending"><Clock3 size={19} /><div><strong>Pending Review</strong><span>Your investment interest was submitted and is being reviewed by the issuer.</span></div></div>
           <p className="marketplace-status-panel__estimate">Submitted {token.interest?.submittedAt ? new Date(token.interest.submittedAt).toLocaleString() : 'recently'}.</p>
           <Button className="marketplace-status-panel__primary" onClick={onSecondaryAction}>View Application</Button>
+        </>
+      ) : null}
+
+      {token.status === MARKETPLACE_STATUS.CLAIM_REQUIRED ? (
+        <>
+          <div className="marketplace-status-callout marketplace-status-callout--warning"><LockKeyhole size={19} /><div><strong>Action Required</strong><span>Your application has been approved by the issuer. Submit the required claim to complete verification and enable your investment.</span></div></div>
+          <Button className="marketplace-status-panel__primary" onClick={onSecondaryAction}>Submit Claim</Button>
         </>
       ) : null}
 
@@ -123,8 +135,13 @@ function OfferingStatusPanel({ token, onPrimaryAction, onSecondaryAction, action
 
       {token.status === MARKETPLACE_STATUS.REJECTED ? (
         <>
-          <div className="marketplace-status-callout marketplace-status-callout--rejected"><XCircle size={19} /><div><strong>Rejected</strong><span>The issuer rejected this investment interest.</span></div></div>
-          <Button className="marketplace-status-panel__primary" onClick={onSecondaryAction}>View Application</Button>
+          <div className="marketplace-status-callout marketplace-status-callout--rejected"><XCircle size={19} /><div><strong>Rejected</strong><span>{rejection.rejectReason || 'The issuer rejected this investment interest.'}</span></div></div>
+          {canResubmitDocuments ? (
+            <>
+              {rejection.resubmitRemaining != null ? <p className="marketplace-status-panel__estimate">Resubmission attempts remaining: {rejection.resubmitRemaining}</p> : null}
+              <Button className="marketplace-status-panel__primary" onClick={onPrimaryAction} loading={actionLoading}>Upload Requested Documents</Button>
+            </>
+          ) : <Button className="marketplace-status-panel__primary" onClick={onSecondaryAction}>View Application</Button>}
         </>
       ) : null}
 
@@ -153,6 +170,8 @@ export default function MarketplaceTokenDetailsPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [interestNote, setInterestNote] = useState('');
   const [imageObjectUrl, setImageObjectUrl] = useState('');
+  const [documentTypes, setDocumentTypes] = useState([]);
+  const [documentTypesLoading, setDocumentTypesLoading] = useState(false);
 
   useDocumentTitle(token ? `${token.name} · Marketplace` : 'Marketplace Offering');
 
@@ -201,13 +220,60 @@ export default function MarketplaceTokenDetailsPage() {
     catch { toast.error(`Could not copy ${label.toLowerCase()}.`); }
   };
 
+  const loadDocumentTypes = async () => {
+    setDocumentTypesLoading(true);
+    try {
+      const options = await investorMarketplaceService.getDocumentUploadOptions();
+      setDocumentTypes(options || []);
+      return options || [];
+    } finally {
+      setDocumentTypesLoading(false);
+    }
+  };
+
+  const prepareDocumentUpload = async () => {
+    if (!token) return;
+    setActionLoading(true);
+    try {
+      let current = token;
+      if (current.status === MARKETPLACE_STATUS.ACTION_REQUIRED) {
+        current = await investorMarketplaceService.ensureInterest(current.id);
+        setToken(current);
+        if (current.status === MARKETPLACE_STATUS.PENDING_REVIEW) {
+          toast.success('Your investment interest is ready for issuer review.');
+          return;
+        }
+      }
+
+      if (current.status === MARKETPLACE_STATUS.REJECTED) {
+        const rejection = current.eligibility?.rejection || current.interest || {};
+        const isDocumentRejection = String(rejection.rejectReasonType || '').toUpperCase() === 'DOC_REJECTED';
+        if (!isDocumentRejection || rejection.canResubmit !== true) {
+          toast.error('This rejected interest is not eligible for document resubmission.');
+          return;
+        }
+      }
+
+      await loadDocumentTypes();
+      setModal('verification');
+    } catch (error) {
+      if (error?.response?.status === 409) await loadOffering().catch(() => null);
+      toast.error(getErrorMessage(error, 'Unable to prepare the requested document upload.'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const openPrimaryAction = () => {
     if (!token) return;
     if (token.status === MARKETPLACE_STATUS.NOT_APPLIED) {
-      setModal(token.eligibility?.eligible === false ? 'verification' : 'interest');
+      if (token.eligibility?.eligible === false) void prepareDocumentUpload();
+      else setModal('interest');
       return;
     }
-    if (token.status === MARKETPLACE_STATUS.ACTION_REQUIRED) setModal('verification');
+    if (token.status === MARKETPLACE_STATUS.ACTION_REQUIRED || token.status === MARKETPLACE_STATUS.REJECTED) {
+      void prepareDocumentUpload();
+    }
   };
 
   const submitInterest = async () => {
@@ -215,17 +281,46 @@ export default function MarketplaceTokenDetailsPage() {
     try {
       const updated = await investorMarketplaceService.submitInterest(token.id, interestNote);
       setToken(updated);
-      setModal(null);
       setInterestNote('');
-      toast.success('Investment interest submitted for issuer review.');
-    } catch (error) {
-      const code = String(error?.response?.data?.code || error?.response?.data?.error?.code || '').toUpperCase();
-      if (error?.response?.status === 422 || code === 'INVESTOR_CLAIM_TOPIC_DOCUMENTS_MISSING') {
-        await loadOffering().catch(() => null);
+      if (updated.status === MARKETPLACE_STATUS.ACTION_REQUIRED) {
+        await loadDocumentTypes();
         setModal('verification');
+        toast.info('Upload the required documents to complete your submission.');
+      } else {
+        setModal(null);
+        toast.success('Investment interest submitted for issuer review.');
       }
+    } catch (error) {
       if (error?.response?.status === 409) await loadOffering().catch(() => null);
       toast.error(getErrorMessage(error, 'Unable to submit investment interest.'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const uploadClaimDocument = (documentTypeUid, file, onUploadProgress, signal) =>
+    investorMarketplaceService.uploadClaimDocument(documentTypeUid, file, onUploadProgress, signal);
+
+  const completeDocumentFlow = async () => {
+    setActionLoading(true);
+    try {
+      const updated = await loadOffering();
+      if (updated.status === MARKETPLACE_STATUS.PENDING_REVIEW) {
+        setModal(null);
+        toast.success('Your documents were uploaded and the investment interest is ready for issuer review.');
+        return;
+      }
+      if (updated.status === MARKETPLACE_STATUS.ACTION_REQUIRED) {
+        toast.error('Upload all required documents before submitting the interest.');
+        return;
+      }
+      if (updated.status === MARKETPLACE_STATUS.REJECTED) {
+        toast.error('The requested replacement documents are not complete yet.');
+        return;
+      }
+      setModal(null);
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Unable to refresh the investment interest.'));
     } finally {
       setActionLoading(false);
     }
@@ -294,7 +389,7 @@ export default function MarketplaceTokenDetailsPage() {
                   key={topic.id || topic.claimTopicCode}
                   icon={topic.claimTopicCode === 'ACCREDITED_INVESTOR' ? BadgeCheck : UserRoundCheck}
                   title={topic.label || topic.claimTopicCode}
-                  status={topic.satisfied == null ? null : { label: topic.satisfied ? 'Satisfied' : 'Missing', tone: topic.satisfied ? 'success' : 'warning' }}
+                  status={topic.satisfied == null ? null : topic.rejected ? { label: 'Re-upload', tone: 'danger' } : { label: topic.satisfied ? 'Satisfied' : 'Missing', tone: topic.satisfied ? 'success' : 'warning' }}
                 >
                   {topic.description || `This claim topic is required by the issuer before an investment interest can be submitted.`}
                 </ComplianceRule>
@@ -313,13 +408,34 @@ export default function MarketplaceTokenDetailsPage() {
         </main>
 
         <aside className="marketplace-token-detail-aside">
-          <OfferingStatusPanel token={token} onPrimaryAction={openPrimaryAction} onSecondaryAction={() => navigate(`${ROUTES.applications}?token=${token.id}`)} actionLoading={actionLoading} />
-          <Card className="marketplace-help-card"><span className="marketplace-help-card__icon"><HelpCircle size={18} /></span><div><strong>Need Help?</strong><p>Review your investor profile if a required claim-topic document is missing. Eligibility is checked again when you submit interest.</p><button type="button" onClick={() => navigate(`${ROUTES.profile}?token=${encodeURIComponent(token.id)}`)}><Mail size={14} /> Open Investor Profile</button></div></Card>
+          <OfferingStatusPanel
+            token={token}
+            onPrimaryAction={openPrimaryAction}
+            onSecondaryAction={() => {
+              const interestUid = token.interest?.interestUid;
+              if (interestUid && token.status === MARKETPLACE_STATUS.CLAIM_REQUIRED) {
+                navigate(ROUTES.applicationClaim(interestUid));
+                return;
+              }
+              navigate(interestUid ? ROUTES.applicationDetail(interestUid) : ROUTES.applications);
+            }}
+            actionLoading={actionLoading}
+          />
+          <Card className="marketplace-help-card"><span className="marketplace-help-card__icon"><HelpCircle size={18} /></span><div><strong>Need Help?</strong><p>Missing or rejected claim-topic documents can be uploaded directly from this offering. Your investor profile remains available for general verification details.</p><button type="button" onClick={() => navigate(`${ROUTES.profile}?token=${encodeURIComponent(token.id)}`)}><Mail size={14} /> Open Investor Profile</button></div></Card>
           <Card className="marketplace-network-card"><span><Building2 size={16} /> Permissioned security token</span><strong>{token.standard}</strong>{token.currentInvestors != null ? <p><UsersRound size={14} /> {number.format(token.currentInvestors)} current investors</p> : null}<p><Banknote size={14} /> {token.currency || 'Token'} pricing</p><p><WalletCards size={14} /> Claim-topic eligibility enforced</p></Card>
         </aside>
       </div>
 
-      <CompleteVerificationModal open={modal === 'verification'} onClose={() => setModal(null)} verification={token.eligibility} onGoToProfile={() => navigate(`${ROUTES.profile}?token=${encodeURIComponent(token.id)}`)} />
+      <UploadMissingDocumentsModal
+        open={modal === 'verification'}
+        onClose={() => setModal(null)}
+        verification={token.eligibility}
+        documentTypes={documentTypes}
+        documentTypesLoading={documentTypesLoading}
+        onUpload={uploadClaimDocument}
+        onComplete={completeDocumentFlow}
+        completing={actionLoading}
+      />
       <SubmitInterestModal open={modal === 'interest'} onClose={() => setModal(null)} token={token} onConfirm={submitInterest} loading={actionLoading} note={interestNote} onNoteChange={setInterestNote} requiredTopics={eligibilityTopics} />
     </div>
   );

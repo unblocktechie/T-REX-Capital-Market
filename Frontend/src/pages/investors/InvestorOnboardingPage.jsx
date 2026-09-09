@@ -14,7 +14,7 @@ import InvestmentRequestSubmittedStep from './InvestmentRequestSubmittedStep';
 import ReviewSubmitStep from './ReviewSubmitStep';
 
 function InvestorOnboardingFlow() {
-  const { state, isDirty, hydration, isLoading, loadError } = useInvestorOnboarding();
+  const { state, isDirty, hydration, isLoading, loadError, isSubmitted, showSubmissionSuccess } = useInvestorOnboarding();
   const location = useLocation();
   useInvestorNavigationGuard(!isLoading && isDirty && state.currentStep < 6);
 
@@ -43,6 +43,12 @@ function InvestorOnboardingFlow() {
   if (loadError) {
     const returnPath = `${location.pathname}${location.search}${location.hash}`;
     return <Navigate to={ROUTES.networkError} replace state={{ from: returnPath }} />;
+  }
+
+  // A submitted profile is a persistent backend state, not a page that should be replayed
+  // on every login. Keep the success screen only for the immediate post-submit transition.
+  if (isSubmitted && !showSubmissionSuccess) {
+    return <Navigate to={ROUTES.dashboard} replace />;
   }
 
   if (state.currentStep === 1) return <IdentityDetailsStep />;

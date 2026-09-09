@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, ClipboardList, Search, ShieldCheck, Store } from 'lucide-react';
+import { ArrowRight, ClipboardList, Eye, Search, ShieldCheck, Store } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { MarketplaceStatusBadge } from '@/components/investor-marketplace/MarketplaceStatusBadge';
@@ -67,7 +67,7 @@ export default function MyApplicationsPage() {
       key: 'action',
       header: 'Action',
       align: 'end',
-      render: (_value, application) => <Button variant="secondary" onClick={() => navigate(ROUTES.marketplaceToken(application.id))}>View Offering <ArrowRight size={15} /></Button>,
+      render: (_value, application) => <Button variant="secondary" icon={Eye} onClick={() => navigate(ROUTES.applicationDetail(application.interestUid || application.interest?.interestUid || application.id))}>View Details</Button>,
     },
   ], [navigate]);
 

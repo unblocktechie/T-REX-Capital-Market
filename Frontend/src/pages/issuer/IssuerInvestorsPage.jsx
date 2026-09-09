@@ -14,23 +14,32 @@ import { formatDate } from '@/utils/date';
 import { getErrorMessage } from '@/utils/error';
 
 const INTEREST_STATUS_OPTIONS = [
-  { value: 'pending', label: 'Pending Review', description: 'Requests waiting for issuer review' },
+  { value: 'all', label: 'All Requests', description: 'All visible investment request statuses' },
+  { value: 'submitIntrest', label: 'Pending Review', description: 'Requests ready for issuer review' },
   { value: 'approved', label: 'Approved', description: 'Requests that have been approved' },
   { value: 'rejected', label: 'Rejected', description: 'Requests that were not approved' },
   { value: 'cancelled', label: 'Cancelled', description: 'Requests that are no longer active' },
 ];
 
-const identityMeta = (value) => {
+const requestStatusMeta = (value) => {
   const normalized = String(value || '').trim().toLowerCase();
-  if (['verified', 'approved', 'complete', 'completed'].includes(normalized)) return { label: 'Verified', tone: 'success' };
-  if (['rejected', 'failed'].includes(normalized)) return { label: 'Rejected', tone: 'danger' };
-  if (['pending', 'pending_kyc', 'under_review'].includes(normalized)) return { label: 'Pending KYC', tone: 'pending' };
-  if (['submitted', 'pending_review'].includes(normalized)) return { label: 'Submitted', tone: 'neutral' };
-  return { label: normalized ? normalized.replaceAll('_', ' ') : 'Submitted', tone: 'neutral' };
+  const compact = normalized.replace(/[\s_-]+/g, '');
+  if (compact === 'verifiedbyissuer') return { label: 'Verified', tone: 'success' };
+  if (normalized === 'approved') return { label: 'Approved', tone: 'success' };
+  if (normalized === 'rejected') return { label: 'Rejected', tone: 'danger' };
+  if (normalized === 'cancelled') return { label: 'Cancelled', tone: 'neutral' };
+  if (normalized === 'pending') return { label: 'Pending', tone: 'pending' };
+  if (['submitintrest', 'submitted', 'pending_review', 'under_review'].includes(normalized)) {
+    return { label: 'Pending Review', tone: 'pending' };
+  }
+  return {
+    label: normalized ? normalized.replaceAll('_', ' ').replace(/\b\w/g, (character) => character.toUpperCase()) : 'Pending Review',
+    tone: 'neutral',
+  };
 };
 
-function IdentityBadge({ status }) {
-  const meta = identityMeta(status);
+function RequestStatusBadge({ status }) {
+  const meta = requestStatusMeta(status);
   return <AppStatusBadge status={status} label={meta.label} tone={meta.tone} compact />;
 }
 
@@ -53,7 +62,7 @@ export default function IssuerInvestorsPage() {
   const navigate = useNavigate();
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState('pending');
+  const [statusFilter, setStatusFilter] = useState('all');
 
   useEffect(() => {
     let active = true;
@@ -81,7 +90,7 @@ export default function IssuerInvestorsPage() {
         </div>
       ),
     },
-    { key: 'identityStatus', header: 'Identity Status', render: (value) => <IdentityBadge status={value} /> },
+    { key: 'status', header: 'Status', render: (value) => <RequestStatusBadge status={value} /> },
     {
       key: 'requestedDate',
       header: 'Date',
@@ -96,11 +105,10 @@ export default function IssuerInvestorsPage() {
   ], [navigate]);
 
   const handleExport = () => {
-    const header = ['Investor', 'Wallet', 'Identity Status', 'Interest Status', 'Submitted At', 'Token', 'Interest UID'];
+    const header = ['Investor', 'Wallet', 'Status', 'Submitted At', 'Token', 'Interest UID'];
     const rows = requests.map((request) => [
       request.investorName,
       request.investorCode,
-      identityMeta(request.identityStatus).label,
       request.status,
       request.requestedDate,
       request.tokenName,
@@ -109,7 +117,8 @@ export default function IssuerInvestorsPage() {
     exportTextFile(`issuer-${statusFilter}-investment-interests.csv`, [header, ...rows].map((row) => row.map(csvEscape).join(',')).join('\n'));
   };
 
-  const selectedStatusLabel = INTEREST_STATUS_OPTIONS.find((item) => item.value === statusFilter)?.label.toLowerCase();
+  const selectedStatusLabel = INTEREST_STATUS_OPTIONS.find((item) => item.value === statusFilter)?.label.toLowerCase() || 'selected';
+  const requestLabel = statusFilter === 'all' ? 'request' : `${selectedStatusLabel} request`;
 
   return (
     <div className="page-stack issuer-investors-page issuer-investors-workspace">
@@ -138,11 +147,11 @@ export default function IssuerInvestorsPage() {
           loading={loading}
           rowKey="interestUid"
           loadingRows={4}
-          emptyTitle={`No ${selectedStatusLabel} requests`}
+          emptyTitle={statusFilter === 'all' ? 'No requests found' : `No ${selectedStatusLabel} requests`}
           emptyDescription="Choose another request status to review other submissions."
         />
         <div className="issuer-table-footer">
-          <span>Showing <strong>{requests.length}</strong> {selectedStatusLabel} request{requests.length === 1 ? '' : 's'}</span>
+          <span>Showing <strong>{requests.length}</strong> {requestLabel}{requests.length === 1 ? '' : 's'}</span>
           <span className="issuer-table-footer__status">Statuses reflect the latest request state.</span>
         </div>
       </Card>

@@ -1,116 +1,102 @@
-import { useMemo, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
-  CheckCircle2,
-  ClipboardList,
-  Download,
-  Eye,
-  FileText,
-  Info,
+  RefreshCw,
   ShieldCheck,
   XCircle,
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import { ApplicationHistory } from '@/components/application-history/ApplicationHistory';
+import { SecureDocumentPreviewModal } from '@/components/common/SecureDocumentPreviewModal';
 import { AppStatusBadge } from '@/components/common/AppStatusBadge';
+import { RejectInterestModal, VerifyIdentityClaimsModal } from '@/components/issuer/IssuerInterestDecisionModals';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ROUTES } from '@/config/routes';
+import { useAuth } from '@/hooks/useAuth';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { issuerInvestorSubscriptionsService } from '@/services/issuer/issuerInvestorSubscriptionsService';
 import { formatDate } from '@/utils/date';
-import { cn } from '@/utils/cn';
 import { getErrorMessage } from '@/utils/error';
 
 const statusMeta = (status) => {
   const value = String(status || '').toLowerCase();
+  const compact = value.replace(/[\s_-]+/g, '');
+  if (compact === 'verifiedbyissuer') return { label: 'Verified', tone: 'success' };
   if (['approved', 'verified'].includes(value)) return { label: value === 'approved' ? 'Approved' : 'Verified', tone: 'success' };
   if (value === 'rejected') return { label: 'Rejected', tone: 'danger' };
   if (value === 'cancelled') return { label: 'Cancelled', tone: 'neutral' };
-  return { label: 'Pending Review', tone: 'warning' };
+  if (value === 'pending') return { label: 'Documents Required', tone: 'pending' };
+  return { label: 'Pending Review', tone: 'pending' };
 };
-
-function ReviewStatusBadge({ status }) {
-  const meta = statusMeta(status);
-  const tone = meta.tone === 'warning' ? 'pending' : meta.tone;
-  return <AppStatusBadge status={status} label={meta.label} tone={tone} />;
-}
 
 const filenameFromDisposition = (value, fallback) => {
-  const match = String(value || '').match(/filename\*?=(?:UTF-8''|\")?([^";]+)/i);
+  const match = String(value || '').match(/filename\*?=(?:UTF-8''|\")?([^\";]+)/i);
   if (!match?.[1]) return fallback;
-  try { return decodeURIComponent(match[1].replace(/^"|"$/g, '')); } catch { return match[1].replace(/^"|"$/g, ''); }
+  try { return decodeURIComponent(match[1].replace(/^\"|\"$/g, '')); } catch { return match[1].replace(/^\"|\"$/g, ''); }
 };
-
-function ClaimReviewCard({ topic, onDownload, onView, downloadingDocumentUid, viewingDocumentUid }) {
-  const satisfied = topic.satisfied === true;
-  return (
-    <Card className="issuer-review-card">
-      <header className="issuer-review-card__header">
-        <div>
-          <div className="issuer-review-card__title-row"><span className="issuer-review-card__icon"><ClipboardList size={18} /></span><h2>{topic.label || topic.claimTopicCode || 'Required Claim Topic'}</h2></div>
-          <p>{topic.description || 'Review the investor documents associated with this required claim topic.'}</p>
-        </div>
-        <span className={cn('issuer-claim-state', satisfied ? 'issuer-claim-state--success' : 'issuer-claim-state--warning')}>
-          {satisfied ? <CheckCircle2 size={14} /> : <XCircle size={14} />}{satisfied ? 'Satisfied' : 'Missing'}
-        </span>
-      </header>
-
-      <div className="issuer-review-card__documents">
-        {topic.documents?.length ? topic.documents.map((document) => (
-          <div className="issuer-document-row" key={document.documentUid || document.id}>
-            <div className="issuer-document-row__file"><span><FileText size={16} /></span><div><strong>{document.name}</strong><small>{[document.file, document.size, document.claimTopicCode].filter(Boolean).join(' · ')}</small></div></div>
-            <div className="issuer-document-row__actions">
-              <Button variant="secondary" size="sm" icon={Eye} loading={viewingDocumentUid === document.documentUid} onClick={() => onView(document)}>View</Button>
-              <Button variant="secondary" size="sm" icon={Download} loading={downloadingDocumentUid === document.documentUid} onClick={() => onDownload(document)}>Download</Button>
-            </div>
-          </div>
-        )) : <div className="issuer-empty-topic-documents"><Info size={16} /><span>No matching document was returned for this required claim topic.</span></div>}
-      </div>
-    </Card>
-  );
-}
 
 export default function IssuerInvestorSubscriptionReviewPage() {
   const { requestId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [request, setRequest] = useState(null);
+  const [history, setHistory] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [downloadingDocumentUid, setDownloadingDocumentUid] = useState('');
-  const [viewingDocumentUid, setViewingDocumentUid] = useState('');
+  const [selectedDocument, setSelectedDocument] = useState(null);
+  const [decisionModal, setDecisionModal] = useState(null);
+  const [decisionLoading, setDecisionLoading] = useState(false);
 
-  useDocumentTitle(request ? `${request.investorName} · Compliance Review` : 'Compliance Review');
+  useDocumentTitle(request ? `${request.investorName} · Application Activity` : 'Application Activity');
 
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    issuerInvestorSubscriptionsService
-      .getRequest(requestId)
-      .then((data) => active && setRequest(data))
-      .catch((error) => active && toast.error(getErrorMessage(error, 'Unable to load this investment interest.')))
-      .finally(() => active && setLoading(false));
-    return () => { active = false; };
+  const loadData = useCallback(async ({ silent = false } = {}) => {
+    if (!requestId) return null;
+    if (!silent) setLoading(true);
+    else setRefreshing(true);
+
+    const [requestResult, historyResult] = await Promise.allSettled([
+      issuerInvestorSubscriptionsService.getRequest(requestId),
+      issuerInvestorSubscriptionsService.getRequestHistory(requestId),
+    ]);
+
+    if (requestResult.status === 'fulfilled') setRequest(requestResult.value || null);
+    else {
+      setRequest(null);
+      toast.error(getErrorMessage(requestResult.reason, 'Unable to load this investment request.'));
+    }
+
+    if (historyResult.status === 'fulfilled') setHistory(historyResult.value || null);
+    else {
+      setHistory({ interestUid: requestId, summary: {}, timeline: [] });
+      toast.error(getErrorMessage(historyResult.reason, 'Unable to load the application activity history.'));
+    }
+
+    if (!silent) setLoading(false);
+    else setRefreshing(false);
+
+    return {
+      request: requestResult.status === 'fulfilled' ? requestResult.value : null,
+      history: historyResult.status === 'fulfilled' ? historyResult.value : null,
+    };
   }, [requestId]);
 
-  const topics = useMemo(() => {
-    if (request?.eligibility?.topics?.length) return request.eligibility.topics;
-    if (request?.claims) {
-      return Object.entries(request.claims).map(([key, claim]) => ({
-        id: key,
-        claimTopicCode: key === 'accredited' ? 'ACCREDITED_INVESTOR' : key.toUpperCase(),
-        label: claim.title,
-        description: claim.description,
-        satisfied: claim.status === 'verified',
-        documents: claim.documents || [],
-      }));
-    }
-    return [];
-  }, [request]);
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
 
-  const fetchDocumentBlob = async (document) => {
-    if (!document.documentUid) throw new Error('This document does not include a download identifier.');
-    return issuerInvestorSubscriptionsService.downloadDocument(request.interestUid || requestId, document.documentUid);
-  };
+  const topics = useMemo(() => request?.eligibility?.topics || [], [request]);
+  const requiredClaimTopics = useMemo(() => {
+    const tokenTopics = request?.token?.requiredClaimTopics;
+    return Array.isArray(tokenTopics) && tokenTopics.length ? tokenTopics : topics;
+  }, [request, topics]);
+
+  const fetchDocumentBlob = useCallback(async (document) => {
+    if (!document?.documentUid) throw new Error('This submission document does not include a download identifier.');
+    return issuerInvestorSubscriptionsService.downloadDocument(request?.interestUid || requestId, document.documentUid);
+  }, [request?.interestUid, requestId]);
 
   const handleDownload = async (document) => {
     setDownloadingDocumentUid(document.documentUid);
@@ -119,93 +105,154 @@ export default function IssuerInvestorSubscriptionReviewPage() {
       const url = URL.createObjectURL(result.blob);
       const link = window.document.createElement('a');
       link.href = url;
-      link.download = filenameFromDisposition(result.contentDisposition, document.file || document.name || 'investor-document');
+      link.download = filenameFromDisposition(
+        result.contentDisposition,
+        document.originalFileName || document.file || document.name || 'investor-document',
+      );
       window.document.body.appendChild(link);
       link.click();
       link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (error) {
-      toast.error(getErrorMessage(error, 'Unable to download this investor document.'));
+      toast.error(getErrorMessage(error, 'Unable to download this submission document.'));
     } finally {
       setDownloadingDocumentUid('');
     }
   };
 
-  const handleView = async (document) => {
-    const popup = window.open('about:blank', '_blank');
-    if (!popup) {
-      toast.error('Allow pop-ups to preview investor documents.');
-      return;
-    }
-    popup.opener = null;
-    setViewingDocumentUid(document.documentUid);
+  const handleReject = async (payload) => {
+    setDecisionLoading(true);
     try {
-      const result = await fetchDocumentBlob(document);
-      const url = URL.createObjectURL(result.blob);
-      popup.location.href = url;
-      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      await issuerInvestorSubscriptionsService.rejectRequest(request.interestUid || requestId, payload);
+      await loadData({ silent: true });
+      setDecisionModal(null);
+      toast.success('Investment application rejected and the decision was added to its activity history.');
     } catch (error) {
-      popup.close();
-      toast.error(getErrorMessage(error, 'Unable to open this investor document.'));
+      if (error?.response?.status === 409) await loadData({ silent: true });
+      toast.error(getErrorMessage(error, 'Unable to reject this investment application.'));
     } finally {
-      setViewingDocumentUid('');
+      setDecisionLoading(false);
     }
   };
 
-  if (loading) return <div className="page-stack issuer-investor-review-page"><div className="issuer-loading-shell" /><div className="issuer-loading-shell issuer-loading-shell--tall" /></div>;
 
-  if (!request) {
-    return <Card className="issuer-review-not-found"><h1>Request not found</h1><p>The selected investment interest could not be loaded.</p><Button variant="secondary" icon={ArrowLeft} onClick={() => navigate(ROUTES.investors)}>Back to Requests</Button></Card>;
+  const handleClaimsVerified = async () => {
+    await loadData({ silent: true });
+    toast.success('All required claim signatures were verified successfully.');
+  };
+
+  if (loading) {
+    return <div className="page-stack issuer-investor-review-page issuer-application-activity-page"><div className="issuer-loading-shell" /><div className="issuer-loading-shell issuer-loading-shell--tall" /></div>;
   }
 
-  const activity = [
-    request.submittedAt ? { id: 'submitted', label: 'Interest Submitted', at: request.submittedAt, note: 'The investor submitted this investment interest.' } : null,
-    request.decisionAt ? { id: 'decision', label: `${statusMeta(request.status).label} Decision`, at: request.decisionAt, note: 'The request decision was recorded.' } : null,
-  ].filter(Boolean);
+  if (!request) {
+    return (
+      <Card className="issuer-review-not-found">
+        <h1>Request not found</h1>
+        <p>The selected investment application could not be loaded or does not belong to this issuer.</p>
+        <Button variant="secondary" icon={ArrowLeft} onClick={() => navigate(ROUTES.investors)}>Back to Requests</Button>
+      </Card>
+    );
+  }
+
+  const requestStatus = String(request.status || '').toLowerCase();
+  const canReject = requestStatus === 'submitintrest';
+  const canVerify = requestStatus === 'submitintrest' || requestStatus.replace(/[\s_-]+/g, '') === 'verifiedbyissuer';
+  const currentMeta = statusMeta(request.status);
+  const submissionNumber = request.submissionNumber || history?.timeline?.reduce((max, event) => Math.max(max, Number(event?.submissionNumber) || 0), 0) || null;
 
   return (
-    <div className="page-stack issuer-investor-review-page">
-      <header className="issuer-review-header issuer-review-header--clean">
-        <div className="issuer-review-header__identity">
-          <h1>{request.investorName}</h1>
-          <div><ReviewStatusBadge status={request.status} /><small>Interest ID: {request.interestUid || request.requestReference}</small></div>
-          <p>Review required claim-topic documents submitted with this investment interest.</p>
+    <div className="page-stack issuer-investor-review-page issuer-application-activity-page">
+      <div className="application-detail-breadcrumbs">
+        <button type="button" onClick={() => navigate(ROUTES.investors)}>Manage Requests</button>
+        <span>›</span>
+        <strong>Application Activity</strong>
+      </div>
+
+      <header className="issuer-application-activity-header">
+        <div>
+          <span className="eyebrow">Issuer review</span>
+          <h1>Application Activity</h1>
+          <p>Audit trail and submission history for {request.investorName}&apos;s application.</p>
         </div>
-        <div className="issuer-review-header__actions">
-          <Button variant="danger" icon={XCircle} disabled>Reject Request</Button>
-          <Button icon={ShieldCheck} disabled>Verify Request</Button>
+        <div className="issuer-application-activity-header__actions">
+          <Button variant="secondary" icon={RefreshCw} loading={refreshing} onClick={() => void loadData({ silent: true })}>Refresh</Button>
         </div>
       </header>
 
-      <div className="issuer-review-layout">
-        <div className="issuer-review-main">
-          {topics.length ? topics.map((topic) => <ClaimReviewCard key={topic.id || topic.claimTopicCode} topic={topic} onDownload={handleDownload} onView={handleView} downloadingDocumentUid={downloadingDocumentUid} viewingDocumentUid={viewingDocumentUid} />) : (
-            <Card className="issuer-review-card"><div className="issuer-empty-topic-documents"><Info size={18} /><span>No required claim-topic eligibility rows were returned for this interest.</span></div></Card>
-          )}
+      <Card className="issuer-application-overview-card">
+        <div className="issuer-application-overview-card__identity">
+          <span>{request.investorName?.slice(0, 1).toUpperCase() || 'I'}</span>
+          <div>
+            <strong>{request.investorName}</strong>
+            <small>{request.investorCode || request.email || 'Investor application'}</small>
+          </div>
+        </div>
+        <div className="issuer-application-overview-card__grid">
+          <div><span>Application ID</span><strong>{request.interestUid || request.requestReference}</strong></div>
+          <div><span>Token</span><strong>{[request.tokenName, request.tokenSymbol ? `(${request.tokenSymbol})` : ''].filter(Boolean).join(' ') || '—'}</strong></div>
+          <div><span>Submitted</span><strong>{formatDate(request.submittedAt || request.requestedDate, 'MMM DD, YYYY hh:mm A')}</strong></div>
+          <div><span>Latest Submission</span><strong>{submissionNumber ? `Submission ${submissionNumber}` : '—'}</strong></div>
+          <div><span>Status</span><AppStatusBadge status={request.status} label={currentMeta.label} tone={currentMeta.tone} compact /></div>
+          <div><span>Resubmissions</span><strong>{history?.summary?.timesResubmitted ?? request?.resubmissionSummary?.timesResubmitted ?? 0}</strong></div>
+        </div>
+        <div className="issuer-application-overview-card__actions">
+          <Button variant="danger" icon={XCircle} disabled={!canReject || decisionLoading} onClick={() => setDecisionModal('reject')}>Reject Request</Button>
+          <Button icon={ShieldCheck} disabled={!canVerify || decisionLoading} onClick={() => setDecisionModal('verify')}>Verify Claims</Button>
+        </div>
+      </Card>
+
+      <section className="application-history-section issuer-application-history-section">
+        <div className="application-history-section__heading">
+          <div>
+            <h2>Application History</h2>
+            <p>Expand each activity to review the exact submission snapshot, issuer decision, and resubmission details.</p>
+          </div>
+          <span>{history?.timeline?.length || 0} event{history?.timeline?.length === 1 ? '' : 's'}</span>
         </div>
 
-        <aside className="issuer-review-aside">
-          <Card className="issuer-subscription-summary">
-            <span className="issuer-side-label">Subscription Summary</span>
-            <div className="issuer-summary-grid">
-              <div><span>Investor</span><strong>{request.investorName}</strong></div>
-              <div><span>Status</span><AppStatusBadge status={request.status} label={statusMeta(request.status).label} tone={statusMeta(request.status).tone === 'warning' ? 'pending' : statusMeta(request.status).tone} compact /></div>
-              <div><span>Token</span><strong>{request.tokenName || request.token?.name}</strong></div>
-              <div><span>Submitted</span><strong>{formatDate(request.submittedAt || request.requestedDate, 'MMM DD, YYYY')}</strong></div>
-              {request.jurisdiction ? <div><span>Jurisdiction</span><strong>{request.jurisdiction}</strong></div> : null}
-              {request.investmentAmount != null ? <div><span>Investment Amount</span><strong>${Number(request.investmentAmount).toLocaleString()}</strong></div> : null}
-            </div>
-            {request.note ? <div className="issuer-request-note"><span>Investor Note</span><p>{request.note}</p></div> : null}
-          </Card>
+        <ApplicationHistory
+          timeline={history?.timeline || []}
+          viewerRole="issuer"
+          currentStatus={request.status}
+          onViewDocument={setSelectedDocument}
+          onDownloadDocument={handleDownload}
+          downloadingDocumentUid={downloadingDocumentUid}
+          showDownload
+          actorNames={{
+            investor: request.investorName || 'Investor account',
+            issuer: user?.name || user?.fullName || 'Issuer account',
+            system: 'System',
+          }}
+          emptyTitle="No application activity was returned"
+          emptyDescription="The current request is available, but the history endpoint did not return any timeline events."
+        />
+      </section>
 
-          <Card className="issuer-activity-card">
-            <span className="issuer-side-label">Activity Log</span>
-            <div className="issuer-activity-list">
-              {activity.length ? activity.map((item) => <div className="issuer-activity-item" key={item.id}><span className="issuer-activity-item__dot" /><div><strong>{item.label}</strong><small>{item.note}</small><em>{formatDate(item.at, 'MMM DD, YYYY, hh:mm A')}</em></div></div>) : <div className="issuer-empty-topic-documents">No activity timestamps were returned.</div>}
-            </div>
-          </Card>
-        </aside>
-      </div>
+      {selectedDocument ? (
+        <SecureDocumentPreviewModal
+          document={selectedDocument}
+          onClose={() => setSelectedDocument(null)}
+          fetchDocumentBlob={fetchDocumentBlob}
+          loadingMessage="Retrieving the exact document version from this issuer-scoped submission snapshot."
+        />
+      ) : null}
+
+      <RejectInterestModal
+        open={decisionModal === 'reject'}
+        onClose={() => setDecisionModal(null)}
+        topics={topics}
+        onConfirm={handleReject}
+        loading={decisionLoading}
+      />
+      <VerifyIdentityClaimsModal
+        open={decisionModal === 'verify'}
+        onClose={() => setDecisionModal(null)}
+        subscriptionId={request.subscriptionId || request.interestUid || request.requestReference || requestId}
+        investorIdentityAddress={request.investorIdentityAddress}
+        requiredClaimTopics={requiredClaimTopics}
+        onVerified={handleClaimsVerified}
+      />
     </div>
   );
 }

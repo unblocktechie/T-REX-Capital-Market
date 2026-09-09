@@ -5,7 +5,7 @@ export function MarketplaceStatusBadge({ status, compact = false, className }) {
   const meta = MARKETPLACE_STATUS_META[status] || MARKETPLACE_STATUS_META[MARKETPLACE_STATUS.NOT_APPLIED];
   const tone = status === MARKETPLACE_STATUS.PENDING_REVIEW
     ? 'pending'
-    : status === MARKETPLACE_STATUS.ACTION_REQUIRED
+    : [MARKETPLACE_STATUS.ACTION_REQUIRED, MARKETPLACE_STATUS.CLAIM_REQUIRED].includes(status)
       ? 'warning'
       : status === MARKETPLACE_STATUS.REJECTED
         ? 'danger'

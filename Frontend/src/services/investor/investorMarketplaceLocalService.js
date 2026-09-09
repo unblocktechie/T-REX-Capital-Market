@@ -4,6 +4,7 @@ const VERIFICATION_KEY = 'trex_investor_marketplace_verification_v1';
 export const MARKETPLACE_STATUS = Object.freeze({
   NOT_APPLIED: 'not_applied',
   ACTION_REQUIRED: 'action_required',
+  CLAIM_REQUIRED: 'claim_required',
   PENDING_REVIEW: 'pending_review',
   APPROVED: 'approved',
   VERIFIED_HOLDER: 'verified_holder',
@@ -23,6 +24,12 @@ export const MARKETPLACE_STATUS_META = Object.freeze({
     shortLabel: 'Action Required',
     tone: 'warning',
     description: 'Additional compliance claims are required before issuer review.',
+  },
+  [MARKETPLACE_STATUS.CLAIM_REQUIRED]: {
+    label: 'Action Required',
+    shortLabel: 'Action Required',
+    tone: 'warning',
+    description: 'The issuer approved the application. Submit the required claim to complete verification.',
   },
   [MARKETPLACE_STATUS.PENDING_REVIEW]: {
     label: 'Pending Review',

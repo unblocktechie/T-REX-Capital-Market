@@ -24,6 +24,7 @@ const labels = {
   team: 'Team & access',
   marketplace: 'Marketplace',
   applications: 'My Applications',
+  'submit-claim': 'Submit Claim',
   profile: 'Profile',
   settings: 'Settings',
   organization: 'Organization',
@@ -46,6 +47,7 @@ export function Breadcrumbs() {
     const isTokenIdentifier = parts[index - 1] === 'tokens' && part !== 'new';
     if (isTokenIdentifier) return tokenSymbol || 'Token details';
     if (parts[index - 1] === 'marketplace') return 'Offering Details';
+    if (parts[index - 1] === 'applications') return 'Application Details';
     if (parts[index - 1] === 'investors') return 'Subscription Details';
     return labels[part] || part;
   };

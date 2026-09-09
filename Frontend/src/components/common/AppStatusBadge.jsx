@@ -3,6 +3,8 @@ import { cn } from '@/utils/cn';
 const NORMALIZED_META = Object.freeze({
   approved: { label: 'Approved', tone: 'success' },
   verified: { label: 'Verified', tone: 'success' },
+  verifiedbyissuer: { label: 'Verified', tone: 'success' },
+  verified_by_issuer: { label: 'Verified', tone: 'success' },
   complete: { label: 'Verified', tone: 'success' },
   completed: { label: 'Verified', tone: 'success' },
   final_approval: { label: 'Final Approval', tone: 'teal' },

@@ -27,6 +27,7 @@ export function Header({ onboardingOnly = false }) {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const profileRef = useRef(null);
 
+  const isApplicationRecordPage = location.pathname.startsWith(`${ROUTES.applications}/`);
   const isTokenRecordPage =
     location.pathname.startsWith('/app/tokens/') &&
     !location.pathname.startsWith(ROUTES.createToken);
@@ -42,6 +43,7 @@ export function Header({ onboardingOnly = false }) {
     roleAwareMeta ||
     routeMeta[location.pathname] ||
     (location.pathname.startsWith(ROUTES.organization) ? routeMeta[ROUTES.organization] : null) ||
+    (isApplicationRecordPage ? routeMeta[ROUTES.applications] : null) ||
     (isTokenRecordPage ? routeMeta.tokenDetails : null) ||
     routeMeta[ROUTES.dashboard];
 

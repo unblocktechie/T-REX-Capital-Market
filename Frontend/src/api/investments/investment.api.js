@@ -1,7 +1,14 @@
 import { apiClient } from '@/api/axios';
 import { INVESTMENT_ENDPOINTS } from './investment.endpoints';
 
-const INTEREST_STATUSES = new Set(['pending', 'approved', 'rejected', 'cancelled']);
+const INTEREST_STATUS_MAP = new Map([
+  ['pending', 'pending'],
+  ['submitintrest', 'submitIntrest'],
+  ['approved', 'approved'],
+  ['rejected', 'rejected'],
+  ['cancelled', 'cancelled'],
+  ['all', 'all'],
+]);
 const TOKEN_STATUSES = new Set(['deployed', 'all']);
 
 const unwrap = (response) =>
@@ -31,8 +38,9 @@ const normalizeLimit = (value, fallback = 12) => {
 const normalizeInterestStatus = (value, { optional = true } = {}) => {
   const normalized = String(value || '').trim().toLowerCase();
   if (!normalized && optional) return '';
-  if (!INTEREST_STATUSES.has(normalized)) throw new Error('Invalid investment interest status.');
-  return normalized;
+  const canonical = INTEREST_STATUS_MAP.get(normalized);
+  if (!canonical) throw new Error('Invalid investment interest status.');
+  return canonical;
 };
 
 export const investmentApi = Object.freeze({
@@ -97,7 +105,14 @@ export const investmentApi = Object.freeze({
       .then(unwrap);
   },
 
-  listIssuerInterests: ({ status = 'pending' } = {}) => {
+  getMyInterestHistory: (interestUid) =>
+    apiClient
+      .get(INVESTMENT_ENDPOINTS.myInterestHistory(requiredUid(interestUid, 'Interest identifier')), {
+        skipGlobalLoader: true,
+      })
+      .then(unwrap),
+
+  listIssuerInterests: ({ status = 'submitIntrest' } = {}) => {
     const normalizedStatus = normalizeInterestStatus(status, { optional: false });
     return apiClient
       .get(INVESTMENT_ENDPOINTS.issuerInterests, {
@@ -113,6 +128,55 @@ export const investmentApi = Object.freeze({
         skipGlobalLoader: true,
       })
       .then(unwrap),
+
+  getIssuerInterestHistory: (interestUid) =>
+    apiClient
+      .get(INVESTMENT_ENDPOINTS.issuerInterestHistory(requiredUid(interestUid, 'Interest identifier')), {
+        skipGlobalLoader: true,
+      })
+      .then(unwrap),
+
+  approveIssuerInterest: (interestUid, note = '') =>
+    apiClient
+      .post(
+        INVESTMENT_ENDPOINTS.approveIssuerInterest(requiredUid(interestUid, 'Interest identifier')),
+        String(note || '').trim() ? { note: String(note).trim() } : {},
+        { skipGlobalLoader: true },
+      )
+      .then(unwrap),
+
+  rejectIssuerInterest: (interestUid, payload = {}) => {
+    const rejectReasonType = String(payload.rejectReasonType || '').trim().toUpperCase();
+    if (!['DOC_REJECTED', 'OTHER'].includes(rejectReasonType)) {
+      throw new Error('Select a valid rejection reason.');
+    }
+
+    const rejectReason = String(payload.rejectReason || '').trim();
+    const rejectedClaims = Array.from(
+      new Set((Array.isArray(payload.rejectedClaims) ? payload.rejectedClaims : [])
+        .map((value) => String(value || '').trim().toUpperCase())
+        .filter(Boolean)),
+    );
+
+    if (rejectReasonType === 'DOC_REJECTED' && !rejectedClaims.length) {
+      throw new Error('Select at least one requested document claim.');
+    }
+    if (rejectReasonType === 'OTHER' && !rejectReason) {
+      throw new Error('Add a reason for this rejection.');
+    }
+
+    return apiClient
+      .post(
+        INVESTMENT_ENDPOINTS.rejectIssuerInterest(requiredUid(interestUid, 'Interest identifier')),
+        {
+          rejectReasonType,
+          rejectReason,
+          ...(rejectReasonType === 'DOC_REJECTED' ? { rejectedClaims } : {}),
+        },
+        { skipGlobalLoader: true },
+      )
+      .then(unwrap);
+  },
 
   downloadIssuerDocument: (interestUid, documentUid) =>
     apiClient.get(

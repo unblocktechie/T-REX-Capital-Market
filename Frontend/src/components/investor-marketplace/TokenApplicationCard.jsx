@@ -17,6 +17,7 @@ import { MARKETPLACE_STATUS } from '@/services/investor/investorMarketplaceLocal
 const STATUS_ACTION = Object.freeze({
   [MARKETPLACE_STATUS.NOT_APPLIED]: 'Submit Interest',
   [MARKETPLACE_STATUS.ACTION_REQUIRED]: 'Complete Documents',
+  [MARKETPLACE_STATUS.CLAIM_REQUIRED]: 'Submit Claim',
   [MARKETPLACE_STATUS.PENDING_REVIEW]: 'Review Application',
   [MARKETPLACE_STATUS.APPROVED]: 'View Approval',
   [MARKETPLACE_STATUS.VERIFIED_HOLDER]: 'View Holding',
@@ -27,6 +28,7 @@ const STATUS_ACTION = Object.freeze({
 const STATUS_ICON = Object.freeze({
   [MARKETPLACE_STATUS.NOT_APPLIED]: Coins,
   [MARKETPLACE_STATUS.ACTION_REQUIRED]: CircleAlert,
+  [MARKETPLACE_STATUS.CLAIM_REQUIRED]: CircleAlert,
   [MARKETPLACE_STATUS.PENDING_REVIEW]: ClipboardCheck,
   [MARKETPLACE_STATUS.APPROVED]: ShieldCheck,
   [MARKETPLACE_STATUS.VERIFIED_HOLDER]: ShieldCheck,
@@ -43,6 +45,7 @@ const normalizeApplicationStatus = (value) => {
   if (['approved', 'final_approval'].includes(status)) return MARKETPLACE_STATUS.APPROVED;
   if (['rejected', 'declined'].includes(status)) return MARKETPLACE_STATUS.REJECTED;
   if (status === 'cancelled') return MARKETPLACE_STATUS.CANCELLED;
+  if (['verifiedbyissuer', 'verified_by_issuer', 'verified-by-issuer', 'claim_required'].includes(status)) return MARKETPLACE_STATUS.CLAIM_REQUIRED;
   if (['action_required', 'documents_required'].includes(status)) return MARKETPLACE_STATUS.ACTION_REQUIRED;
   if (status === 'verified_holder') return MARKETPLACE_STATUS.VERIFIED_HOLDER;
   return MARKETPLACE_STATUS.NOT_APPLIED;

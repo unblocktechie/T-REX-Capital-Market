@@ -115,6 +115,9 @@ export function InvestorOnboardingProvider({ children }) {
   const [savingIdentity, setSavingIdentity] = useState(false);
   const [savingCompliance, setSavingCompliance] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // Ephemeral UI state: only show the success screen immediately after a submission
+  // completed in this mounted session. Backend status remains authoritative across logins.
+  const [showSubmissionSuccess, setShowSubmissionSuccess] = useState(false);
 
   const commitState = useCallback((updater) => {
     const current = stateRef.current;
@@ -360,6 +363,9 @@ export function InvestorOnboardingProvider({ children }) {
     setSubmitting(true);
     try {
       const result = await investorApi.submit({ walletAddress });
+      // Set the one-time success flag before applying the submitted server state so the
+      // onboarding route cannot briefly redirect to the dashboard between state updates.
+      setShowSubmissionSuccess(true);
       const fresh = await refreshFromServer();
       return { result, state: fresh };
     } finally {
@@ -418,6 +424,7 @@ export function InvestorOnboardingProvider({ children }) {
       savingCompliance,
       submitting,
       isSubmitted,
+      showSubmissionSuccess,
       isDirty,
       hydration: hydrationRef.current,
       resetKey,
@@ -443,6 +450,7 @@ export function InvestorOnboardingProvider({ children }) {
       isDirty,
       isLoading,
       isSubmitted,
+      showSubmissionSuccess,
       loadBackend,
       loadError,
       markSubmitted,

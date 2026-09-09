@@ -30,6 +30,8 @@ const IssuerInvestorSubscriptionReviewPage = lazy(() => import('@/pages/issuer/I
 const MarketplacePage = lazy(() => import('@/pages/investor-portal/MarketplacePage'));
 const MarketplaceTokenDetailsPage = lazy(() => import('@/pages/investor-portal/MarketplaceTokenDetailsPage'));
 const MyApplicationsPage = lazy(() => import('@/pages/investor-portal/MyApplicationsPage'));
+const ApplicationDetailsPage = lazy(() => import('@/pages/investor-portal/ApplicationDetailsPage'));
+const SubmitClaimPage = lazy(() => import('@/pages/investor-portal/SubmitClaimPage'));
 const ProfilePage = lazy(() => import('@/pages/profile/ProfilePage'));
 const NotFoundPage = lazy(() => import('@/pages/errors/NotFoundPage'));
 const ForbiddenPage = lazy(() => import('@/pages/errors/ForbiddenPage'));
@@ -171,6 +173,8 @@ export const router = createBrowserRouter([
                   { path: 'marketplace', element: withSuspense(<MarketplacePage />) },
                   { path: 'marketplace/:tokenId', element: withSuspense(<MarketplaceTokenDetailsPage />) },
                   { path: 'applications', element: withSuspense(<MyApplicationsPage />) },
+                  { path: 'applications/:interestUid', element: withSuspense(<ApplicationDetailsPage />) },
+                  { path: 'applications/:interestUid/submit-claim', element: withSuspense(<SubmitClaimPage />) },
                 ],
               },
               {

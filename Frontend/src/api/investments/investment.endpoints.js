@@ -8,8 +8,14 @@ export const INVESTMENT_ENDPOINTS = Object.freeze({
     `/investments/tokens/${segment(tokenUid)}/required-documents`,
   submitInterest: (tokenUid) => `/investments/tokens/${segment(tokenUid)}/interest`,
   myInterests: '/investments/me/interests',
+  myInterestHistory: (interestUid) => `/investments/me/interests/${segment(interestUid)}/history`,
   issuerInterests: '/investments/issuer/interests',
   issuerInterest: (interestUid) => `/investments/issuer/interests/${segment(interestUid)}`,
+  issuerInterestHistory: (interestUid) => `/investments/issuer/interests/${segment(interestUid)}/history`,
+  approveIssuerInterest: (interestUid) =>
+    `/investments/issuer/interests/${segment(interestUid)}/approve`,
+  rejectIssuerInterest: (interestUid) =>
+    `/investments/issuer/interests/${segment(interestUid)}/reject`,
   issuerDocumentDownload: (interestUid, documentUid) =>
     `/investments/issuer/interests/${segment(interestUid)}/documents/${segment(documentUid)}/download`,
 });

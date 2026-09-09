@@ -6,8 +6,22 @@ const numberOrNull = (...values) => {
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 };
+const claimTopicNumber = (...values) => {
+  for (const value of values) {
+    if (value === '' || value === undefined || value === null || typeof value === 'object') continue;
+    const normalized = String(value).trim();
+    if (!/^\d+$/.test(normalized)) continue;
+    const number = Number(normalized);
+    if (Number.isSafeInteger(number) && number >= 0) return number;
+  }
+  return null;
+};
 const array = (...values) => values.find(Array.isArray) || [];
 const flag = (value) => value === true || value === 1 || value === '1' || value === 'true';
+const stringList = (value) => {
+  if (Array.isArray(value)) return value.map((item) => text(item)).filter(Boolean);
+  return text(value).split(',').map((item) => item.trim()).filter(Boolean);
+};
 
 const humanize = (value) =>
   text(value)
@@ -31,33 +45,57 @@ const splitDescription = (value) => {
 };
 
 export const mapClaimTopic = (topic, index = 0) => {
+  const topicObject = topic && typeof topic === 'object' ? topic : {};
+  const primitiveTopic = ['number', 'bigint', 'string'].includes(typeof topic) ? topic : undefined;
+  const claimTopicValue = claimTopicNumber(
+    primitiveTopic,
+    topicObject?.claimTopicValue,
+    topicObject?.claim_topic_value,
+    topicObject?.claimTopic,
+    topicObject?.topicValue,
+    topicObject?.topic_value,
+    topicObject?.topic,
+    topicObject?.numericValue,
+    topicObject?.numeric_value,
+    topicObject?.claimTopic?.claimTopicValue,
+    topicObject?.claimTopic?.claim_topic_value,
+    topicObject?.claimTopic?.topicValue,
+    topicObject?.claimTopic?.value,
+    topicObject?.value,
+  );
+  const primitiveCode = typeof primitiveTopic === 'string' && !/^\d+$/.test(primitiveTopic.trim())
+    ? primitiveTopic
+    : undefined;
   const claimTopicCode = text(
-    topic?.claimTopicCode,
-    topic?.code,
-    topic?.claimTopic?.claimTopicCode,
-    topic?.claimTopic?.code,
+    topicObject?.claimTopicCode,
+    topicObject?.code,
+    topicObject?.claimTopic?.claimTopicCode,
+    topicObject?.claimTopic?.code,
+    primitiveCode,
   ).toUpperCase();
   const claimTopicUid = text(
-    topic?.claimTopicUid,
-    topic?.topicUid,
-    topic?.uid,
-    topic?.id,
-    topic?.claimTopic?.claimTopicUid,
+    topicObject?.claimTopicUid,
+    topicObject?.topicUid,
+    topicObject?.uid,
+    topicObject?.id,
+    topicObject?.claimTopic?.claimTopicUid,
   );
   const label = text(
-    topic?.claimTopicName,
-    topic?.name,
-    topic?.label,
-    topic?.claimTopic?.claimTopicName,
-    humanize(claimTopicCode || `Claim Topic ${index + 1}`),
+    topicObject?.claimTopicName,
+    topicObject?.name,
+    topicObject?.label,
+    topicObject?.claimTopic?.claimTopicName,
+    humanize(claimTopicCode || (claimTopicValue !== null ? `Claim Topic ${claimTopicValue}` : `Claim Topic ${index + 1}`)),
   );
 
   return {
-    id: claimTopicUid || claimTopicCode || `claim-topic-${index + 1}`,
+    id: claimTopicUid || claimTopicCode || (claimTopicValue !== null ? `claim-topic-${claimTopicValue}` : `claim-topic-${index + 1}`),
     claimTopicUid,
     claimTopicCode,
+    claimTopic: claimTopicValue,
+    claimTopicValue,
     label,
-    description: text(topic?.description, topic?.claimTopic?.description),
+    description: text(topicObject?.description, topicObject?.claimTopic?.description),
   };
 };
 
@@ -68,6 +106,10 @@ export const mapEligibility = (data) => {
     data?.claimTopics,
     data?.topics,
   );
+  const rejectedCodes = stringList(
+    data?.rejection?.rejectedClaim ?? data?.rejectedClaim ?? data?.rejection?.rejectedClaims,
+  ).map((item) => item.toUpperCase());
+
   const topics = rawTopics.map((topic, index) => {
     const mapped = mapClaimTopic(topic, index);
     const documents = array(topic?.documents, topic?.matchingDocuments).map((document) => ({
@@ -79,9 +121,18 @@ export const mapEligibility = (data) => {
       uploadedAt: text(document?.uploadedAt, document?.createdAt),
     }));
     const explicitSatisfied = first(topic?.satisfied, topic?.isSatisfied, topic?.eligible);
+    const satisfied = explicitSatisfied === undefined ? documents.length > 0 : flag(explicitSatisfied);
+    const explicitRejected = first(topic?.rejected, topic?.isRejected);
+    const rejected = explicitRejected === undefined
+      ? rejectedCodes.includes(mapped.claimTopicCode)
+      : flag(explicitRejected);
+    const explicitMissing = first(topic?.missing, topic?.isMissing);
+
     return {
       ...mapped,
-      satisfied: explicitSatisfied === undefined ? documents.length > 0 : flag(explicitSatisfied),
+      satisfied,
+      missing: explicitMissing === undefined ? !satisfied : flag(explicitMissing),
+      rejected,
       documents,
     };
   });
@@ -93,15 +144,36 @@ export const mapEligibility = (data) => {
 
   const eligibleValue = first(data?.eligible, data?.isEligible);
   const eligible = eligibleValue === undefined
-    ? topics.every((topic) => topic.satisfied)
+    ? topics.every((topic) => topic.satisfied && !topic.rejected)
     : flag(eligibleValue);
+
+  const rejectionSource = data?.rejection || {};
+  const rejectionReasonType = text(
+    rejectionSource?.rejectReasonType,
+    data?.rejectReasonType,
+  ).toUpperCase();
+  const rejectionReason = text(rejectionSource?.rejectReason, data?.rejectReason);
+  const rejectionClaims = stringList(
+    rejectionSource?.rejectedClaim ?? rejectionSource?.rejectedClaims ?? data?.rejectedClaim,
+  ).map((item) => item.toUpperCase());
+  const hasRejection = Boolean(rejectionReasonType || rejectionReason || rejectionClaims.length);
 
   return {
     eligible,
     topics,
     missingClaimTopics: missingCodes.length
       ? missingCodes
-      : topics.filter((topic) => !topic.satisfied).map((topic) => topic.claimTopicCode || topic.label),
+      : topics.filter((topic) => topic.missing).map((topic) => topic.claimTopicCode || topic.label),
+    interestStatus: text(data?.interestStatus, data?.status).toLowerCase(),
+    rejection: hasRejection ? {
+      rejectReasonType: rejectionReasonType,
+      rejectReason: rejectionReason,
+      rejectedClaim: rejectionClaims,
+      rejectedCount: numberOrNull(rejectionSource?.rejectedCount, data?.rejectedCount),
+      canResubmitClaim: numberOrNull(rejectionSource?.canResubmitClaim, data?.canResubmitClaim),
+      resubmitRemaining: numberOrNull(rejectionSource?.resubmitRemaining, data?.resubmitRemaining),
+      canResubmit: flag(first(rejectionSource?.canResubmit, data?.canResubmit)),
+    } : null,
   };
 };
 
@@ -378,6 +450,14 @@ export const mapInterest = (raw = {}) => {
     submittedAt: text(raw?.submittedAt, raw?.createdAt),
     decisionAt: text(raw?.decisionAt),
     updatedAt: text(raw?.updatedAt, raw?.decisionAt, raw?.submittedAt, raw?.createdAt),
+    rejectReasonType: text(raw?.rejectReasonType, raw?.rejection?.rejectReasonType).toUpperCase(),
+    rejectReason: text(raw?.rejectReason, raw?.rejection?.rejectReason),
+    rejectedClaim: stringList(raw?.rejectedClaim ?? raw?.rejection?.rejectedClaim ?? raw?.rejection?.rejectedClaims)
+      .map((item) => item.toUpperCase()),
+    rejectedCount: numberOrNull(raw?.rejectedCount, raw?.rejection?.rejectedCount),
+    canResubmitClaim: numberOrNull(raw?.canResubmitClaim, raw?.rejection?.canResubmitClaim),
+    resubmitRemaining: numberOrNull(raw?.resubmitRemaining, raw?.rejection?.resubmitRemaining),
+    canResubmit: flag(first(raw?.canResubmit, raw?.rejection?.canResubmit)),
     token: mapMarketplaceToken(tokenSource),
     raw,
   };
@@ -436,6 +516,33 @@ export const mapIssuerInterest = (raw = {}) => {
 export const mapIssuerInterestDetail = (raw = {}) => {
   const source = raw?.interest && typeof raw.interest === 'object' ? { ...raw.interest, ...raw } : raw;
   const base = mapIssuerInterest(source);
+  const investor = raw?.investor || source?.investor || raw?.identity || source?.identity || {};
+  const investorIdentityAddress = text(
+    raw?.investorIdentityAddress,
+    raw?.investorOnchainId,
+    raw?.investorOnchainID,
+    raw?.identityAddress,
+    raw?.onchainIdentityAddress,
+    raw?.identityContractAddress,
+    source?.investorIdentityAddress,
+    source?.investorOnchainId,
+    source?.investorOnchainID,
+    source?.identityAddress,
+    source?.onchainIdentityAddress,
+    source?.identityContractAddress,
+    investor?.investorIdentityAddress,
+    investor?.identityAddress,
+    investor?.onchainIdentityAddress,
+    investor?.identityContractAddress,
+    investor?.onchainIdAddress,
+    investor?.onchainIDAddress,
+    investor?.onchainId,
+    investor?.onchainID,
+    investor?.identity?.address,
+    investor?.identity?.identityAddress,
+    investor?.identity?.onchainId,
+    investor?.identity?.onchainID,
+  );
   const eligibility = mapEligibility(raw?.eligibility || raw?.requiredDocuments || source?.eligibility || raw);
   const documents = array(raw?.documents, raw?.investorDocuments, source?.documents).map((document, index) => ({
     id: text(document?.documentUid, document?.id, `document-${index}`),
@@ -447,6 +554,8 @@ export const mapIssuerInterestDetail = (raw = {}) => {
     claimTopicCode: text(document?.claimTopicCode, document?.documentType?.claimTopicCode).toUpperCase(),
     downloadUrl: text(document?.downloadUrl),
     uploadedAt: text(document?.uploadedAt, document?.createdAt),
+    versionNumber: numberOrNull(document?.versionNumber),
+    submissionNumber: numberOrNull(document?.submissionNumber),
   }));
 
   const topics = eligibility.topics.map((topic) => ({
@@ -454,10 +563,98 @@ export const mapIssuerInterestDetail = (raw = {}) => {
     documents: documents.filter((document) => document.claimTopicCode === topic.claimTopicCode),
   }));
 
+  const resubmissionSource = raw?.resubmissionSummary || source?.resubmissionSummary || {};
+
   return {
     ...base,
+    subscriptionId: text(raw?.subscriptionId, source?.subscriptionId, base.interestUid),
+    investorIdentityAddress,
     eligibility: { ...eligibility, topics },
     documents,
+    submissionNumber: numberOrNull(raw?.submissionNumber, source?.submissionNumber),
+    resubmissionSummary: {
+      timesRejected: numberOrNull(resubmissionSource?.timesRejected),
+      timesResubmitted: numberOrNull(resubmissionSource?.timesResubmitted),
+      rejectedCount: numberOrNull(resubmissionSource?.rejectedCount, raw?.rejectedCount, source?.rejectedCount),
+      canResubmitClaim: numberOrNull(resubmissionSource?.canResubmitClaim, raw?.canResubmitClaim, source?.canResubmitClaim),
+      resubmitRemaining: numberOrNull(resubmissionSource?.resubmitRemaining, raw?.resubmitRemaining, source?.resubmitRemaining),
+      canResubmit: flag(first(resubmissionSource?.canResubmit, raw?.canResubmit, source?.canResubmit)),
+    },
+  };
+};
+
+const mapHistoryDocument = (document = {}, index = 0) => ({
+  id: text(document?.submissionDocumentUid, document?.documentUid, document?.id, `history-document-${index}`),
+  submissionDocumentUid: text(document?.submissionDocumentUid),
+  documentUid: text(document?.documentUid, document?.id),
+  documentTypeName: text(document?.documentTypeName, document?.documentType?.documentTypeName, document?.name, 'Investor document'),
+  name: text(document?.documentTypeName, document?.documentType?.documentTypeName, document?.name, 'Investor document'),
+  originalFileName: text(document?.originalFileName, document?.fileName, document?.file, 'document'),
+  file: text(document?.originalFileName, document?.fileName, document?.file, 'document'),
+  documentCategory: text(document?.documentCategory, document?.category),
+  claimTopicCode: text(document?.claimTopicCode, document?.documentType?.claimTopicCode).toUpperCase(),
+  versionNumber: numberOrNull(document?.versionNumber),
+  submissionNumber: numberOrNull(document?.submissionNumber),
+  mimeType: text(document?.mimeType, document?.contentType),
+  fileSize: numberOrNull(document?.fileSize, document?.size),
+  size: text(document?.sizeLabel, document?.fileSize, document?.size),
+  downloadUrl: text(document?.downloadUrl),
+});
+
+export const mapInvestmentHistory = (raw = {}) => {
+  const source = raw?.history && typeof raw.history === 'object' ? raw.history : raw;
+  const summarySource = source?.summary || {};
+  const timeline = array(source?.timeline, source?.events, source?.history).map((event, index) => {
+    const eventType = text(event?.eventType, event?.type, event?.status).toLowerCase();
+    return {
+      id: text(event?.historyUid, event?.eventUid, event?.uid, event?.id) || `${eventType || 'event'}-${text(event?.createdAt, event?.timestamp) || index}-${index}`,
+      historyUid: text(event?.historyUid, event?.eventUid, event?.uid, event?.id),
+      eventType,
+      actorRole: text(event?.actorRole).toLowerCase(),
+      actorUserUid: text(event?.actorUserUid),
+      actorName: text(
+        event?.actorName,
+        event?.actorFullName,
+        event?.actorDisplayName,
+        event?.actor?.fullName,
+        event?.actor?.displayName,
+        event?.actor?.name,
+        event?.actorUser?.fullName,
+        event?.actorUser?.displayName,
+        event?.actorUser?.name,
+      ),
+      createdAt: text(event?.createdAt, event?.timestamp, event?.eventAt),
+      note: text(event?.note),
+      rejectReasonType: text(event?.rejectReasonType).toUpperCase(),
+      rejectReason: text(event?.rejectReason),
+      rejectedClaim: stringList(event?.rejectedClaim ?? event?.rejectedClaims).map((item) => item.toUpperCase()),
+      resubmitAttempt: numberOrNull(event?.resubmitAttempt),
+      submissionNumber: numberOrNull(event?.submissionNumber),
+      documents: array(event?.documents, event?.submissionDocuments).map(mapHistoryDocument),
+      raw: event,
+    };
+  });
+
+  return {
+    interestUid: text(source?.interestUid, raw?.interestUid),
+    tokenUid: text(source?.tokenUid, raw?.tokenUid),
+    tokenName: text(source?.tokenName, raw?.tokenName),
+    tokenSymbol: text(source?.tokenSymbol, raw?.tokenSymbol, source?.symbol, raw?.symbol).toUpperCase(),
+    status: text(source?.status, summarySource?.status, raw?.status).toLowerCase(),
+    summary: {
+      status: text(summarySource?.status, source?.status).toLowerCase(),
+      rejectReasonType: text(summarySource?.rejectReasonType, source?.rejectReasonType).toUpperCase(),
+      rejectReason: text(summarySource?.rejectReason, source?.rejectReason),
+      currentRejectedClaim: stringList(summarySource?.currentRejectedClaim ?? summarySource?.rejectedClaim ?? source?.rejectedClaim).map((item) => item.toUpperCase()),
+      rejectedCount: numberOrNull(summarySource?.rejectedCount, source?.rejectedCount),
+      canResubmitClaim: numberOrNull(summarySource?.canResubmitClaim, source?.canResubmitClaim),
+      resubmitRemaining: numberOrNull(summarySource?.resubmitRemaining, source?.resubmitRemaining),
+      canResubmit: flag(first(summarySource?.canResubmit, source?.canResubmit)),
+      timesRejected: numberOrNull(summarySource?.timesRejected),
+      timesResubmitted: numberOrNull(summarySource?.timesResubmitted),
+    },
+    timeline,
+    raw,
   };
 };
 

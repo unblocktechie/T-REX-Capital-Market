@@ -11,6 +11,8 @@ export function MarketplaceDropdown({
   prefix,
   align = 'start',
   className,
+  placeholder = 'Select',
+  disabled = false,
 }) {
   const id = useId();
   const rootRef = useRef(null);
@@ -18,16 +20,17 @@ export function MarketplaceDropdown({
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const selectedIndex = useMemo(
-    () => Math.max(0, options.findIndex((option) => option.value === value)),
+    () => options.findIndex((option) => option.value === value),
     [options, value],
   );
-  const selected = options[selectedIndex] || options[0];
+  const selected = selectedIndex >= 0 ? options[selectedIndex] : null;
 
   useEffect(() => {
     if (!open) return undefined;
 
-    setActiveIndex(selectedIndex);
-    window.requestAnimationFrame(() => optionRefs.current[selectedIndex]?.focus());
+    const nextIndex = selectedIndex >= 0 ? selectedIndex : 0;
+    setActiveIndex(nextIndex);
+    window.requestAnimationFrame(() => optionRefs.current[nextIndex]?.focus());
 
     const closeOutside = (event) => {
       if (!rootRef.current?.contains(event.target)) setOpen(false);
@@ -48,6 +51,7 @@ export function MarketplaceDropdown({
   }, [open, selectedIndex]);
 
   const choose = (nextValue) => {
+    if (disabled) return;
     onChange?.(nextValue);
     setOpen(false);
     window.requestAnimationFrame(() => {
@@ -81,13 +85,14 @@ export function MarketplaceDropdown({
       <button
         type="button"
         className={cn('marketplace-dropdown__trigger', open && 'is-open')}
+        disabled={disabled}
         aria-label={ariaLabel}
         aria-haspopup="listbox"
-        aria-expanded={open}
+        aria-expanded={open && !disabled}
         aria-controls={open ? `${id}-menu` : undefined}
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => { if (!disabled) setOpen((current) => !current); }}
         onKeyDown={(event) => {
-          if (!open && ['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) {
+          if (!disabled && !open && ['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) {
             event.preventDefault();
             setOpen(true);
           }
@@ -95,11 +100,11 @@ export function MarketplaceDropdown({
       >
         {Icon ? <Icon size={16} aria-hidden="true" /> : null}
         {prefix ? <span className="marketplace-dropdown__prefix">{prefix}</span> : null}
-        <span className="marketplace-dropdown__value">{selected?.label || 'Select'}</span>
+        <span className={cn('marketplace-dropdown__value', !selected && 'is-placeholder')}>{selected?.label || placeholder}</span>
         <ChevronDown size={15} className="marketplace-dropdown__chevron" aria-hidden="true" />
       </button>
 
-      {open ? (
+      {open && !disabled ? (
         <div
           id={`${id}-menu`}
           className="marketplace-dropdown__menu"
