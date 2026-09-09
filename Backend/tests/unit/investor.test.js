@@ -153,6 +153,66 @@ test('uploading a KYC document advances from identityDetails to identityDocument
   assert.equal(repo.investor.currentStep, 'identityDocuments');
 });
 
+test('re-uploading a document type creates a new version and retains (supersedes) the previous one', async () => {
+  const docs = [];
+  let current = null;
+  const repo = {
+    findByUserUid: async () => ({ investorUid: 'inv-1', userUid: 'user-1', status: 'draft', currentStep: 'identityDocuments' }),
+    findActiveDocumentByType: async () => current,
+    markDocumentNotCurrent: async (documentUid) => { const d = docs.find((x) => x.documentUid === documentUid); if (d) d.isCurrent = false; },
+    createDocument: async (rec) => {
+      const d = { documentUid: `doc${docs.length + 1}`, isCurrent: rec.isCurrent, versionNumber: rec.versionNumber, documentCategory: rec.documentCategory };
+      docs.push(d);
+      current = { documentUid: d.documentUid, storageKey: rec.storageKey, versionNumber: rec.versionNumber };
+      return d;
+    },
+    updateByUserUid: async () => {},
+  };
+  const service = new InvestorService({ repository: repo, optionRepository: optionRepo, locationService, identityService: identityOk, transactionRunner: runner });
+  const file = { originalname: 'p.pdf', filename: 's1.pdf', mimetype: 'application/pdf', size: 1, path: __filename };
+  const first = await service.uploadDocuments(investor, 'kyc-type', [file]);
+  assert.equal(first[0].versionNumber, 1);
+  const second = await service.uploadDocuments(investor, 'kyc-type', [{ ...file, filename: 's2.pdf' }]);
+  assert.equal(second[0].versionNumber, 2);
+  assert.equal(docs.length, 2, 'the old version is retained, not deleted');
+  assert.equal(docs[0].isCurrent, false);
+  assert.equal(docs[1].isCurrent, true);
+});
+
+test('a submitted investor may upload documents only when the investment gate allows it', async () => {
+  const repo = makeRepo({ investorUid: 'inv-1', userUid: 'user-1', status: 'submitted', currentStep: 'completed' });
+  let gateCalled = false;
+  let syncCalled = false;
+  const investmentService = {
+    assertClaimUploadAllowed: async () => { gateCalled = true; },
+    syncInterestsForInvestor: async () => { syncCalled = true; },
+  };
+  const service = new InvestorService({
+    repository: repo, optionRepository: optionRepo, locationService,
+    identityService: identityOk, investmentService, transactionRunner: runner,
+  });
+  const docs = await service.uploadDocuments(investor, 'kyc-type', [{ originalname: 'id.pdf', filename: 'stored.pdf', mimetype: 'application/pdf', size: 1234, path: __filename }]);
+  assert.ok(gateCalled, 'upload gate should be consulted for a submitted investor');
+  assert.ok(syncCalled, 'interests should be synced after a submitted investor uploads');
+  assert.equal(docs[0].documentCategory, 'kyc');
+});
+
+test('a submitted investor is blocked from uploading when the investment gate rejects', async () => {
+  const repo = makeRepo({ investorUid: 'inv-1', userUid: 'user-1', status: 'submitted', currentStep: 'completed' });
+  const investmentService = {
+    assertClaimUploadAllowed: async () => { const error = new Error('not allowed'); error.statusCode = 403; throw error; },
+    syncInterestsForInvestor: async () => {},
+  };
+  const service = new InvestorService({
+    repository: repo, optionRepository: optionRepo, locationService,
+    identityService: identityOk, investmentService, transactionRunner: runner,
+  });
+  await assert.rejects(
+    service.uploadDocuments(investor, 'kyc-type', [{ originalname: 'id.pdf', filename: 'stored.pdf', mimetype: 'application/pdf', size: 1234, path: __filename }]),
+    (error) => error.statusCode === 403,
+  );
+});
+
 test('submit fails without the required documents, then succeeds and finalizes as submitted', async () => {
   const repo = makeRepo(completeInvestor());
   repo.categories = ['public_markets'];

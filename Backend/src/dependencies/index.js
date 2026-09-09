@@ -12,6 +12,8 @@ const { TokenOptionRepository } = require('../repositories/token-option.reposito
 const { TokenDeploymentAttemptRepository } = require('../repositories/token-deployment-attempt.repository');
 const { InvestorRepository } = require('../repositories/investor.repository');
 const { InvestorOptionRepository } = require('../repositories/investor-option.repository');
+const { InvestmentRepository } = require('../repositories/investment.repository');
+const { IssuerClaimRepository } = require('../repositories/issuer-claim.repository');
 const { UserService } = require('../services/user.service');
 const { RoleService } = require('../services/role.service');
 const { MenuService } = require('../services/menu.service');
@@ -27,6 +29,9 @@ const { TrexDeploymentSyncService } = require('../services/blockchain/trex-deplo
 const { TokenService } = require('../services/token.service');
 const { TokenDeploymentAttemptService } = require('../services/token-deployment-attempt.service');
 const { InvestorService } = require('../services/investor.service');
+const { InvestmentService } = require('../services/investment.service');
+const { IssuerClaimService } = require('../services/issuer-claim.service');
+const { ClaimSignatureService } = require('../services/blockchain/claim-signature.service');
 const { TokenImageService } = require('../services/common/token-image.service');
 const { TrexDeploymentSyncRunner } = require('../jobs/trex-deployment-sync.runner');
 const emailService = require('../services/common/email.service');
@@ -38,6 +43,8 @@ const { createOrganizationAdminController } = require('../api/v1/controllers/org
 const { createTokenController } = require('../api/v1/controllers/token.controller');
 const { createDeploymentAttemptController } = require('../api/v1/controllers/deployment-attempt.controller');
 const { createInvestorController } = require('../api/v1/controllers/investor.controller');
+const { createInvestmentController } = require('../api/v1/controllers/investment.controller');
+const { createIssuerClaimController } = require('../api/v1/controllers/issuer-claim.controller');
 const { createAuthenticate } = require('../middleware/authenticate.middleware');
 const { createAuthorize } = require('../middleware/authorize.middleware');
 
@@ -56,6 +63,9 @@ const tokenOptionRepository = new TokenOptionRepository();
 const tokenDeploymentAttemptRepository = new TokenDeploymentAttemptRepository();
 const investorRepository = new InvestorRepository();
 const investorOptionRepository = new InvestorOptionRepository();
+const investmentRepository = new InvestmentRepository();
+const issuerClaimRepository = new IssuerClaimRepository();
+const claimSignatureService = new ClaimSignatureService();
 const tokenImageService = new TokenImageService();
 const tokenDeploymentReceiptService = new TokenDeploymentReceiptService();
 
@@ -98,11 +108,29 @@ const trexDeploymentSyncService = new TrexDeploymentSyncService({
   attemptRepository: tokenDeploymentAttemptRepository,
 });
 const trexDeploymentSyncRunner = new TrexDeploymentSyncRunner(trexDeploymentSyncService);
+const investmentService = new InvestmentService({
+  repository: investmentRepository,
+  tokenRepository,
+  investorRepository,
+  organizationRepository,
+  tokenImageService,
+  // approveInterest requires a SIGNED issuer claim verification before promoting to verifiedByIssuer.
+  issuerClaimRepository,
+});
 const investorService = new InvestorService({
   repository: investorRepository,
   optionRepository: investorOptionRepository,
   locationService,
   identityService: organizationIdentityService,
+  // Enforces the investment-interest upload gate + resubmission sync on document upload.
+  investmentService,
+});
+const issuerClaimService = new IssuerClaimService({
+  repository: issuerClaimRepository,
+  interestRepository: investmentRepository,
+  organizationRepository,
+  tokenRepository,
+  claimSignatureService,
 });
 
 const controllers = {
@@ -118,6 +146,8 @@ const controllers = {
   tokens: createTokenController(tokenService, tokenOptionRepository),
   deploymentAttempts: createDeploymentAttemptController(tokenDeploymentAttemptService),
   investors: createInvestorController(investorService, investorOptionRepository),
+  investments: createInvestmentController(investmentService),
+  issuerClaims: createIssuerClaimController(issuerClaimService),
 };
 
 module.exports = {
@@ -126,12 +156,12 @@ module.exports = {
     authService, userService, roleService, menuService, permissionService, settingService,
     locationService, organizationService, organizationAdminService, organizationIdentityService,
     tokenService, tokenDeploymentAttemptService, tokenImageService, tokenDeploymentReceiptService,
-    trexDeploymentSyncService, investorService,
+    trexDeploymentSyncService, investorService, investmentService, issuerClaimService, claimSignatureService,
   },
   repositories: {
     userRepository, roleRepository, menuRepository, permissionRepository, settingRepository, authTokenRepository,
     locationRepository, organizationOptionRepository, organizationRepository, tokenRepository, tokenOptionRepository,
-    tokenDeploymentAttemptRepository, investorRepository, investorOptionRepository,
+    tokenDeploymentAttemptRepository, investorRepository, investorOptionRepository, investmentRepository, issuerClaimRepository,
   },
   jobs: {
     trexDeploymentSyncRunner,

@@ -45,13 +45,16 @@ const calculateAge = (value) => {
 const generateProfileReference = () => `INV-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
 
 class InvestorService {
-  constructor({ repository, optionRepository, locationService, identityService, transactionRunner = withTransaction }) {
+  constructor({ repository, optionRepository, locationService, identityService, investmentService = null, transactionRunner = withTransaction }) {
     this.repository = repository;
     this.optionRepository = optionRepository;
     this.locationService = locationService;
     // Reuses the shared OnchainID identity factory service (the same one the organization
     // approval flow uses) to create the investor's on-chain identity.
     this.identityService = identityService;
+    // Optional: enforces the investment-interest document-upload gate and promotes/repairs
+    // interest records after a submitted investor uploads claim documents.
+    this.investmentService = investmentService;
     this.transactionRunner = transactionRunner;
   }
 
@@ -164,8 +167,14 @@ class InvestorService {
     this.assertInvestor(user);
     if (!files?.length) throw ApiError.badRequest('At least one document file is required.');
     const current = await this.repository.findByUserUid(user.userUid);
-    this.assertEditable(current);
     if (!current) throw ApiError.badRequest('Save your identity details before uploading documents.');
+    // A submitted investor may upload documents only to satisfy a pending / resubmittable
+    // investment-interest request; a non-submitted (draft) investor uploads normally.
+    if (current.status === 'submitted' && this.investmentService) {
+      await this.investmentService.assertClaimUploadAllowed(current.investorUid);
+    } else {
+      this.assertEditable(current);
+    }
     const documentType = await this.optionRepository.findDocumentType(documentTypeUid);
     if (!documentType) throw ApiError.badRequest('The selected document type does not exist.');
 
@@ -173,6 +182,10 @@ class InvestorService {
       investorUid: current.investorUid,
       documentTypeUid,
       documentCategory: documentType.documentCategory,
+      // Claim topic the uploaded document satisfies (KYC / ACCREDITED_INVESTOR). Falls back
+      // to the category mapping for legacy document types created before the column existed.
+      claimTopicCode: documentType.claimTopicCode
+        || (documentType.documentCategory === 'kyc' ? 'KYC' : 'ACCREDITED_INVESTOR'),
       originalFileName: file.originalname,
       storedFileName: file.filename,
       storageKey: file.filename,
@@ -181,25 +194,30 @@ class InvestorService {
       checksumSha256: await hashFile(file.path),
     })));
 
-    const { documents, replacedStorageKey } = await this.transactionRunner(async (connection) => {
-      // One document per type: replace an existing active document of the same type.
+    const { documents } = await this.transactionRunner(async (connection) => {
+      // Versioned "current profile" document per type. Uploading a new document of an existing
+      // type supersedes the previous version (isCurrent = 0) but KEEPS the old row and file for
+      // audit/history, so past application submissions keep resolving their exact version.
       const existing = await this.repository.findActiveDocumentByType(current.investorUid, documentTypeUid, connection);
-      if (existing) await this.repository.softDeleteDocument(current.investorUid, existing.documentUid, connection);
+      const nextVersion = existing ? Number(existing.versionNumber || 1) + 1 : 1;
+      if (existing) await this.repository.markDocumentNotCurrent(existing.documentUid, connection);
       const created = [];
-      for (const record of fileRecords) created.push(await this.repository.createDocument(record, connection));
+      for (const record of fileRecords) {
+        created.push(await this.repository.createDocument({
+          ...record, versionNumber: nextVersion, isCurrent: true, uploadedByUserUid: user.userUid,
+        }, connection));
+      }
       if (documentType.documentCategory === 'kyc' && current.currentStep === 'identityDetails') {
         await this.repository.updateByUserUid(user.userUid, { currentStep: 'identityDocuments', ...this.draftState() }, connection);
       }
-      return { documents: created, replacedStorageKey: existing ? existing.storageKey : null };
+      return { documents: created };
     });
+    // Note: superseded versions and their files are intentionally retained (never unlinked).
 
-    if (replacedStorageKey) {
-      const filePath = path.resolve(env.investorUploads.directory, replacedStorageKey);
-      if (filePath.startsWith(`${env.investorUploads.directory}${path.sep}`)) {
-        fs.promises.unlink(filePath).catch((error) => {
-          if (error.code !== 'ENOENT') logger.warn('Could not remove replaced investor document file', { error });
-        });
-      }
+    // After a submitted investor changes documents, promote pending interests that are now
+    // complete and resolve DOC_REJECTED interests whose rejected claims were re-uploaded.
+    if (current.status === 'submitted' && this.investmentService) {
+      await this.investmentService.syncInterestsForInvestor(current.investorUid, user.userUid);
     }
     return documents;
   }

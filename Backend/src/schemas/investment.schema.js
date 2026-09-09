@@ -1,0 +1,67 @@
+const { Joi, uid } = require('./common.schema');
+
+const INTEREST_STATUSES = ['pending', 'submitIntrest', 'verifiedByIssuer', 'approved', 'rejected', 'cancelled'];
+const REJECT_REASON_TYPES = ['DOC_REJECTED', 'OTHER'];
+
+// Token statuses an admin may filter the marketplace by. Investors are always restricted to
+// 'deployed' in the service regardless of what they pass here.
+const TOKEN_STATUSES = ['draft', 'readyToDeploy', 'deploymentPending', 'deploymentFailed', 'deployed'];
+
+// Marketplace list: pagination + optional name/symbol search. `status` defaults to the
+// investable set ('deployed'); admins may pass any token status or 'all'.
+const listTokensQuery = Joi.object({
+  page: Joi.number().integer().min(1).default(1),
+  limit: Joi.number().integer().min(1).max(100).default(20),
+  search: Joi.string().trim().max(100).allow('', null),
+  status: Joi.string().valid(...TOKEN_STATUSES, 'all').default('deployed'),
+});
+
+const tokenParams = Joi.object({ tokenUid: uid.required() });
+
+const submitInterest = Joi.object({
+  note: Joi.string().trim().max(500).allow('', null),
+});
+
+const myInterestsQuery = Joi.object({
+  status: Joi.string().valid(...INTEREST_STATUSES),
+});
+
+const issuerInterestsQuery = Joi.object({
+  status: Joi.string().valid(...INTEREST_STATUSES, 'all').default('submitIntrest'),
+});
+
+const interestParams = Joi.object({ interestUid: uid.required() });
+
+// Issuer rejection: DOC_REJECTED requires the rejected claim-topic codes; OTHER forbids them.
+const rejectInterest = Joi.object({
+  rejectReasonType: Joi.string().valid(...REJECT_REASON_TYPES).required(),
+  rejectReason: Joi.string().trim().max(1000).required(),
+  rejectedClaims: Joi.when('rejectReasonType', {
+    is: 'DOC_REJECTED',
+    then: Joi.array().items(Joi.string().trim().max(80)).min(1).unique().required(),
+    otherwise: Joi.array().items(Joi.string().trim().max(80)).max(0).default([]),
+  }),
+});
+
+const approveInterest = Joi.object({
+  note: Joi.string().trim().max(500).allow('', null),
+});
+
+const interestDocumentParams = Joi.object({
+  interestUid: uid.required(),
+  documentUid: uid.required(),
+});
+
+module.exports = {
+  listTokensQuery,
+  tokenParams,
+  submitInterest,
+  myInterestsQuery,
+  issuerInterestsQuery,
+  interestParams,
+  interestDocumentParams,
+  rejectInterest,
+  approveInterest,
+  INTEREST_STATUSES,
+  REJECT_REASON_TYPES,
+};

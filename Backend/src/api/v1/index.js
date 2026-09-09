@@ -8,6 +8,8 @@ const { createReferenceRouter, createOrganizationRouter } = require('./routes/or
 const { createOrganizationAdminRouter } = require('./routes/organization-admin.routes');
 const { createTokenRouter } = require('./routes/token.routes');
 const { createInvestorReferenceRouter, createInvestorRouter } = require('./routes/investor.routes');
+const { createInvestmentRouter } = require('./routes/investment.routes');
+const { createIssuerClaimRouter } = require('./routes/issuer-claim.routes');
 
 const createV1Router = () => {
   const router = express.Router();
@@ -37,6 +39,16 @@ const createV1Router = () => {
   router.use(createInvestorReferenceRouter(dependencies.controllers.investors));
   router.use('/investors', createInvestorRouter({
     controller: dependencies.controllers.investors,
+    authenticate: dependencies.authenticate,
+    authorize: dependencies.authorize,
+  }));
+  router.use('/investments', createInvestmentRouter({
+    controller: dependencies.controllers.investments,
+    authenticate: dependencies.authenticate,
+    authorize: dependencies.authorize,
+  }));
+  router.use('/issuer/claims', createIssuerClaimRouter({
+    controller: dependencies.controllers.issuerClaims,
     authenticate: dependencies.authenticate,
     authorize: dependencies.authorize,
   }));

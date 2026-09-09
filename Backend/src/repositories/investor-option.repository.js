@@ -42,7 +42,7 @@ const DOCUMENT_CATEGORIES = ['kyc', 'accredited'];
 class InvestorOptionRepository {
   async listDocumentTypes(category, executor) {
     return execute(
-      `SELECT \`documentTypeUid\`, \`documentTypeCode\`, \`documentTypeName\`, \`documentCategory\`, \`description\`, \`isRequired\`
+      `SELECT \`documentTypeUid\`, \`documentTypeCode\`, \`documentTypeName\`, \`documentCategory\`, \`claimTopicCode\`, \`description\`, \`isRequired\`
        FROM \`investorDocumentTypeMaster\`
        WHERE \`documentCategory\` = ? AND \`isActive\` = 1 AND \`isDeleted\` = 0
        ORDER BY \`displayOrder\`, \`documentTypeName\``,
@@ -53,7 +53,7 @@ class InvestorOptionRepository {
 
   async findDocumentType(documentTypeUid, executor) {
     const rows = await execute(
-      `SELECT \`documentTypeUid\`, \`documentTypeCode\`, \`documentTypeName\`, \`documentCategory\`
+      `SELECT \`documentTypeUid\`, \`documentTypeCode\`, \`documentTypeName\`, \`documentCategory\`, \`claimTopicCode\`
        FROM \`investorDocumentTypeMaster\`
        WHERE \`documentTypeUid\` = ? AND \`isActive\` = 1 AND \`isDeleted\` = 0 LIMIT 1`,
       [documentTypeUid],

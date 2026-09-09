@@ -1,2621 +1,3053 @@
 {
-	"info": {
-		"_postman_id": "857fb97d-5b0e-40b0-9ef6-b64061c87724",
+  "info": {
+    "_postman_id": "857fb97d-5b0e-40b0-9ef6-b64061c87724",
     "name": "T-REX Capital Market Backend",
     "description": "Complete T-REX Capital Market API collection. Configure the collection variables, run Admin Login to capture an administrator JWT, and run create requests before their get/update/delete requests. Verification and reset tokens must be copied from their respective emails into the collection variables.",
-		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-	},
-	"auth": {
-		"type": "bearer",
-		"bearer": [
-			{
-				"key": "token",
-				"value": "{{adminToken}}",
-				"type": "string"
-			}
-		]
-	},
-	"event": [
-		{
-			"listen": "test",
-			"script": {
-				"type": "text/javascript",
-				"exec": [
-					"pm.test('Response has a request ID', function () {",
-					"  pm.expect(pm.response.headers.get('x-request-id')).to.be.a('string');",
-					"});",
-					"pm.test('Response time is below 5 seconds', function () {",
-					"  pm.expect(pm.response.responseTime).to.be.below(5000);",
-					"});"
-				]
-			}
-		}
-	],
-	"variable": [
-		{
-			"key": "baseUrl",
-			"value": "http://localhost:3000",
-			"type": "string"
-		},
-		{
-			"key": "adminEmail",
-			"value": "admin@example.com",
-			"type": "string"
-		},
-		{
-			"key": "adminPassword",
-			"value": "ReplaceMe123!",
-			"type": "string"
-		},
-		{
-			"key": "signupEmail",
-			"value": "ada.lovelace@example.com",
-			"type": "string"
-		},
-		{
-			"key": "signupPassword",
-			"value": "Launch!234",
-			"type": "string"
-		},
-		{
-			"key": "newPassword",
-			"value": "NewLaunch!567",
-			"type": "string"
-		},
-		{
-			"key": "verificationToken",
-			"value": "PASTE_64_CHARACTER_TOKEN_FROM_EMAIL",
-			"type": "string"
-		},
-		{
-			"key": "resetToken",
-			"value": "PASTE_64_CHARACTER_TOKEN_FROM_EMAIL",
-			"type": "string"
-		},
-		{
-			"key": "adminToken",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "userToken",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "issuerRoleUid",
-			"value": "00000000-0000-4000-8000-000000000003",
-			"type": "string"
-		},
-		{
-			"key": "investorRoleUid",
-			"value": "00000000-0000-4000-8000-000000000004",
-			"type": "string"
-		},
-		{
-			"key": "adminRoleUid",
-			"value": "00000000-0000-4000-8000-000000000001",
-			"type": "string"
-		},
-		{
-			"key": "usersMenuUid",
-			"value": "10000000-0000-4000-8000-000000000001",
-			"type": "string"
-		},
-		{
-			"key": "managedUserUid",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "managedUserEmail",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "roleUid",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "menuUid",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "permissionUid",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "settingUid",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "countryUid",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "stateUid",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "cityUid",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "entityTypeUid",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "industryUid",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "documentTypeUid",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "documentUid",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "walletAddress",
-			"value": "0x1111111111111111111111111111111111111111",
-			"type": "string"
-		},
-		{
-			"key": "claimTopicUid",
-			"value": "30000000-0000-4000-8000-000000000001",
-			"type": "string"
-		},
-		{
-			"key": "tokenDeployTxHash",
-			"value": "PASTE_CONFIRMED_SEPOLIA_TREX_DEPLOYMENT_HASH",
-			"type": "string"
-		},
-		{
-			"key": "adminOrganizationUid",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "adminDocumentUid",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "adminOrganizationStatus",
-			"value": "submitted",
-			"type": "string"
-		},
-		{
-			"key": "chainId",
-			"value": "11155111",
-			"type": "string"
-		},
-		{
-			"key": "idempotencyKey",
-			"value": "deploy-attempt-0001",
-			"type": "string"
-		},
-		{
-			"key": "deploymentAttemptUid",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "investorToken",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "investorDocumentTypeUid",
-			"value": "33000000-0000-4000-8000-000000000001",
-			"type": "string"
-		},
-		{
-			"key": "accreditationDocumentTypeUid",
-			"value": "33000000-0000-4000-8000-000000000011",
-			"type": "string"
-		},
-		{
-			"key": "investorDocumentUid",
-			"value": "",
-			"type": "string"
-		}
-	],
-	"item": [
-		{
-			"name": "Health",
-			"item": [
-				{
-					"name": "Health Check",
-					"request": {
-						"auth": {
-							"type": "noauth"
-						},
-						"method": "GET",
-						"header": [],
-						"url": "{{baseUrl}}/api/health",
-						"description": "Unversioned health endpoint. Returns status, uptime, environment, UTC timestamp, and version."
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('API is healthy', function () {",
-									"  pm.response.to.have.status(200);",
-									"  const json = pm.response.json();",
-									"  pm.expect(json.success).to.eql(true);",
-									"  pm.expect(json.data.status).to.eql('UP');",
-									"});"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Versioned Health Check",
-					"request": {
-						"auth": {
-							"type": "noauth"
-						},
-						"method": "GET",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/health"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Status is 200', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				}
-			]
-		},
-		{
-			"name": "Authentication",
-			"auth": {
-				"type": "noauth"
-			},
-			"item": [
-				{
-					"name": "Signup (Issuer Example)",
-					"event": [
-						{
-							"listen": "prerequest",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"const email = `ada.lovelace.${Date.now()}@example.com`;",
-									"pm.collectionVariables.set('signupEmail', email);"
-								]
-							}
-						},
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Account is created', function () {",
-									"  pm.response.to.have.status(201);",
-									"  const json = pm.response.json();",
-									"  pm.expect(json.success).to.eql(true);",
-									"  pm.expect(json.data.email).to.eql(pm.collectionVariables.get('signupEmail'));",
-									"  pm.expect(json.data.roleUid).to.eql(pm.collectionVariables.get('issuerRoleUid'));",
-									"  pm.expect(json.data).not.to.have.property('passwordHash');",
-									"});"
-								]
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"fullName\": \"Ada Lovelace\",\n  \"email\": \"{{signupEmail}}\",\n  \"password\": \"{{signupPassword}}\",\n  \"isIssuer\": true\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/auth/signup",
-						"description": "Generates a unique sample email, assigns the Issuer role, and sends the verification email. Set isIssuer to false to test Investor assignment."
-					}
-				},
-				{
-					"name": "Resend Verification Email",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"email\": \"{{signupEmail}}\"\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/auth/resend-verification"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Request is accepted', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Verify Email",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/auth/verify-email?token={{verificationToken}}",
-						"description": "Copy the latest token from the verification email into verificationToken before sending."
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Email is verified', function () {",
-									"  pm.response.to.have.status(200);",
-									"  pm.expect(pm.response.json().data.emailVerified).to.eql(true);",
-									"});"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "User Login",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"email\": \"{{signupEmail}}\",\n  \"password\": \"{{signupPassword}}\"\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/auth/login"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('User login succeeds', () => pm.response.to.have.status(200));",
-									"const json = pm.response.json();",
-									"if (json.data && json.data.accessToken) pm.collectionVariables.set('userToken', json.data.accessToken);"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Admin Login",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/auth/login",
-						"description": "Run after npm run seed:admin. Automatically saves adminToken for every protected request."
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Admin login succeeds', () => pm.response.to.have.status(200));",
-									"const json = pm.response.json();",
-									"pm.expect(json.data.accessToken).to.be.a('string');",
-									"pm.collectionVariables.set('adminToken', json.data.accessToken);"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Forgot Password",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"email\": \"{{signupEmail}}\"\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/auth/forgot-password"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Reset email request succeeds for registered user', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Verify Reset Token",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/auth/verify-reset-token?token={{resetToken}}",
-						"description": "Copy the token from the password-reset email into resetToken before sending."
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Reset token is valid', function () {",
-									"  pm.response.to.have.status(200);",
-									"  pm.expect(pm.response.json().data.valid).to.eql(true);",
-									"});"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Reset Password",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"token\": \"{{resetToken}}\",\n  \"newPassword\": \"{{newPassword}}\"\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/auth/reset-password"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Password is reset', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Login With New Password",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"email\": \"{{signupEmail}}\",\n  \"password\": \"{{newPassword}}\"\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/auth/login"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('New password works', () => pm.response.to.have.status(200));",
-									"const json = pm.response.json();",
-									"if (json.data && json.data.accessToken) pm.collectionVariables.set('userToken', json.data.accessToken);"
-								]
-							}
-						}
-					]
-				}
-			]
-		},
-		{
-			"name": "User Management",
-			"item": [
-				{
-					"name": "Create User",
-					"event": [
-						{
-							"listen": "prerequest",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.collectionVariables.set('managedUserEmail', `grace.hopper.${Date.now()}@example.com`);"
-								]
-							}
-						},
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('User is created', () => pm.response.to.have.status(201));",
-									"const json = pm.response.json();",
-									"if (json.data) pm.collectionVariables.set('managedUserUid', json.data.userUid);"
-								]
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"roleUid\": \"{{investorRoleUid}}\",\n  \"fullName\": \"Grace Hopper\",\n  \"email\": \"{{managedUserEmail}}\",\n  \"password\": \"Compiler!123\",\n  \"emailVerified\": true,\n  \"isActive\": true\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/users"
-					}
-				},
-				{
-					"name": "List Users",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/users?page=1&limit=20&search=Grace&sortBy=fullName&sortOrder=asc&roleUid={{investorRoleUid}}&emailVerified=true&isActive=true"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Users are listed', () => pm.response.to.have.status(200));",
-									"pm.expect(pm.response.json().meta.pagination).to.be.an('object');"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Get User By UID",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/users/{{managedUserUid}}"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('User is returned', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Update User",
-					"request": {
-						"method": "PUT",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"fullName\": \"Rear Admiral Grace Hopper\",\n  \"isActive\": true\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/users/{{managedUserUid}}"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('User is updated', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Delete User",
-					"request": {
-						"method": "DELETE",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/users/{{managedUserUid}}"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('User is soft-deleted', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				}
-			]
-		},
-		{
-			"name": "Role Management",
-			"item": [
-				{
-					"name": "Create Role",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"roleName\": \"Operations {{$timestamp}}\",\n  \"description\": \"Launch operations team\",\n  \"isSystem\": false,\n  \"isActive\": true\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/roles"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Role is created', () => pm.response.to.have.status(201));",
-									"const json = pm.response.json();",
-									"if (json.data) pm.collectionVariables.set('roleUid', json.data.roleUid);"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "List Roles",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/roles?page=1&limit=20&search=Operations&sortBy=roleName&sortOrder=asc&isSystem=false&isActive=true"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Roles are listed', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Get Role By UID",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/roles/{{roleUid}}"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Role is returned', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Update Role",
-					"request": {
-						"method": "PUT",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"description\": \"Updated launch operations team\",\n  \"isActive\": true\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/roles/{{roleUid}}"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Role is updated', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Delete Role",
-					"request": {
-						"method": "DELETE",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/roles/{{roleUid}}"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Role is soft-deleted', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				}
-			]
-		},
-		{
-			"name": "Menu Management",
-			"item": [
-				{
-					"name": "Create Menu",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"parentMenuUid\": null,\n  \"menuName\": \"Launches {{$timestamp}}\",\n  \"menuCode\": \"LAUNCHES_{{$timestamp}}\",\n  \"routePath\": \"/launches\",\n  \"icon\": \"rocket\",\n  \"displayOrder\": 10,\n  \"isVisible\": true,\n  \"isActive\": true\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/menus"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Menu is created', () => pm.response.to.have.status(201));",
-									"const json = pm.response.json();",
-									"if (json.data) pm.collectionVariables.set('menuUid', json.data.menuUid);"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "List Menus",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/menus?page=1&limit=20&search=Launches&sortBy=displayOrder&sortOrder=asc&isVisible=true&isActive=true"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Menus are listed', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Get Menu By UID",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/menus/{{menuUid}}"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Menu is returned', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Update Menu",
-					"request": {
-						"method": "PUT",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"menuName\": \"Token Launches\",\n  \"displayOrder\": 15,\n  \"isVisible\": true\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/menus/{{menuUid}}"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Menu is updated', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Delete Menu",
-					"request": {
-						"method": "DELETE",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/menus/{{menuUid}}"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Menu is soft-deleted', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				}
-			]
-		},
-		{
-			"name": "Permission Management",
-			"item": [
-				{
-					"name": "Create Permission",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"roleUid\": \"{{adminRoleUid}}\",\n  \"menuUid\": \"{{usersMenuUid}}\",\n  \"permissionName\": \"Access sample API\",\n  \"permissionCode\": \"SAMPLE_API_{{$timestamp}}\",\n  \"httpMethod\": \"GET\",\n  \"apiPath\": \"/api/v1/sample/{{$timestamp}}\",\n  \"isAllowed\": true,\n  \"isActive\": true\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/permissions"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Permission is created', () => pm.response.to.have.status(201));",
-									"const json = pm.response.json();",
-									"if (json.data) pm.collectionVariables.set('permissionUid', json.data.permissionUid);"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "List Permissions",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/permissions?page=1&limit=20&search=sample&sortBy=permissionName&sortOrder=asc&roleUid={{adminRoleUid}}&httpMethod=GET&isAllowed=true&isActive=true"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Permissions are listed', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Get Permission By UID",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/permissions/{{permissionUid}}"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Permission is returned', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Update Permission",
-					"request": {
-						"method": "PUT",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"permissionName\": \"Access updated sample API\",\n  \"isAllowed\": true,\n  \"isActive\": true\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/permissions/{{permissionUid}}"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Permission is updated', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Delete Permission",
-					"request": {
-						"method": "DELETE",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/permissions/{{permissionUid}}"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Permission is soft-deleted', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				}
-			]
-		},
-		{
-			"name": "Organization Onboarding",
-			"description": "Run Organization Options, Countries, States, and Cities first. Run User Login with a verified issuer account to populate userToken. Draft saves allow partial data; completed step saves and final submission enforce the full validation rules.",
-			"auth": {
-				"type": "bearer",
-				"bearer": [
-					{
-						"key": "token",
-						"value": "{{userToken}}",
-						"type": "string"
-					}
-				]
-			},
-			"item": [
-				{
-					"name": "Organization Options",
-					"request": {
-						"auth": {
-							"type": "noauth"
-						},
-						"method": "GET",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/organization-options"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Organization options are returned', () => pm.response.to.have.status(200));",
-									"const data = pm.response.json().data;",
-									"if (data.entityTypes.length) pm.collectionVariables.set('entityTypeUid', data.entityTypes[0].entityTypeUid);",
-									"if (data.industries.length) pm.collectionVariables.set('industryUid', data.industries[0].industryUid);",
-									"const required = data.documentTypes.find((item) => item.isRequired);",
-									"if (required) pm.collectionVariables.set('documentTypeUid', required.documentTypeUid);"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "List Countries",
-					"request": {
-						"auth": {
-							"type": "noauth"
-						},
-						"method": "GET",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/locations/countries?page=1&limit=50&search=United%20States"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Countries are returned', () => pm.response.to.have.status(200));",
-									"const rows = pm.response.json().data;",
-									"const country = rows.find((item) => item.countryCode === 'US') || rows[0];",
-									"if (country) pm.collectionVariables.set('countryUid', country.countryUid);"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "List States by Country",
-					"request": {
-						"auth": {
-							"type": "noauth"
-						},
-						"method": "GET",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/locations/countries/{{countryUid}}/states?page=1&limit=50&search=California"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('States are returned', () => pm.response.to.have.status(200));",
-									"const rows = pm.response.json().data;",
-									"if (rows.length) pm.collectionVariables.set('stateUid', rows[0].stateUid);"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "List Cities by State",
-					"request": {
-						"auth": {
-							"type": "noauth"
-						},
-						"method": "GET",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/locations/states/{{stateUid}}/cities?page=1&limit=50&search=San%20Francisco"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Cities are returned', () => pm.response.to.have.status(200));",
-									"const rows = pm.response.json().data;",
-									"if (rows.length) pm.collectionVariables.set('cityUid', rows[0].cityUid);"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Get My Organization Form",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/organizations/me"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Organization form is returned', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Save Company Information Draft",
-					"request": {
-						"method": "PUT",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"legalCompanyName\": \"Acme Financial Holdings Ltd.\",\n  \"isDraft\": true\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/organizations/me/company-information"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Partial company draft is saved', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Mark Organization User Notified",
-					"request": {
-						"method": "PATCH",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/organizations/me/user-notified",
-						"description": "Idempotently sets isUserNotified to true for the current issuer organization."
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Organization user is marked notified', () => pm.response.to.have.status(200));",
-									"pm.expect(Boolean(pm.response.json().data.isUserNotified)).to.eql(true);"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Complete Company Information",
-					"request": {
-						"method": "PUT",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"legalCompanyName\": \"Acme Financial Holdings Ltd.\",\n  \"entityTypeUid\": \"{{entityTypeUid}}\",\n  \"registrationNumber\": \"LEI-5493001KJTIIGC8Y1R12\",\n  \"streetAddress\": \"123 Financial District\",\n  \"countryUid\": \"{{countryUid}}\",\n  \"stateUid\": \"{{stateUid}}\",\n  \"cityUid\": \"{{cityUid}}\",\n  \"postalCode\": \"94105\",\n  \"isDraft\": false\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/organizations/me/company-information"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Company step is completed', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Complete Jurisdiction",
-					"request": {
-						"method": "PUT",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"countryOfIncorporationUid\": \"{{countryUid}}\",\n  \"dateOfIncorporation\": \"2020-05-16\",\n  \"taxIdentificationNumber\": \"US123456789\",\n  \"industryUid\": \"{{industryUid}}\",\n  \"businessActivity\": \"Asset tokenization and regulated financial services.\",\n  \"website\": \"https://acme.example\",\n  \"isDraft\": false\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/organizations/me/jurisdiction"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Jurisdiction step is completed', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Complete Beneficial Owners",
-					"request": {
-						"method": "PUT",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"owners\": [\n    {\n      \"fullName\": \"Jane Doe\",\n      \"dateOfBirth\": \"1985-06-15\",\n      \"nationalityCountryUid\": \"{{countryUid}}\",\n      \"ownershipPercentage\": 80,\n      \"isPrimary\": true\n    },\n    {\n      \"fullName\": \"John Doe\",\n      \"dateOfBirth\": \"1980-03-11\",\n      \"nationalityCountryUid\": \"{{countryUid}}\",\n      \"ownershipPercentage\": 20,\n      \"isPrimary\": false\n    }\n  ],\n  \"isDraft\": false\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/organizations/me/beneficial-owners"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Beneficial owners are saved', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Upload Organization Documents",
-					"request": {
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "formdata",
-							"formdata": [
-								{
-									"key": "documentTypeUid",
-									"value": "{{documentTypeUid}}",
-									"type": "text"
-								},
-								{
-									"key": "documents",
-									"type": "file",
-									"src": [],
-									"description": "Select one or more PDF, PNG, JPG, or JPEG files (10 MB each by default)."
-								}
-							]
-						},
-						"url": "{{baseUrl}}/api/v1/organizations/me/documents",
-						"description": "Repeat for every required document type. Set documentTypeUid from Organization Options before each upload."
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Documents are uploaded', () => pm.response.to.have.status(201));",
-									"const rows = pm.response.json().data;",
-									"if (rows.length) pm.collectionVariables.set('documentUid', rows[0].documentUid);"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "List Organization Documents",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/organizations/me/documents"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Documents are listed', () => pm.response.to.have.status(200));",
-									"const rows = pm.response.json().data;",
-									"if (rows.length) pm.collectionVariables.set('documentUid', rows[0].documentUid);"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Download Organization Document",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/organizations/me/documents/{{documentUid}}/download"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Document downloads', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Optional - Delete Organization Document",
-					"request": {
-						"method": "DELETE",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/organizations/me/documents/{{documentUid}}",
-						"description": "Optional destructive test. Run before submission, then re-upload that required document type before submitting."
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Document is deleted', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Submit Organization",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"walletAddress\": \"{{walletAddress}}\"\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/organizations/me/submit",
-						"description": "Upload every required document type before submission. Successful submission makes the form read-only."
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Organization is submitted', () => pm.response.to.have.status(200));",
-									"pm.expect(pm.response.json().data.status).to.be.oneOf(['submitted', 'resubmitted']);"
-								]
-							}
-						}
-					]
-				}
-			]
-		},
-		{
-			"name": "Admin Organization Review",
-			"description": "Requires adminToken. The list request captures the first pending organization UID for detail and review.",
-			"item": [
-				{
-					"name": "List Submitted Organizations",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/admin/organizations?page=1&limit=20&status={{adminOrganizationStatus}}&sortBy=submittedAt&sortOrder=desc",
-						"description": "Set adminOrganizationStatus to submitted or resubmitted for the corresponding review queue."
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Submitted organizations are listed', () => pm.response.to.have.status(200));",
-									"const rows = pm.response.json().data;",
-									"if (rows.length) pm.collectionVariables.set('adminOrganizationUid', rows[0].organizationUid);"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Get Complete Organization Details",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/admin/organizations/{{adminOrganizationUid}}"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Complete organization details are returned', () => pm.response.to.have.status(200));",
-									"const data = pm.response.json().data;",
-									"pm.expect(data).to.have.property('beneficialOwners');",
-									"pm.expect(data).to.have.property('documents');",
-									"if (data.documents.length) pm.collectionVariables.set('adminDocumentUid', data.documents[0].documentUid);"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Preview Organization Document",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/admin/organizations/{{adminOrganizationUid}}/documents/{{adminDocumentUid}}/file?disposition=inline",
-						"description": "Returns binary content with Content-Disposition inline. Use Postman's Visualize/Preview or save the response."
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Document is available for preview', () => pm.response.to.have.status(200));",
-									"pm.expect(pm.response.headers.get('Content-Disposition')).to.include('inline');"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Download Organization Document",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/admin/organizations/{{adminOrganizationUid}}/documents/{{adminDocumentUid}}/file?disposition=attachment",
-						"description": "Use Send and Download in Postman. The original filename is supplied through Content-Disposition."
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Document is available for download', () => pm.response.to.have.status(200));",
-									"pm.expect(pm.response.headers.get('Content-Disposition')).to.include('attachment');"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Review Organization (Approve + OnchainID Example)",
-					"request": {
-						"method": "PATCH",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"status\": \"approved\"\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/admin/organizations/{{adminOrganizationUid}}/status",
-						"description": "Requires configured Sepolia RPC, identity factory, and funded deployer. Creates or reuses the organization's OnchainID before status becomes approved. Run either this request or the rejection example against a submitted application."
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Organization and on-chain identity are approved', () => pm.response.to.have.status(200));",
-									"const body = pm.response.json();",
-									"pm.expect(body.data.status).to.eql('approved');",
-									"pm.expect(body.data.contractAddress).to.match(/^0x[a-fA-F0-9]{40}$/);",
-									"pm.expect(body.data.contractTxnMessage).to.include('approved successfully');"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Review Organization (Reject Example)",
-					"request": {
-						"method": "PATCH",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"status\": \"rejected\",\n  \"rejectionReason\": \"Please replace the expired incorporation document and verify the registration number.\"\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/admin/organizations/{{adminOrganizationUid}}/status",
-						"description": "rejectionReason is required for rejected. Run either this request or the approval example against a submitted application."
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Organization is reviewed', () => pm.response.to.have.status(200));",
-									"pm.expect(pm.response.json().data.status).to.be.oneOf(['approved', 'rejected']);"
-								]
-							}
-						}
-					]
-				}
-			]
-		},
-		{
-			"name": "Token Creation",
-			"description": "Requires a verified issuer with an approved organization. Uses userToken and the same walletAddress submitted with the organization. Run in order; select a valid 256-4096 px token image in Step 1.",
-			"auth": {
-				"type": "bearer",
-				"bearer": [
-					{
-						"key": "token",
-						"value": "{{userToken}}",
-						"type": "string"
-					}
-				]
-			},
-			"item": [
-				{
-					"name": "Token Options",
-					"request": {
-						"auth": {
-							"type": "noauth"
-						},
-						"method": "GET",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/token-options"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Token options are returned', () => pm.response.to.have.status(200));",
-									"const topics = pm.response.json().data.claimTopics;",
-									"pm.expect(topics.length).to.be.above(0);",
-									"pm.collectionVariables.set('claimTopicUid', topics[0].claimTopicUid);",
-									"pm.expect(topics[0]).to.have.property('value');"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Get My Token Form",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/tokens/me"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Token form or null is returned', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Step 1 - Save Token Information and Image",
-					"request": {
-						"method": "PUT",
-						"header": [],
-						"body": {
-							"mode": "formdata",
-							"formdata": [
-								{
-									"key": "tokenName",
-									"value": "Acme Security Token",
-									"type": "text"
-								},
-								{
-									"key": "tokenSymbol",
-									"value": "trex",
-									"type": "text"
-								},
-								{
-									"key": "decimals",
-									"value": "18",
-									"type": "text"
-								},
-								{
-									"key": "initialTokenPrice",
-									"value": "1.00",
-									"type": "text"
-								},
-								{
-									"key": "treasuryWalletAddress",
-									"value": "{{walletAddress}}",
-									"type": "text"
-								},
-								{
-									"key": "tokenDescription",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{adminToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test('Response has a request ID', function () {",
+          "  pm.expect(pm.response.headers.get('x-request-id')).to.be.a('string');",
+          "});",
+          "pm.test('Response time is below 5 seconds', function () {",
+          "  pm.expect(pm.response.responseTime).to.be.below(5000);",
+          "});"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "adminEmail",
+      "value": "admin@example.com",
+      "type": "string"
+    },
+    {
+      "key": "adminPassword",
+      "value": "ReplaceMe123!",
+      "type": "string"
+    },
+    {
+      "key": "signupEmail",
+      "value": "ada.lovelace@example.com",
+      "type": "string"
+    },
+    {
+      "key": "signupPassword",
+      "value": "Launch!234",
+      "type": "string"
+    },
+    {
+      "key": "newPassword",
+      "value": "NewLaunch!567",
+      "type": "string"
+    },
+    {
+      "key": "verificationToken",
+      "value": "PASTE_64_CHARACTER_TOKEN_FROM_EMAIL",
+      "type": "string"
+    },
+    {
+      "key": "resetToken",
+      "value": "PASTE_64_CHARACTER_TOKEN_FROM_EMAIL",
+      "type": "string"
+    },
+    {
+      "key": "adminToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "issuerRoleUid",
+      "value": "00000000-0000-4000-8000-000000000003",
+      "type": "string"
+    },
+    {
+      "key": "investorRoleUid",
+      "value": "00000000-0000-4000-8000-000000000004",
+      "type": "string"
+    },
+    {
+      "key": "adminRoleUid",
+      "value": "00000000-0000-4000-8000-000000000001",
+      "type": "string"
+    },
+    {
+      "key": "usersMenuUid",
+      "value": "10000000-0000-4000-8000-000000000001",
+      "type": "string"
+    },
+    {
+      "key": "managedUserUid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "managedUserEmail",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "roleUid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "menuUid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "permissionUid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "settingUid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "countryUid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "stateUid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cityUid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "entityTypeUid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "industryUid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "documentTypeUid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "documentUid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "walletAddress",
+      "value": "0x1111111111111111111111111111111111111111",
+      "type": "string"
+    },
+    {
+      "key": "claimTopicUid",
+      "value": "30000000-0000-4000-8000-000000000001",
+      "type": "string"
+    },
+    {
+      "key": "tokenDeployTxHash",
+      "value": "PASTE_CONFIRMED_SEPOLIA_TREX_DEPLOYMENT_HASH",
+      "type": "string"
+    },
+    {
+      "key": "adminOrganizationUid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "adminDocumentUid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "adminOrganizationStatus",
+      "value": "submitted",
+      "type": "string"
+    },
+    {
+      "key": "chainId",
+      "value": "11155111",
+      "type": "string"
+    },
+    {
+      "key": "idempotencyKey",
+      "value": "deploy-attempt-0001",
+      "type": "string"
+    },
+    {
+      "key": "deploymentAttemptUid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "investorToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "investorDocumentTypeUid",
+      "value": "33000000-0000-4000-8000-000000000001",
+      "type": "string"
+    },
+    {
+      "key": "accreditationDocumentTypeUid",
+      "value": "33000000-0000-4000-8000-000000000011",
+      "type": "string"
+    },
+    {
+      "key": "investorDocumentUid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "investmentTokenUid",
+      "value": ""
+    },
+    {
+      "key": "interestUid",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/health",
+            "description": "Unversioned health endpoint. Returns status, uptime, environment, UTC timestamp, and version."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('API is healthy', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(true);",
+                  "  pm.expect(json.data.status).to.eql('UP');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Versioned Health Check",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/health"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Authentication",
+      "auth": {
+        "type": "noauth"
+      },
+      "item": [
+        {
+          "name": "Signup (Issuer Example)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const email = `ada.lovelace.${Date.now()}@example.com`;",
+                  "pm.collectionVariables.set('signupEmail', email);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Account is created', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.success).to.eql(true);",
+                  "  pm.expect(json.data.email).to.eql(pm.collectionVariables.get('signupEmail'));",
+                  "  pm.expect(json.data.roleUid).to.eql(pm.collectionVariables.get('issuerRoleUid'));",
+                  "  pm.expect(json.data).not.to.have.property('passwordHash');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Ada Lovelace\",\n  \"email\": \"{{signupEmail}}\",\n  \"password\": \"{{signupPassword}}\",\n  \"isIssuer\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/auth/signup",
+            "description": "Generates a unique sample email, assigns the Issuer role, and sends the verification email. Set isIssuer to false to test Investor assignment."
+          }
+        },
+        {
+          "name": "Resend Verification Email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{signupEmail}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/auth/resend-verification"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Request is accepted', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify Email",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/auth/verify-email?token={{verificationToken}}",
+            "description": "Copy the latest token from the verification email into verificationToken before sending."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Email is verified', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().data.emailVerified).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "User Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{signupEmail}}\",\n  \"password\": \"{{signupPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/auth/login"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User login succeeds', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.accessToken) pm.collectionVariables.set('userToken', json.data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/auth/login",
+            "description": "Run after npm run seed:admin. Automatically saves adminToken for every protected request."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin login succeeds', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.expect(json.data.accessToken).to.be.a('string');",
+                  "pm.collectionVariables.set('adminToken', json.data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{signupEmail}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/auth/forgot-password"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Reset email request succeeds for registered user', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify Reset Token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/auth/verify-reset-token?token={{resetToken}}",
+            "description": "Copy the token from the password-reset email into resetToken before sending."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Reset token is valid', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().data.valid).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{resetToken}}\",\n  \"newPassword\": \"{{newPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/auth/reset-password"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Password is reset', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login With New Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{signupEmail}}\",\n  \"password\": \"{{newPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/auth/login"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('New password works', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.accessToken) pm.collectionVariables.set('userToken', json.data.accessToken);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "User Management",
+      "item": [
+        {
+          "name": "Create User",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('managedUserEmail', `grace.hopper.${Date.now()}@example.com`);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User is created', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "if (json.data) pm.collectionVariables.set('managedUserUid', json.data.userUid);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roleUid\": \"{{investorRoleUid}}\",\n  \"fullName\": \"Grace Hopper\",\n  \"email\": \"{{managedUserEmail}}\",\n  \"password\": \"Compiler!123\",\n  \"emailVerified\": true,\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/users"
+          }
+        },
+        {
+          "name": "List Users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/users?page=1&limit=20&search=Grace&sortBy=fullName&sortOrder=asc&roleUid={{investorRoleUid}}&emailVerified=true&isActive=true"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Users are listed', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.response.json().meta.pagination).to.be.an('object');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get User By UID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/users/{{managedUserUid}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User is returned', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Rear Admiral Grace Hopper\",\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/users/{{managedUserUid}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User is updated', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/users/{{managedUserUid}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User is soft-deleted', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Role Management",
+      "item": [
+        {
+          "name": "Create Role",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roleName\": \"Operations {{$timestamp}}\",\n  \"description\": \"Launch operations team\",\n  \"isSystem\": false,\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/roles"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Role is created', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "if (json.data) pm.collectionVariables.set('roleUid', json.data.roleUid);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Roles",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/roles?page=1&limit=20&search=Operations&sortBy=roleName&sortOrder=asc&isSystem=false&isActive=true"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Roles are listed', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Role By UID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/roles/{{roleUid}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Role is returned', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Role",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Updated launch operations team\",\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/roles/{{roleUid}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Role is updated', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Role",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/roles/{{roleUid}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Role is soft-deleted', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Menu Management",
+      "item": [
+        {
+          "name": "Create Menu",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"parentMenuUid\": null,\n  \"menuName\": \"Launches {{$timestamp}}\",\n  \"menuCode\": \"LAUNCHES_{{$timestamp}}\",\n  \"routePath\": \"/launches\",\n  \"icon\": \"rocket\",\n  \"displayOrder\": 10,\n  \"isVisible\": true,\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/menus"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Menu is created', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "if (json.data) pm.collectionVariables.set('menuUid', json.data.menuUid);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Menus",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/menus?page=1&limit=20&search=Launches&sortBy=displayOrder&sortOrder=asc&isVisible=true&isActive=true"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Menus are listed', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Menu By UID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/menus/{{menuUid}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Menu is returned', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Menu",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"menuName\": \"Token Launches\",\n  \"displayOrder\": 15,\n  \"isVisible\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/menus/{{menuUid}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Menu is updated', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Menu",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/menus/{{menuUid}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Menu is soft-deleted', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Permission Management",
+      "item": [
+        {
+          "name": "Create Permission",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roleUid\": \"{{adminRoleUid}}\",\n  \"menuUid\": \"{{usersMenuUid}}\",\n  \"permissionName\": \"Access sample API\",\n  \"permissionCode\": \"SAMPLE_API_{{$timestamp}}\",\n  \"httpMethod\": \"GET\",\n  \"apiPath\": \"/api/v1/sample/{{$timestamp}}\",\n  \"isAllowed\": true,\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/permissions"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Permission is created', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "if (json.data) pm.collectionVariables.set('permissionUid', json.data.permissionUid);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Permissions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/permissions?page=1&limit=20&search=sample&sortBy=permissionName&sortOrder=asc&roleUid={{adminRoleUid}}&httpMethod=GET&isAllowed=true&isActive=true"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Permissions are listed', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Permission By UID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/permissions/{{permissionUid}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Permission is returned', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Permission",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permissionName\": \"Access updated sample API\",\n  \"isAllowed\": true,\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/permissions/{{permissionUid}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Permission is updated', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Permission",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/permissions/{{permissionUid}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Permission is soft-deleted', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Organization Onboarding",
+      "description": "Run Organization Options, Countries, States, and Cities first. Run User Login with a verified issuer account to populate userToken. Draft saves allow partial data; completed step saves and final submission enforce the full validation rules.",
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{userToken}}",
+            "type": "string"
+          }
+        ]
+      },
+      "item": [
+        {
+          "name": "Organization Options",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/organization-options"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Organization options are returned', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "if (data.entityTypes.length) pm.collectionVariables.set('entityTypeUid', data.entityTypes[0].entityTypeUid);",
+                  "if (data.industries.length) pm.collectionVariables.set('industryUid', data.industries[0].industryUid);",
+                  "const required = data.documentTypes.find((item) => item.isRequired);",
+                  "if (required) pm.collectionVariables.set('documentTypeUid', required.documentTypeUid);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Countries",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/locations/countries?page=1&limit=50&search=United%20States"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Countries are returned', () => pm.response.to.have.status(200));",
+                  "const rows = pm.response.json().data;",
+                  "const country = rows.find((item) => item.countryCode === 'US') || rows[0];",
+                  "if (country) pm.collectionVariables.set('countryUid', country.countryUid);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List States by Country",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/locations/countries/{{countryUid}}/states?page=1&limit=50&search=California"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('States are returned', () => pm.response.to.have.status(200));",
+                  "const rows = pm.response.json().data;",
+                  "if (rows.length) pm.collectionVariables.set('stateUid', rows[0].stateUid);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Cities by State",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/locations/states/{{stateUid}}/cities?page=1&limit=50&search=San%20Francisco"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Cities are returned', () => pm.response.to.have.status(200));",
+                  "const rows = pm.response.json().data;",
+                  "if (rows.length) pm.collectionVariables.set('cityUid', rows[0].cityUid);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get My Organization Form",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/organizations/me"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Organization form is returned', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Save Company Information Draft",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"legalCompanyName\": \"Acme Financial Holdings Ltd.\",\n  \"isDraft\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/organizations/me/company-information"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Partial company draft is saved', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Mark Organization User Notified",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/organizations/me/user-notified",
+            "description": "Idempotently sets isUserNotified to true for the current issuer organization."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Organization user is marked notified', () => pm.response.to.have.status(200));",
+                  "pm.expect(Boolean(pm.response.json().data.isUserNotified)).to.eql(true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Complete Company Information",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"legalCompanyName\": \"Acme Financial Holdings Ltd.\",\n  \"entityTypeUid\": \"{{entityTypeUid}}\",\n  \"registrationNumber\": \"LEI-5493001KJTIIGC8Y1R12\",\n  \"streetAddress\": \"123 Financial District\",\n  \"countryUid\": \"{{countryUid}}\",\n  \"stateUid\": \"{{stateUid}}\",\n  \"cityUid\": \"{{cityUid}}\",\n  \"postalCode\": \"94105\",\n  \"isDraft\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/organizations/me/company-information"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Company step is completed', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Complete Jurisdiction",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"countryOfIncorporationUid\": \"{{countryUid}}\",\n  \"dateOfIncorporation\": \"2020-05-16\",\n  \"taxIdentificationNumber\": \"US123456789\",\n  \"industryUid\": \"{{industryUid}}\",\n  \"businessActivity\": \"Asset tokenization and regulated financial services.\",\n  \"website\": \"https://acme.example\",\n  \"isDraft\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/organizations/me/jurisdiction"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Jurisdiction step is completed', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Complete Beneficial Owners",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"owners\": [\n    {\n      \"fullName\": \"Jane Doe\",\n      \"dateOfBirth\": \"1985-06-15\",\n      \"nationalityCountryUid\": \"{{countryUid}}\",\n      \"ownershipPercentage\": 80,\n      \"isPrimary\": true\n    },\n    {\n      \"fullName\": \"John Doe\",\n      \"dateOfBirth\": \"1980-03-11\",\n      \"nationalityCountryUid\": \"{{countryUid}}\",\n      \"ownershipPercentage\": 20,\n      \"isPrimary\": false\n    }\n  ],\n  \"isDraft\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/organizations/me/beneficial-owners"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Beneficial owners are saved', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload Organization Documents",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "documentTypeUid",
+                  "value": "{{documentTypeUid}}",
+                  "type": "text"
+                },
+                {
+                  "key": "documents",
+                  "type": "file",
+                  "src": [],
+                  "description": "Select one or more PDF, PNG, JPG, or JPEG files (10 MB each by default)."
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/api/v1/organizations/me/documents",
+            "description": "Repeat for every required document type. Set documentTypeUid from Organization Options before each upload."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Documents are uploaded', () => pm.response.to.have.status(201));",
+                  "const rows = pm.response.json().data;",
+                  "if (rows.length) pm.collectionVariables.set('documentUid', rows[0].documentUid);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Organization Documents",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/organizations/me/documents"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Documents are listed', () => pm.response.to.have.status(200));",
+                  "const rows = pm.response.json().data;",
+                  "if (rows.length) pm.collectionVariables.set('documentUid', rows[0].documentUid);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Download Organization Document",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/organizations/me/documents/{{documentUid}}/download"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Document downloads', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Optional - Delete Organization Document",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/organizations/me/documents/{{documentUid}}",
+            "description": "Optional destructive test. Run before submission, then re-upload that required document type before submitting."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Document is deleted', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Submit Organization",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"walletAddress\": \"{{walletAddress}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/organizations/me/submit",
+            "description": "Upload every required document type before submission. Successful submission makes the form read-only."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Organization is submitted', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.response.json().data.status).to.be.oneOf(['submitted', 'resubmitted']);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Admin Organization Review",
+      "description": "Requires adminToken. The list request captures the first pending organization UID for detail and review.",
+      "item": [
+        {
+          "name": "List Submitted Organizations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/admin/organizations?page=1&limit=20&status={{adminOrganizationStatus}}&sortBy=submittedAt&sortOrder=desc",
+            "description": "Set adminOrganizationStatus to submitted or resubmitted for the corresponding review queue."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Submitted organizations are listed', () => pm.response.to.have.status(200));",
+                  "const rows = pm.response.json().data;",
+                  "if (rows.length) pm.collectionVariables.set('adminOrganizationUid', rows[0].organizationUid);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Complete Organization Details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/admin/organizations/{{adminOrganizationUid}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Complete organization details are returned', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "pm.expect(data).to.have.property('beneficialOwners');",
+                  "pm.expect(data).to.have.property('documents');",
+                  "if (data.documents.length) pm.collectionVariables.set('adminDocumentUid', data.documents[0].documentUid);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Preview Organization Document",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/admin/organizations/{{adminOrganizationUid}}/documents/{{adminDocumentUid}}/file?disposition=inline",
+            "description": "Returns binary content with Content-Disposition inline. Use Postman's Visualize/Preview or save the response."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Document is available for preview', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.response.headers.get('Content-Disposition')).to.include('inline');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Download Organization Document",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/admin/organizations/{{adminOrganizationUid}}/documents/{{adminDocumentUid}}/file?disposition=attachment",
+            "description": "Use Send and Download in Postman. The original filename is supplied through Content-Disposition."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Document is available for download', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.response.headers.get('Content-Disposition')).to.include('attachment');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Review Organization (Approve + OnchainID Example)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"approved\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/admin/organizations/{{adminOrganizationUid}}/status",
+            "description": "Requires configured Sepolia RPC, identity factory, and funded deployer. Creates or reuses the organization's OnchainID before status becomes approved. Run either this request or the rejection example against a submitted application."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Organization and on-chain identity are approved', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.data.status).to.eql('approved');",
+                  "pm.expect(body.data.contractAddress).to.match(/^0x[a-fA-F0-9]{40}$/);",
+                  "pm.expect(body.data.contractTxnMessage).to.include('approved successfully');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Review Organization (Reject Example)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"rejected\",\n  \"rejectionReason\": \"Please replace the expired incorporation document and verify the registration number.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/admin/organizations/{{adminOrganizationUid}}/status",
+            "description": "rejectionReason is required for rejected. Run either this request or the approval example against a submitted application."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Organization is reviewed', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.response.json().data.status).to.be.oneOf(['approved', 'rejected']);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Token Creation",
+      "description": "Requires a verified issuer with an approved organization. Uses userToken and the same walletAddress submitted with the organization. Run in order; select a valid 256-4096 px token image in Step 1.",
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{userToken}}",
+            "type": "string"
+          }
+        ]
+      },
+      "item": [
+        {
+          "name": "Token Options",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/token-options"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Token options are returned', () => pm.response.to.have.status(200));",
+                  "const topics = pm.response.json().data.claimTopics;",
+                  "pm.expect(topics.length).to.be.above(0);",
+                  "pm.collectionVariables.set('claimTopicUid', topics[0].claimTopicUid);",
+                  "pm.expect(topics[0]).to.have.property('value');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get My Token Form",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/tokens/me"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Token form or null is returned', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Step 1 - Save Token Information and Image",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "tokenName",
+                  "value": "Acme Security Token",
+                  "type": "text"
+                },
+                {
+                  "key": "tokenSymbol",
+                  "value": "trex",
+                  "type": "text"
+                },
+                {
+                  "key": "decimals",
+                  "value": "18",
+                  "type": "text"
+                },
+                {
+                  "key": "initialTokenPrice",
+                  "value": "1.00",
+                  "type": "text"
+                },
+                {
+                  "key": "treasuryWalletAddress",
+                  "value": "{{walletAddress}}",
+                  "type": "text"
+                },
+                {
+                  "key": "tokenDescription",
 									"value": "Institutional security token for the T-REX Capital Market sample flow.",
-									"type": "text"
-								},
-								{
-									"key": "isDraft",
-									"value": "false",
-									"type": "text"
-								},
-								{
-									"key": "tokenImage",
-									"type": "file",
-									"src": [],
-									"description": "Select PNG/JPEG/WebP/SVG, max 2 MB, dimensions 256x256 through 4096x4096."
-								}
-							]
-						},
-						"url": "{{baseUrl}}/api/v1/tokens/me/information"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Token information is saved', () => pm.response.to.have.status(200));",
-									"const data = pm.response.json().data;",
-									"pm.expect(data.tokenSymbol).to.eql('TREX');",
-									"pm.expect(data.imageMimeType).to.eql('image/webp');",
-									"pm.expect(data.currentStep).to.eql('claims');"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "View Optimized Token Image",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/tokens/me/image",
-						"description": "Returns optimized metadata-free WebP binary content."
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Optimized token image is returned', () => pm.response.to.have.status(200));",
-									"pm.expect(pm.response.headers.get('Content-Type')).to.include('image/webp');"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Step 2 - Save Claims",
-					"request": {
-						"method": "PUT",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"claimTopicUids\": [\"{{claimTopicUid}}\"],\n  \"organizationActsAsTrustedClaimIssuer\": true,\n  \"isDraft\": false\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/tokens/me/claims"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Token claims are saved', () => pm.response.to.have.status(200));",
-									"pm.expect(pm.response.json().data.claimTopics.length).to.be.above(0);"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Step 3 - Save Compliance Rules",
-					"request": {
-						"method": "PUT",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"maxInvestors\": 2000,\n  \"maxBalancePerInvestor\": 10000,\n  \"countryRestrictionMode\": \"allowlist\",\n  \"countryUids\": [\"{{countryUid}}\"],\n  \"isDraft\": false\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/tokens/me/compliance"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Token compliance rules are saved', () => pm.response.to.have.status(200));",
-									"const restriction = pm.response.json().data.countryRestrictions[0];",
-									"pm.expect(restriction.iso3166NumericCode).to.match(/^\\d{3}$/);"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Step 4 - Save Governance Roles",
-					"request": {
-						"method": "PUT",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"tokenAgentWalletAddress\": \"{{walletAddress}}\",\n  \"identityManagerWalletAddress\": \"{{walletAddress}}\",\n  \"isDraft\": false\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/tokens/me/governance"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Token governance roles are saved', () => pm.response.to.have.status(200));",
-									"pm.expect(pm.response.json().data.currentStep).to.eql('review');"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Deploy 1 - Create Deployment Attempt",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"chainId\": {{chainId}},\n  \"walletAddress\": \"{{walletAddress}}\",\n  \"idempotencyKey\": \"{{idempotencyKey}}\"\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/tokens/me/deployment-attempts",
-						"description": "Create a pending deployment attempt. The backend validates the token, organization, deployer wallet, chain and eligibility. Only open MetaMask when the response is successful, status is 'pending', and canInitiateTransaction is true. Idempotent by idempotencyKey; a live pending attempt for the same token+wallet is returned instead of duplicated (HTTP 200), a new one is HTTP 201."
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Deployment attempt created or returned', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
-									"const data = pm.response.json().data;",
-									"if (data && data.deploymentAttemptUid) { pm.collectionVariables.set('deploymentAttemptUid', data.deploymentAttemptUid); }",
-									"pm.expect(data.status).to.eql('pending');",
-									"pm.expect(data.canInitiateTransaction).to.eql(true);"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Deploy 2 - Get Active Deployment Attempt (Resume)",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/tokens/me/deployment-attempts/active",
-						"description": "Resume-after-refresh. Reports the token status and the latest/active attempt so the frontend can decide whether to create a new attempt, continue waiting for confirmation, finalize, or show the token as already deployed. Captures deploymentAttemptUid when present."
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Active deployment state fetched', () => pm.response.to.have.status(200));",
-									"const data = pm.response.json().data;",
-									"if (data && data.attempt && data.attempt.deploymentAttemptUid) { pm.collectionVariables.set('deploymentAttemptUid', data.attempt.deploymentAttemptUid); }"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Deploy 3 - Record Broadcast Transaction",
-					"request": {
-						"method": "PATCH",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"transactionHash\": \"{{tokenDeployTxHash}}\",\n  \"chainId\": {{chainId}},\n  \"walletAddress\": \"{{walletAddress}}\"\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/tokens/me/deployment-attempts/{{deploymentAttemptUid}}/submitted",
-						"description": "Record the broadcast transaction hash immediately after MetaMask broadcasts. This does NOT mark the token deployed - a hash only proves broadcast, not success. Idempotent for the same hash; a different hash returns HTTP 409 TRANSACTION_HASH_CONFLICT."
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Transaction hash recorded', () => pm.response.to.have.status(200));",
-									"pm.expect(pm.response.json().data.status).to.eql('submitted');"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Deploy 4 - Optional - Fail / Reject Deployment Attempt",
-					"request": {
-						"method": "PATCH",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"status\": \"wallet_rejected\",\n  \"errorCode\": \"USER_REJECTED_REQUEST\",\n  \"errorMessage\": \"The wallet request was rejected.\"\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/tokens/me/deployment-attempts/{{deploymentAttemptUid}}/fail",
-						"description": "Close a pending attempt when the user rejects MetaMask or transaction preparation fails before broadcast. Allowed statuses: wallet_rejected, cancelled, failed. Idempotent. An attempt that already has a broadcast transaction hash cannot be closed here (HTTP 409) - it must be verified instead."
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Deployment attempt closed', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Step 6 - Validate and Submit Token (Finalize)",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"deploymentAttemptUid\": \"{{deploymentAttemptUid}}\",\n  \"transactionHash\": \"{{tokenDeployTxHash}}\"\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/tokens/me/submit",
-						"description": "Finalize deployment. The backend independently verifies the on-chain transaction (never trusts the frontend). Send deploymentAttemptUid + transactionHash for the two-phase flow; sending only transactionHash remains supported for backward compatibility. Returns 200 when finalized (token deployed), or 202 while the transaction is still confirming."
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Submit accepted (finalized or confirming)', () => pm.expect(pm.response.code).to.be.oneOf([200, 202]));",
-									"if (pm.response.code === 202) {",
-									"  pm.test('Deployment still confirming', () => pm.expect(pm.response.json().pending || pm.response.json().data.status === 'confirming').to.be.ok);",
-									"} else {",
-									"  const data = pm.response.json().data;",
-									"  pm.expect(data.status).to.eql('deployed');",
-									"  pm.expect(data.deployTxHash.toLowerCase()).to.eql(pm.collectionVariables.get('tokenDeployTxHash').toLowerCase());",
-									"  pm.expect(data.tokenAddress).to.match(/^0x[a-fA-F0-9]{40}$/);",
-									"  pm.expect(data.identityRegistryAddress).to.match(/^0x[a-fA-F0-9]{40}$/);",
-									"  pm.expect(data.isDraft).to.eql(false);",
-									"}"
-								]
-							}
-						}
-					]
-				}
-			]
-		},
-		{
-			"name": "Investor Onboarding",
-			"auth": {
-				"type": "bearer",
-				"bearer": [
-					{
-						"key": "token",
-						"value": "{{investorToken}}",
-						"type": "string"
-					}
-				]
-			},
-			"item": [
-				{
-					"name": "Investor Options",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"auth": {
-							"type": "noauth"
-						},
-						"url": "{{baseUrl}}/api/v1/investor-options",
-						"description": "Public reference data: identity (KYC) and accreditation document types grouped by documentCategory, plus the enum option sets."
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Investor options fetched', () => pm.response.to.have.status(200));",
-									"const data = pm.response.json().data;",
-									"if (data.identityDocumentTypes?.[0]) pm.collectionVariables.set('investorDocumentTypeUid', data.identityDocumentTypes[0].documentTypeUid);",
-									"if (data.accreditationDocumentTypes?.[0]) pm.collectionVariables.set('accreditationDocumentTypeUid', data.accreditationDocumentTypes[0].documentTypeUid);"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Get My Investor Form",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/investors/me",
-						"description": "Returns the investor onboarding form (identity + compliance + investmentCategories + documents), or null when not started."
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Investor form fetched', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Save Identity Details Draft",
-					"request": {
-						"method": "PUT",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"firstName\": \"Lois\",\n  \"isDraft\": true\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/investors/me/identity",
-						"description": "Partial draft save of step 1. isDraft=true does not require all fields."
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Identity draft saved', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Complete Identity Details",
-					"request": {
-						"method": "PUT",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"firstName\": \"Lois\",\n  \"lastName\": \"Hall\",\n  \"dateOfBirth\": \"1990-03-10\",\n  \"gender\": \"male\",\n  \"streetAddress\": \"221B Baker Street\",\n  \"countryUid\": \"{{countryUid}}\",\n  \"stateUid\": \"{{stateUid}}\",\n  \"cityUid\": \"{{cityUid}}\",\n  \"isDraft\": false\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/investors/me/identity",
-						"description": "Complete step 1. Requires all identity fields, enforces age >= 18, advances currentStep to identityDocuments. countryUid/stateUid/cityUid are location-master UIDs from the /locations reference endpoints (run the Organization Onboarding location requests first to capture countryUid/stateUid/cityUid)."
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Identity details saved', () => pm.response.to.have.status(200));",
-									"pm.expect(pm.response.json().data.currentStep).to.eql('identityDocuments');"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Upload Identity (KYC) Document",
-					"request": {
-						"method": "POST",
-						"body": {
-							"mode": "formdata",
-							"formdata": [
-								{
-									"key": "documentTypeUid",
-									"value": "{{investorDocumentTypeUid}}",
-									"type": "text"
-								},
-								{
-									"key": "documents",
-									"type": "file",
-									"src": []
-								}
-							]
-						},
-						"url": "{{baseUrl}}/api/v1/investors/me/documents",
-						"description": "Upload a KYC identity document. Select a PDF/PNG/JPG file for the 'documents' field. documentTypeUid must be a kyc-category type."
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Document uploaded', () => pm.response.to.have.status(201));",
-									"const doc = pm.response.json().data?.[0];",
-									"if (doc?.documentUid) pm.collectionVariables.set('investorDocumentUid', doc.documentUid);"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Upload Accreditation Document",
-					"request": {
-						"method": "POST",
-						"body": {
-							"mode": "formdata",
-							"formdata": [
-								{
-									"key": "documentTypeUid",
-									"value": "{{accreditationDocumentTypeUid}}",
-									"type": "text"
-								},
-								{
-									"key": "documents",
-									"type": "file",
-									"src": []
-								}
-							]
-						},
-						"url": "{{baseUrl}}/api/v1/investors/me/documents",
-						"description": "Upload an accreditation supporting document. documentTypeUid must be an accredited-category type."
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Accreditation document uploaded', () => pm.response.to.have.status(201));"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "List Investor Documents",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/investors/me/documents",
-						"description": "List all uploaded documents grouped by documentCategory (kyc / accredited)."
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Documents fetched', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Download Investor Document",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/investors/me/documents/{{investorDocumentUid}}/download",
-						"description": "Download a previously uploaded investor document."
-					}
-				},
-				{
-					"name": "Optional - Delete Investor Document",
-					"request": {
-						"method": "DELETE",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/investors/me/documents/{{investorDocumentUid}}",
-						"description": "Delete an uploaded document (draft only)."
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Document deleted', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Complete Compliance Questionnaire",
-					"request": {
-						"method": "PUT",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"sourceOfWealth\": \"Business Ownership\",\n  \"estimatedNetWorth\": \"Below $100,000\",\n  \"annualInvestmentCapacity\": \"$500,000 – $1,000,000\",\n  \"investmentCategories\": [\"public_markets\", \"digital_assets\"],\n  \"yearsOfExperience\": 5,\n  \"previousRwaExperience\": \"no\",\n  \"accreditationType\": \"institutional\",\n  \"isDraft\": false\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/investors/me/compliance",
-						"description": "Complete step 3. Requires all compliance fields + at least one investment category; advances currentStep to completed."
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Compliance saved', () => pm.response.to.have.status(200));",
-									"pm.expect(pm.response.json().data.currentStep).to.eql('completed');"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Submit Investor Onboarding",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"walletAddress\": \"{{walletAddress}}\"\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/investors/me/submit",
-						"description": "Finalize onboarding. Validates the full form + at least one KYC and one accreditation document, records the wallet, and sets status to submitted directly (no verification)."
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Investor onboarding submitted', () => pm.response.to.have.status(200));",
-									"const data = pm.response.json().data;",
-									"pm.expect(data.status).to.eql('submitted');",
-									"pm.expect(data.profileReference).to.match(/^INV-/);"
-								]
-							}
-						}
-					]
-				}
-			]
-		},
-		{
-			"name": "General Settings",
-			"item": [
-				{
-					"name": "Get Public Settings",
-					"request": {
-						"auth": {
-							"type": "noauth"
-						},
-						"method": "GET",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/general-settings/public"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Public settings are returned', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Create General Setting",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"settingKey\": \"application.pageSize.{{$timestamp}}\",\n  \"settingValue\": \"25\",\n  \"valueType\": \"number\",\n  \"settingGroup\": \"application\",\n  \"description\": \"Default frontend page size\",\n  \"isPublic\": true,\n  \"isActive\": true\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/general-settings"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Setting is created', () => pm.response.to.have.status(201));",
-									"const json = pm.response.json();",
-									"if (json.data) pm.collectionVariables.set('settingUid', json.data.settingUid);"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "List General Settings",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/general-settings?page=1&limit=20&search=pageSize&sortBy=settingKey&sortOrder=asc&settingGroup=application&valueType=number&isPublic=true&isActive=true"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Settings are listed', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Get General Setting By UID",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/general-settings/{{settingUid}}"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Setting is returned', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Update General Setting",
-					"request": {
-						"method": "PUT",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"settingValue\": \"50\",\n  \"description\": \"Updated default frontend page size\",\n  \"isPublic\": true\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": "{{baseUrl}}/api/v1/general-settings/{{settingUid}}"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Setting is updated', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				},
-				{
-					"name": "Delete General Setting",
-					"request": {
-						"method": "DELETE",
-						"header": [],
-						"url": "{{baseUrl}}/api/v1/general-settings/{{settingUid}}"
-					},
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"pm.test('Setting is soft-deleted', () => pm.response.to.have.status(200));"
-								]
-							}
-						}
-					]
-				}
-			]
-		}
-	]
+                  "type": "text"
+                },
+                {
+                  "key": "isDraft",
+                  "value": "false",
+                  "type": "text"
+                },
+                {
+                  "key": "tokenImage",
+                  "type": "file",
+                  "src": [],
+                  "description": "Select PNG/JPEG/WebP/SVG, max 2 MB, dimensions 256x256 through 4096x4096."
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/api/v1/tokens/me/information"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Token information is saved', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "pm.expect(data.tokenSymbol).to.eql('TREX');",
+                  "pm.expect(data.imageMimeType).to.eql('image/webp');",
+                  "pm.expect(data.currentStep).to.eql('claims');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "View Optimized Token Image",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/tokens/me/image",
+            "description": "Returns optimized metadata-free WebP binary content."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Optimized token image is returned', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.response.headers.get('Content-Type')).to.include('image/webp');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Step 2 - Save Claims",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"claimTopicUids\": [\"{{claimTopicUid}}\"],\n  \"organizationActsAsTrustedClaimIssuer\": true,\n  \"isDraft\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/tokens/me/claims"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Token claims are saved', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.response.json().data.claimTopics.length).to.be.above(0);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Step 3 - Save Compliance Rules",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"maxInvestors\": 2000,\n  \"maxBalancePerInvestor\": 10000,\n  \"countryRestrictionMode\": \"allowlist\",\n  \"countryUids\": [\"{{countryUid}}\"],\n  \"isDraft\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/tokens/me/compliance"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Token compliance rules are saved', () => pm.response.to.have.status(200));",
+                  "const restriction = pm.response.json().data.countryRestrictions[0];",
+                  "pm.expect(restriction.iso3166NumericCode).to.match(/^\\d{3}$/);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Step 4 - Save Governance Roles",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tokenAgentWalletAddress\": \"{{walletAddress}}\",\n  \"identityManagerWalletAddress\": \"{{walletAddress}}\",\n  \"isDraft\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/tokens/me/governance"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Token governance roles are saved', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.response.json().data.currentStep).to.eql('review');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Deploy 1 - Create Deployment Attempt",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chainId\": {{chainId}},\n  \"walletAddress\": \"{{walletAddress}}\",\n  \"idempotencyKey\": \"{{idempotencyKey}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/tokens/me/deployment-attempts",
+            "description": "Create a pending deployment attempt. The backend validates the token, organization, deployer wallet, chain and eligibility. Only open MetaMask when the response is successful, status is 'pending', and canInitiateTransaction is true. Idempotent by idempotencyKey; a live pending attempt for the same token+wallet is returned instead of duplicated (HTTP 200), a new one is HTTP 201."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Deployment attempt created or returned', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "const data = pm.response.json().data;",
+                  "if (data && data.deploymentAttemptUid) { pm.collectionVariables.set('deploymentAttemptUid', data.deploymentAttemptUid); }",
+                  "pm.expect(data.status).to.eql('pending');",
+                  "pm.expect(data.canInitiateTransaction).to.eql(true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Deploy 2 - Get Active Deployment Attempt (Resume)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/tokens/me/deployment-attempts/active",
+            "description": "Resume-after-refresh. Reports the token status and the latest/active attempt so the frontend can decide whether to create a new attempt, continue waiting for confirmation, finalize, or show the token as already deployed. Captures deploymentAttemptUid when present."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Active deployment state fetched', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "if (data && data.attempt && data.attempt.deploymentAttemptUid) { pm.collectionVariables.set('deploymentAttemptUid', data.attempt.deploymentAttemptUid); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Deploy 3 - Record Broadcast Transaction",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionHash\": \"{{tokenDeployTxHash}}\",\n  \"chainId\": {{chainId}},\n  \"walletAddress\": \"{{walletAddress}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/tokens/me/deployment-attempts/{{deploymentAttemptUid}}/submitted",
+            "description": "Record the broadcast transaction hash immediately after MetaMask broadcasts. This does NOT mark the token deployed - a hash only proves broadcast, not success. Idempotent for the same hash; a different hash returns HTTP 409 TRANSACTION_HASH_CONFLICT."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Transaction hash recorded', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.response.json().data.status).to.eql('submitted');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Deploy 4 - Optional - Fail / Reject Deployment Attempt",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"wallet_rejected\",\n  \"errorCode\": \"USER_REJECTED_REQUEST\",\n  \"errorMessage\": \"The wallet request was rejected.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/tokens/me/deployment-attempts/{{deploymentAttemptUid}}/fail",
+            "description": "Close a pending attempt when the user rejects MetaMask or transaction preparation fails before broadcast. Allowed statuses: wallet_rejected, cancelled, failed. Idempotent. An attempt that already has a broadcast transaction hash cannot be closed here (HTTP 409) - it must be verified instead."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Deployment attempt closed', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Step 6 - Validate and Submit Token (Finalize)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deploymentAttemptUid\": \"{{deploymentAttemptUid}}\",\n  \"transactionHash\": \"{{tokenDeployTxHash}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/tokens/me/submit",
+            "description": "Finalize deployment. The backend independently verifies the on-chain transaction (never trusts the frontend). Send deploymentAttemptUid + transactionHash for the two-phase flow; sending only transactionHash remains supported for backward compatibility. Returns 200 when finalized (token deployed), or 202 while the transaction is still confirming."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Submit accepted (finalized or confirming)', () => pm.expect(pm.response.code).to.be.oneOf([200, 202]));",
+                  "if (pm.response.code === 202) {",
+                  "  pm.test('Deployment still confirming', () => pm.expect(pm.response.json().pending || pm.response.json().data.status === 'confirming').to.be.ok);",
+                  "} else {",
+                  "  const data = pm.response.json().data;",
+                  "  pm.expect(data.status).to.eql('deployed');",
+                  "  pm.expect(data.deployTxHash.toLowerCase()).to.eql(pm.collectionVariables.get('tokenDeployTxHash').toLowerCase());",
+                  "  pm.expect(data.tokenAddress).to.match(/^0x[a-fA-F0-9]{40}$/);",
+                  "  pm.expect(data.identityRegistryAddress).to.match(/^0x[a-fA-F0-9]{40}$/);",
+                  "  pm.expect(data.isDraft).to.eql(false);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Investor Onboarding",
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{investorToken}}",
+            "type": "string"
+          }
+        ]
+      },
+      "item": [
+        {
+          "name": "Investor Options",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": "{{baseUrl}}/api/v1/investor-options",
+            "description": "Public reference data: identity (KYC) and accreditation document types grouped by documentCategory, plus the enum option sets."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Investor options fetched', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "if (data.identityDocumentTypes?.[0]) pm.collectionVariables.set('investorDocumentTypeUid', data.identityDocumentTypes[0].documentTypeUid);",
+                  "if (data.accreditationDocumentTypes?.[0]) pm.collectionVariables.set('accreditationDocumentTypeUid', data.accreditationDocumentTypes[0].documentTypeUid);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get My Investor Form",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/investors/me",
+            "description": "Returns the investor onboarding form (identity + compliance + investmentCategories + documents), or null when not started."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Investor form fetched', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Save Identity Details Draft",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Lois\",\n  \"isDraft\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/investors/me/identity",
+            "description": "Partial draft save of step 1. isDraft=true does not require all fields."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Identity draft saved', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Complete Identity Details",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Lois\",\n  \"lastName\": \"Hall\",\n  \"dateOfBirth\": \"1990-03-10\",\n  \"gender\": \"male\",\n  \"streetAddress\": \"221B Baker Street\",\n  \"countryUid\": \"{{countryUid}}\",\n  \"stateUid\": \"{{stateUid}}\",\n  \"cityUid\": \"{{cityUid}}\",\n  \"isDraft\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/investors/me/identity",
+            "description": "Complete step 1. Requires all identity fields, enforces age >= 18, advances currentStep to identityDocuments. countryUid/stateUid/cityUid are location-master UIDs from the /locations reference endpoints (run the Organization Onboarding location requests first to capture countryUid/stateUid/cityUid)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Identity details saved', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.response.json().data.currentStep).to.eql('identityDocuments');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload Identity (KYC) Document",
+          "request": {
+            "method": "POST",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "documentTypeUid",
+                  "value": "{{investorDocumentTypeUid}}",
+                  "type": "text"
+                },
+                {
+                  "key": "documents",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/api/v1/investors/me/documents",
+            "description": "Upload a KYC identity document. Select a PDF/PNG/JPG file for the 'documents' field. documentTypeUid must be a kyc-category type."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Document uploaded', () => pm.response.to.have.status(201));",
+                  "const doc = pm.response.json().data?.[0];",
+                  "if (doc?.documentUid) pm.collectionVariables.set('investorDocumentUid', doc.documentUid);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload Accreditation Document",
+          "request": {
+            "method": "POST",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "documentTypeUid",
+                  "value": "{{accreditationDocumentTypeUid}}",
+                  "type": "text"
+                },
+                {
+                  "key": "documents",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/api/v1/investors/me/documents",
+            "description": "Upload an accreditation supporting document. documentTypeUid must be an accredited-category type."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Accreditation document uploaded', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Investor Documents",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/investors/me/documents",
+            "description": "List all uploaded documents grouped by documentCategory (kyc / accredited)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Documents fetched', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Download Investor Document",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/investors/me/documents/{{investorDocumentUid}}/download",
+            "description": "Download a previously uploaded investor document."
+          }
+        },
+        {
+          "name": "Optional - Delete Investor Document",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/investors/me/documents/{{investorDocumentUid}}",
+            "description": "Delete an uploaded document (draft only)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Document deleted', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Complete Compliance Questionnaire",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceOfWealth\": \"Business Ownership\",\n  \"estimatedNetWorth\": \"Below $100,000\",\n  \"annualInvestmentCapacity\": \"$500,000 – $1,000,000\",\n  \"investmentCategories\": [\"public_markets\", \"digital_assets\"],\n  \"yearsOfExperience\": 5,\n  \"previousRwaExperience\": \"no\",\n  \"accreditationType\": \"institutional\",\n  \"isDraft\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/investors/me/compliance",
+            "description": "Complete step 3. Requires all compliance fields + at least one investment category; advances currentStep to completed."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Compliance saved', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.response.json().data.currentStep).to.eql('completed');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Submit Investor Onboarding",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"walletAddress\": \"{{walletAddress}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/investors/me/submit",
+            "description": "Finalize onboarding. Validates the full form + at least one KYC and one accreditation document, records the wallet, and sets status to submitted directly (no verification)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Investor onboarding submitted', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "pm.expect(data.status).to.eql('submitted');",
+                  "pm.expect(data.profileReference).to.match(/^INV-/);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Investment Journey",
+      "item": [
+        {
+          "name": "List Investment Tokens (Investor)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/investments/tokens?page=1&limit=6&status=deployed",
+            "description": "Marketplace token catalogue for an investor. Investors always receive deployed tokens only (the status filter is ignored for the investor role). Each item includes name, symbol, decimals, price, maxInvestors/maxHolder, maxBalancePerInvestor, countryRestrictionMode, countryRestrictions, organizationCountryName/Code, hasImage and imageUrl."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Investment tokens listed', () => pm.response.to.have.status(200));",
+                  "const first = pm.response.json().data?.[0];",
+                  "if (first?.tokenUid) pm.collectionVariables.set('investmentTokenUid', first.tokenUid);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Investment Tokens (Admin - any status)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/investments/tokens?page=1&limit=20&status=all",
+            "description": "Admin marketplace list. An admin may filter by any token status (draft, readyToDeploy, deploymentPending, deploymentFailed, deployed) or 'all'. Uses the admin token.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin can list any status', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Investment Token Details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/investments/tokens/{{investmentTokenUid}}",
+            "description": "Full token details plus maxInvestors, maxBalancePerInvestor, countryRestrictionMode, countryRestrictions (code/name/numericCode), organizationCountryName/Code, and requiredClaimTopics."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Token details fetched', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "View Investment Token Image",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/investments/tokens/{{investmentTokenUid}}/image",
+            "description": "Streams the optimized token image (admin + investor)."
+          }
+        },
+        {
+          "name": "Get Required Documents (Eligibility)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/investments/tokens/{{investmentTokenUid}}/required-documents",
+            "description": "For a token, returns each required claim topic with satisfied/missing/rejected flags and the investor's matching documents, plus eligible, missingClaimTopics, interestStatus, and a rejection block (rejectReasonType, rejectReason, rejectedClaim, rejectedCount, canResubmitClaim, resubmitRemaining, canResubmit) when the interest was rejected."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Required documents fetched', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Submit Investment Interest",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/investments/tokens/{{investmentTokenUid}}/interest",
+            "description": "Always creates/refreshes an interest. Missing required claim documents -> status 'pending' (issuer cannot see it); all documents present -> status 'submitIntrest' (issuer sees it). Requires a submitted investor and a deployed token.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Interested in participating in this offering.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Interest submitted', () => pm.response.to.have.status(201));",
+                  "const data = pm.response.json().data;",
+                  "if (data?.interestUid) pm.collectionVariables.set('interestUid', data.interestUid);",
+                  "console.log('Interest status:', data?.status);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List My Investment Interests",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/investments/me/interests",
+            "description": "The investor's own interests with token summary (including maxInvestors and maxBalancePerInvestor). Optional query: ?status=pending|submitIntrest|approved|rejected|cancelled."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('My interests fetched', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload Claim Document (for pending / rejected interest)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/investors/me/documents",
+            "description": "Reuses the investor document upload. For a SUBMITTED investor this is allowed only when a 'pending' or resubmittable DOC_REJECTED interest exists (else 403). After upload the backend promotes pending interests to submitIntrest and resolves re-uploaded rejected claims. Select a PDF/PNG/JPG file for 'documents'.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "documentTypeUid",
+                  "value": "{{investorDocumentTypeUid}}",
+                  "type": "text"
+                },
+                {
+                  "key": "documents",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Claim document uploaded', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Investment Interests (Issuer)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/investments/issuer/interests?status=submitIntrest",
+            "description": "Interests for the issuer's organization. Issuers see only 'submitIntrest' by default (pending/documents-incomplete requests are never listed). Optional ?status=... or 'all'.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{userToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Issuer interests listed', () => pm.response.to.have.status(200));",
+                  "const first = pm.response.json().data?.[0];",
+                  "if (first?.interestUid) pm.collectionVariables.set('interestUid', first.interestUid);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Investment Interest (Issuer)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/investments/issuer/interests/{{interestUid}}",
+            "description": "A single interest (asserts org ownership) with all documents the investor submitted (each with claimTopicCode + downloadUrl) and the required claim-topic eligibility breakdown.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{userToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Issuer interest fetched', () => pm.response.to.have.status(200));",
+                  "const doc = pm.response.json().data?.documents?.[0];",
+                  "if (doc?.documentUid) pm.collectionVariables.set('investorDocumentUid', doc.documentUid);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Approve Investment Interest (Issuer)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/investments/issuer/interests/{{interestUid}}/approve",
+            "description": "Approves a 'submitIntrest' interest (-> approved). 409 if it is not submitIntrest.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Approved after document review.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{userToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Interest approved', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject Investment Interest - DOC_REJECTED (Issuer)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/investments/issuer/interests/{{interestUid}}/reject",
+            "description": "Rejects due to documents. rejectedClaims must be claim-topic codes required by the token (stored comma-separated in rejectedClaim). The investor can then re-upload those claim documents while resubmission attempts remain.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rejectReasonType\": \"DOC_REJECTED\",\n  \"rejectReason\": \"The passport image is blurry; please re-upload a clear scan.\",\n  \"rejectedClaims\": [\"KYC\"]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{userToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Interest rejected (DOC_REJECTED)', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject Investment Interest - OTHER (Issuer)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/investments/issuer/interests/{{interestUid}}/reject",
+            "description": "Rejects for a non-document reason. No claim-topic selection is required.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rejectReasonType\": \"OTHER\",\n  \"rejectReason\": \"Offering is currently closed to new participants.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{userToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Interest rejected (OTHER)', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Download Interest Document (Issuer)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/investments/issuer/interests/{{interestUid}}/documents/{{investorDocumentUid}}/download",
+            "description": "Downloads one of the investor's submitted documents (ownership + path-safety checked).",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{userToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{investorToken}}",
+            "type": "string"
+          }
+        ]
+      },
+      "description": "Token marketplace (admin+investor), investor submit-interest journey (pending/submitIntrest by claim-topic eligibility), and issuer review (approve / reject with DOC_REJECTED resubmission). Set investorToken via a User Login as the investor, userToken via a User Login as the issuer, and adminToken via Admin Login."
+    },
+    {
+      "name": "General Settings",
+      "item": [
+        {
+          "name": "Get Public Settings",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/general-settings/public"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Public settings are returned', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create General Setting",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"settingKey\": \"application.pageSize.{{$timestamp}}\",\n  \"settingValue\": \"25\",\n  \"valueType\": \"number\",\n  \"settingGroup\": \"application\",\n  \"description\": \"Default frontend page size\",\n  \"isPublic\": true,\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/general-settings"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Setting is created', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "if (json.data) pm.collectionVariables.set('settingUid', json.data.settingUid);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List General Settings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/general-settings?page=1&limit=20&search=pageSize&sortBy=settingKey&sortOrder=asc&settingGroup=application&valueType=number&isPublic=true&isActive=true"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Settings are listed', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get General Setting By UID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/general-settings/{{settingUid}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Setting is returned', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update General Setting",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"settingValue\": \"50\",\n  \"description\": \"Updated default frontend page size\",\n  \"isPublic\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/general-settings/{{settingUid}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Setting is updated', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete General Setting",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/general-settings/{{settingUid}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Setting is soft-deleted', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
 }
