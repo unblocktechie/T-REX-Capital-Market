@@ -16,22 +16,49 @@ import { cn } from '@/utils/cn';
 import { createLocalId } from '@/utils/createLocalId';
 import { formatFileSize } from '@/utils/investor';
 
-const DEFAULT_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
-const IMAGE_TYPES = ['image/jpeg', 'image/png'];
+const DEFAULT_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+const IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png'];
 
-const validateFile = (file, imageOnly) => {
+const fileExtension = (name = '') => String(name).toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] || '';
+
+const hasSupportedFileSignature = async (file, extension) => {
+  const bytes = new Uint8Array(await file.slice(0, 8).arrayBuffer());
+  if (extension === 'pdf') {
+    return bytes.length >= 5 &&
+      bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46 && bytes[4] === 0x2d;
+  }
+  if (extension === 'jpg' || extension === 'jpeg') {
+    return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  }
+  if (extension === 'png') {
+    const png = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+    return png.every((byte, index) => bytes[index] === byte);
+  }
+  return false;
+};
+
+const validateFile = async (file, imageOnly) => {
   const allowedTypes = imageOnly ? IMAGE_TYPES : DEFAULT_TYPES;
-  const normalizedName = file.name.toLowerCase();
-  const extensionAllowed = imageOnly
-    ? /\.(jpe?g|png)$/.test(normalizedName)
-    : /\.(pdf|jpe?g|png)$/.test(normalizedName);
-  if (!allowedTypes.includes(file.type) && !extensionAllowed) {
+  const extension = fileExtension(file.name);
+  const allowedExtensions = imageOnly ? ['jpg', 'jpeg', 'png'] : ['pdf', 'jpg', 'jpeg', 'png'];
+  if (!allowedExtensions.includes(extension) || (file.type && !allowedTypes.includes(file.type))) {
     return imageOnly
-      ? 'Upload a JPG, JPEG, or PNG image.'
-      : 'Upload a PDF, JPG, JPEG, or PNG file.';
+      ? 'Only JPG, JPEG, or PNG images are allowed.'
+      : 'Only PDF, JPG, JPEG, or PNG files are allowed.';
   }
   if (file.size > MAX_UPLOAD_BYTES) return 'File size must not exceed 10 MB.';
   if (!file.size) return 'The selected file is empty.';
+
+  try {
+    if (!(await hasSupportedFileSignature(file, extension))) {
+      return imageOnly
+        ? 'The selected file does not appear to be a valid JPG, JPEG, or PNG image.'
+        : 'The selected file does not appear to be a valid PDF, JPG, JPEG, or PNG file.';
+    }
+  } catch {
+    return 'Unable to validate the selected file. Please choose another supported file.';
+  }
+
   return '';
 };
 
@@ -90,7 +117,7 @@ export function FileUploadZone({
   };
 
   const uploadFile = async (file, existingId = '') => {
-    const validationError = validateFile(file, imageOnly);
+    const validationError = await validateFile(file, imageOnly);
     if (validationError) {
       setLocalError(validationError);
       return;
@@ -164,7 +191,7 @@ export function FileUploadZone({
     inputRef.current?.click();
   };
 
-  const accept = imageOnly ? '.jpg,.jpeg,.png,image/jpeg,image/png' : '.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png';
+  const accept = imageOnly ? '.jpg,.jpeg,.png,image/jpeg,image/jpg,image/png' : '.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/jpg,image/png';
   const describedBy = error || localError ? `${inputId}-error` : `${inputId}-hint`;
 
   return (

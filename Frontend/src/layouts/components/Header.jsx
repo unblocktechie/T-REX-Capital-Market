@@ -32,10 +32,12 @@ export function Header({ onboardingOnly = false }) {
     !location.pathname.startsWith(ROUTES.createToken);
   const roleAwareMeta =
     user?.role === ROLES.investor && location.pathname === ROUTES.dashboard
-      ? { title: 'Investor Dashboard', description: 'Investor profile and portal access' }
-      : user?.role === ROLES.investor && location.pathname === ROUTES.investors
-        ? { title: 'Investor Profile', description: 'Completed investor onboarding details' }
-        : null;
+      ? { title: 'Investor Dashboard', description: 'Identity, portfolio and investor activity' }
+      : user?.role === ROLES.investor && location.pathname === ROUTES.profile
+        ? { title: 'Investor Profile', description: 'Submitted investor identity and verification details' }
+        : user?.role === ROLES.investor && location.pathname === ROUTES.investors
+          ? { title: 'Investor Onboarding', description: 'Investor identity and qualification setup' }
+          : null;
   const currentMeta =
     roleAwareMeta ||
     routeMeta[location.pathname] ||

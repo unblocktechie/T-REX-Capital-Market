@@ -47,14 +47,14 @@ export const identityDetailsSchema = z.object({
     .refine((value) => !Number.isNaN(new Date(`${value}T00:00:00`).getTime()), 'Enter a valid date of birth.')
     .refine((value) => new Date(`${value}T00:00:00`) <= today(), 'Date of birth cannot be in the future.')
     .refine((value) => calculateAge(value) >= 18, 'You must be at least 18 years old.'),
-  gender: z.enum(['', 'male', 'female', 'other']).optional(),
+  gender: z.string().min(1, 'Gender is required.'),
   streetAddress: z
     .string()
     .trim()
     .min(5, 'Street address must contain at least 5 characters.')
     .max(150, 'Street address must not exceed 150 characters.'),
-  city: z.string().trim().min(2, 'City must contain at least 2 characters.').max(80, 'City is too long.'),
-  stateProvince: z.string().trim().min(1, 'State or province is required.').max(80, 'State or province is too long.'),
+  city: z.string().optional().default(''),
+  stateProvince: z.string().min(1, 'State or province is required.'),
   countryOfResidence: z.string().min(1, 'Country of residence is required.'),
 });
 

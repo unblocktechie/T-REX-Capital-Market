@@ -5,12 +5,18 @@ import { TypedDocumentUploader } from '@/components/investor/TypedDocumentUpload
 import { InvestorLayout, InvestorSecurityCard } from '@/components/investor/InvestorLayout';
 import { InvestorActionBar, InvestorFormCard } from '@/components/investor/InvestorPrimitives';
 import { Button } from '@/components/ui/Button';
-import { IDENTITY_DOCUMENT_TYPES } from '@/constants/investor';
 import { useInvestorOnboarding } from '@/hooks/useInvestorOnboarding';
 import { documentsSchema } from '@/validations/investor.schemas';
 
 export default function IdentityDocumentsStep() {
-  const { state, updateSection, setStep } = useInvestorOnboarding();
+  const {
+    state,
+    options,
+    updateSection,
+    setStep,
+    uploadDocument,
+    deleteDocument,
+  } = useInvestorOnboarding();
   const [selectedIdentityDocumentType, setSelectedIdentityDocumentType] = useState('');
   const [errors, setErrors] = useState({});
   const documents = state.documents;
@@ -55,18 +61,20 @@ export default function IdentityDocumentsStep() {
     <InvestorLayout
       title="Identity Documents"
       description="Upload one or more clear government-issued identity documents. At least one valid document is required to continue."
-      side={<InvestorSecurityCard title="Document privacy" description="Only safe file metadata is saved in localStorage. File content is kept in this browser’s private preview vault so uploaded documents remain available for review after refresh." />}
+      side={<InvestorSecurityCard title="Document privacy" description="Files are uploaded directly to the authenticated investor document endpoint. Only backend document metadata is kept in the form state, and review downloads are requested securely when needed." />}
     >
       <InvestorFormCard className="investor-form-card--spaced">
         <TypedDocumentUploader
           documentTypeLabel="Identity Document Type"
-          documentTypeOptions={IDENTITY_DOCUMENT_TYPES}
+          documentTypeOptions={options.identityDocumentTypes}
           documentTypeValue={selectedIdentityDocumentType}
           onDocumentTypeChange={setSelectedIdentityDocumentType}
           value={identityDocuments}
           onChange={(nextDocuments) => patchDocuments({ identityDocuments: nextDocuments })}
+          onUpload={uploadDocument}
+          onDelete={deleteDocument}
           error={errors.identityDocuments}
-          selectionHint="Select an identity document type first, then upload the matching file. You can add one or more identity documents. Each document type can be added once and can be replaced or removed."
+          selectionHint="Select an identity document type first, then upload the matching file. You can add one or more identity documents. Re-uploading a type replaces the previously stored file for that type."
         />
       </InvestorFormCard>
 

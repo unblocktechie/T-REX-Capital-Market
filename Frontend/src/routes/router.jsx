@@ -25,7 +25,11 @@ const VerifyEmailPage = lazy(() => import('@/pages/auth/VerifyEmailPage'));
 const ForgotPasswordPage = lazy(() => import('@/pages/auth/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('@/pages/auth/ResetPasswordPage'));
 const DashboardPage = lazy(() => import('@/pages/dashboard/DashboardPage'));
-const InvestorOnboardingPage = lazy(() => import('@/pages/investors/InvestorOnboardingPage'));
+const InvestorsRoutePage = lazy(() => import('@/pages/investors/InvestorsRoutePage'));
+const IssuerInvestorSubscriptionReviewPage = lazy(() => import('@/pages/issuer/IssuerInvestorSubscriptionReviewPage'));
+const MarketplacePage = lazy(() => import('@/pages/investor-portal/MarketplacePage'));
+const MarketplaceTokenDetailsPage = lazy(() => import('@/pages/investor-portal/MarketplaceTokenDetailsPage'));
+const MyApplicationsPage = lazy(() => import('@/pages/investor-portal/MyApplicationsPage'));
 const ProfilePage = lazy(() => import('@/pages/profile/ProfilePage'));
 const NotFoundPage = lazy(() => import('@/pages/errors/NotFoundPage'));
 const ForbiddenPage = lazy(() => import('@/pages/errors/ForbiddenPage'));
@@ -139,6 +143,7 @@ export const router = createBrowserRouter([
             children: [
               { index: true, element: <Navigate to={ROUTES.dashboard} replace /> },
               { path: 'dashboard', element: withSuspense(<DashboardPage />) },
+              { path: 'investors', element: withSuspense(<InvestorsRoutePage />) },
               {
                 element: <RoleMiddleware roles={[ROLES.issuer]} />,
                 children: [
@@ -157,12 +162,15 @@ export const router = createBrowserRouter([
                   },
                   { path: 'tokens/:tokenAddress/success', element: withSuspense(<DeploymentSuccessPage />) },
                   { path: 'tokens/:tokenAddress', element: withSuspense(<TokenDetailsPage />) },
+                  { path: 'investors/:requestId', element: withSuspense(<IssuerInvestorSubscriptionReviewPage />) },
                 ],
               },
               {
-                element: <RoleMiddleware roles={[ROLES.issuer, ROLES.investor]} />,
+                element: <RoleMiddleware roles={[ROLES.investor]} />,
                 children: [
-                  { path: 'investors', element: withSuspense(<InvestorOnboardingPage />) },
+                  { path: 'marketplace', element: withSuspense(<MarketplacePage />) },
+                  { path: 'marketplace/:tokenId', element: withSuspense(<MarketplaceTokenDetailsPage />) },
+                  { path: 'applications', element: withSuspense(<MyApplicationsPage />) },
                 ],
               },
               {

@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { usersApi } from '@/api/users/users.api';
 import { Pagination } from '@/components/pagination/Pagination';
 import { DataTable } from '@/components/tables/DataTable';
+import { AppStatusBadge } from '@/components/common/AppStatusBadge';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -12,7 +13,7 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 
 const toneForStatus = (status) =>
-  ({ Active: 'success', Invited: 'info', Suspended: 'danger' })[status] || 'neutral';
+  ({ Active: 'success', Invited: 'neutral', Suspended: 'danger' })[status] || 'neutral';
 
 export default function UsersPage() {
   useDocumentTitle('Team & access');
@@ -50,12 +51,13 @@ export default function UsersPage() {
       {
         key: 'status',
         header: 'Status',
-        render: (value) => <Badge tone={toneForStatus(value)}>{value}</Badge>,
+        render: (value) => <AppStatusBadge status={value} label={value} tone={toneForStatus(value)} compact />,
       },
       { key: 'lastActive', header: 'Last active' },
       {
         key: 'actions',
-        header: '',
+        header: 'Action',
+        align: 'end',
         render: () => (
           <button className="icon-button" aria-label="User actions">
             <MoreHorizontal size={18} />

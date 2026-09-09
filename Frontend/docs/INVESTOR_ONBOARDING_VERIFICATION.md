@@ -1,34 +1,40 @@
-# Investor Onboarding Update Verification
+# Investor Onboarding Backend Integration Verification
 
 ## Changes verified
 
-- Investor stepper uses the shared Organization/Token stepper markup and CSS classes.
-- The visible stepper contains four onboarding stages; profile creation and request submission remain internal post-review flow states.
-- Identity Documents continues directly to Compliance Questionnaire.
-- Compliance Questionnaire returns to Identity Documents and continues to Review and Submit.
-- Review edit actions point to the updated step numbers.
-- Profile creation is step 5 and successful submission is step 6.
-- Selfie Verification is no longer included in routing, readiness validation, review output, initial state, or active service behavior.
-- All visible Save Draft and Save Changes controls were removed.
-- The Development tools panel and its component were removed from the active module.
-- Draft recovery is preserved through debounced automatic localStorage persistence.
-- Legacy seven-step drafts are migrated to the six-step flow.
-- Gender options use a compact card variant to remove the excess vertical space visible in the supplied screenshot.
-- Responsive stepper columns are configured for four visible stages on desktop and mobile.
+- The visible investor stepper and responsive stylesheet files were left unchanged.
+- The active `/app/investors` flow is restricted to the Investor role, matching the supplied backend contract.
+- Investor option sets are loaded from `/investor-options` and used by identity, document, and compliance controls.
+- `/investors/me` is loaded before an onboarding step is rendered; backend step/status is authoritative.
+- Identity and compliance edits have debounced backend draft synchronization using `isDraft: true`.
+- Continue actions use `isDraft: false`, wait for backend success, map backend field errors, and only then advance the UI.
+- Identity and accreditation documents use the real multipart investor endpoint and backend document UIDs.
+- Document replacement, delete, authenticated review/download, upload progress, retry, cancel, file type, and 10 MB checks are connected to the backend flow.
+- Final submission sends the connected wallet address to `/investors/me/submit` and refreshes `/investors/me` after success.
+- Backend `submitted` state renders the completed investor screen and does not expose editable onboarding steps.
+- Local storage is retained only as a sanitized text recovery cache. It does not overwrite backend documents, server-completed steps, or submitted status.
+- Legacy mock upload/profile/submission services are not reachable from the active investor route. Inactive legacy Selfie/development files were left in place to avoid unrelated deletion.
+- Existing CSS/SCSS/SASS/LESS files were not changed.
 
 ## Static checks completed
 
-- Parsed all JavaScript and JSX source files using TypeScript's JSX parser.
-- Resolved every relative and `@/` source import.
-- Parsed `src/assets/styles/investor.css` without CSS parser errors.
-- Confirmed no active investor page or component contains `Save Draft`, `Save Changes`, `Selfie Verification`, or `Development tools`.
-- Confirmed the supplied package manifests were not changed.
+- Parsed all 227 JavaScript and JSX source files using the globally available TypeScript JSX parser: no syntax errors.
+- Resolved every relative and `@/` JavaScript/JSX import: no missing local imports.
+- Checked changed investor files for unused local symbols using TypeScript diagnostics: zero changed-file unused diagnostics.
+- Compared the investor endpoint constants with the supplied Postman Investor Onboarding folder: methods/paths match the documented endpoint set.
+- Confirmed the active investor dependency graph has no mock document-upload, mock profile-creation, or mock submission references.
+- Confirmed no stylesheet file changed from the supplied frontend archive.
+- Confirmed package manifests were not intentionally changed by the integration.
 
-## Environment limitation
+## Dependency-backed build limitation in this sandbox
 
-A complete dependency installation and Vite production build could not be completed in this sandbox. The dependency installation did not finish within the available execution window, and the sandbox provides Node.js `22.16.0` while the project declares Node.js `>=22.22.1`.
+A full `npm run lint` / `npm run build` could not be run because project dependencies are not present in the uploaded archive and installation is blocked in this environment:
 
-Run the following in the normal project environment with Node.js 22.22.1 or later:
+- The configured package mirror returns `404` for the pinned `zustand@5.0.14` tarball.
+- A direct public-registry install did not complete in the sandbox.
+- The sandbox Node version is `22.16.0`, while the project declares Node `>=22.22.1`.
+
+Run in the normal project environment with Node 22.22.1 or later:
 
 ```bash
 npm ci
@@ -37,4 +43,4 @@ npm run build
 npm run dev
 ```
 
-Then manually verify `/app/investors` at small-mobile, large-mobile, tablet, desktop, and large-desktop widths.
+Then manually exercise the investor flow with a real Investor JWT and backend, including refresh/resume, upload/replace/delete/download, backend validation failures, wallet/network errors, submit, and submitted-record reload behavior.

@@ -21,7 +21,7 @@ export function DeploymentConfirmationModal({ open, onClose, onConfirm, data, wa
     <Modal
       open={open}
       onClose={close}
-      title="Confirm T-REX deployment"
+      title="Confirm token creation"
       className="issuance-confirmation-modal"
       bodyClassName="issuance-confirmation-modal__body"
       footer={

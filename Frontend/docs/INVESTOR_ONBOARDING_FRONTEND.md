@@ -2,7 +2,7 @@
 
 ## Route
 
-The `/app/investors` route opens the interactive investor onboarding module.
+The `/app/investors` route opens the investor-only onboarding module.
 
 ## Current Flow
 
@@ -11,55 +11,69 @@ The `/app/investors` route opens the interactive investor onboarding module.
 3. Compliance Questionnaire
 4. Review and Submit
 5. Create Investor Profile modal
-6. Investment Request Submitted
+6. Investor Profile Created
 
-The former Selfie Verification step has been removed from the flow.
+The former Selfie Verification step has been removed from the active flow.
 
 ## Stepper and Layout
 
-- The investor flow now reuses the same horizontal stepper structure and visual classes used by the Organization and Token issuance flows.
+- The investor flow reuses the same horizontal stepper structure and visual classes used by the Organization and Token issuance flows.
 - Desktop and tablet layouts show the full horizontal stepper.
 - Mobile layouts use the shared compact progress summary, progress bar, and step markers.
-- The stepper displays only the four editable onboarding stages and preserves backward navigation to previously reached steps. Profile creation and request submission continue to run after Review and Submit without appearing in the stepper.
+- The stepper displays only the four editable onboarding stages and preserves backward navigation to previously reached steps. Profile creation and completion continue after Review and Submit without appearing in the stepper.
 
 ## Architecture
 
 - `src/pages/investors/` contains the step screens and flow orchestrator.
-- `src/components/investor/` contains reusable choice cards, upload zone, wallet card, modal, review primitives, and investor stepper adapter.
-- `src/context/InvestorOnboardingProvider.jsx` maintains cross-step state and automatic draft recovery.
-- `src/validations/investor.schemas.js` contains Zod validation schemas.
-- `src/services/investor/` contains isolated Promise-based mock services.
-- `src/constants/investor.js` contains options, defaults, step definitions, flow version, and storage keys.
-- `src/assets/styles/investor.css` contains responsive module styling and investor-specific overrides.
+- `src/components/investor/` contains reusable choice cards, backend document upload/review UI, wallet card, modal, review primitives, and investor stepper adapter.
+- `src/api/investor/` contains investor endpoint definitions, API calls, backend/UI mappers, and payload mapping.
+- `src/context/InvestorOnboardingProvider.jsx` maintains cross-step state, backend bootstrap, server draft synchronization, document actions, and final submission.
+- `src/validations/investor.schemas.js` contains client-side validation aligned with the backend requirements supplied for investor onboarding.
+- `src/services/investor/` still contains the browser recovery helpers and legacy mock utilities used by inactive development/legacy components; the active investor flow no longer uses mock upload/profile/submission services.
+- `src/constants/investor.js` contains fallback options, defaults, step definitions, flow version, and storage keys.
+- `src/assets/styles/investor.css` contains the existing responsive module styling and investor-specific overrides.
 
-## Draft Storage
+## Backend Integration
 
-The flow automatically stores safe draft data in `trex.investor-onboarding-draft.v1`.
+The active flow uses the shared authenticated Axios client and the following endpoints:
 
-Only form values and file metadata are persisted. File contents and blob preview URLs are not stored in localStorage. The visible **Save Draft** and **Save Changes** controls have been removed, while draft recovery remains available through automatic persistence.
+- `GET /investor-options`
+- `GET /investors/me`
+- `PUT /investors/me/identity`
+- `POST /investors/me/documents`
+- `DELETE /investors/me/documents/:documentUid`
+- `GET /investors/me/documents/:documentUid/download`
+- `PUT /investors/me/compliance`
+- `POST /investors/me/submit`
 
-Existing seven-step drafts are migrated to the six-step flow when loaded:
+Server `currentStep` and `status` are authoritative. A submitted investor record opens the completed state and is not exposed through editable steps.
 
-- Old Identity Details and Identity Documents steps remain unchanged.
-- The removed Selfie step resumes at Compliance Questionnaire.
-- Later steps are shifted back by one position.
+## Draft Recovery
 
-## Mock Services
+Identity and compliance changes are debounced to the backend using `isDraft: true`. Completed step actions use `isDraft: false` so the backend applies its full validation and advances the server-side step.
 
-The module provides separated mock services for:
+The browser also stores a sanitized recovery cache in `trex.investor-onboarding-draft.v1`. This cache is only a fallback for unsaved text values; it cannot override backend document records, completed steps, or submitted status.
 
-- Automatic draft persistence
-- Document upload progress and retry
-- Wallet connection
-- Investor profile creation
-- Investment request submission
+Legacy drafts are normalized when loaded, and legacy mock document records are discarded in favor of backend document metadata.
 
-The service boundaries can later be replaced with backend or Web3 integrations without restructuring the UI.
+## Documents
 
-## Removed Development UI
+- Document type options come from `/investor-options` and use the backend `documentTypeUid` values.
+- Files are sent as multipart `documentTypeUid + documents` uploads.
+- PDF, JPG, JPEG, and PNG files up to 10 MB are validated before upload.
+- Replacing a file for the same type uses the backend replacement behavior.
+- Deletion uses the backend document UID and is available only while the record is editable.
+- Review retrieves the authenticated backend download endpoint and creates a temporary in-memory preview URL; uploaded file contents are not persisted in localStorage.
 
-The development tools panel and its visible failure/reset options are no longer rendered in the investor flow.
+## Validation and Submission
 
-## Security Disclosure
+- Identity requires the documented fields, supported server options, and age 18+.
+- Compliance requires the documented questionnaire fields and at least one allowed investment category.
+- The UI requires at least one successful KYC document and one successful accreditation document before final submission.
+- The connected wallet must be available on the supported network; the backend performs the final wallet validation.
+- Backend field errors are mapped to matching form controls where possible.
+- Final submission directly produces backend status `submitted`; there is no investor admin-verification stage in this flow.
 
-Encryption, identity verification, accreditation checks, ONCHAINID creation, blockchain registration, and issuer submission remain simulated UI behavior only. The module displays this limitation anywhere a security or compliance message could otherwise imply a production integration.
+## Security Behavior
+
+The active investor flow no longer claims simulated persistence. Identity/compliance records and document files are handled by the authenticated backend API. ONCHAINID-style and investor profile references are generated by the backend during final submission rather than by frontend mock services.

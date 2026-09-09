@@ -122,8 +122,11 @@ export const INITIAL_INVESTOR_STATE = Object.freeze({
     gender: '',
     streetAddress: '',
     city: '',
+    cityName: '',
     stateProvince: '',
+    stateProvinceName: '',
     countryOfResidence: '',
+    countryOfResidenceName: '',
   },
   documents: {
     identityDocuments: [],

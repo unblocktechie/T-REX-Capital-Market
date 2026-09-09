@@ -1,0 +1,129 @@
+import { apiClient } from '@/api/axios';
+import { INVESTMENT_ENDPOINTS } from './investment.endpoints';
+
+const INTEREST_STATUSES = new Set(['pending', 'approved', 'rejected', 'cancelled']);
+const TOKEN_STATUSES = new Set(['deployed', 'all']);
+
+const unwrap = (response) =>
+  response.data && Object.prototype.hasOwnProperty.call(response.data, 'data')
+    ? response.data.data
+    : response.data;
+
+const responseMeta = (response, unwrapped) => response.data?.meta || unwrapped?.meta || response.meta || {};
+
+const requiredUid = (value, label) => {
+  const normalized = String(value || '').trim();
+  if (!normalized) throw new Error(`${label} is required.`);
+  return normalized;
+};
+
+const normalizePage = (value, fallback = 1) => {
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number > 0 ? number : fallback;
+};
+
+const normalizeLimit = (value, fallback = 12) => {
+  const number = Number(value);
+  if (!Number.isSafeInteger(number) || number <= 0) return fallback;
+  return Math.min(number, 100);
+};
+
+const normalizeInterestStatus = (value, { optional = true } = {}) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized && optional) return '';
+  if (!INTEREST_STATUSES.has(normalized)) throw new Error('Invalid investment interest status.');
+  return normalized;
+};
+
+export const investmentApi = Object.freeze({
+  async listTokens({ page = 1, limit = 12, search = '', status = 'deployed' } = {}) {
+    const normalizedStatus = String(status || 'deployed').trim().toLowerCase();
+    if (!TOKEN_STATUSES.has(normalizedStatus)) throw new Error('Invalid token catalogue status.');
+
+    const response = await apiClient.get(INVESTMENT_ENDPOINTS.tokens, {
+      params: {
+        page: normalizePage(page),
+        limit: normalizeLimit(limit),
+        ...(String(search || '').trim() ? { search: String(search).trim() } : {}),
+        status: normalizedStatus,
+      },
+      skipGlobalLoader: true,
+    });
+
+    const data = unwrap(response);
+    return { data, meta: responseMeta(response, data) };
+  },
+
+  getToken: (tokenUid) =>
+    apiClient
+      .get(INVESTMENT_ENDPOINTS.token(requiredUid(tokenUid, 'Token identifier')), {
+        skipGlobalLoader: true,
+      })
+      .then(unwrap),
+
+  getTokenImage: (tokenUid, signal) =>
+    apiClient
+      .get(INVESTMENT_ENDPOINTS.tokenImage(requiredUid(tokenUid, 'Token identifier')), {
+        responseType: 'blob',
+        timeout: 60_000,
+        signal,
+        skipGlobalLoader: true,
+      })
+      .then((response) => response.data),
+
+  getRequiredDocuments: (tokenUid) =>
+    apiClient
+      .get(INVESTMENT_ENDPOINTS.requiredDocuments(requiredUid(tokenUid, 'Token identifier')), {
+        skipGlobalLoader: true,
+      })
+      .then(unwrap),
+
+  submitInterest: (tokenUid, note = '') =>
+    apiClient
+      .post(
+        INVESTMENT_ENDPOINTS.submitInterest(requiredUid(tokenUid, 'Token identifier')),
+        String(note || '').trim() ? { note: String(note).trim() } : {},
+        { skipGlobalLoader: true },
+      )
+      .then(unwrap),
+
+  listMyInterests: ({ status } = {}) => {
+    const normalizedStatus = normalizeInterestStatus(status);
+    return apiClient
+      .get(INVESTMENT_ENDPOINTS.myInterests, {
+        params: normalizedStatus ? { status: normalizedStatus } : undefined,
+        skipGlobalLoader: true,
+      })
+      .then(unwrap);
+  },
+
+  listIssuerInterests: ({ status = 'pending' } = {}) => {
+    const normalizedStatus = normalizeInterestStatus(status, { optional: false });
+    return apiClient
+      .get(INVESTMENT_ENDPOINTS.issuerInterests, {
+        params: { status: normalizedStatus },
+        skipGlobalLoader: true,
+      })
+      .then(unwrap);
+  },
+
+  getIssuerInterest: (interestUid) =>
+    apiClient
+      .get(INVESTMENT_ENDPOINTS.issuerInterest(requiredUid(interestUid, 'Interest identifier')), {
+        skipGlobalLoader: true,
+      })
+      .then(unwrap),
+
+  downloadIssuerDocument: (interestUid, documentUid) =>
+    apiClient.get(
+      INVESTMENT_ENDPOINTS.issuerDocumentDownload(
+        requiredUid(interestUid, 'Interest identifier'),
+        requiredUid(documentUid, 'Document identifier'),
+      ),
+      {
+        responseType: 'blob',
+        timeout: 60_000,
+        skipGlobalLoader: true,
+      },
+    ),
+});

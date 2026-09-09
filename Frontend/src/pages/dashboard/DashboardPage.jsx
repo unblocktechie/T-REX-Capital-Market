@@ -7,10 +7,12 @@ import {
   Circle,
   Coins,
   FileCheck2,
-  FileSearch,
+  FileClock,
   Plus,
+  Copy,
   Rocket,
   ShieldCheck,
+  Store,
   UserRoundCheck,
   UsersRound,
   WalletCards,
@@ -25,9 +27,11 @@ import { ROLES } from '@/config/permissions';
 import { ROUTES } from '@/config/routes';
 import { useAuth } from '@/hooks/useAuth';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
-import { useInvestorAccessStatus } from '@/hooks/useInvestorAccessStatus';
+import { useInvestorProfileData } from '@/hooks/useInvestorProfileData';
+import { useWalletConnection } from '@/hooks/useWalletConnection';
 import { useMyToken } from '@/hooks/useMyToken';
 import { formatCurrency, formatNumber } from '@/utils/currency';
+import { toast } from 'sonner';
 
 const metricIcons = [Building2, Coins, UsersRound, ShieldCheck];
 
@@ -313,140 +317,216 @@ function InvestorDashboardPage() {
   useDocumentTitle('Investor dashboard');
   const { user } = useAuth();
   const navigate = useNavigate();
-  const investorAccess = useInvestorAccessStatus(user);
-  const onboarding = investorAccess.state;
-  const request = onboarding.investmentRequest;
-  const profile = onboarding.investorProfile;
-  const createdAt = request.submissionDate || profile.createdAt;
-  const completedAt = createdAt
-    ? new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(
-        new Date(createdAt),
-      )
-    : 'Not available';
-  const walletAddress = onboarding.wallet.displayAddress || onboarding.wallet.address || 'Not linked';
-  const statusLabel = 'Profile Created';
+  const walletConnection = useWalletConnection();
+  const investorQuery = useInvestorProfileData();
+  const onboarding = investorQuery.state;
+
+  if (investorQuery.isLoading) {
+    return (
+      <div className="page-stack investor-portal-dashboard">
+        <Skeleton height={150} />
+        <section className="investor-dashboard-grid">
+          <Skeleton height={220} />
+          <Skeleton height={220} />
+          <Skeleton height={220} />
+        </section>
+        <Skeleton height={300} />
+      </div>
+    );
+  }
+
+  if (investorQuery.isError) {
+    return (
+      <Card className="investor-dashboard-error">
+        <ShieldCheck size={28} />
+        <h1>We could not load your investor dashboard</h1>
+        <p>Your profile is safe. Retry the authenticated investor profile request to continue.</p>
+        <Button onClick={() => investorQuery.refetch()}>Try again</Button>
+      </Card>
+    );
+  }
+
+  const profile = onboarding.investorProfile || {};
+  const identityDocuments = onboarding.documents?.identityDocuments || [];
+  const accreditationDocuments = onboarding.compliance?.accreditationDocuments || [];
+  const rawInvestor = investorQuery.rawInvestor || {};
+  const createdAt = rawInvestor.submittedAt || rawInvestor.createdAt || onboarding.lastUpdated;
+  const createdDate = createdAt && !Number.isNaN(new Date(createdAt).getTime())
+    ? new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(createdAt))
+    : 'Available after creation';
+  const walletAddress = onboarding.wallet?.address || '';
+  const displayWallet = onboarding.wallet?.displayAddress || (walletAddress
+    ? `${walletAddress.slice(0, 8)}...${walletAddress.slice(-4)}`
+    : 'Not linked');
+  const connectedMatches = Boolean(
+    walletAddress &&
+      walletConnection.address &&
+      walletAddress.toLowerCase() === walletConnection.address.toLowerCase(),
+  );
+  const networkLabel = connectedMatches
+    ? walletConnection.chain?.name || 'Connected network'
+    : 'Primary wallet';
+  const balanceLabel = connectedMatches
+    ? walletConnection.balanceLabel || 'Balance unavailable'
+    : 'Connect wallet to view balance';
+  const latestDocumentDate = [...identityDocuments, ...accreditationDocuments]
+    .map((document) => document.uploadedAt)
+    .filter(Boolean)
+    .sort()
+    .at(-1);
+  const formatActivityDate = (value) => {
+    if (!value || Number.isNaN(new Date(value).getTime())) return 'Completed';
+    return new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(
+      new Date(value),
+    );
+  };
+  const activity = [
+    {
+      title: 'Investor profile created',
+      detail: profile.profileId ? `Profile ${profile.profileId} is active.` : 'Investor account setup completed.',
+      date: rawInvestor.submittedAt || onboarding.lastUpdated,
+      tone: 'success',
+    },
+    {
+      title: 'Primary wallet linked',
+      detail: walletAddress ? `${displayWallet} is linked to your investor identity.` : 'Primary wallet linked.',
+      date: rawInvestor.submittedAt || onboarding.lastUpdated,
+      tone: 'primary',
+    },
+    {
+      title: 'Verification documents saved',
+      detail: `${identityDocuments.length + accreditationDocuments.length} document${identityDocuments.length + accreditationDocuments.length === 1 ? '' : 's'} available in your profile.`,
+      date: latestDocumentDate || onboarding.lastUpdated,
+      tone: 'neutral',
+    },
+  ];
+
+  const copyIdentity = async () => {
+    const value = profile.onchainId || profile.profileId;
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success('Identity reference copied.');
+    } catch {
+      toast.error('Unable to copy the identity reference.');
+    }
+  };
 
   return (
-    <div className="page-stack">
-      <Card className="overflow-hidden border-[color-mix(in_srgb,var(--primary-500)_22%,var(--border))] bg-[linear-gradient(135deg,color-mix(in_srgb,var(--primary-500)_10%,var(--surface)),var(--surface)_62%)] p-[clamp(20px,4vw,38px)]">
-        <div className="grid items-center gap-7 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="min-w-0">
-            <span className="mb-3 inline-flex items-center gap-2 rounded-full border border-[color-mix(in_srgb,var(--success-500)_28%,transparent)] bg-[color-mix(in_srgb,var(--success-500)_10%,var(--surface))] px-3 py-1.5 text-xs font-bold text-[var(--success-500)]">
-              <CheckCircle2 size={15} /> {statusLabel}
-            </span>
-            <h1 className="m-0 max-w-3xl font-[var(--font-display)] text-[clamp(28px,4vw,46px)] leading-[1.08] tracking-[-0.035em] text-[var(--text)]">
-              Welcome, {user?.name?.split(' ')[0] || 'Investor'}.
-            </h1>
-            <p className="mt-4 mb-0 max-w-2xl text-sm leading-6 text-[var(--text-soft)] sm:text-base sm:leading-7">
-              Your investor profile has been created successfully. You can now review your onboarding information, manage your account, and use the investor portal.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Button icon={UserRoundCheck} onClick={() => navigate(ROUTES.investors)}>
-                View investor profile
-              </Button>
-              <Button variant="secondary" icon={FileSearch} onClick={() => navigate(ROUTES.profile)}>
-                Account settings
-              </Button>
-            </div>
-          </div>
-          <div className="grid min-h-[220px] place-items-center rounded-3xl border border-[color-mix(in_srgb,var(--success-500)_18%,var(--border))] bg-[color-mix(in_srgb,var(--surface)_86%,transparent)] p-6 shadow-[var(--shadow-sm)]">
-            <div className="grid place-items-center text-center">
-              <span className="grid size-20 place-items-center rounded-full bg-[color-mix(in_srgb,var(--success-500)_12%,var(--surface))] text-[var(--success-500)]">
-                <ShieldCheck size={38} />
-              </span>
-              <strong className="mt-4 text-lg text-[var(--text)]">Investor portal ready</strong>
-              <small className="mt-1 max-w-[230px] text-sm leading-5 text-[var(--text-soft)]">
-                Your onboarding information is saved and your dashboard is ready to use.
-              </small>
-            </div>
-          </div>
+    <div className="page-stack investor-portal-dashboard">
+      <header className="investor-dashboard-welcome">
+        <div>
+          <span className="eyebrow">Investor workspace</span>
+          <h1>Welcome, {user?.name?.split(' ')[0] || onboarding.identity?.firstName || 'Investor'}.</h1>
+          <p>Your investor account is ready. Review your identity, discover offerings, and track applications from one place.</p>
         </div>
-      </Card>
+        <Button icon={Store} onClick={() => navigate(ROUTES.marketplace)}>
+          Explore Marketplace <ArrowRight size={17} />
+        </Button>
+      </header>
 
-      <section className="grid gap-4 md:grid-cols-3" aria-label="Investor profile summary">
-        <Card className="p-5">
-          <span className="grid size-10 place-items-center rounded-xl bg-[color-mix(in_srgb,var(--primary-500)_11%,var(--surface))] text-[var(--primary-600)]">
-            <UserRoundCheck size={20} />
-          </span>
-          <small className="mt-4 block text-xs font-bold tracking-[0.08em] text-[var(--text-muted)] uppercase">Investor Profile</small>
-          <strong className="mt-1 block break-words text-lg text-[var(--text)]">{profile.profileId || 'Created'}</strong>
-          <p className="mt-1 mb-0 text-sm text-[var(--text-soft)]">{statusLabel}</p>
+      <section className="investor-dashboard-grid" aria-label="Investor account summary">
+        <Card className="investor-dashboard-summary-card">
+          <div className="investor-dashboard-card-heading">
+            <div>
+              <span className="eyebrow">Account identity</span>
+              <h2>ONCHAINID</h2>
+            </div>
+            <span className="investor-dashboard-card-icon"><UserRoundCheck size={20} /></span>
+          </div>
+          <div className="investor-dashboard-reference">
+            <code title={profile.onchainId || 'ONCHAINID created'}>{profile.onchainId || 'Created'}</code>
+            {profile.onchainId ? (
+              <button type="button" onClick={copyIdentity} aria-label="Copy ONCHAINID" title="Copy ONCHAINID">
+                <Copy size={16} />
+              </button>
+            ) : null}
+          </div>
+          <dl className="investor-dashboard-facts">
+            <div><dt>Status</dt><dd><span className="investor-dashboard-status"><CheckCircle2 size={14} /> Created</span></dd></div>
+            <div><dt>Profile</dt><dd>{profile.profileId || 'Created'}</dd></div>
+            <div><dt>Created</dt><dd>{createdDate}</dd></div>
+          </dl>
         </Card>
-        <Card className="p-5">
-          <span className="grid size-10 place-items-center rounded-xl bg-[color-mix(in_srgb,var(--primary-500)_11%,var(--surface))] text-[var(--primary-600)]">
-            <WalletCards size={20} />
-          </span>
-          <small className="mt-4 block text-xs font-bold tracking-[0.08em] text-[var(--text-muted)] uppercase">Connected Wallet</small>
-          <strong className="mt-1 block break-all text-base text-[var(--text)]" title={onboarding.wallet.address}>
-            {walletAddress}
-          </strong>
-          <p className="mt-1 mb-0 text-sm text-[var(--text-soft)]">{onboarding.wallet.network || 'Network unavailable'}</p>
-        </Card>
-        <Card className="p-5">
-          <span className="grid size-10 place-items-center rounded-xl bg-[color-mix(in_srgb,var(--primary-500)_11%,var(--surface))] text-[var(--primary-600)]">
-            <FileCheck2 size={20} />
-          </span>
-          <small className="mt-4 block text-xs font-bold tracking-[0.08em] text-[var(--text-muted)] uppercase">Onboarding Reference</small>
-          <strong className="mt-1 block break-words text-lg text-[var(--text)]">{request.requestId || profile.profileId || 'Completed'}</strong>
-          <p className="mt-1 mb-0 text-sm text-[var(--text-soft)]">Completed {completedAt}</p>
-        </Card>
-      </section>
 
-      <section className="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.75fr)]">
-        <Card className="p-5 sm:p-6">
-          <header>
-            <span className="eyebrow">Profile setup</span>
-            <h2 className="mt-1 mb-1 font-[var(--font-display)] text-2xl text-[var(--text)]">Your investor workspace is ready</h2>
-            <p className="m-0 text-sm leading-6 text-[var(--text-soft)]">Your onboarding details are saved and the main investor portal is now available.</p>
-          </header>
-          <div className="mt-6 grid gap-4">
-            {[
-              ['Investor profile created', 'Completed'],
-              ['Identity documents saved', 'Completed'],
-              ['Primary wallet linked', 'Completed'],
-              ['Dashboard access enabled', 'Available'],
-            ].map(([title, detail]) => (
-              <div className="grid grid-cols-[36px_minmax(0,1fr)] gap-3" key={title}>
-                <span className="grid size-9 place-items-center rounded-full border border-[var(--success-500)] bg-[color-mix(in_srgb,var(--success-500)_12%,var(--surface))] text-sm font-bold text-[var(--success-500)]">
-                  <Check size={16} />
-                </span>
-                <div className="min-w-0 border-b border-[var(--border)] pb-4 last:border-b-0">
-                  <strong className="block text-sm text-[var(--text)]">{title}</strong>
-                  <small className="mt-1 block text-xs text-[var(--text-soft)]">{detail}</small>
+        <Card className="investor-dashboard-summary-card">
+          <div className="investor-dashboard-card-heading">
+            <div>
+              <span className="eyebrow">Connected wallet</span>
+              <h2>Primary wallet</h2>
+            </div>
+            <span className="investor-dashboard-card-icon"><WalletCards size={20} /></span>
+          </div>
+          <div className="investor-dashboard-reference">
+            <code title={walletAddress}>{displayWallet}</code>
+          </div>
+          <dl className="investor-dashboard-facts">
+            <div><dt>Status</dt><dd><span className="investor-dashboard-status"><CheckCircle2 size={14} /> Linked</span></dd></div>
+            <div><dt>Network</dt><dd>{networkLabel}</dd></div>
+            <div><dt>Balance</dt><dd>{balanceLabel}</dd></div>
+          </dl>
+        </Card>
+
+        <Card className="investor-dashboard-activity-card">
+          <div className="investor-dashboard-card-heading">
+            <div>
+              <span className="eyebrow">Recent activity</span>
+              <h2>Account timeline</h2>
+            </div>
+            <span className="investor-dashboard-card-icon"><FileClock size={20} /></span>
+          </div>
+          <div className="investor-dashboard-timeline">
+            {activity.map((item) => (
+              <div className="investor-dashboard-timeline-item" key={item.title}>
+                <span className={`investor-dashboard-timeline-dot is-${item.tone}`} />
+                <div>
+                  <strong>{item.title}</strong>
+                  <p>{item.detail}</p>
+                  <small>{formatActivityDate(item.date)}</small>
                 </div>
               </div>
             ))}
           </div>
         </Card>
+      </section>
 
-        <Card className="p-5 sm:p-6">
-          <span className="grid size-11 place-items-center rounded-2xl bg-[color-mix(in_srgb,var(--success-500)_11%,var(--surface))] text-[var(--success-500)]">
-            <CheckCircle2 size={23} />
-          </span>
-          <h2 className="mt-4 mb-2 font-[var(--font-display)] text-xl text-[var(--text)]">Profile saved</h2>
-          <p className="m-0 text-sm leading-6 text-[var(--text-soft)]">
-            Your completed onboarding profile remains available after logout or refresh, so you will not be asked to create it again.
-          </p>
-          <dl className="mt-5 grid gap-3 text-sm">
-            <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] pb-3">
-              <dt className="text-[var(--text-soft)]">Current status</dt>
-              <dd className="m-0 text-right font-bold text-[var(--text)]">{statusLabel}</dd>
+      <section className="investor-dashboard-lower-grid">
+        <Card className="investor-investments-card">
+          <header className="investor-dashboard-card-heading">
+            <div>
+              <span className="eyebrow">Portfolio</span>
+              <h2>My Investments</h2>
             </div>
-            <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] pb-3">
-              <dt className="text-[var(--text-soft)]">Portal access</dt>
-              <dd className="m-0 text-right font-bold text-[var(--success-500)]">Enabled</dd>
-            </div>
-            <div className="flex items-start justify-between gap-3">
-              <dt className="text-[var(--text-soft)]">ONCHAINID</dt>
-              <dd className="m-0 max-w-[190px] break-all text-right font-bold text-[var(--text)]">{profile.onchainId || 'Created'}</dd>
-            </div>
-          </dl>
+            <button className="link-button" type="button" onClick={() => navigate(ROUTES.applications)}>
+              My applications
+            </button>
+          </header>
+          <div className="investor-dashboard-empty-state">
+            <span><Coins size={27} /></span>
+            <h3>No investments yet</h3>
+            <p>Your portfolio is currently empty. Explore compliant tokenized assets when offerings become available.</p>
+            <Button variant="secondary" icon={Store} onClick={() => navigate(ROUTES.marketplace)}>
+              Browse available offerings
+            </Button>
+          </div>
+        </Card>
+
+        <Card className="investor-dashboard-profile-card">
+          <span className="investor-dashboard-card-icon"><FileCheck2 size={21} /></span>
+          <h2>Profile overview</h2>
+          <p>Your submitted identity, suitability information, and verification documents are available in one secure profile.</p>
+          <div className="investor-dashboard-profile-stats">
+            <div><strong>{identityDocuments.length}</strong><span>Identity document{identityDocuments.length === 1 ? '' : 's'}</span></div>
+            <div><strong>{accreditationDocuments.length}</strong><span>Accreditation document{accreditationDocuments.length === 1 ? '' : 's'}</span></div>
+          </div>
+          <Button className="button--full" variant="secondary" onClick={() => navigate(ROUTES.profile)}>
+            View full investor profile <ArrowRight size={17} />
+          </Button>
         </Card>
       </section>
     </div>
   );
 }
-
 export default function DashboardPage() {
   const { user } = useAuth();
   return user?.role === ROLES.investor ? <InvestorDashboardPage /> : <IssuerDashboardPage />;

@@ -16,12 +16,14 @@ const labels = {
   success: 'Deployment Successful',
   identity: 'Identity registry',
   compliance: 'Compliance rules',
-  investors: 'Investors',
+  investors: 'Manage Request',
   transactions: 'Transactions',
   'corporate-actions': 'Corporate actions',
   documents: 'Documents',
   reports: 'Reports',
   team: 'Team & access',
+  marketplace: 'Marketplace',
+  applications: 'My Applications',
   profile: 'Profile',
   settings: 'Settings',
   organization: 'Organization',
@@ -43,6 +45,8 @@ export function Breadcrumbs() {
   const getLabel = (part, index) => {
     const isTokenIdentifier = parts[index - 1] === 'tokens' && part !== 'new';
     if (isTokenIdentifier) return tokenSymbol || 'Token details';
+    if (parts[index - 1] === 'marketplace') return 'Offering Details';
+    if (parts[index - 1] === 'investors') return 'Subscription Details';
     return labels[part] || part;
   };
   return (

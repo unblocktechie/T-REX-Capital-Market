@@ -9,20 +9,20 @@ import {
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { CreateInvestorProfileModal } from '@/components/investor/CreateInvestorProfileModal';
-import { InvestorDocumentReview } from '@/components/investor/InvestorDocumentReview';
+import { InvestorDocumentList } from '@/components/investor/InvestorDocumentReview';
 import { InvestorLayout } from '@/components/investor/InvestorLayout';
 import { InvestorActionBar } from '@/components/investor/InvestorPrimitives';
 import { WalletCard } from '@/components/investor/WalletCard';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { useInvestorOnboarding } from '@/hooks/useInvestorOnboarding';
+import { useCityOptions, useCountryOptions, useStateOptions } from '@/hooks/useLocationOptions';
 import { useWalletConnection } from '@/hooks/useWalletConnection';
-import { createMockInvestorProfile, submitMockInvestmentRequest } from '@/services/investor';
+import { getErrorMessage } from '@/utils/error';
 import { isInvestorOnboardingReady } from '@/validations/investor.schemas';
-import { INVESTMENT_CATEGORIES, ACCREDITATION_OPTIONS } from '@/constants/investor';
 
-const displayLabel = (options, value) => options.find((option) => option.value === value)?.label || value || 'Not provided';
-const formatDocumentCount = (documents = []) => `${documents.length} ${documents.length === 1 ? 'document' : 'documents'} uploaded`;
+const displayLabel = (options, value) =>
+  options.find((option) => String(option.value) === String(value))?.label || value || 'Not provided';
 const displayDate = (value) => {
   if (!value) return 'Not provided';
   const date = new Date(`${value}T00:00:00`);
@@ -54,20 +54,35 @@ function ReviewList({ items }) {
 export default function ReviewSubmitStep() {
   const {
     state,
-    updateSection,
-    patchState,
+    options,
     setStep,
-    markSubmitted,
+    submitInvestor,
+    submitting,
+    downloadDocument,
   } = useInvestorOnboarding();
   const connectedWallet = useWalletConnection();
   const [modalOpen, setModalOpen] = useState(state.currentStep === 5);
-  const [submitting, setSubmitting] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [submissionError, setSubmissionError] = useState('');
   const ready = useMemo(() => isInvestorOnboardingReady(state), [state]);
   const identity = state.identity;
   const documents = state.documents;
   const compliance = state.compliance;
+  const { options: countryOptions } = useCountryOptions(
+    identity.countryOfResidence
+      ? [{ value: identity.countryOfResidence, label: identity.countryOfResidenceName || identity.countryOfResidence }]
+      : [],
+  );
+  const { options: stateOptions } = useStateOptions(
+    identity.countryOfResidence,
+    identity.stateProvince
+      ? [{ value: identity.stateProvince, label: identity.stateProvinceName || identity.stateProvince }]
+      : [],
+  );
+  const { options: cityOptions } = useCityOptions(
+    identity.stateProvince,
+    identity.city ? [{ value: identity.city, label: identity.cityName || identity.city }] : [],
+  );
   const activeWallet = useMemo(
     () => ({
       isConnected: Boolean(connectedWallet.isConnected && connectedWallet.address),
@@ -100,6 +115,10 @@ export default function ReviewSubmitStep() {
       toast.error('Connect the primary investor wallet before continuing.');
       return;
     }
+    if (!activeWallet.isCorrectNetwork) {
+      toast.error('Switch the connected wallet to the supported network before continuing.');
+      return;
+    }
     setSubmissionError('');
     setModalOpen(true);
     setStep(5);
@@ -113,49 +132,27 @@ export default function ReviewSubmitStep() {
 
   const createProfileAndSubmit = async () => {
     if (submitting) return;
-    setSubmitting(true);
     setSubmissionError('');
+    setLoadingMessage('Finalizing your investor onboarding with the connected wallet…');
     try {
-      let profile = state.investorProfile;
-      if (!profile.profileId) {
-        setLoadingMessage('Creating your simulated investor profile and ONCHAINID reference…');
-        profile = await createMockInvestorProfile({ walletAddress: activeWallet.address });
-        if (!profile?.profileId) throw new Error('The profile service returned an empty response. Please retry.');
-        updateSection('investorProfile', profile);
-        toast.success(`Investor profile ${profile.profileId} created.`);
-      }
-
-      setLoadingMessage('Finalizing your investor profile…');
-      const request = await submitMockInvestmentRequest({
-        investorProfileId: profile.profileId,
-        walletAddress: activeWallet.address,
-      });
-      if (!request?.requestId) throw new Error('The profile completion service returned an empty response. Please retry.');
-      const completedState = {
-        ...state,
-        wallet: activeWallet,
-        currentStep: 6,
-        highestStepReached: 6,
-        investorProfile: profile,
-        investmentRequest: request,
-        lastUpdated: new Date().toISOString(),
-      };
-      patchState({ wallet: activeWallet, investorProfile: profile, investmentRequest: request });
-      markSubmitted(completedState);
+      const { result } = await submitInvestor(activeWallet.address);
       setModalOpen(false);
-      toast.success('Investor profile created successfully.');
+      const reference = result?.profileReference || '';
+      toast.success(reference ? `Investor profile ${reference} created successfully.` : 'Investor profile created successfully.');
       window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
     } catch (error) {
-      setSubmissionError(error.message || 'Unable to finish creating the investor profile.');
+      setSubmissionError(getErrorMessage(error, 'Unable to submit the investor onboarding profile.'));
     } finally {
-      setSubmitting(false);
       setLoadingMessage('');
     }
   };
 
-  const categories = compliance.investmentCategories.map((value) => displayLabel(INVESTMENT_CATEGORIES, value)).join(', ');
-  const lastUpdated = state.lastUpdated
-    ? new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(state.lastUpdated))
+  const categories = compliance.investmentCategories
+    .map((value) => displayLabel(options.investmentCategories, value))
+    .join(', ');
+  const lastUpdatedDate = state.lastUpdated ? new Date(state.lastUpdated) : null;
+  const lastUpdated = lastUpdatedDate && !Number.isNaN(lastUpdatedDate.getTime())
+    ? new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(lastUpdatedDate)
     : 'Not saved yet';
 
   const actionPanel = (
@@ -163,9 +160,9 @@ export default function ReviewSubmitStep() {
       <Card className="investor-review-action-card">
         <span className="eyebrow">Final action</span>
         <h2>Create your investor profile</h2>
-        <p>Connect the primary wallet, review the entered information, and complete your investor profile setup.</p>
+        <p>Connect the primary wallet, review the entered information, and submit the completed onboarding record.</p>
         <WalletCard wallet={activeWallet} />
-        <Button className="button--full" onClick={openProfileModal} disabled={!ready || !activeWallet.isConnected || !activeWallet.isCorrectNetwork} icon={ShieldCheck}>
+        <Button className="button--full" onClick={openProfileModal} disabled={!ready || !activeWallet.isConnected || !activeWallet.isCorrectNetwork || submitting} icon={ShieldCheck}>
           Create Investor Profile
         </Button>
         <small>Last updated: {lastUpdated}</small>
@@ -173,10 +170,10 @@ export default function ReviewSubmitStep() {
 
       <Card className="investor-help-panel">
         <span><Headphones size={20} /></span>
-        <div><strong>Need compliance assistance?</strong><p>Contact the compliance desk for help understanding an onboarding field.</p><Button variant="ghost" size="sm" onClick={() => toast.info('Compliance desk contact is simulated in this frontend flow.')}>Contact Compliance Desk</Button></div>
+        <div><strong>Need compliance assistance?</strong><p>Contact the compliance desk for help understanding an onboarding field.</p><Button variant="ghost" size="sm" onClick={() => toast.info('Please contact your configured compliance support channel.')}>Contact Compliance Desk</Button></div>
       </Card>
 
-      <div className="investor-encryption-note"><LockKeyhole size={18} /><p><strong>AES-256 Encryption</strong><span>This is an informational UI message only; no production encryption service is connected.</span></p></div>
+      <div className="investor-encryption-note"><LockKeyhole size={18} /><p><strong>Protected API access</strong><span>Investor records and documents are accessed through authenticated backend requests.</span></p></div>
     </aside>
   );
 
@@ -193,30 +190,38 @@ export default function ReviewSubmitStep() {
           <ReviewList items={[
             ['Full Legal Name', `${identity.firstName} ${identity.lastName}`.trim()],
             ['Date of Birth', displayDate(identity.dateOfBirth)],
-            ['Gender', identity.gender ? identity.gender[0].toUpperCase() + identity.gender.slice(1) : 'Not provided'],
-            ['Tax Residency / Country of Residence', identity.countryOfResidence],
-            ['Residential Address', `${identity.streetAddress}, ${identity.city}, ${identity.stateProvince}, ${identity.countryOfResidence}`],
+            ['Gender', displayLabel(options.genders, identity.gender)],
+            ['Tax Residency / Country of Residence', displayLabel(countryOptions, identity.countryOfResidence)],
+            ['Residential Address', [
+              identity.streetAddress,
+              displayLabel(cityOptions, identity.city),
+              displayLabel(stateOptions, identity.stateProvince),
+              displayLabel(countryOptions, identity.countryOfResidence),
+            ].filter((value) => value && value !== 'Not provided').join(', ')],
           ]} />
         </ReviewSection>
 
         <ReviewSection title="Identity Verification" actionLabel="Update" onEdit={() => setStep(2, { markReached: false })}>
-          <ReviewList items={[
-            ['Uploaded Identity Documents', formatDocumentCount(documents.identityDocuments || [])],
-          ]} />
+          <InvestorDocumentList
+            documents={documents.identityDocuments || []}
+            title="Uploaded Identity Documents"
+            categoryLabel="Identity"
+            downloadDocument={downloadDocument}
+          />
         </ReviewSection>
 
         <ReviewSection title="Accredited Investor Status" actionLabel="Update" onEdit={() => setStep(3, { markReached: false })}>
           <ReviewList items={[
-            ['Accreditation Type', displayLabel(ACCREDITATION_OPTIONS, compliance.accreditationType)],
-            ['Uploaded Accreditation Documents', formatDocumentCount(compliance.accreditationDocuments || [])],
-            ['Profile Status', 'Ready to Create'],
+            ['Accreditation Type', displayLabel(options.accreditationTypes, compliance.accreditationType)],
+            ['Profile Status', 'Ready to Submit'],
           ]} />
+          <InvestorDocumentList
+            documents={compliance.accreditationDocuments || []}
+            title="Uploaded Accreditation Documents"
+            categoryLabel="Accreditation"
+            downloadDocument={downloadDocument}
+          />
         </ReviewSection>
-
-        <InvestorDocumentReview
-          identityDocuments={documents.identityDocuments || []}
-          accreditationDocuments={compliance.accreditationDocuments || []}
-        />
 
         <ReviewSection title="Investor Profile" onEdit={() => setStep(3, { markReached: false })}>
           <ReviewList items={[
@@ -249,7 +254,7 @@ export default function ReviewSubmitStep() {
         error={submissionError}
         wallet={activeWallet}
         ready={ready}
-        profileCreated={Boolean(state.investorProfile.profileId)}
+        profileCreated={false}
       />
     </>
   );

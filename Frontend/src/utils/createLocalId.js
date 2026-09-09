@@ -1,7 +1,7 @@
 /**
  * Creates a browser-safe local identifier.
  * crypto.randomUUID() is unavailable on some non-secure HTTP origins,
- * so the organization flow must not depend on it directly.
+ * so application flows must not depend on it directly.
  */
 export function createLocalId(prefix = 'local') {
   const cryptoApi = globalThis.crypto;

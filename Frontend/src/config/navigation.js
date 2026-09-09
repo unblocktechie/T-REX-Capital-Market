@@ -1,4 +1,4 @@
-import { Building2, Coins, LayoutDashboard, UsersRound } from 'lucide-react';
+import { Building2, Coins, FileText, LayoutDashboard, Store, UsersRound } from 'lucide-react';
 import { PERMISSIONS, ROLES } from './permissions';
 import { ROUTES } from './routes';
 
@@ -32,12 +32,28 @@ export const navigationGroups = Object.freeze([
         roles: [ROLES.issuer],
       },
       {
-        label: 'Investors',
-        shortLabel: 'Investors',
+        label: 'Manage Request',
+        shortLabel: 'Manage Request',
         to: ROUTES.investors,
         icon: UsersRound,
         permission: PERMISSIONS.dashboardView,
-        roles: [ROLES.issuer, ROLES.investor],
+        roles: [ROLES.issuer],
+      },
+      {
+        label: 'Market Place',
+        shortLabel: 'Market Place',
+        to: ROUTES.marketplace,
+        icon: Store,
+        permission: PERMISSIONS.dashboardView,
+        roles: [ROLES.investor],
+      },
+      {
+        label: 'My Application',
+        shortLabel: 'Application',
+        to: ROUTES.applications,
+        icon: FileText,
+        permission: PERMISSIONS.dashboardView,
+        roles: [ROLES.investor],
       },
     ],
   },
@@ -58,8 +74,11 @@ export const routeMeta = Object.freeze({
     description: 'ERC-3643 token configuration and deployment details',
   },
   [ROUTES.investors]: {
-    title: 'Investors',
-    description: 'Investor onboarding and qualification',
+    title: 'Manage Request',
+    description: 'Review investor subscription requests',
   },
+  [ROUTES.marketplace]: { title: 'Marketplace', description: 'Discover tokenized investment opportunities' },
+  marketplaceToken: { title: 'Marketplace Asset', description: 'Review a compliant tokenized investment offering' },
+  [ROUTES.applications]: { title: 'My Applications', description: 'Track your investment applications' },
   [ROUTES.profile]: { title: 'Profile', description: 'Personal account settings' },
 });
