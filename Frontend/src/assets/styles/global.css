@@ -1641,6 +1641,69 @@ h3 {
   color: var(--danger-500);
 }
 
+
+.network-error-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: hidden;
+  padding: clamp(24px, 5vw, 64px) clamp(18px, 4vw, 40px);
+}
+.network-error-page__visual {
+  display: grid;
+  justify-items: center;
+  gap: clamp(14px, 2vw, 24px);
+  width: min(100%, 980px);
+}
+.network-error-page__code {
+  max-width: 100%;
+  margin: 0;
+  font-size: clamp(48px, 12vw, 142px);
+  letter-spacing: -0.065em;
+  line-height: 0.92;
+  white-space: nowrap;
+}
+.network-error-page__icon {
+  margin-top: 0;
+}
+.network-error-page__content {
+  display: grid;
+  justify-items: center;
+  width: min(100%, 620px);
+}
+.network-error-page__content h1 {
+  margin-top: clamp(20px, 3vw, 30px);
+}
+.network-error-page__content p {
+  margin-top: 0;
+}
+
+@media (max-width: 520px) {
+  .network-error-page {
+    padding-inline: 18px;
+  }
+  .network-error-page__visual {
+    gap: 16px;
+  }
+  .network-error-page__code {
+    font-size: clamp(44px, 14vw, 68px);
+    letter-spacing: -0.055em;
+  }
+  .network-error-page__icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+  }
+  .network-error-page__content h1 {
+    margin-top: 20px;
+    font-size: clamp(27px, 8vw, 34px);
+  }
+  .network-error-page__content p {
+    margin-bottom: 22px;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+}
+
 @media (max-width: 1100px) {
   .auth-layout {
     grid-template-columns: minmax(360px, 0.88fr) minmax(460px, 1.12fr);

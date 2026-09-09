@@ -11,6 +11,11 @@ import { PasswordInput } from '@/components/ui/PasswordInput';
 import { ROUTES } from '@/config/routes';
 import { ROLES } from '@/config/permissions';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import {
+  isInvestorWorkspaceUnlocked,
+  loadInvestorDraft,
+} from '@/services/investor';
+import { pendingDeploymentService } from '@/services/pendingDeployment.service';
 import { loginSchema } from '@/validations/auth.schemas';
 
 export default function LoginPage() {
@@ -21,6 +26,7 @@ export default function LoginPage() {
   const from = location.state?.from?.pathname || ROUTES.dashboard;
   const sessionExpired = searchParams.get('reason') === 'session-expired';
   const emailVerified = searchParams.get('verified') === 'true';
+  const pendingDeployment = pendingDeploymentService.get();
   const {
     register,
     handleSubmit,
@@ -33,9 +39,40 @@ export default function LoginPage() {
   const login = useMutation({
     mutationFn: authService.login,
     onSuccess: (session) => {
-      toast.success('Welcome back.');
+      const recoverableDeployment =
+        session?.user?.role === ROLES.issuer
+          ? pendingDeploymentService.getForUser(session.user)
+          : null;
+
+      if (recoverableDeployment) {
+        toast.success('Welcome back — resuming your deployment', {
+          description:
+            'Your blockchain transaction was recovered. The backend will resume its independent Sepolia verification; MetaMask will not open again.',
+        });
+        navigate(ROUTES.tokenDeploying, { replace: true });
+        return;
+      }
+
+      if (pendingDeploymentService.belongsToAnotherUser(session?.user)) {
+        toast.warning('A pending deployment belongs to a different account', {
+          description:
+            'Sign in with the issuer account that created the blockchain transaction to complete the backend update.',
+        });
+      } else {
+        toast.success('Welcome back.');
+      }
+
+      const investorState =
+        session?.user?.role === ROLES.investor
+          ? loadInvestorDraft(session.user).draft
+          : null;
       const destination =
-        session?.user?.role === ROLES.admin ? ROUTES.adminReviewQueue : from;
+        session?.user?.role === ROLES.admin
+          ? ROUTES.adminReviewQueue
+          : session?.user?.role === ROLES.investor &&
+              !isInvestorWorkspaceUnlocked(investorState)
+            ? ROUTES.investors
+            : from;
       navigate(destination, { replace: true });
     },
   });
@@ -60,8 +97,10 @@ export default function LoginPage() {
         </div>
       ) : null}
       {sessionExpired ? (
-        <div className="mb-4 rounded-xl border border-[color-mix(in_srgb,var(--warning-500)_30%,transparent)] bg-[color-mix(in_srgb,var(--warning-500)_9%,transparent)] px-3.5 py-3 text-[13px] text-[#a5670a]">
-          Your session expired. Sign in again to continue.
+        <div className="mb-4 rounded-xl border border-[color-mix(in_srgb,var(--warning-500)_30%,transparent)] bg-[color-mix(in_srgb,var(--warning-500)_9%,transparent)] px-3.5 py-3 text-[13px] leading-5 text-[#a5670a]">
+          {pendingDeployment
+            ? 'Your session expired after the wallet transaction. Its hash is safely stored in this browser. Sign in with the same issuer account so the backend can resume verification without another wallet transaction.'
+            : 'Your session expired. Sign in again to continue.'}
         </div>
       ) : null}
       <form

@@ -65,9 +65,15 @@ function WalletOption({ type, title, description, disabled, loading, onClick }) 
   );
 }
 
-export function WalletControl({ onboarding = false, prominent = false, expanded = false }) {
+export function WalletControl({
+  onboarding = false,
+  prominent = false,
+  expanded = false,
+  context = 'organization',
+}) {
   const [open, setOpen] = useState(false);
   const wallet = useWalletConnection();
+  const isInvestorContext = context === 'investor';
 
   const connectWith = async (connector) => {
     try {
@@ -142,9 +148,18 @@ export function WalletControl({ onboarding = false, prominent = false, expanded 
   const currentNetworkLabel =
     wallet.chain?.name ||
     `Unsupported network${wallet.chainId ? ` (Chain ID ${wallet.chainId})` : ''}`;
+  const modalTitle = wallet.isConnected
+    ? isInvestorContext
+      ? 'Investor wallet'
+      : 'Organization wallet'
+    : isInvestorContext
+      ? 'Connect investor wallet'
+      : 'Connect organization wallet';
 
   const triggerClasses = prominent
-    ? 'min-h-12 w-full justify-center border-transparent bg-[linear-gradient(135deg,var(--primary-500),var(--primary-600))] px-4 text-white shadow-[0_10px_24px_rgba(47,128,237,0.24)] hover:-translate-y-0.5 hover:border-transparent hover:bg-[linear-gradient(135deg,var(--primary-600),var(--primary-700))] hover:text-white hover:shadow-[0_14px_30px_rgba(47,128,237,0.3)]'
+    ? isInvestorContext
+      ? 'investor-wallet-connect-trigger min-h-12 w-full justify-center border-transparent px-4 text-white'
+      : 'min-h-12 w-full justify-center border-transparent bg-[linear-gradient(135deg,var(--primary-500),var(--primary-600))] px-4 text-white shadow-[0_10px_24px_rgba(47,128,237,0.24)] hover:-translate-y-0.5 hover:border-transparent hover:bg-[linear-gradient(135deg,var(--primary-600),var(--primary-700))] hover:text-white hover:shadow-[0_14px_30px_rgba(47,128,237,0.3)]'
     : wallet.isConnected
       ? wallet.isCorrectNetwork
         ? 'border-emerald-200 bg-emerald-50/80 text-slate-950 hover:border-emerald-300 hover:bg-emerald-50'
@@ -242,7 +257,7 @@ export function WalletControl({ onboarding = false, prominent = false, expanded 
       <Modal
         open={open}
         onClose={() => !wallet.isBusy && setOpen(false)}
-        title={wallet.isConnected ? 'Organization wallet' : 'Connect organization wallet'}
+        title={modalTitle}
         className="sm:max-w-lg"
       >
         {wallet.isConnected ? (
@@ -329,7 +344,7 @@ export function WalletControl({ onboarding = false, prominent = false, expanded 
               >
                 <span>
                   <strong className="block text-sm">{wallet.requiredChain.name}</strong>
-                  <small className="block text-xs opacity-70">Required deployment network</small>
+                  <small className="block text-xs opacity-70">{isInvestorContext ? 'Required investor network' : 'Required deployment network'}</small>
                 </span>
                 {wallet.isCorrectNetwork ? (
                   <Check size={18} />
@@ -387,7 +402,9 @@ export function WalletControl({ onboarding = false, prominent = false, expanded 
               </span>
               <h3 className="mt-4 mb-1 text-lg font-semibold text-slate-950">Choose a secure wallet</h3>
               <p className="m-0 text-sm leading-6 text-slate-600">
-                This wallet becomes the primary organization wallet and will be used for token creation and future issuer actions.
+                {isInvestorContext
+                  ? 'This wallet becomes your primary investor wallet and will be linked to your investor profile.'
+                  : 'This wallet becomes the primary organization wallet and will be used for token creation and future issuer actions.'}
               </p>
               <span className="mt-3 inline-flex rounded-full bg-white px-3 py-1 text-xs font-bold text-[var(--primary-700)] shadow-sm">
                 Sepolia testnet only

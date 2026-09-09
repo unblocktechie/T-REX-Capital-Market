@@ -35,17 +35,41 @@ export function DeploymentConfirmationModal({ open, onClose, onConfirm, data, wa
             disabled={!acknowledged}
             loading={loading}
           >
-            Continue to Wallet
+            Start Wallet Confirmations
           </Button>
         </>
       }
     >
       <div className="issuance-modal-stack">
-        <InfoCallout title="Wallet signature required" tone="warning" icon={AlertTriangle}>
-          Your connected issuer wallet will open to sign the T-REX Gateway transaction and pay the
-          Sepolia gas fee. The backend submit API is called only after Sepolia confirms the
-          transaction and returns a valid transaction hash.
+        <InfoCallout title="Two MetaMask confirmations are required" tone="warning" icon={AlertTriangle}>
+          These are two separate blockchain actions. MetaMask will show one confirmation at a time,
+          and each confirmed transaction has its own Sepolia gas fee.
         </InfoCallout>
+        <div className="issuance-wallet-transactions" aria-label="Required wallet transactions">
+          <strong>What you will approve</strong>
+          <ol>
+            <li>
+              <span aria-hidden="true">1</span>
+              <div>
+                <b>Create your security token</b>
+                <p>
+                  Creates the token and the compliance, identity, and registry contracts needed for
+                  your regulated offering.
+                </p>
+              </div>
+            </li>
+            <li>
+              <span aria-hidden="true">2</span>
+              <div>
+                <b>Activate token transfers</b>
+                <p>
+                  Unpauses the new token so eligible investors can receive and transfer it after
+                  deployment.
+                </p>
+              </div>
+            </li>
+          </ol>
+        </div>
         <dl className="issuance-review-list">
           <div>
             <dt>Token</dt>
@@ -75,14 +99,6 @@ export function DeploymentConfirmationModal({ open, onClose, onConfirm, data, wa
           address={data.tokenInformation.treasuryWallet}
         />
         <AddressDisplay label="Connected wallet" address={wallet.address} />
-        <div className="issuance-immutable-list">
-          <strong>On-chain deployment creates</strong>
-          <ul>
-            <li>ERC-3643 token and identity registry contracts</li>
-            <li>Claim topic and trusted issuer registries</li>
-            <li>Modular compliance with the selected restrictions</li>
-          </ul>
-        </div>
         <label className="issuance-acknowledgement">
           <input
             type="checkbox"
@@ -90,8 +106,8 @@ export function DeploymentConfirmationModal({ open, onClose, onConfirm, data, wa
             onChange={(event) => setAcknowledged(event.target.checked)}
           />
           <span>
-            I confirm the connected wallet is the approved issuer wallet and understand the
-            deployment settings become immutable after the transaction is confirmed.
+            I confirm the connected wallet is the approved issuer wallet and understand that
+            MetaMask will request two separate transaction approvals.
           </span>
         </label>
       </div>

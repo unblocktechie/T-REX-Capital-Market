@@ -23,6 +23,8 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTokenDashboardData } from '@/hooks/useTokenDashboardData';
 import { formatMoney, formatNumber } from '@/utils/tokenIssuance';
+import { getDeploymentTransactionHash } from '@/utils/transactionHash';
+import { shortenWalletAddress } from '@/utils/wallet';
 
 const firstText = (...values) =>
   String(values.find((value) => value !== undefined && value !== null) || '').trim();
@@ -35,13 +37,16 @@ const rawAddress = (raw, ...keys) => {
   return '';
 };
 
-function DetailMetric({ icon: Icon, label, value, mono = false }) {
+function DetailMetric({ icon: Icon, label, value, mono = false, titleValue }) {
   return (
     <article className="token-dashboard-metric">
       <span className="token-dashboard-metric__icon"><Icon size={20} /></span>
       <div>
         <small>{label}</small>
-        <strong className={mono ? 'token-dashboard-metric__mono' : undefined} title={String(value)}>
+        <strong
+          className={mono ? 'token-dashboard-metric__mono' : undefined}
+          title={String(titleValue || value)}
+        >
           {value || '—'}
         </strong>
       </div>
@@ -91,7 +96,19 @@ export default function TokenDetailsPage() {
     );
   }
 
-  if (!token.hasToken || !token.isLocked) {
+  if (!token.hasToken) {
+    return <Navigate to={ROUTES.createToken} replace />;
+  }
+
+  if (token.isDeploymentPending) {
+    return <Navigate to={ROUTES.tokenDeploying} replace />;
+  }
+
+  if (token.isReadyToDeploy || token.isDeploymentFailed) {
+    return <Navigate to={ROUTES.tokenIssuanceStep('review')} replace />;
+  }
+
+  if (!token.isDeployed) {
     return <Navigate to={ROUTES.createToken} replace />;
   }
 
@@ -131,16 +148,11 @@ export default function TokenDetailsPage() {
     'deployment.contracts.irs',
     'deployment.identityRegistryStorageAddress',
   );
-  const realTransactionHash = rawAddress(
-    raw,
-    'deployTx',
-    'transactionHash',
-    'transaction.hash',
-    'deploymentTransactionHash',
-    'deployment.deployTx',
-    'deployment.transactionHash',
-  );
-  const transactionHash = realTransactionHash;
+  // The token overview never renders the transaction hash itself. The backend's
+  // confirmed deployTxHash is used only to build the block-explorer destination
+  // for the View Transaction action. Legacy response keys remain supported by
+  // the shared resolver so older records keep working.
+  const transactionHash = getDeploymentTransactionHash(raw);
   const transactionExplorer = transactionHash && explorerBase
     ? `${explorerBase}/tx/${transactionHash}`
     : undefined;
@@ -151,7 +163,6 @@ export default function TokenDetailsPage() {
   const countryNames = (compliance.countries || [])
     .map((country) => country?.countryName || country?.label || String(country || ''))
     .filter(Boolean);
-  const validatedAt = firstText(raw.submittedAt, raw.validatedAt, raw.updatedAt);
   const displayStatus = token.isDeployed ? 'Deployed' : 'Ready to Deploy';
   const initialPrice = mapped.supplyPricing?.initialPrice;
 
@@ -189,15 +200,34 @@ export default function TokenDetailsPage() {
           {information.description ||
             'Review the token identity, governance agents, enabled claims and compliance rules from one secure dashboard.'}
         </p>
+        <div className="token-dashboard-header__deployment-meta">
+          <AddressDisplay
+            label="Token contract"
+            address={tokenContractAddress}
+            emptyLabel="Token contract not recorded"
+            explorerUrl={tokenExplorer}
+            showFullAddress
+            className="token-dashboard-header__contract"
+          />
+          <div className="token-dashboard-header__price">
+            <small>Token price</small>
+            <strong>{initialPrice ? formatMoney(initialPrice, 'USDT') : '—'}</strong>
+          </div>
+        </div>
       </header>
 
       <section className="token-dashboard-metrics" aria-label="Token summary">
         <DetailMetric icon={FileCheck2} label="Token Name" value={tokenName} />
         <DetailMetric icon={BadgeCheck} label="Symbol" value={symbol} />
         <DetailMetric icon={CircleDollarSign} label="Decimals" value={information.decimals || '18'} />
-        <DetailMetric icon={WalletCards} label="Treasury Wallet" value={ownerAddress} mono />
+        <DetailMetric
+          icon={WalletCards}
+          label="Treasury Wallet"
+          value={shortenWalletAddress(ownerAddress, 5, 5)}
+          titleValue={ownerAddress}
+          mono
+        />
       </section>
-
 
       <div className="token-dashboard-grid">
         <section className="token-dashboard-card">
@@ -333,43 +363,6 @@ export default function TokenDetailsPage() {
                 {countryNames.map((country) => <span key={country}>{country}</span>)}
               </div>
             ) : null}
-          </div>
-        </section>
-
-        <section className="token-dashboard-card token-dashboard-card--wide">
-          <header>
-            <div><Network size={20} /><h2>Deployment Record</h2></div>
-            <StatusBadge status="valid">{token.status || 'readyToDeploy'}</StatusBadge>
-          </header>
-          <div className="token-dashboard-card__body token-dashboard-deployment-grid">
-            <AddressDisplay
-              label="Token proposal UID"
-              address={token.tokenUid}
-              emptyLabel="Assigned by backend"
-              showFullAddress
-            />
-            <AddressDisplay
-              label="Transaction hash"
-              address={transactionHash}
-              emptyLabel="Deployment transaction not recorded"
-              explorerUrl={transactionExplorer}
-              showFullAddress
-            />
-            <AddressDisplay
-              label="Token proxy contract"
-              address={tokenContractAddress}
-              emptyLabel="Token contract not recorded"
-              explorerUrl={tokenExplorer}
-              showFullAddress
-            />
-            <div className="token-dashboard-record-summary">
-              <div><span>Network</span><strong>{network}</strong></div>
-              <div><span>Initial token price</span><strong>{initialPrice ? formatMoney(initialPrice, 'USDT') : '—'}</strong></div>
-              <div>
-                <span>Validated at</span>
-                <strong>{validatedAt ? new Date(validatedAt).toLocaleString() : 'Backend validated'}</strong>
-              </div>
-            </div>
           </div>
         </section>
       </div>

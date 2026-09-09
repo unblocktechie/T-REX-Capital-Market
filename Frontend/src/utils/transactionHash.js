@@ -12,20 +12,29 @@ export const isValidTransactionHash = (value) =>
 
 export const getDeploymentTransactionHash = (record) => {
   const hash = firstText(
+    record?.deployTxHash,
     record?.transactionHash,
     record?.deployTx,
     record?.txHash,
     record?.hash,
+    record?.contractTxnHash,
+    record?.contractTransactionHash,
     record?.transaction?.hash,
     record?.deploymentTransactionHash,
-    record?.contractTransactionHash,
+    record?.deployment?.deployTxHash,
     record?.deployment?.transactionHash,
     record?.deployment?.deployTx,
     record?.deployment?.txHash,
+    record?.deployment?.contractTxnHash,
+    record?.deployment?.contractTransactionHash,
+    record?.data?.deployTxHash,
     record?.data?.transactionHash,
     record?.data?.deployTx,
+    record?.data?.contractTxnHash,
+    record?.result?.deployTxHash,
     record?.result?.transactionHash,
     record?.result?.deployTx,
+    record?.result?.contractTxnHash,
   );
 
   return isValidTransactionHash(hash) ? hash : '';

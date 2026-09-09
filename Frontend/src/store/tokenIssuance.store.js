@@ -101,6 +101,9 @@ export const createInitialTokenIssuanceState = () => ({
   deployment: {
     status: 'idle',
     activeStage: 0,
+    deploymentAttemptUid: '',
+    attemptStatus: '',
+    idempotencyKey: '',
     transactionHash: '',
     error: '',
     result: null,
@@ -108,6 +111,7 @@ export const createInitialTokenIssuanceState = () => ({
     canRetry: false,
     retryMode: '',
     pendingSync: null,
+    walletAction: null,
   },
   backend: createBackendState(),
   updatedAt: null,
@@ -293,7 +297,12 @@ export const useTokenIssuanceStore = create((set, get) => ({
       const lockedStatus = String(mapped?.server?.status || '')
         .toLowerCase()
         .replace(/[^a-z]/g, '');
-      const isLocked = ['readytodeploy', 'deployed'].includes(lockedStatus);
+      const isLocked = [
+        'readytodeploy',
+        'deploymentpending',
+        'deploymentfailed',
+        'deployed',
+      ].includes(lockedStatus);
 
       if (!mapped?.exists) {
         return {

@@ -17,7 +17,9 @@ export const getTokenRecordUid = (token) =>
 export const getTokenRecordStatus = (token) => firstText(token?.status, 'draft');
 
 export const isTokenRecordLocked = (token) =>
-  ['readytodeploy', 'deployed'].includes(normalizeStatus(getTokenRecordStatus(token)));
+  ['readytodeploy', 'deploymentpending', 'deploymentfailed', 'deployed'].includes(
+    normalizeStatus(getTokenRecordStatus(token)),
+  );
 
 export const getTokenRecordName = (token) => {
   const information = token?.tokenInformation || token?.information || token || {};
@@ -77,6 +79,8 @@ export function useMyToken({ enabled = true } = {}) {
     status,
     isLocked,
     isReadyToDeploy: normalizeStatus(status) === 'readytodeploy',
+    isDeploymentPending: normalizeStatus(status) === 'deploymentpending',
+    isDeploymentFailed: normalizeStatus(status) === 'deploymentfailed',
     isDeployed: normalizeStatus(status) === 'deployed',
     hasToken: Boolean(tokenUid || getTokenRecordName(token)),
     userKey,

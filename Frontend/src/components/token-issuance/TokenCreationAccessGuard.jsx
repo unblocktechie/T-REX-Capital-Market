@@ -10,8 +10,8 @@ export function TokenCreationAccessGuard() {
   const isActiveSubmission =
     location.pathname === ROUTES.tokenDeploying &&
     ['processing', 'success', 'error'].includes(deploymentStatus);
-  // The processing page uses the already-hydrated issuance state. Avoid an unnecessary
-  // token status request before the wallet returns a transaction hash.
+  // The processing page owns active-attempt recovery and bootstraps the complete issuance
+  // state itself. Avoid a duplicate token-status request while that flow is running.
   const token = useMyToken({ enabled: !isActiveSubmission });
 
   if (token.isPending && !isActiveSubmission) {
@@ -30,12 +30,16 @@ export function TokenCreationAccessGuard() {
     return <Navigate to={ROUTES.tokenDetails(token.tokenUid || 'token')} replace />;
   }
 
+  if (token.isDeploymentPending && location.pathname !== ROUTES.tokenDeploying) {
+    return <Navigate to={ROUTES.tokenDeploying} replace />;
+  }
+
   const isDeploymentRetryRoute = [
     ROUTES.tokenIssuanceStep('review'),
     ROUTES.tokenDeploying,
   ].includes(location.pathname);
 
-  if (token.isReadyToDeploy && !isDeploymentRetryRoute) {
+  if ((token.isReadyToDeploy || token.isDeploymentFailed) && !isDeploymentRetryRoute) {
     return <Navigate to={ROUTES.tokenIssuanceStep('review')} replace />;
   }
 

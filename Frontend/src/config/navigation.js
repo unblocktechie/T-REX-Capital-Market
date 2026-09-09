@@ -1,5 +1,5 @@
 import { Building2, Coins, LayoutDashboard, UsersRound } from 'lucide-react';
-import { PERMISSIONS } from './permissions';
+import { PERMISSIONS, ROLES } from './permissions';
 import { ROUTES } from './routes';
 
 export const navigationGroups = Object.freeze([
@@ -20,6 +20,7 @@ export const navigationGroups = Object.freeze([
         icon: Building2,
         permission: PERMISSIONS.dashboardView,
         dynamicOrganization: true,
+        roles: [ROLES.issuer],
       },
       {
         label: 'Tokens',
@@ -28,6 +29,7 @@ export const navigationGroups = Object.freeze([
         icon: Coins,
         permission: PERMISSIONS.dashboardView,
         dynamicToken: true,
+        roles: [ROLES.issuer],
       },
       {
         label: 'Investors',
@@ -35,6 +37,7 @@ export const navigationGroups = Object.freeze([
         to: ROUTES.investors,
         icon: UsersRound,
         permission: PERMISSIONS.dashboardView,
+        roles: [ROLES.issuer, ROLES.investor],
       },
     ],
   },

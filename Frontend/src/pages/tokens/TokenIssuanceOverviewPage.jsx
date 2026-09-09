@@ -9,9 +9,11 @@ import {
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { tokenStepFromCurrentStep } from '@/api/tokens/token.mapper';
 import { Button } from '@/components/ui/Button';
 import { ROUTES } from '@/config/routes';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { useMyToken } from '@/hooks/useMyToken';
 import { useTokenIssuanceStore } from '@/store/tokenIssuance.store';
 
 const roadmap = [
@@ -52,10 +54,38 @@ const standardBenefits = [
 export default function TokenIssuanceOverviewPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const myToken = useMyToken();
+  const backend = useTokenIssuanceStore((state) => state.backend);
+  const completedSteps = useTokenIssuanceStore((state) => state.completedSteps);
   const resetIssuance = useTokenIssuanceStore((state) => state.resetIssuance);
   useDocumentTitle('Asset Issuance Wizard');
 
-  const startWizard = () => {
+  const hasStartedWizard = Boolean(
+    myToken.hasToken ||
+      backend.tokenUid ||
+      completedSteps.includes('token-information'),
+  );
+
+  const currentBackendStep =
+    myToken.token?.currentStep ||
+    myToken.token?.tokenCurrentStep ||
+    backend.currentStep;
+
+  let continueStep = tokenStepFromCurrentStep(currentBackendStep);
+
+  // A token record is created only after the first step is saved successfully. Some older
+  // backend responses can still report `information` immediately after that save, so continue
+  // from the next incomplete step instead of sending the issuer back to an already-saved form.
+  if (hasStartedWizard && continueStep === 'token-information') {
+    continueStep = 'identity-claims';
+  }
+
+  const openWizard = () => {
+    if (hasStartedWizard) {
+      navigate(ROUTES.tokenIssuanceStep(continueStep));
+      return;
+    }
+
     resetIssuance();
     queryClient.removeQueries({ queryKey: ['token-issuance', 'bootstrap'] });
     navigate(ROUTES.tokenIssuanceStep('token-information'));
@@ -73,11 +103,11 @@ export default function TokenIssuanceOverviewPage() {
           </p>
         </div>
         <Button
-          icon={Rocket}
+          icon={hasStartedWizard ? ArrowRight : Rocket}
           size="lg"
-          onClick={startWizard}
+          onClick={openWizard}
         >
-          Start Wizard
+          {hasStartedWizard ? 'Continue Wizard' : 'Start Wizard'}
         </Button>
       </header>
 

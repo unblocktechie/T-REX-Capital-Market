@@ -13,7 +13,7 @@ const firstValidationMessage = (errors) => {
 
 export const getErrorMessage = (error, fallback = 'Something went wrong. Please try again.') => {
   if (!error?.response && error?.code === 'ERR_NETWORK') {
-    return 'Cannot reach the T-REX backend. Check the API server, network, and CORS settings.';
+    return "We're experiencing a temporary issue. Please try again in a few moments.";
   }
 
   const payload = error?.response?.data;

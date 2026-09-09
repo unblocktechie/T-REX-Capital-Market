@@ -403,6 +403,9 @@ export async function deployTrexSuite({
   agents,
   deploymentConfig,
   onStageChange,
+  onWalletAction,
+  onTransactionSubmitted,
+  onDeploymentConfirmed,
 }) {
   const provider = await connector?.getProvider?.();
   if (!provider?.request) {
@@ -636,8 +639,45 @@ export async function deployTrexSuite({
       args: [tokenDetails, claimDetails],
     });
 
+    onWalletAction?.({
+      key: 'create-token',
+      step: 1,
+      total: 2,
+      status: 'awaiting-signature',
+      title: 'Transaction 1 of 2: Create your token',
+      description:
+        'Approve this transaction to create the ERC-3643 token and its identity, compliance, and registry contracts on Sepolia.',
+      gasRequired: true,
+    });
+
     const transactionHash = await walletClient.writeContract(simulation.request);
+    onWalletAction?.({
+      key: 'create-token',
+      step: 1,
+      total: 2,
+      status: 'confirming',
+      title: 'Creating your token',
+      description: 'The wallet approval was received. Waiting for Sepolia to confirm the token creation transaction.',
+      transactionHash,
+      gasRequired: true,
+    });
     onStageChange?.(3, { transactionHash });
+
+    if (onTransactionSubmitted) {
+      try {
+        await onTransactionSubmitted({
+          transactionHash,
+          issuerAddress,
+          network: web3Config.requiredChain.name,
+          chainId: providerChainId,
+        });
+      } catch (submissionError) {
+        submissionError.transactionHash = transactionHash;
+        submissionError.transactionSubmitted = true;
+        submissionError.syncOnly = true;
+        throw submissionError;
+      }
+    }
 
     const receipt = await publicClient.waitForTransactionReceipt({
       hash: transactionHash,
@@ -645,12 +685,33 @@ export async function deployTrexSuite({
     });
 
     if (receipt.status !== 'success') {
+      onWalletAction?.({
+        key: 'create-token',
+        step: 1,
+        total: 2,
+        status: 'failed',
+        title: 'Token creation transaction failed',
+        description: 'Sepolia confirmed the transaction, but it reverted.',
+        transactionHash,
+        gasRequired: true,
+      });
       const reverted = new Error('The deployment transaction was confirmed but reverted.');
       reverted.transactionHash = transactionHash;
       reverted.transactionSubmitted = true;
       reverted.confirmedRevert = true;
       throw reverted;
     }
+
+    onWalletAction?.({
+      key: 'create-token',
+      step: 1,
+      total: 2,
+      status: 'confirmed',
+      title: 'Token created successfully',
+      description: 'The T-REX token suite is confirmed on Sepolia. One final wallet approval will activate token transfers.',
+      transactionHash,
+      gasRequired: true,
+    });
 
     const contracts = extractSuiteDeployment(receipt, getAddress(factoryAddress));
     if (!contracts?.token) {
@@ -660,6 +721,33 @@ export async function deployTrexSuite({
       missingEvent.transactionHash = transactionHash;
       missingEvent.transactionSubmitted = true;
       throw missingEvent;
+    }
+
+    // Persist the confirmed deployment hash before requesting the optional second wallet
+    // transaction. This keeps the deployment recoverable even if the web session expires,
+    // the tab reloads, or another authenticated request redirects the user to sign in.
+    if (onDeploymentConfirmed) {
+      try {
+        await onDeploymentConfirmed({
+          transactionHash,
+          receipt,
+          contracts,
+          issuerAddress,
+          network: web3Config.requiredChain.name,
+          chainId: providerChainId,
+          blockNumber: receipt.blockNumber.toString(),
+        });
+      } catch (recoveryError) {
+        const durableStorageError = new Error(
+          'Your token was created on Sepolia, but this browser could not save the confirmed transaction for session recovery. Keep this page open and retry the backend update before leaving.',
+        );
+        durableStorageError.code = 'DEPLOYMENT_RECOVERY_SAVE_FAILED';
+        durableStorageError.cause = recoveryError;
+        durableStorageError.transactionHash = transactionHash;
+        durableStorageError.transactionSubmitted = true;
+        durableStorageError.syncOnly = true;
+        throw durableStorageError;
+      }
     }
 
     const verificationReads = await Promise.allSettled([
@@ -724,6 +812,17 @@ export async function deployTrexSuite({
     if (tokenWasPaused !== false) {
       unpause = { ...unpause, attempted: true, status: 'pending' };
       try {
+        onWalletAction?.({
+          key: 'activate-transfers',
+          step: 2,
+          total: 2,
+          status: 'awaiting-signature',
+          title: 'Transaction 2 of 2: Activate token transfers',
+          description:
+            'Approve this transaction to unpause the new token so eligible investors can receive and transfer it.',
+          gasRequired: true,
+        });
+
         const unpauseSimulation = await publicClient.simulateContract({
           account: activeAddress,
           address: contracts.token,
@@ -731,9 +830,35 @@ export async function deployTrexSuite({
           functionName: 'unpause',
         });
         const unpauseTransactionHash = await walletClient.writeContract(unpauseSimulation.request);
+        onWalletAction?.({
+          key: 'activate-transfers',
+          step: 2,
+          total: 2,
+          status: 'confirming',
+          title: 'Activating token transfers',
+          description: 'The wallet approval was received. Waiting for Sepolia to confirm the activation transaction.',
+          transactionHash: unpauseTransactionHash,
+          gasRequired: true,
+        });
         const unpauseReceipt = await publicClient.waitForTransactionReceipt({
           hash: unpauseTransactionHash,
           confirmations: 1,
+        });
+        onWalletAction?.({
+          key: 'activate-transfers',
+          step: 2,
+          total: 2,
+          status: unpauseReceipt.status === 'success' ? 'confirmed' : 'failed',
+          title:
+            unpauseReceipt.status === 'success'
+              ? 'Token transfers activated'
+              : 'Token activation transaction failed',
+          description:
+            unpauseReceipt.status === 'success'
+              ? 'The token is unpaused and ready for eligible transfers.'
+              : 'The token was created, but the activation transaction reverted.',
+          transactionHash: unpauseTransactionHash,
+          gasRequired: true,
         });
         unpause = {
           attempted: true,
@@ -747,6 +872,17 @@ export async function deployTrexSuite({
           receipt: jsonSafe(unpauseReceipt),
         };
       } catch (unpauseError) {
+        onWalletAction?.({
+          key: 'activate-transfers',
+          step: 2,
+          total: 2,
+          status: 'failed',
+          title: 'Token created, but transfers are still paused',
+          description:
+            'The second wallet transaction was not completed. The token exists on Sepolia, but it must be unpaused before transfers can begin.',
+          transactionHash: unpauseError?.transactionHash || '',
+          gasRequired: true,
+        });
         unpause = {
           attempted: true,
           status: 'failed',

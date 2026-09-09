@@ -31,6 +31,8 @@ import { TOKEN_CREATION_AGENT_ROLES, TOKEN_ISSUANCE_STEPS } from '@/config/token
 import { ROUTES } from '@/config/routes';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useWalletConnection } from '@/hooks/useWalletConnection';
+import { pendingDeploymentService } from '@/services/pendingDeployment.service';
+import { useAuthStore } from '@/store/auth.store';
 import { useTokenIssuanceStore } from '@/store/tokenIssuance.store';
 import { cn } from '@/utils/cn';
 import {
@@ -89,6 +91,7 @@ function DetailItem({ label, children, full = false }) {
 export default function ReviewDeployPage() {
   const navigate = useNavigate();
   const wallet = useWalletConnection();
+  const authUser = useAuthStore((state) => state.user);
   const tokenInformation = useTokenIssuanceStore((state) => state.tokenInformation);
   const supplyPricing = useTokenIssuanceStore((state) => state.supplyPricing);
   const identityClaims = useTokenIssuanceStore((state) => state.identityClaims);
@@ -109,6 +112,8 @@ export default function ReviewDeployPage() {
     .toLowerCase()
     .replace(/[^a-z]/g, '');
   const isReadyToDeploy = normalizedBackendStatus === 'readytodeploy';
+  const isDeploymentPending = normalizedBackendStatus === 'deploymentpending';
+  const isDeploymentFailed = normalizedBackendStatus === 'deploymentfailed';
   const isDeployed = normalizedBackendStatus === 'deployed';
   const blocking = hasBlockingReviewErrors(checks) || isDeployed;
   const validChecks = checks.filter((check) => check.status === 'valid').length;
@@ -141,7 +146,67 @@ export default function ReviewDeployPage() {
   };
 
   const openDeployment = () => {
-    if (deployment.transactionHash && deployment.status !== 'success') {
+    if (isDeploymentPending) {
+      setDeployment({
+        status: 'processing',
+        activeStage: 4,
+        deploymentAttemptUid: '',
+        attemptStatus: 'pending',
+        error: '',
+        canRetry: false,
+        retryMode: 'backend-sync',
+        walletAction: {
+          key: 'backend-resume',
+          status: 'syncing',
+          title: 'Checking the active deployment',
+          description:
+            'The backend deployment attempt will be resumed safely. MetaMask will only open when no transaction has already been broadcast.',
+        },
+      });
+      navigate(ROUTES.tokenDeploying);
+      return;
+    }
+
+    const recoverableDeployment = pendingDeploymentService.getForUser(authUser);
+    if (recoverableDeployment && !isDeploymentFailed) {
+      setDeployment({
+        status: 'processing',
+        activeStage: 4,
+        deploymentAttemptUid:
+          recoverableDeployment.metadata?.deploymentAttemptUid || '',
+        attemptStatus:
+          recoverableDeployment.metadata?.attemptStatus || recoverableDeployment.status,
+        transactionHash: recoverableDeployment.transactionHash,
+        error: '',
+        canRetry: false,
+        retryMode: 'backend-sync',
+        pendingSync: {
+          transactionHash: recoverableDeployment.transactionHash,
+          deploymentAttemptUid:
+            recoverableDeployment.metadata?.deploymentAttemptUid || '',
+          metadata: recoverableDeployment.metadata,
+        },
+        walletAction: {
+          key: 'session-recovery',
+          status: 'syncing',
+          title: 'Existing blockchain transaction found',
+          description:
+            'The saved hash will be reconciled with the backend deployment attempt. The backend will independently verify the Sepolia transaction, and MetaMask will not open again.',
+        },
+      });
+      toast.info('Continuing the existing deployment', {
+        description:
+          'A transaction hash is already saved for this token. The backend will resume its independent verification, and no duplicate blockchain transaction will be sent.',
+      });
+      navigate(ROUTES.tokenDeploying);
+      return;
+    }
+
+    if (
+      deployment.transactionHash &&
+      deployment.status !== 'success' &&
+      !isDeploymentFailed
+    ) {
       toast.error('A blockchain transaction has already been submitted.', {
         description:
           'Complete the pending backend synchronization instead of sending another deployment transaction.',
@@ -156,7 +221,7 @@ export default function ReviewDeployPage() {
       return;
     }
 
-    if (deployment.requestStartedAt && !deployment.canRetry) {
+    if (deployment.requestStartedAt && !deployment.canRetry && !isDeploymentFailed) {
       toast.error('A previous deployment request still needs status reconciliation.', {
         description:
           'Check the submitted transaction status before starting another deployment.',
@@ -185,15 +250,22 @@ export default function ReviewDeployPage() {
 
   const confirmDeployment = () => {
     if (startingDeployment) return;
+    if (isDeploymentFailed) pendingDeploymentService.clear();
     setStartingDeployment(true);
     setDeployment({
       status: 'processing',
       activeStage: 0,
+      deploymentAttemptUid: '',
+      attemptStatus: '',
+      idempotencyKey: '',
       error: '',
       transactionHash: '',
       result: null,
       requestStartedAt: null,
       canRetry: false,
+      retryMode: '',
+      pendingSync: null,
+      walletAction: null,
     });
     setConfirmationOpen(false);
     navigate(ROUTES.tokenDeploying);
@@ -443,12 +515,24 @@ export default function ReviewDeployPage() {
               <Rocket size={25} />
             </span>
             <div className="review-deployment-panel__heading">
-              <span>{isReadyToDeploy ? 'Proposal validated' : 'Ready for deployment'}</span>
+              <span>
+                {isDeploymentPending
+                  ? 'Deployment in progress'
+                  : isDeploymentFailed
+                    ? 'Deployment retry available'
+                    : isReadyToDeploy
+                      ? 'Proposal validated'
+                      : 'Ready for deployment'}
+              </span>
               <h2>{`Deploy on ${networkLabel} through the T-REX Gateway`}</h2>
               <p>
-                {isReadyToDeploy
-                  ? 'The backend validation is complete. Confirm the issuer wallet to sign the on-chain deployment.'
-                  : 'The backend will validate the proposal, then the connected issuer wallet will sign the Gateway transaction.'}
+                {isDeploymentPending
+                  ? 'A backend-controlled deployment attempt already exists. Continue to resume the submitted transaction or the pending wallet approval safely.'
+                  : isDeploymentFailed
+                    ? 'The previous on-chain attempt did not finalize. Continue to check the backend state and start a new authorized attempt when allowed.'
+                    : isReadyToDeploy
+                      ? 'The backend validation is complete. Confirm the issuer wallet to sign the on-chain deployment.'
+                      : 'The backend will validate the proposal, then the connected issuer wallet will sign the Gateway transaction.'}
               </p>
             </div>
 
@@ -546,7 +630,13 @@ export default function ReviewDeployPage() {
                 disabled={blocking}
                 loading={startingDeployment}
               >
-                {isReadyToDeploy ? 'Sign and Deploy Token' : 'Validate and Deploy Token'}
+                {isDeploymentPending
+                  ? 'Continue Deployment'
+                  : isDeploymentFailed
+                    ? 'Retry Token Deployment'
+                    : isReadyToDeploy
+                      ? 'Sign and Deploy Token'
+                      : 'Validate and Deploy Token'}
               </Button>
             </div>
             <small className="review-deployment-panel__note">

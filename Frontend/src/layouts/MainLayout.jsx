@@ -5,6 +5,7 @@ import { Sidebar } from './components/Sidebar';
 import { ROUTES } from '@/config/routes';
 import { ROLES } from '@/config/permissions';
 import { useAuth } from '@/hooks/useAuth';
+import { useInvestorAccessStatus } from '@/hooks/useInvestorAccessStatus';
 import { useOrganization } from '@/hooks/useOrganization';
 import { isOrganizationWorkspaceUnlocked } from '@/services/organizationStorageService';
 import { useUiStore } from '@/store/ui.store';
@@ -14,13 +15,22 @@ export function MainLayout() {
   const collapsed = useUiStore((state) => state.sidebarCollapsed);
   const { user } = useAuth();
   const { organization } = useOrganization();
+  const investorAccess = useInvestorAccessStatus(
+    user?.role === ROLES.investor ? user : null,
+  );
   const location = useLocation();
 
   const isIssuer = user?.role === ROLES.issuer;
+  const isInvestor = user?.role === ROLES.investor;
   const isVerifiedSuccessPage = location.pathname === ROUTES.organizationVerified;
-  const onboardingOnly =
+  const isInvestorOnboardingPage = location.pathname === ROUTES.investors;
+  const issuerOnboardingOnly =
     isIssuer &&
     (!isOrganizationWorkspaceUnlocked(organization) || isVerifiedSuccessPage);
+  const investorOnboardingOnly =
+    isInvestor &&
+    (!investorAccess.isWorkspaceUnlocked || isInvestorOnboardingPage);
+  const onboardingOnly = issuerOnboardingOnly || investorOnboardingOnly;
 
   return (
     <div

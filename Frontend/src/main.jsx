@@ -10,6 +10,7 @@ import { wagmiConfig } from '@/config/web3';
 import '@/assets/styles/global.css';
 import '@/assets/styles/organization.css';
 import '@/assets/styles/token-issuance.css';
+import '@/assets/styles/investor.css';
 
 setupAxiosInterceptors();
 

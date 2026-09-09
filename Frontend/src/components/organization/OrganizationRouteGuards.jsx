@@ -1,4 +1,4 @@
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { TrexLoader } from '@/components/loaders/TrexLoader';
 import { ROUTES } from '@/config/routes';
 import { useOrganization } from '@/hooks/useOrganization';
@@ -6,6 +6,7 @@ import { ORGANIZATION_STATUSES } from '@/services/organizationStorageService';
 
 export function OrganizationDataGuard() {
   const { isLoading, error } = useOrganization();
+  const location = useLocation();
 
   if (isLoading) {
     return (
@@ -20,7 +21,16 @@ export function OrganizationDataGuard() {
   }
 
   if (error?.response?.status === 403) return <Navigate to={ROUTES.forbidden} replace />;
-  if (error) return <Navigate to={ROUTES.networkError} replace />;
+  if (error) {
+    const returnPath = `${location.pathname}${location.search}${location.hash}`;
+    return (
+      <Navigate
+        to={ROUTES.networkError}
+        replace
+        state={{ from: returnPath }}
+      />
+    );
+  }
   return <Outlet />;
 }
 

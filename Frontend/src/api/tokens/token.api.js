@@ -2,10 +2,39 @@ import { apiClient } from '@/api/axios';
 import { assertValidTransactionHash } from '@/utils/transactionHash';
 import { TOKEN_ENDPOINTS } from './token.endpoints';
 
+const DEPLOYMENT_IDEMPOTENCY_KEY_MAX_LENGTH = 99;
+
 const unwrap = (response) =>
   response.data && Object.prototype.hasOwnProperty.call(response.data, 'data')
     ? response.data.data
     : response.data;
+
+const requiredText = (value, label) => {
+  const normalized = String(value || '').trim();
+  if (!normalized) throw new Error(`${label} is required.`);
+  return normalized;
+};
+
+const normalizeChainId = (value) => {
+  const chainId = Number(value);
+  if (!Number.isSafeInteger(chainId) || chainId <= 0) {
+    throw new Error('A valid blockchain chain ID is required.');
+  }
+  return chainId;
+};
+
+const normalizeDeploymentAttemptUid = (value) =>
+  requiredText(value, 'Deployment attempt identifier');
+
+const normalizeDeploymentIdempotencyKey = (value) => {
+  const normalized = requiredText(value, 'Deployment idempotency key');
+  if (normalized.length > DEPLOYMENT_IDEMPOTENCY_KEY_MAX_LENGTH) {
+    throw new Error(
+      `Deployment idempotency key must be ${DEPLOYMENT_IDEMPOTENCY_KEY_MAX_LENGTH} characters or fewer.`,
+    );
+  }
+  return normalized;
+};
 
 export const tokenApi = Object.freeze({
   getOptions: () =>
@@ -51,15 +80,94 @@ export const tokenApi = Object.freeze({
       .put(TOKEN_ENDPOINTS.governance, payload, { skipGlobalLoader: true })
       .then(unwrap),
 
-  // Finalize the token proposal only after Sepolia confirms the deployment.
-  // The confirmed transaction hash is the only deployment value accepted from the client.
-  submit: (hash) => {
-    const transactionHash = assertValidTransactionHash(hash);
+  createDeploymentAttempt: ({
+    chainId,
+    walletAddress,
+    idempotencyKey,
+    networkName,
+    metadata,
+  }) =>
+    apiClient
+      .post(
+        TOKEN_ENDPOINTS.deploymentAttempts,
+        {
+          chainId: normalizeChainId(chainId),
+          walletAddress: requiredText(walletAddress, 'Deployment wallet address'),
+          idempotencyKey: normalizeDeploymentIdempotencyKey(idempotencyKey),
+          ...(networkName ? { networkName: String(networkName).trim() } : {}),
+          ...(metadata && typeof metadata === 'object' ? { metadata } : {}),
+        },
+        { skipGlobalLoader: true },
+      )
+      .then(unwrap),
+
+  getActiveDeploymentAttempt: () =>
+    apiClient
+      .get(TOKEN_ENDPOINTS.activeDeploymentAttempt, { skipGlobalLoader: true })
+      .then(unwrap),
+
+  markDeploymentAttemptSubmitted: (
+    deploymentAttemptUid,
+    { transactionHash, chainId, walletAddress },
+  ) => {
+    const normalizedAttemptUid = normalizeDeploymentAttemptUid(deploymentAttemptUid);
+    const normalizedHash = assertValidTransactionHash(transactionHash);
+
+    return apiClient
+      .patch(
+        TOKEN_ENDPOINTS.deploymentAttemptSubmitted(normalizedAttemptUid),
+        {
+          transactionHash: normalizedHash,
+          chainId: normalizeChainId(chainId),
+          walletAddress: requiredText(walletAddress, 'Deployment wallet address'),
+        },
+        { skipGlobalLoader: true },
+      )
+      .then(unwrap);
+  },
+
+  failDeploymentAttempt: (
+    deploymentAttemptUid,
+    { status, errorCode, errorMessage },
+  ) => {
+    const normalizedAttemptUid = normalizeDeploymentAttemptUid(deploymentAttemptUid);
+    const allowedStatuses = new Set(['wallet_rejected', 'cancelled', 'failed']);
+    const normalizedStatus = String(status || '').trim().toLowerCase();
+
+    if (!allowedStatuses.has(normalizedStatus)) {
+      throw new Error('A valid deployment failure status is required.');
+    }
+
+    return apiClient
+      .patch(
+        TOKEN_ENDPOINTS.deploymentAttemptFail(normalizedAttemptUid),
+        {
+          status: normalizedStatus,
+          ...(errorCode ? { errorCode: String(errorCode).slice(0, 120) } : {}),
+          ...(errorMessage ? { errorMessage: String(errorMessage).slice(0, 1000) } : {}),
+        },
+        { skipGlobalLoader: true },
+      )
+      .then(unwrap);
+  },
+
+  // Finalize only after broadcast. The backend independently verifies the receipt and
+  // can return HTTP 202 while the transaction is still confirming.
+  submit: (values) => {
+    const payload =
+      values && typeof values === 'object'
+        ? values
+        : { transactionHash: values };
+    const transactionHash = assertValidTransactionHash(payload.transactionHash);
+    const deploymentAttemptUid = String(payload.deploymentAttemptUid || '').trim();
 
     return apiClient
       .post(
         TOKEN_ENDPOINTS.submit,
-        { transactionHash },
+        {
+          transactionHash,
+          ...(deploymentAttemptUid ? { deploymentAttemptUid } : {}),
+        },
         {
           skipGlobalLoader: true,
           timeout: 180_000,
@@ -67,8 +175,10 @@ export const tokenApi = Object.freeze({
       )
       .then((response) => ({
         data: unwrap(response),
+        body: response.data,
         httpStatus: response.status,
         ok: response.status >= 200 && response.status < 300,
+        pending: response.status === 202 || response.data?.pending === true,
       }));
   },
 

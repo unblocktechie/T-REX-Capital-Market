@@ -17,6 +17,7 @@ import { OrganizationAccessMiddleware } from '@/middleware/OrganizationAccessMid
 import { RoleMiddleware } from '@/middleware/RoleMiddleware';
 import { WorkspaceMiddleware } from '@/middleware/WorkspaceMiddleware';
 import { useAuth } from '@/hooks/useAuth';
+import { useInvestorAccessStatus } from '@/hooks/useInvestorAccessStatus';
 
 const LoginPage = lazy(() => import('@/pages/auth/LoginPage'));
 const SignupPage = lazy(() => import('@/pages/auth/SignupPage'));
@@ -24,7 +25,7 @@ const VerifyEmailPage = lazy(() => import('@/pages/auth/VerifyEmailPage'));
 const ForgotPasswordPage = lazy(() => import('@/pages/auth/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('@/pages/auth/ResetPasswordPage'));
 const DashboardPage = lazy(() => import('@/pages/dashboard/DashboardPage'));
-const ModulePage = lazy(() => import('@/pages/common/ModulePage'));
+const InvestorOnboardingPage = lazy(() => import('@/pages/investors/InvestorOnboardingPage'));
 const ProfilePage = lazy(() => import('@/pages/profile/ProfilePage'));
 const NotFoundPage = lazy(() => import('@/pages/errors/NotFoundPage'));
 const ForbiddenPage = lazy(() => import('@/pages/errors/ForbiddenPage'));
@@ -57,8 +58,15 @@ const AdminProfilePage = lazy(() => import('@/pages/admin/AdminProfilePage'));
 
 function HomeRedirect() {
   const { isAuthenticated, user } = useAuth();
+  const investorAccess = useInvestorAccessStatus(
+    user?.role === ROLES.investor ? user : null,
+  );
   if (!isAuthenticated) return <Navigate to={ROUTES.login} replace />;
-  return <Navigate to={user?.role === ROLES.admin ? ROUTES.adminReviewQueue : ROUTES.dashboard} replace />;
+  if (user?.role === ROLES.admin) return <Navigate to={ROUTES.adminReviewQueue} replace />;
+  if (user?.role === ROLES.investor && !investorAccess.isWorkspaceUnlocked) {
+    return <Navigate to={ROUTES.investors} replace />;
+  }
+  return <Navigate to={ROUTES.dashboard} replace />;
 }
 
 const withSuspense = (element) => (
@@ -132,21 +140,31 @@ export const router = createBrowserRouter([
               { index: true, element: <Navigate to={ROUTES.dashboard} replace /> },
               { path: 'dashboard', element: withSuspense(<DashboardPage />) },
               {
-                element: <TokenCreationAccessGuard />,
+                element: <RoleMiddleware roles={[ROLES.issuer]} />,
                 children: [
-                  { path: 'tokens/new', element: withSuspense(<TokenIssuanceOverviewPage />) },
-                  { path: 'tokens/new/token-information', element: withSuspense(<TokenInformationPage />) },
-                  { path: 'tokens/new/supply-pricing', element: <Navigate to={ROUTES.tokenIssuanceStep('token-information')} replace /> },
-                  { path: 'tokens/new/identity-claims', element: withSuspense(<IdentityClaimsPage />) },
-                  { path: 'tokens/new/compliance', element: withSuspense(<ComplianceRulesPage />) },
-                  { path: 'tokens/new/agents', element: withSuspense(<AgentsPage />) },
-                  { path: 'tokens/new/review', element: withSuspense(<ReviewDeployPage />) },
-                  { path: 'tokens/new/deploying', element: withSuspense(<DeploymentProcessingPage />) },
+                  {
+                    element: <TokenCreationAccessGuard />,
+                    children: [
+                      { path: 'tokens/new', element: withSuspense(<TokenIssuanceOverviewPage />) },
+                      { path: 'tokens/new/token-information', element: withSuspense(<TokenInformationPage />) },
+                      { path: 'tokens/new/supply-pricing', element: <Navigate to={ROUTES.tokenIssuanceStep('token-information')} replace /> },
+                      { path: 'tokens/new/identity-claims', element: withSuspense(<IdentityClaimsPage />) },
+                      { path: 'tokens/new/compliance', element: withSuspense(<ComplianceRulesPage />) },
+                      { path: 'tokens/new/agents', element: withSuspense(<AgentsPage />) },
+                      { path: 'tokens/new/review', element: withSuspense(<ReviewDeployPage />) },
+                      { path: 'tokens/new/deploying', element: withSuspense(<DeploymentProcessingPage />) },
+                    ],
+                  },
+                  { path: 'tokens/:tokenAddress/success', element: withSuspense(<DeploymentSuccessPage />) },
+                  { path: 'tokens/:tokenAddress', element: withSuspense(<TokenDetailsPage />) },
                 ],
               },
-              { path: 'tokens/:tokenAddress/success', element: withSuspense(<DeploymentSuccessPage />) },
-              { path: 'tokens/:tokenAddress', element: withSuspense(<TokenDetailsPage />) },
-              { path: 'investors', element: withSuspense(<ModulePage moduleKey="investors" />) },
+              {
+                element: <RoleMiddleware roles={[ROLES.issuer, ROLES.investor]} />,
+                children: [
+                  { path: 'investors', element: withSuspense(<InvestorOnboardingPage />) },
+                ],
+              },
               {
                 element: <RoleMiddleware roles={[ROLES.issuer]} />,
                 children: [

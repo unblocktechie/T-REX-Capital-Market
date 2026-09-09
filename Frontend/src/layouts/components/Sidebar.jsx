@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Building2, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Building2, ChevronLeft, ChevronRight, UserRound, X } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { TrexLogo } from '@/components/branding/TrexLogo';
 import { navigationGroups } from '@/config/navigation';
@@ -72,7 +72,7 @@ export function Sidebar() {
 
         <div className="workspace-pill">
           <span className="workspace-pill__icon">
-            <Building2 size={17} />
+            {isIssuer ? <Building2 size={17} /> : <UserRound size={17} />}
           </span>
           <span className="workspace-pill__copy">
             <small>{roleLabel} workspace</small>
@@ -86,6 +86,7 @@ export function Sidebar() {
             const visibleItems = group.items.filter(
               (item) =>
                 canSee(item.permission) &&
+                (!item.roles || item.roles.includes(user?.role)) &&
                 (!item.dynamicOrganization || user?.role === ROLES.issuer) &&
                 (!item.dynamicToken || user?.role === ROLES.issuer),
             );
@@ -96,11 +97,19 @@ export function Sidebar() {
                 {visibleItems.map((item) => {
                   const isOrganizationItem = item.dynamicOrganization;
                   const isTokenItem = item.dynamicToken;
-                  const label = item.label;
-                  const destination =
-                    isTokenItem && tokenRecord.isLocked
+                  const label =
+                    user?.role === ROLES.investor && item.to === ROUTES.investors
+                      ? 'Investor Profile'
+                      : item.label;
+                  const destination = isTokenItem
+                    ? tokenRecord.isDeployed
                       ? ROUTES.tokenDetails(tokenRecord.tokenUid || 'token')
-                      : item.to;
+                      : tokenRecord.isDeploymentPending
+                        ? ROUTES.tokenDeploying
+                        : tokenRecord.isReadyToDeploy || tokenRecord.isDeploymentFailed
+                          ? ROUTES.tokenIssuanceStep('review')
+                          : item.to
+                    : item.to;
                   const showOrganizationBadge =
                     isOrganizationItem &&
                     [
@@ -108,7 +117,15 @@ export function Sidebar() {
                       ORGANIZATION_STATUSES.VERIFIED_SUCCESS_PENDING,
                       ORGANIZATION_STATUSES.VERIFIED,
                     ].includes(organization.status);
-                  const tokenBadge = tokenRecord.isDeployed ? 'Live' : 'Ready';
+                  const tokenStatusBadge = isTokenItem
+                    ? tokenRecord.isDeploymentPending
+                      ? 'Deploying'
+                      : tokenRecord.isDeploymentFailed
+                        ? 'Retry'
+                        : tokenRecord.isReadyToDeploy
+                          ? 'Ready'
+                          : ''
+                    : '';
 
                   return (
                     <NavLink
@@ -122,9 +139,14 @@ export function Sidebar() {
                       <span className="sidebar-link__label">{label}</span>
                       {showOrganizationBadge ? (
                         <OrganizationStatusBadge status={organization.status} compact />
-                      ) : isTokenItem && tokenRecord.isLocked ? (
-                        <small className="sidebar-link__badge sidebar-link__badge--success">
-                          {tokenBadge}
+                      ) : tokenStatusBadge ? (
+                        <small
+                          className={cn(
+                            'sidebar-link__badge',
+                            tokenStatusBadge === 'Ready' && 'sidebar-link__badge--success',
+                          )}
+                        >
+                          {tokenStatusBadge}
                         </small>
                       ) : item.badge && !(isTokenItem && tokenRecord.isPending) ? (
                         <small className="sidebar-link__badge">{item.badge}</small>

@@ -175,7 +175,7 @@ export const DEPLOYMENT_STAGES = Object.freeze([
   'Checking authorized wallet and Sepolia network',
   'Preparing ONCHAINID, claims and compliance',
   'Building the T-REX Gateway deployment payload',
-  'Signing and confirming the Sepolia transaction',
+  'Confirming token creation and transfer activation',
   'Submitting the confirmed transaction hash',
 ]);
 

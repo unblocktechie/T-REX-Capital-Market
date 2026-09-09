@@ -7,11 +7,13 @@ import {
   Circle,
   Coins,
   FileCheck2,
+  FileSearch,
   Plus,
   Rocket,
   ShieldCheck,
   UserRoundCheck,
   UsersRound,
+  WalletCards,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { dashboardApi } from '@/api/dashboard/dashboard.api';
@@ -19,9 +21,11 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { ROLES } from '@/config/permissions';
 import { ROUTES } from '@/config/routes';
 import { useAuth } from '@/hooks/useAuth';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { useInvestorAccessStatus } from '@/hooks/useInvestorAccessStatus';
 import { useMyToken } from '@/hooks/useMyToken';
 import { formatCurrency, formatNumber } from '@/utils/currency';
 
@@ -40,14 +44,25 @@ const launchSteps = [
   { title: 'Review & deploy', text: 'Final validation and contract deployment' },
 ];
 
-export default function DashboardPage() {
+function IssuerDashboardPage() {
   useDocumentTitle('Launchpad overview');
   const { user } = useAuth();
   const navigate = useNavigate();
   const tokenRecord = useMyToken();
-  const tokenDestination = tokenRecord.isLocked
+  const tokenDestination = tokenRecord.isDeployed
     ? ROUTES.tokenDetails(tokenRecord.tokenUid || 'token')
-    : ROUTES.createToken;
+    : tokenRecord.isDeploymentPending
+      ? ROUTES.tokenDeploying
+      : tokenRecord.isReadyToDeploy || tokenRecord.isDeploymentFailed
+        ? ROUTES.tokenIssuanceStep('review')
+        : ROUTES.createToken;
+  const tokenActionLabel = tokenRecord.isDeployed
+    ? 'View token'
+    : tokenRecord.isDeploymentPending
+      ? 'Continue deployment'
+      : tokenRecord.isReadyToDeploy || tokenRecord.isDeploymentFailed
+        ? 'Review token deployment'
+        : 'Create security token';
   const overview = useQuery({
     queryKey: ['dashboard', 'overview'],
     queryFn: dashboardApi.getOverview,
@@ -66,8 +81,12 @@ export default function DashboardPage() {
             and lifecycle management.
           </p>
           <div className="launchpad-hero__actions">
-            <Button icon={tokenRecord.isLocked ? Coins : Plus} size="lg" onClick={() => navigate(tokenDestination)}>
-              {tokenRecord.isLocked ? 'View token' : 'Create security token'}
+            <Button
+              icon={tokenRecord.isLocked ? Coins : Plus}
+              size="lg"
+              onClick={() => navigate(tokenDestination)}
+            >
+              {tokenActionLabel}
             </Button>
             <Button variant="secondary" size="lg" onClick={() => navigate(ROUTES.organization)}>
               View organization <ArrowRight size={18} />
@@ -289,3 +308,147 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+function InvestorDashboardPage() {
+  useDocumentTitle('Investor dashboard');
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const investorAccess = useInvestorAccessStatus(user);
+  const onboarding = investorAccess.state;
+  const request = onboarding.investmentRequest;
+  const profile = onboarding.investorProfile;
+  const createdAt = request.submissionDate || profile.createdAt;
+  const completedAt = createdAt
+    ? new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(
+        new Date(createdAt),
+      )
+    : 'Not available';
+  const walletAddress = onboarding.wallet.displayAddress || onboarding.wallet.address || 'Not linked';
+  const statusLabel = 'Profile Created';
+
+  return (
+    <div className="page-stack">
+      <Card className="overflow-hidden border-[color-mix(in_srgb,var(--primary-500)_22%,var(--border))] bg-[linear-gradient(135deg,color-mix(in_srgb,var(--primary-500)_10%,var(--surface)),var(--surface)_62%)] p-[clamp(20px,4vw,38px)]">
+        <div className="grid items-center gap-7 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="min-w-0">
+            <span className="mb-3 inline-flex items-center gap-2 rounded-full border border-[color-mix(in_srgb,var(--success-500)_28%,transparent)] bg-[color-mix(in_srgb,var(--success-500)_10%,var(--surface))] px-3 py-1.5 text-xs font-bold text-[var(--success-500)]">
+              <CheckCircle2 size={15} /> {statusLabel}
+            </span>
+            <h1 className="m-0 max-w-3xl font-[var(--font-display)] text-[clamp(28px,4vw,46px)] leading-[1.08] tracking-[-0.035em] text-[var(--text)]">
+              Welcome, {user?.name?.split(' ')[0] || 'Investor'}.
+            </h1>
+            <p className="mt-4 mb-0 max-w-2xl text-sm leading-6 text-[var(--text-soft)] sm:text-base sm:leading-7">
+              Your investor profile has been created successfully. You can now review your onboarding information, manage your account, and use the investor portal.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Button icon={UserRoundCheck} onClick={() => navigate(ROUTES.investors)}>
+                View investor profile
+              </Button>
+              <Button variant="secondary" icon={FileSearch} onClick={() => navigate(ROUTES.profile)}>
+                Account settings
+              </Button>
+            </div>
+          </div>
+          <div className="grid min-h-[220px] place-items-center rounded-3xl border border-[color-mix(in_srgb,var(--success-500)_18%,var(--border))] bg-[color-mix(in_srgb,var(--surface)_86%,transparent)] p-6 shadow-[var(--shadow-sm)]">
+            <div className="grid place-items-center text-center">
+              <span className="grid size-20 place-items-center rounded-full bg-[color-mix(in_srgb,var(--success-500)_12%,var(--surface))] text-[var(--success-500)]">
+                <ShieldCheck size={38} />
+              </span>
+              <strong className="mt-4 text-lg text-[var(--text)]">Investor portal ready</strong>
+              <small className="mt-1 max-w-[230px] text-sm leading-5 text-[var(--text-soft)]">
+                Your onboarding information is saved and your dashboard is ready to use.
+              </small>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      <section className="grid gap-4 md:grid-cols-3" aria-label="Investor profile summary">
+        <Card className="p-5">
+          <span className="grid size-10 place-items-center rounded-xl bg-[color-mix(in_srgb,var(--primary-500)_11%,var(--surface))] text-[var(--primary-600)]">
+            <UserRoundCheck size={20} />
+          </span>
+          <small className="mt-4 block text-xs font-bold tracking-[0.08em] text-[var(--text-muted)] uppercase">Investor Profile</small>
+          <strong className="mt-1 block break-words text-lg text-[var(--text)]">{profile.profileId || 'Created'}</strong>
+          <p className="mt-1 mb-0 text-sm text-[var(--text-soft)]">{statusLabel}</p>
+        </Card>
+        <Card className="p-5">
+          <span className="grid size-10 place-items-center rounded-xl bg-[color-mix(in_srgb,var(--primary-500)_11%,var(--surface))] text-[var(--primary-600)]">
+            <WalletCards size={20} />
+          </span>
+          <small className="mt-4 block text-xs font-bold tracking-[0.08em] text-[var(--text-muted)] uppercase">Connected Wallet</small>
+          <strong className="mt-1 block break-all text-base text-[var(--text)]" title={onboarding.wallet.address}>
+            {walletAddress}
+          </strong>
+          <p className="mt-1 mb-0 text-sm text-[var(--text-soft)]">{onboarding.wallet.network || 'Network unavailable'}</p>
+        </Card>
+        <Card className="p-5">
+          <span className="grid size-10 place-items-center rounded-xl bg-[color-mix(in_srgb,var(--primary-500)_11%,var(--surface))] text-[var(--primary-600)]">
+            <FileCheck2 size={20} />
+          </span>
+          <small className="mt-4 block text-xs font-bold tracking-[0.08em] text-[var(--text-muted)] uppercase">Onboarding Reference</small>
+          <strong className="mt-1 block break-words text-lg text-[var(--text)]">{request.requestId || profile.profileId || 'Completed'}</strong>
+          <p className="mt-1 mb-0 text-sm text-[var(--text-soft)]">Completed {completedAt}</p>
+        </Card>
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.75fr)]">
+        <Card className="p-5 sm:p-6">
+          <header>
+            <span className="eyebrow">Profile setup</span>
+            <h2 className="mt-1 mb-1 font-[var(--font-display)] text-2xl text-[var(--text)]">Your investor workspace is ready</h2>
+            <p className="m-0 text-sm leading-6 text-[var(--text-soft)]">Your onboarding details are saved and the main investor portal is now available.</p>
+          </header>
+          <div className="mt-6 grid gap-4">
+            {[
+              ['Investor profile created', 'Completed'],
+              ['Identity documents saved', 'Completed'],
+              ['Primary wallet linked', 'Completed'],
+              ['Dashboard access enabled', 'Available'],
+            ].map(([title, detail]) => (
+              <div className="grid grid-cols-[36px_minmax(0,1fr)] gap-3" key={title}>
+                <span className="grid size-9 place-items-center rounded-full border border-[var(--success-500)] bg-[color-mix(in_srgb,var(--success-500)_12%,var(--surface))] text-sm font-bold text-[var(--success-500)]">
+                  <Check size={16} />
+                </span>
+                <div className="min-w-0 border-b border-[var(--border)] pb-4 last:border-b-0">
+                  <strong className="block text-sm text-[var(--text)]">{title}</strong>
+                  <small className="mt-1 block text-xs text-[var(--text-soft)]">{detail}</small>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card className="p-5 sm:p-6">
+          <span className="grid size-11 place-items-center rounded-2xl bg-[color-mix(in_srgb,var(--success-500)_11%,var(--surface))] text-[var(--success-500)]">
+            <CheckCircle2 size={23} />
+          </span>
+          <h2 className="mt-4 mb-2 font-[var(--font-display)] text-xl text-[var(--text)]">Profile saved</h2>
+          <p className="m-0 text-sm leading-6 text-[var(--text-soft)]">
+            Your completed onboarding profile remains available after logout or refresh, so you will not be asked to create it again.
+          </p>
+          <dl className="mt-5 grid gap-3 text-sm">
+            <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] pb-3">
+              <dt className="text-[var(--text-soft)]">Current status</dt>
+              <dd className="m-0 text-right font-bold text-[var(--text)]">{statusLabel}</dd>
+            </div>
+            <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] pb-3">
+              <dt className="text-[var(--text-soft)]">Portal access</dt>
+              <dd className="m-0 text-right font-bold text-[var(--success-500)]">Enabled</dd>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <dt className="text-[var(--text-soft)]">ONCHAINID</dt>
+              <dd className="m-0 max-w-[190px] break-all text-right font-bold text-[var(--text)]">{profile.onchainId || 'Created'}</dd>
+            </div>
+          </dl>
+        </Card>
+      </section>
+    </div>
+  );
+}
+
+export default function DashboardPage() {
+  const { user } = useAuth();
+  return user?.role === ROLES.investor ? <InvestorDashboardPage /> : <IssuerDashboardPage />;
+}
+

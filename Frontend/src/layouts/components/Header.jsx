@@ -5,6 +5,7 @@ import { authService } from '@/api/auth';
 import { TrexLogo } from '@/components/branding/TrexLogo';
 import { WalletControl } from '@/components/wallet/WalletControl';
 import { routeMeta } from '@/config/navigation';
+import { ROLES } from '@/config/permissions';
 import { ROUTES } from '@/config/routes';
 import { useAuth } from '@/hooks/useAuth';
 import { useUiStore } from '@/store/ui.store';
@@ -29,7 +30,14 @@ export function Header({ onboardingOnly = false }) {
   const isTokenRecordPage =
     location.pathname.startsWith('/app/tokens/') &&
     !location.pathname.startsWith(ROUTES.createToken);
+  const roleAwareMeta =
+    user?.role === ROLES.investor && location.pathname === ROUTES.dashboard
+      ? { title: 'Investor Dashboard', description: 'Investor profile and portal access' }
+      : user?.role === ROLES.investor && location.pathname === ROUTES.investors
+        ? { title: 'Investor Profile', description: 'Completed investor onboarding details' }
+        : null;
   const currentMeta =
+    roleAwareMeta ||
     routeMeta[location.pathname] ||
     (location.pathname.startsWith(ROUTES.organization) ? routeMeta[ROUTES.organization] : null) ||
     (isTokenRecordPage ? routeMeta.tokenDetails : null) ||
