@@ -109,7 +109,7 @@ hash/message are recorded so the user can retry. Requires `SEPOLIA_RPC_URL`,
 - `investorInvestmentCategory` — child table (replace-pattern) for the multi-select categories.
 - `investorDocument` — uploaded files, each carrying its `documentCategory`.
 
-Migration: `database/migrations/20260807_add_investor_onboarding.sql` (creates the tables,
+Migration: `database/migrations/20260909_add_investor_onboarding.sql` (creates the tables,
 seeds the document types, adds the Investor Onboarding menu and the eight Investor
 `permissionMaster` rows). Idempotent. Investor document files are stored under
 `INVESTOR_UPLOAD_DIR` (default `storage/investor-documents`).

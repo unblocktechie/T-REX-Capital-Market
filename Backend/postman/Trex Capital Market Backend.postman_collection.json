@@ -239,6 +239,22 @@
     {
       "key": "interestUid",
       "value": ""
+    },
+    {
+      "key": "investorClaimId",
+      "value": ""
+    },
+    {
+      "key": "investorClaimTxHash",
+      "value": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "key": "registryRegistrationUid",
+      "value": ""
+    },
+    {
+      "key": "registryTxHash",
+      "value": "PASTE_ISSUER_REGISTER_IDENTITY_TX_HASH"
     }
   ],
   "item": [
@@ -2675,7 +2691,7 @@
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/api/v1/investments/issuer/interests?status=submitIntrest",
-            "description": "Interests for the issuer's organization. Issuers see only 'submitIntrest' by default (pending/documents-incomplete requests are never listed). Optional ?status=... or 'all'.",
+            "description": "Interests for the issuer's organization. Issuers see only 'submitIntrest' by default. Use ?status=claimSubmitted to find subscriptions eligible for Add to Registry, or ?status=all.",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -2732,6 +2748,85 @@
               }
             }
           ]
+        },
+        {
+          "name": "Create or Resume Registry Registration (Issuer)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/investments/issuer/interests/{{interestUid}}/registry-registration",
+            "description": "Requires interest status claimSubmitted. Creates PENDING before MetaMask or returns the existing row. Use only the returned registry/wallet/identity/country values for registerIdentity().",
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{userToken}}", "type": "string" }]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Registry operation created or resumed', () => pm.expect([200, 201]).to.include(pm.response.code));",
+                "const data = pm.response.json().data;",
+                "pm.expect(data.status).to.be.oneOf(['PENDING', 'CONFIRMED']);",
+                "if (data.registryOperationId) pm.collectionVariables.set('registryRegistrationUid', data.registryOperationId);"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "Get Registry Registration (Issuer)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/investments/issuer/interests/{{interestUid}}/registry-registration",
+            "description": "Resume state after refresh. The backend returns its current PENDING/CONFIRMED record.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{userToken}}", "type": "string" }]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": ["pm.test('Registry operation fetched', () => pm.response.to.have.status(200));"]
+            }
+          }]
+        },
+        {
+          "name": "Confirm Registry Transaction (Issuer)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"txHash\": \"{{registryTxHash}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/investments/issuer/interests/{{interestUid}}/registry-registration/{{registryRegistrationUid}}/confirm",
+            "description": "Send only the MetaMask hash. Backend verifies chain, sender, registry, calldata, receipt, IdentityRegistered event, and final state. A successful confirmation atomically sets the interest to registered and records registered history. 202 means wait/poll; only 200 with status CONFIRMED is complete.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{userToken}}", "type": "string" }]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Registry verification responded', () => pm.expect([200, 202]).to.include(pm.response.code));",
+                "const data = pm.response.json().data;",
+                "if (pm.response.code === 200) pm.expect(data.status).to.eql('CONFIRMED');"
+              ]
+            }
+          }]
         },
         {
           "name": "Approve Investment Interest (Issuer)",
@@ -2896,6 +2991,126 @@
         ]
       },
       "description": "Token marketplace (admin+investor), investor submit-interest journey (pending/submitIntrest by claim-topic eligibility), and issuer review (approve / reject with DOC_REJECTED resubmission). Set investorToken via a User Login as the investor, userToken via a User Login as the issuer, and adminToken via Admin Login."
+    },
+    {
+      "name": "Investor Claim Submission (Hybrid)",
+      "description": "Fast and idempotent investor claim flow. Prepare creates the one logical DB row. Submit stores/verifies the wallet hash. Retry verifies the known hash or performs one Identity.getClaim read; it never waits for a historical log scan. Open MetaMask again only when Retry returns TRANSACTION_REQUIRED. SYNCING means the global indexer/targeted recovery worker is reconciling the actual event hash.",
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{investorToken}}",
+            "type": "string"
+          }
+        ]
+      },
+      "item": [
+        {
+          "name": "List Investor Claims",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/investor/claims?interestId={{interestUid}}",
+            "description": "Lists trusted issuer-signed claim parameters and current states. Captures the first claimId for the following requests."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Claims are returned', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.claims && json.data.claims.length) pm.collectionVariables.set('investorClaimId', json.data.claims[0].claimId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Prepare Investor Claim",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"interestId\": \"{{interestUid}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/investor/claims/{{investorClaimId}}/prepare",
+            "description": "Creates/resets the single PENDING row and returns trusted ONCHAINID call arguments. Call this before MetaMask."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Claim is prepared', () => pm.expect([200, 201]).to.include(pm.response.code));",
+                  "const json = pm.response.json();",
+                  "pm.test('Preparation has a workflow status', () => pm.expect(json.data.status).to.be.oneOf(['PENDING', 'CONFIRMED']));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Submit Investor Claim Transaction",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"interestId\": \"{{interestUid}}\",\n  \"txHash\": \"{{investorClaimTxHash}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/investor/claims/{{investorClaimId}}/submit",
+            "description": "Set investorClaimTxHash to the real MetaMask transaction hash. The backend persists it before receipt verification."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Claim is confirmed or awaiting confirmations', () => pm.expect([200, 202]).to.include(pm.response.code));",
+                  "const json = pm.response.json();",
+                  "pm.test('Submit status is explicit', () => pm.expect(json.data.status).to.be.oneOf(['CONFIRMED', 'PENDING_CONFIRMATION']));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Retry Investor Claim (Fast)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"interestId\": \"{{interestUid}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/investor/claims/{{investorClaimId}}/retry",
+            "description": "Fast recovery. CONFIRMED=no action; PENDING_CONFIRMATION=wait; SYNCING=poll; TRANSACTION_REQUIRED=frontend may open MetaMask."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Retry responded quickly', () => pm.expect(pm.response.responseTime).to.be.below(5000));",
+                  "pm.test('Retry is accepted', () => pm.expect([200, 202]).to.include(pm.response.code));",
+                  "const json = pm.response.json();",
+                  "pm.test('Retry status drives the wallet UI', () => pm.expect(json.data.status).to.be.oneOf(['CONFIRMED', 'PENDING_CONFIRMATION', 'SYNCING', 'TRANSACTION_REQUIRED']));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     },
     {
       "name": "General Settings",

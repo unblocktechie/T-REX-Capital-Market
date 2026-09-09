@@ -96,6 +96,19 @@ class IssuerClaimRepository {
     );
   }
 
+  // A single signed-claim row by its uid (the investor's claimId). Carries interestUid.
+  async findSignatureByUid(signatureUid, executor) {
+    const rows = await execute(
+      `SELECT \`signatureUid\`, \`verificationUid\`, \`interestUid\`, \`claimTopic\`, \`data\`, \`signature\`,
+              \`signedByWallet\`, \`status\`, \`verifiedAt\`
+       FROM \`issuerClaimSignature\`
+       WHERE \`signatureUid\` = ? AND \`isDeleted\` = 0 LIMIT 1`,
+      [signatureUid],
+      executor,
+    );
+    return rows[0] || null;
+  }
+
   async listSignatures(verificationUid, executor) {
     return execute(
       `SELECT \`signatureUid\`, \`verificationUid\`, \`claimTopic\`, \`data\`, \`signature\`, \`signedByWallet\`,

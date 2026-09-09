@@ -1,6 +1,6 @@
 const { Joi, uid } = require('./common.schema');
 
-const INTEREST_STATUSES = ['pending', 'submitIntrest', 'verifiedByIssuer', 'approved', 'rejected', 'cancelled'];
+const INTEREST_STATUSES = ['pending', 'submitIntrest', 'verifiedByIssuer', 'claimSubmitted', 'registered', 'approved', 'rejected', 'cancelled'];
 const REJECT_REASON_TYPES = ['DOC_REJECTED', 'OTHER'];
 
 // Token statuses an admin may filter the marketplace by. Investors are always restricted to
@@ -32,6 +32,17 @@ const issuerInterestsQuery = Joi.object({
 
 const interestParams = Joi.object({ interestUid: uid.required() });
 
+const registryRegistrationParams = Joi.object({
+  interestUid: uid.required(),
+  registryRegistrationUid: uid.required(),
+});
+
+const confirmRegistryRegistration = Joi.object({
+  txHash: Joi.string().trim().lowercase().pattern(/^0x[a-fA-F0-9]{64}$/).required(),
+});
+
+const emptyBody = Joi.object({});
+
 // Issuer rejection: DOC_REJECTED requires the rejected claim-topic codes; OTHER forbids them.
 const rejectInterest = Joi.object({
   rejectReasonType: Joi.string().valid(...REJECT_REASON_TYPES).required(),
@@ -59,6 +70,9 @@ module.exports = {
   myInterestsQuery,
   issuerInterestsQuery,
   interestParams,
+  registryRegistrationParams,
+  confirmRegistryRegistration,
+  emptyBody,
   interestDocumentParams,
   rejectInterest,
   approveInterest,

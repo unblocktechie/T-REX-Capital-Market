@@ -319,3 +319,90 @@ Before submitting, configure `TREX_FACTORY_ADDRESS` with the Sepolia TREX factor
 Failure check: submit a confirmed failed transaction or a successful hash without the configured factory's `TREXSuiteDeployed` event. Expected: `422 TOKEN_DEPLOYMENT_VERIFICATION_FAILED`; `GET /tokens/me` then returns `status: deploymentFailed`, the attempted `deployTxHash`, and a diagnostic `contractTxnMessage`. A new valid transaction hash can be submitted afterward.
 
 Draft checks: repeat any step with `isDraft: true` and partial fields/empty arrays. Expect `200` and no step advance. Final submit must still reject incomplete data.
+
+## 19. Hybrid investor claim confirmation and Retry
+
+Prerequisites: an investor application in `verifiedByIssuer`, an investor ONCHAINID, an issuer
+ONCHAINID, and at least one `SIGNED` issuer claim. Use the investor JWT.
+
+1. List claims and copy a `claimId`:
+
+   ```bash
+   curl "http://localhost:3000/api/v1/investor/claims?interestId=INTEREST_UID" -H "Authorization: Bearer INVESTOR_TOKEN"
+   ```
+
+2. Prepare the existing logical submission:
+
+   ```bash
+   curl -X POST http://localhost:3000/api/v1/investor/claims/CLAIM_ID/prepare -H "Authorization: Bearer INVESTOR_TOKEN" -H "Content-Type: application/json" -d '{"interestId":"INTEREST_UID"}'
+   ```
+
+   Expected: `201`, `status: PENDING`, wallet call parameters, and one database row. Record the
+   returned `submissionUid`.
+
+3. Submit the ONCHAINID transaction from the frontend wallet, then post the real hash:
+
+   ```bash
+   curl -X POST http://localhost:3000/api/v1/investor/claims/CLAIM_ID/submit -H "Authorization: Bearer INVESTOR_TOKEN" -H "Content-Type: application/json" -d '{"interestId":"INTEREST_UID","txHash":"0x64_HEX_CHARACTERS"}'
+   ```
+
+   Expected: `200 CONFIRMED`, or `202 PENDING_CONFIRMATION` until mined. Repeating the request must
+   not create another row or transaction.
+
+4. Test failed browser handoff: prepare another claim, successfully submit it on-chain, but do not
+   call `/submit`. Call Retry instead:
+
+   ```bash
+   curl -X POST http://localhost:3000/api/v1/investor/claims/CLAIM_ID/retry -H "Authorization: Bearer INVESTOR_TOKEN" -H "Content-Type: application/json" -d '{"interestId":"INTEREST_UID"}'
+   ```
+
+   Expected: immediate `CONFIRMED` if the global event ledger already has the event; otherwise
+   HTTP `202` with `status: SYNCING`. Poll the list or Retry endpoint after a worker pass. The same
+   row must become `CONFIRMED` with the actual event transaction hash.
+
+5. Prepare a claim without submitting it on-chain, then Retry. Expected:
+   `200 TRANSACTION_REQUIRED`; only now should the frontend request MetaMask submission.
+
+6. Verify operational state:
+
+   ```sql
+   SELECT indexerName, chainId, startBlock, lastIndexedBlock, lastSuccessAt, lastErrorMessage
+   FROM blockchainIndexerCheckpoint WHERE indexerName = 'investorClaim';
+
+   SELECT processingStatus, COUNT(*) FROM investorClaimBlockchainEvent GROUP BY processingStatus;
+
+   SELECT submissionUid, status, txHash, syncStatus, preparedAtBlock, lastScannedBlock, syncAttempts
+   FROM investorClaimSubmission WHERE interestUid = 'INTEREST_UID';
+   ```
+
+   The checkpoint must advance only through the configured safe head. There must be no duplicate
+   `(interestUid, claimSignatureUid)` row and no duplicate `(chainId, txHash, logIndex)` event.
+
+## Identity Registry registration
+
+1. Use an issuer-owned subscription with status `claimSubmitted`, then call
+   `POST /api/v1/investments/issuer/interests/{interestUid}/registry-registration` with `{}`.
+2. Assert `201`, `status: PENDING`, and `txHash: null`; save `registryOperationId`. Repeating the
+   request must return the same operation with `200`.
+3. In MetaMask, use the stored issuer wallet and the backend-returned registry, investor wallet,
+   ONCHAINID, and country values in `registerIdentity`.
+4. Send only the hash to `POST .../registry-registration/{registryOperationId}/confirm`.
+5. `202` means wait/poll. A `200` response is complete only when `data.status` is `CONFIRMED`.
+   Confirm that `tokenInvestmentInterest.status = 'registered'` and exactly one corresponding
+   `tokenInvestmentInterestHistory.eventType = 'registered'` row exists.
+6. Negative checks using another issuer, sender, registry, wallet, identity, country, reverted
+   receipt, missing event, or mismatching final state must leave the row `PENDING`.
+7. Frontend-crash check: prepare and submit on-chain, but omit confirm. The worker must reconcile
+   the existing row using the actual event hash without creating a row or transaction.
+8. Inspect `identityRegistryBlockchainEvent` and this global cursor:
+
+   ```sql
+   SELECT * FROM blockchainIndexerCheckpoint
+   WHERE indexerName = 'identityRegistryRegistration';
+
+   SELECT interestUid, status FROM tokenInvestmentInterest WHERE interestUid = 'INTEREST_UID';
+
+   SELECT eventType, actorRole, actorUserUid, note, createdAt
+   FROM tokenInvestmentInterestHistory
+   WHERE interestUid = 'INTEREST_UID' AND eventType = 'registered';
+   ```

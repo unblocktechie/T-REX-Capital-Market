@@ -169,7 +169,7 @@ class InvestmentRepository {
       `SELECT ii.*,
               t.\`tokenName\`, t.\`tokenSymbol\`, t.\`decimals\`, t.\`initialTokenPrice\`,
               t.\`imageStorageKey\`, t.\`imageMimeType\`, t.\`tokenAddress\`, t.\`status\` AS \`tokenStatus\`,
-              o.\`legalCompanyName\`,
+              o.\`legalCompanyName\`, o.\`contractAddress\` AS \`organizationIdentityAddress\`,
               i.\`firstName\`, i.\`lastName\`, i.\`profileReference\`, i.\`status\` AS \`investorStatus\`,
               i.\`walletAddress\` AS \`investorWalletAddress\`, i.\`contractAddress\` AS \`investorIdentityAddress\`,
               i.\`onchainIdReference\` AS \`investorOnchainIdReference\`
@@ -266,6 +266,30 @@ class InvestmentRepository {
       executor,
     );
     return rows[0] || null;
+  }
+
+  // Row lock on the interest, to serialize the "all claims confirmed -> claimSubmitted"
+  // transition under concurrent claim submissions.
+  async findInterestForUpdate(interestUid, executor) {
+    const rows = await execute(
+      'SELECT * FROM `tokenInvestmentInterest` WHERE `interestUid` = ? AND `isDeleted` = 0 LIMIT 1 FOR UPDATE',
+      [interestUid],
+      executor,
+    );
+    return rows[0] || null;
+  }
+
+  // Conditional status transition (idempotent): only flips when the current status matches.
+  // Returns true when it actually transitioned.
+  async transitionInterestStatus(interestUid, fromStatus, toStatus, executor) {
+    const result = await execute(
+      `UPDATE \`tokenInvestmentInterest\`
+       SET \`status\` = ?, \`updatedAt\` = UTC_TIMESTAMP(3)
+       WHERE \`interestUid\` = ? AND \`status\` = ? AND \`isDeleted\` = 0`,
+      [toStatus, interestUid, fromStatus],
+      executor,
+    );
+    return result.affectedRows > 0;
   }
 
   async listInterestsByInvestor(investorUid, { status } = {}, executor) {

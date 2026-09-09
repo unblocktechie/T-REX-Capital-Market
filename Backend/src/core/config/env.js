@@ -91,9 +91,15 @@ const env = Object.freeze({
     identityFactoryAddress: process.env.IDENTITY_FACTORY_ADDRESS,
     trexFactoryAddress: process.env.TREX_FACTORY_ADDRESS,
     confirmations: Number(process.env.BLOCKCHAIN_CONFIRMATIONS || 1),
+    // Registry confirmation is intentionally conservative because CONFIRMED is authoritative.
+    registryConfirmations: Number(process.env.REGISTRY_CONFIRMATIONS || 12),
     transactionTimeoutMs: Number(process.env.BLOCKCHAIN_TRANSACTION_TIMEOUT_MS || 120000),
     // Block to start on-chain log lookups from (factory deploy block). 0 = from genesis.
     trexFactoryStartBlock: Number(process.env.TREX_FACTORY_START_BLOCK || 0),
+    // Global investor-claim indexer start block. When omitted, the TREX factory start block is a
+    // conservative platform deployment fallback; zero starts one configured chunk behind safe head.
+    claimIndexerStartBlock: Number(process.env.CLAIM_INDEXER_START_BLOCK || process.env.TREX_FACTORY_START_BLOCK || 0),
+    registryIndexerStartBlock: Number(process.env.REGISTRY_INDEXER_START_BLOCK || process.env.TREX_FACTORY_START_BLOCK || 0),
     // Salt-reconcile event scan: window size per eth_getLogs (stay under the RPC range cap)
     // and the maximum blocks to look back when no start block is configured.
     reconcileBlockOffset: Number(process.env.RECONCILE_BLOCK_OFFSET || 9000),

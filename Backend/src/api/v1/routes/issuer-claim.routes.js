@@ -4,7 +4,7 @@ const { asyncHandler } = require('../../../utils/async-handler');
 const schemas = require('../../../schemas/issuer-claim.schema');
 
 // Issuer claim-signature verification. Authenticated + DB-authorized (permissionMaster),
-// issuer-only. See 20260814_issuer_claim_verification.sql.
+// issuer-only. See 20260909_issuer_claim_verification.sql.
 const createIssuerClaimRouter = ({ controller, authenticate, authorize }) => {
   const router = express.Router();
   router.use(authenticate);

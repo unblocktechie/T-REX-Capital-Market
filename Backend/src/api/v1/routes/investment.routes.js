@@ -5,8 +5,8 @@ const schemas = require('../../../schemas/investment.schema');
 
 // All investment routes are authenticated + DB-authorized (permissionMaster). The
 // marketplace list/detail/image are granted to admin + investor; the journey endpoints to
-// investor; the review endpoints to issuer. See 20260808_add_investment_journey.sql.
-const createInvestmentRouter = ({ controller, authenticate, authorize }) => {
+// investor; the review endpoints to issuer. See 20260909_add_investment_journey.sql.
+const createInvestmentRouter = ({ controller, registryController, authenticate, authorize }) => {
   const router = express.Router();
   router.use(authenticate);
 
@@ -21,6 +21,27 @@ const createInvestmentRouter = ({ controller, authenticate, authorize }) => {
     validate({ params: schemas.tokenParams }),
     authorize,
     asyncHandler(controller.requiredDocuments),
+  );
+
+  // Backend-authoritative Identity Registry registration. The first call records PENDING intent;
+  // confirm accepts only txHash and independently proves the exact on-chain operation.
+  router.post(
+    '/issuer/interests/:interestUid/registry-registration',
+    validate({ params: schemas.interestParams, body: schemas.emptyBody }),
+    authorize,
+    asyncHandler(registryController.create),
+  );
+  router.get(
+    '/issuer/interests/:interestUid/registry-registration',
+    validate({ params: schemas.interestParams }),
+    authorize,
+    asyncHandler(registryController.get),
+  );
+  router.post(
+    '/issuer/interests/:interestUid/registry-registration/:registryRegistrationUid/confirm',
+    validate({ params: schemas.registryRegistrationParams, body: schemas.confirmRegistryRegistration }),
+    authorize,
+    asyncHandler(registryController.confirm),
   );
   router.post(
     '/tokens/:tokenUid/interest',

@@ -14,6 +14,9 @@ const { InvestorRepository } = require('../repositories/investor.repository');
 const { InvestorOptionRepository } = require('../repositories/investor-option.repository');
 const { InvestmentRepository } = require('../repositories/investment.repository');
 const { IssuerClaimRepository } = require('../repositories/issuer-claim.repository');
+const { InvestorClaimSubmissionRepository } = require('../repositories/investor-claim-submission.repository');
+const { ClaimIndexerRepository } = require('../repositories/claim-indexer.repository');
+const { IdentityRegistryRegistrationRepository } = require('../repositories/identity-registry-registration.repository');
 const { UserService } = require('../services/user.service');
 const { RoleService } = require('../services/role.service');
 const { MenuService } = require('../services/menu.service');
@@ -31,9 +34,20 @@ const { TokenDeploymentAttemptService } = require('../services/token-deployment-
 const { InvestorService } = require('../services/investor.service');
 const { InvestmentService } = require('../services/investment.service');
 const { IssuerClaimService } = require('../services/issuer-claim.service');
+const { InvestorClaimService } = require('../services/investor-claim.service');
 const { ClaimSignatureService } = require('../services/blockchain/claim-signature.service');
+const { ClaimSubmissionVerifierService } = require('../services/blockchain/claim-submission-verifier.service');
+const { ClaimStateService } = require('../services/blockchain/claim-state.service');
+const { ClaimIndexerService } = require('../services/blockchain/claim-indexer.service');
+const { IdentityRegistryVerifierService } = require('../services/blockchain/identity-registry-verifier.service');
+const { IdentityRegistryReconciliationService } = require('../services/blockchain/identity-registry-reconciliation.service');
+const { IdentityRegistryRegistrationService } = require('../services/identity-registry-registration.service');
 const { TokenImageService } = require('../services/common/token-image.service');
 const { TrexDeploymentSyncRunner } = require('../jobs/trex-deployment-sync.runner');
+const { ClaimRecoveryService } = require('../services/blockchain/claim-recovery.service');
+const { ClaimRecoveryRunner } = require('../jobs/claim-recovery.runner');
+const { ClaimIndexerRunner } = require('../jobs/claim-indexer.runner');
+const { IdentityRegistryReconciliationRunner } = require('../jobs/identity-registry-reconciliation.runner');
 const emailService = require('../services/common/email.service');
 const { createCrudController } = require('../api/v1/controllers/crud.controller');
 const { createAuthController } = require('../api/v1/controllers/auth.controller');
@@ -45,6 +59,8 @@ const { createDeploymentAttemptController } = require('../api/v1/controllers/dep
 const { createInvestorController } = require('../api/v1/controllers/investor.controller');
 const { createInvestmentController } = require('../api/v1/controllers/investment.controller');
 const { createIssuerClaimController } = require('../api/v1/controllers/issuer-claim.controller');
+const { createInvestorClaimController } = require('../api/v1/controllers/investor-claim.controller');
+const { createIdentityRegistryRegistrationController } = require('../api/v1/controllers/identity-registry-registration.controller');
 const { createAuthenticate } = require('../middleware/authenticate.middleware');
 const { createAuthorize } = require('../middleware/authorize.middleware');
 
@@ -65,7 +81,13 @@ const investorRepository = new InvestorRepository();
 const investorOptionRepository = new InvestorOptionRepository();
 const investmentRepository = new InvestmentRepository();
 const issuerClaimRepository = new IssuerClaimRepository();
+const investorClaimSubmissionRepository = new InvestorClaimSubmissionRepository();
+const claimIndexerRepository = new ClaimIndexerRepository();
+const identityRegistryRegistrationRepository = new IdentityRegistryRegistrationRepository();
 const claimSignatureService = new ClaimSignatureService();
+const claimSubmissionVerifierService = new ClaimSubmissionVerifierService();
+const claimStateService = new ClaimStateService();
+const identityRegistryVerifierService = new IdentityRegistryVerifierService();
 const tokenImageService = new TokenImageService();
 const tokenDeploymentReceiptService = new TokenDeploymentReceiptService();
 
@@ -108,6 +130,34 @@ const trexDeploymentSyncService = new TrexDeploymentSyncService({
   attemptRepository: tokenDeploymentAttemptRepository,
 });
 const trexDeploymentSyncRunner = new TrexDeploymentSyncRunner(trexDeploymentSyncService);
+const claimRecoveryService = new ClaimRecoveryService({
+  settingRepository,
+  submissionRepository: investorClaimSubmissionRepository,
+  issuerClaimRepository,
+  interestRepository: investmentRepository,
+  tokenRepository,
+});
+const claimRecoveryRunner = new ClaimRecoveryRunner(claimRecoveryService);
+const claimIndexerService = new ClaimIndexerService({
+  settingRepository,
+  indexerRepository: claimIndexerRepository,
+  submissionRepository: investorClaimSubmissionRepository,
+  recoveryService: claimRecoveryService,
+});
+const claimIndexerRunner = new ClaimIndexerRunner(claimIndexerService);
+const identityRegistryRegistrationService = new IdentityRegistryRegistrationService({
+  repository: identityRegistryRegistrationRepository,
+  interestRepository: investmentRepository,
+  verifier: identityRegistryVerifierService,
+});
+const identityRegistryReconciliationService = new IdentityRegistryReconciliationService({
+  settingRepository,
+  repository: identityRegistryRegistrationRepository,
+  checkpointRepository: claimIndexerRepository,
+  verifier: identityRegistryVerifierService,
+  finalizationService: identityRegistryRegistrationService,
+});
+const identityRegistryReconciliationRunner = new IdentityRegistryReconciliationRunner(identityRegistryReconciliationService);
 const investmentService = new InvestmentService({
   repository: investmentRepository,
   tokenRepository,
@@ -132,6 +182,18 @@ const issuerClaimService = new IssuerClaimService({
   tokenRepository,
   claimSignatureService,
 });
+const investorClaimService = new InvestorClaimService({
+  repository: investorClaimSubmissionRepository,
+  interestRepository: investmentRepository,
+  issuerClaimRepository,
+  investorRepository,
+  tokenRepository,
+  verifier: claimSubmissionVerifierService,
+  // Retry endpoint reuses the fallback runner's targeted reconciliation.
+  recoveryService: claimRecoveryService,
+  claimStateService,
+  claimIndexerService,
+});
 
 const controllers = {
   auth: createAuthController(authService),
@@ -148,6 +210,8 @@ const controllers = {
   investors: createInvestorController(investorService, investorOptionRepository),
   investments: createInvestmentController(investmentService),
   issuerClaims: createIssuerClaimController(issuerClaimService),
+  investorClaims: createInvestorClaimController(investorClaimService),
+  registryRegistrations: createIdentityRegistryRegistrationController(identityRegistryRegistrationService),
 };
 
 module.exports = {
@@ -157,14 +221,21 @@ module.exports = {
     locationService, organizationService, organizationAdminService, organizationIdentityService,
     tokenService, tokenDeploymentAttemptService, tokenImageService, tokenDeploymentReceiptService,
     trexDeploymentSyncService, investorService, investmentService, issuerClaimService, claimSignatureService,
+    investorClaimService, claimSubmissionVerifierService, claimStateService, claimRecoveryService, claimIndexerService,
+    identityRegistryRegistrationService, identityRegistryVerifierService, identityRegistryReconciliationService,
   },
   repositories: {
     userRepository, roleRepository, menuRepository, permissionRepository, settingRepository, authTokenRepository,
     locationRepository, organizationOptionRepository, organizationRepository, tokenRepository, tokenOptionRepository,
     tokenDeploymentAttemptRepository, investorRepository, investorOptionRepository, investmentRepository, issuerClaimRepository,
+    investorClaimSubmissionRepository, claimIndexerRepository,
+    identityRegistryRegistrationRepository,
   },
   jobs: {
     trexDeploymentSyncRunner,
+    claimRecoveryRunner,
+    claimIndexerRunner,
+    identityRegistryReconciliationRunner,
   },
   authenticate: createAuthenticate(userRepository),
   authorize: createAuthorize(permissionRepository),

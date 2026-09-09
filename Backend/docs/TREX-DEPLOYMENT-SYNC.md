@@ -151,12 +151,12 @@ credentials are logged.
 
 ## Migration
 
-`database/migrations/20260805_add_trex_deployment_sync.sql` seeds the six settings and adds a
+`database/migrations/20260909_add_trex_deployment_sync.sql` seeds the six settings and adds a
 nullable `deploymentSalt` column to `tokenMaster` (idempotent; existing deployed-token records
 are never modified; operator-tuned values and the live checkpoint are preserved on re-run).
 
 ```bash
-mysql -u root trexLaunchpad < database/migrations/20260805_add_trex_deployment_sync.sql
+mysql -u root trexCapitalMarket < database/migrations/20260909_add_trex_deployment_sync.sql
 ```
 
 ## Notes / assumptions

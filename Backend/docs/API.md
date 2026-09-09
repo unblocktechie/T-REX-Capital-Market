@@ -501,9 +501,49 @@ Rejection lifecycle:
 - Second rejection: `rejectionCount: 2`, `canResubmit: false`. All issuer edits and further submission attempts return `409`; the frontend should show Contact Sales.
 - Approval: OnchainID creation/reuse must succeed before the application becomes read-only and rejection data is cleared.
 
+## Investor claim submission and synchronization
+
+These endpoints require an investor JWT. `claimId` is the issuer claim signature UID and
+`interestId` is the investment interest UID.
+
+- `GET /investor/claims?interestId=...` lists signed claims and their submission state.
+- `POST /investor/claims/{claimId}/prepare` with `{ "interestId": "..." }` creates the one
+  `PENDING` row and returns trusted on-chain call parameters.
+- `POST /investor/claims/{claimId}/submit` with `{ "interestId": "...", "txHash": "0x..." }`
+  durably records the hash and verifies the exact receipt event. It returns `200 CONFIRMED` or
+  `202 PENDING_CONFIRMATION` when the transaction still needs confirmations.
+- `POST /investor/claims/{claimId}/retry` with `{ "interestId": "..." }` is a fast recovery API.
+  It verifies an existing hash, otherwise performs one exact `Identity.getClaim` read. It returns
+  `CONFIRMED`, `PENDING_CONFIRMATION`, `TRANSACTION_REQUIRED`, or HTTP `202 SYNCING`.
+
+Retry never runs a large historical log scan and never sends a transaction. The global indexer and
+targeted recovery worker obtain the actual `ClaimAdded`/`ClaimChanged` `event.transactionHash` and
+update the existing row. The frontend should open MetaMask only for `TRANSACTION_REQUIRED`.
+
+See `docs/INVESTOR-CLAIM-SUBMISSION.md` for payloads and
+`docs/CLAIM-INDEXER.md` for the production worker architecture.
+
+## Identity Registry registration (Issuer)
+
+- `POST /investments/issuer/interests/{interestUid}/registry-registration` validates ownership,
+  token/investor/claim/country eligibility and registry agent state, then creates or returns the one
+  `PENDING` operation with backend-authoritative `registerIdentity` arguments.
+- `GET /investments/issuer/interests/{interestUid}/registry-registration` resumes the operation.
+- `POST /investments/issuer/interests/{interestUid}/registry-registration/{registryRegistrationUid}/confirm`
+  accepts only `{ "txHash": "0x..." }`. It verifies chain, sender, recipient, calldata, receipt,
+  deployed-version `IdentityRegistered` event and final registry state before atomically confirming.
+
+Successful confirmation also atomically changes the subscription from `claimSubmitted` to
+`registered` and records a single `registered` event in `tokenInvestmentInterestHistory`. The API
+and fallback worker share this idempotent finalization path.
+
+Unmined/under-confirmed hashes return `202`; definitive mismatches remain `PENDING` and return `422`.
+The global registry indexer plus targeted recovery worker reconciles frontend-crash cases without
+creating transactions or trusting events alone. See `docs/IDENTITY-REGISTRY-REGISTRATION.md`.
+
 ## Status codes
 
-- `200` success/update/delete; `201` created
+- `200` success/update/delete; `201` created; `202` accepted/pending asynchronous confirmation
 - `400` malformed request or invalid/expired one-time token
 - `401` missing, invalid, expired, or stale JWT
 - `403` inactive/unverified account, CORS denial, or missing permission

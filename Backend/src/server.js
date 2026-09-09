@@ -16,10 +16,19 @@ const start = async () => {
 
   // Background fallback reconciler for missed TREX deployments (read-only).
   jobs.trexDeploymentSyncRunner.start();
+  // Background fallback recovery for investor claim submissions missing tx metadata (read-only).
+  jobs.claimRecoveryRunner.start();
+  // Global, checkpointed ClaimAdded/ClaimChanged indexer across DB-known investor ONCHAINIDs.
+  jobs.claimIndexerRunner.start();
+  // IdentityRegistered global indexer + targeted recovery for PENDING registry operations.
+  jobs.identityRegistryReconciliationRunner.start();
 
   const shutdown = (signal) => {
     logger.info('Graceful shutdown started', { signal });
     jobs.trexDeploymentSyncRunner.stop();
+    jobs.claimRecoveryRunner.stop();
+    jobs.claimIndexerRunner.stop();
+    jobs.identityRegistryReconciliationRunner.stop();
     server.close(async () => {
       await closePool();
       logger.info('Graceful shutdown completed');

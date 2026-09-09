@@ -6,8 +6,10 @@ A production-oriented Node.js, Express, and MySQL API foundation for T-REX Capit
 
 - Issuer/investor signup role selection, email verification, verified-user login, forgot/reset password, and JWT authentication
 - API-level role-based access control loaded from `permissionMaster`
+- Hybrid ONCHAINID claim synchronization: receipt verification, a global checkpointed multi-identity indexer, fast Retry, and targeted recovery
 - CRUD APIs for users, roles, menus, permissions, and general settings
 - Issuer-only organization onboarding with company, jurisdiction, beneficial-owner, document, draft, and final-submission steps
+- Backend-authoritative Identity Registry registration with strict transaction/event/state verification and hybrid recovery
 - Administrator organization review with OnchainID creation before approval, rejection reasons, and one controlled issuer revision cycle
 - Approved-issuer token creation drafts with claim topics, ISO 3166-1 numeric country rules, governance-wallet validation, and deployment readiness
 - Signature-verified token images re-encoded to optimized metadata-free WebP, with optional ClamAV scanning
@@ -69,6 +71,10 @@ Apply `database/migrations/20260908_add_organization_identity_contract_result.sq
 Apply `database/migrations/20260908_add_token_creation_flow.sql`, then rerun `npm run seed:locations`, before using token creation. This adds ISO 3166-1 numeric codes, token/claim/restriction tables, claim values 1 and 2, menu data, and issuer permissions.
 If that migration was applied before `maxBalancePerInvestor` changed from a percentage to an absolute token amount, also apply `database/migrations/20260908_change_token_max_balance_to_amount.sql`.
 Apply `database/migrations/20260908_add_token_deployment_receipt.sql` before accepting frontend TREX deployment transaction hashes. Configure `TREX_FACTORY_ADDRESS` to the Sepolia factory that emits `TREXSuiteDeployed`.
+Apply the dated migrations through `database/migrations/20260909_investor_claim_retry_permission.sql` for investor onboarding, investments, issuer claim signing, claim submission, and Retry permissions.
+Apply `database/migrations/20260909_add_hybrid_claim_indexer.sql` to add the global claim checkpoint, durable event ledger, synchronization cursors, and worker settings. Set `CLAIM_INDEXER_START_BLOCK` to the earliest investor-claim block before starting production workers.
+Apply `database/migrations/20260909_add_identity_registry_registration.sql` for the issuer Add to Registry flow, RBAC permissions, event ledger, and worker settings. Set `REGISTRY_INDEXER_START_BLOCK` to the earliest relevant Identity Registry deployment block in production. See `docs/IDENTITY-REGISTRY-REGISTRATION.md`.
+Apply `database/migrations/20260909_add_registered_investment_status.sql` so verified registry confirmation atomically advances investment interests to `registered` and records their history event.
 
 ```bash
 npm run check
@@ -76,7 +82,7 @@ npm test
 npm start
 ```
 
-See [API documentation](docs/API.md), [frontend organization guide](docs/FRONTEND-ORGANIZATION-GUIDE.md), [frontend token guide](docs/FRONTEND-TOKEN-CREATION-GUIDE.md), [testing guide](docs/TESTING.md), [OpenAPI specification](docs/openapi.yaml), [editable database diagram](docs/trex-capital-market-database.excalidraw), and the import-ready [Postman collection](postman/Trex%20Capital%20Market%20Backend.postman_collection.json).
+See [API documentation](docs/API.md), [investor claim flow](docs/INVESTOR-CLAIM-SUBMISSION.md), [frontend claim Retry guide](docs/FRONTEND-INVESTOR-CLAIM-RETRY-GUIDE.md), [global claim indexer](docs/CLAIM-INDEXER.md), [targeted claim recovery](docs/CLAIM-RECOVERY-RUNNER.md), [frontend organization guide](docs/FRONTEND-ORGANIZATION-GUIDE.md), [frontend token guide](docs/FRONTEND-TOKEN-CREATION-GUIDE.md), [testing guide](docs/TESTING.md), [OpenAPI specification](docs/openapi.yaml), [editable database diagram](docs/trex-capital-market-database.excalidraw), and the import-ready [Postman collection](postman/Trex%20Capital%20Market%20Backend.postman_collection.json).
 
 ## Response contract
 
@@ -90,4 +96,5 @@ Successful responses contain `success`, `message`, `data`, `timestamp`, and `req
 - Set `ALLOWED_ORIGINS` to exact HTTPS frontend origins. There is no wildcard fallback.
 - Configure `UPLOAD_DIR`, `UPLOAD_MAX_FILE_SIZE_MB`, and `UPLOAD_MAX_FILES`; store production uploads on encrypted persistent storage and include them in backup/retention procedures.
 - Configure token-image storage and a ClamAV executable using the `TOKEN_IMAGE_*` variables when malware scanning is required in production.
+- Monitor `blockchainIndexerCheckpoint` lag/errors and keep both claim workers enabled. The indexer uses a DB lease, so multiple API instances are safe.
 - RBAC changes take effect on the next request. Role changes invalidate existing JWTs immediately.

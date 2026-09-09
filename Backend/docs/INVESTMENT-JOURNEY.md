@@ -4,16 +4,16 @@ A read-only token **marketplace** plus an investor **"express interest"** flow g
 claim-topic document eligibility, and an issuer **review** view of incoming interests.
 
 All endpoints reuse the existing JWT authentication + DB-driven RBAC (`permissionMaster`).
-Migrations (idempotent): `database/migrations/20260808_add_investment_journey.sql` and
-`database/migrations/20260811_investment_interest_reject_flow.sql` (adds `submitIntrest` status,
+Migrations (idempotent): `database/migrations/20260909_add_investment_journey.sql` and
+`database/migrations/20260909_investment_interest_reject_flow.sql` (adds `submitIntrest` status,
 the reject/resubmission columns, and issuer approve/reject permissions), and
-`database/migrations/20260812_investment_interest_history.sql` (adds the timeline history table
+`database/migrations/20260909_investment_interest_history.sql` (adds the timeline history table
 and the investor/issuer history-read permissions), and
-`database/migrations/20260813_document_versioning_and_submission_snapshot.sql` (adds document
+`database/migrations/20260909_document_versioning_and_submission_snapshot.sql` (adds document
 versioning columns and the per-submission document snapshot table), and
-`database/migrations/20260815_add_verified_by_issuer_status.sql` (adds the `verifiedByIssuer`
+`database/migrations/20260909_add_verified_by_issuer_status.sql` (adds the `verifiedByIssuer`
 status the issuer's review now sets), and
-`database/migrations/20260816_add_verified_by_issuer_history_event.sql` (adds the
+`database/migrations/20260909_add_verified_by_issuer_history_event.sql` (adds the
 `verifiedByIssuer` timeline event type).
 
 ## What was added

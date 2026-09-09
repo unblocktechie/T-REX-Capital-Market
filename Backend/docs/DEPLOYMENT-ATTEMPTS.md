@@ -198,12 +198,12 @@ for the flow to work.
 
 ## Migration
 
-`database/migrations/20260804_add_token_deployment_attempts.sql` creates the
+`database/migrations/20260909_add_token_deployment_attempts.sql` creates the
 `tokenDeploymentAttempt` table and indexes, adds the `deploymentPending` value to the
 `tokenMaster.status` enum, and seeds the four Issuer `permissionMaster` rows. It is idempotent,
 never modifies existing deployed-token records, and includes a commented rollback block.
 Apply it after the base schema:
 
 ```bash
-mysql -u root trexLaunchpad < database/migrations/20260804_add_token_deployment_attempts.sql
+mysql -u root trexCapitalMarket < database/migrations/20260909_add_token_deployment_attempts.sql
 ```

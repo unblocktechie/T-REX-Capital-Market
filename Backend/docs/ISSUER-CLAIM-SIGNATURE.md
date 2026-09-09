@@ -116,5 +116,5 @@ The overall status is **never** `SIGNED` unless 100% of the required topics veri
   `data`, `signature`, `signedByWallet`, `status`, `verificationError`, `verifiedAt`, timestamps.
   `UNIQUE(verificationUid, claimTopic)`.
 
-Migration: `database/migrations/20260814_issuer_claim_verification.sql` (creates both tables +
+Migration: `database/migrations/20260909_issuer_claim_verification.sql` (creates both tables +
 issuer permissions). Idempotent.

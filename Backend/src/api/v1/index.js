@@ -10,6 +10,7 @@ const { createTokenRouter } = require('./routes/token.routes');
 const { createInvestorReferenceRouter, createInvestorRouter } = require('./routes/investor.routes');
 const { createInvestmentRouter } = require('./routes/investment.routes');
 const { createIssuerClaimRouter } = require('./routes/issuer-claim.routes');
+const { createInvestorClaimRouter } = require('./routes/investor-claim.routes');
 
 const createV1Router = () => {
   const router = express.Router();
@@ -44,11 +45,17 @@ const createV1Router = () => {
   }));
   router.use('/investments', createInvestmentRouter({
     controller: dependencies.controllers.investments,
+    registryController: dependencies.controllers.registryRegistrations,
     authenticate: dependencies.authenticate,
     authorize: dependencies.authorize,
   }));
   router.use('/issuer/claims', createIssuerClaimRouter({
     controller: dependencies.controllers.issuerClaims,
+    authenticate: dependencies.authenticate,
+    authorize: dependencies.authorize,
+  }));
+  router.use('/investor/claims', createInvestorClaimRouter({
+    controller: dependencies.controllers.investorClaims,
     authenticate: dependencies.authenticate,
     authorize: dependencies.authorize,
   }));

@@ -369,6 +369,101 @@
       "rawText": "Soft relationship policy\nRepositories/services validate references and deletion rules. MySQL intentionally defines no FOREIGN KEY constraints.",
       "originalText": "Soft relationship policy\nRepositories/services validate references and deletion rules. MySQL intentionally defines no FOREIGN KEY constraints.",
       "textAlign": "left", "verticalAlign": "top", "containerId": null, "lineHeight": 1.25, "autoResize": true
+    },
+    {
+      "id": "claimSubmissionBox", "type": "rectangle", "x": 60, "y": 1500, "width": 570, "height": 430, "angle": 0,
+      "strokeColor": "#0369a1", "backgroundColor": "#e0f2fe", "fillStyle": "solid", "strokeWidth": 2,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "j0",
+      "roundness": { "type": 3 }, "seed": 1901, "version": 1, "versionNonce": 2901, "isDeleted": false,
+      "boundElements": null, "updated": 1787011200000, "link": null, "locked": false
+    },
+    {
+      "id": "claimSubmissionText", "type": "text", "x": 85, "y": 1525, "width": 520, "height": 380, "angle": 0,
+      "strokeColor": "#0c4a6e", "backgroundColor": "transparent", "fillStyle": "solid", "strokeWidth": 1,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "j1",
+      "roundness": null, "seed": 1902, "version": 1, "versionNonce": 2902, "isDeleted": false,
+      "boundElements": null, "updated": 1787011200000, "link": null, "locked": false,
+      "fontSize": 16, "fontFamily": 3,
+      "text": "investorClaimSubmission\n\nPK submissionUid\nUQ interestUid + claimSignatureUid\nUQ txHash + logIndex\nREL investorUid → investorMaster\nREL interestUid → tokenInvestmentInterest\nREL claimSignatureUid → issuerClaimSignature\nclaimTopic, data, signature\ninvestorIdentityAddress, issuerIdentityAddress\npreparedAtBlock, lastScannedBlock\ntxHash, blockNumber, transactionIndex, logIndex\nstatus: PENDING | CONFIRMED | FAILED\nsyncStatus: IDLE | QUEUED | PROCESSING | FAILED\nsync timestamps, attempts, failure, nextSyncAt\ncreatedAt, updatedAt",
+      "rawText": "investorClaimSubmission\n\nPK submissionUid\nUQ interestUid + claimSignatureUid\nUQ txHash + logIndex\nREL investorUid → investorMaster\nREL interestUid → tokenInvestmentInterest\nREL claimSignatureUid → issuerClaimSignature\nclaimTopic, data, signature\ninvestorIdentityAddress, issuerIdentityAddress\npreparedAtBlock, lastScannedBlock\ntxHash, blockNumber, transactionIndex, logIndex\nstatus: PENDING | CONFIRMED | FAILED\nsyncStatus: IDLE | QUEUED | PROCESSING | FAILED\nsync timestamps, attempts, failure, nextSyncAt\ncreatedAt, updatedAt",
+      "originalText": "investorClaimSubmission\n\nPK submissionUid\nUQ interestUid + claimSignatureUid\nUQ txHash + logIndex\nREL investorUid → investorMaster\nREL interestUid → tokenInvestmentInterest\nREL claimSignatureUid → issuerClaimSignature\nclaimTopic, data, signature\ninvestorIdentityAddress, issuerIdentityAddress\npreparedAtBlock, lastScannedBlock\ntxHash, blockNumber, transactionIndex, logIndex\nstatus: PENDING | CONFIRMED | FAILED\nsyncStatus: IDLE | QUEUED | PROCESSING | FAILED\nsync timestamps, attempts, failure, nextSyncAt\ncreatedAt, updatedAt",
+      "textAlign": "left", "verticalAlign": "top", "containerId": null, "lineHeight": 1.25, "autoResize": true
+    },
+    {
+      "id": "claimEventBox", "type": "rectangle", "x": 700, "y": 1500, "width": 570, "height": 430, "angle": 0,
+      "strokeColor": "#047857", "backgroundColor": "#d1fae5", "fillStyle": "solid", "strokeWidth": 2,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "j2",
+      "roundness": { "type": 3 }, "seed": 1903, "version": 1, "versionNonce": 2903, "isDeleted": false,
+      "boundElements": null, "updated": 1787011200000, "link": null, "locked": false
+    },
+    {
+      "id": "claimEventText", "type": "text", "x": 725, "y": 1525, "width": 520, "height": 380, "angle": 0,
+      "strokeColor": "#064e3b", "backgroundColor": "transparent", "fillStyle": "solid", "strokeWidth": 1,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "j3",
+      "roundness": null, "seed": 1904, "version": 1, "versionNonce": 2904, "isDeleted": false,
+      "boundElements": null, "updated": 1787011200000, "link": null, "locked": false,
+      "fontSize": 16, "fontFamily": 3,
+      "text": "investorClaimBlockchainEvent\n\nPK claimEventUid\nUQ chainId + txHash + logIndex\nREL matchedSubmissionUid → investorClaimSubmission\nchainId, identityAddress, claimId\nclaimTopic, scheme, issuerIdentityAddress\ndata, signature, uri\neventName: ClaimAdded | ClaimChanged\ntxHash, blockNumber, blockHash\ntransactionIndex, logIndex\nprocessingStatus: NEW | MATCHED | UNMATCHED | FAILED\nprocessingAttempts, processingMessage, processedAt\nisCanonical, isActive, isDeleted\ncreatedAt, updatedAt",
+      "rawText": "investorClaimBlockchainEvent\n\nPK claimEventUid\nUQ chainId + txHash + logIndex\nREL matchedSubmissionUid → investorClaimSubmission\nchainId, identityAddress, claimId\nclaimTopic, scheme, issuerIdentityAddress\ndata, signature, uri\neventName: ClaimAdded | ClaimChanged\ntxHash, blockNumber, blockHash\ntransactionIndex, logIndex\nprocessingStatus: NEW | MATCHED | UNMATCHED | FAILED\nprocessingAttempts, processingMessage, processedAt\nisCanonical, isActive, isDeleted\ncreatedAt, updatedAt",
+      "originalText": "investorClaimBlockchainEvent\n\nPK claimEventUid\nUQ chainId + txHash + logIndex\nREL matchedSubmissionUid → investorClaimSubmission\nchainId, identityAddress, claimId\nclaimTopic, scheme, issuerIdentityAddress\ndata, signature, uri\neventName: ClaimAdded | ClaimChanged\ntxHash, blockNumber, blockHash\ntransactionIndex, logIndex\nprocessingStatus: NEW | MATCHED | UNMATCHED | FAILED\nprocessingAttempts, processingMessage, processedAt\nisCanonical, isActive, isDeleted\ncreatedAt, updatedAt",
+      "textAlign": "left", "verticalAlign": "top", "containerId": null, "lineHeight": 1.25, "autoResize": true
+    },
+    {
+      "id": "claimCheckpointBox", "type": "rectangle", "x": 1340, "y": 1500, "width": 570, "height": 430, "angle": 0,
+      "strokeColor": "#7c3aed", "backgroundColor": "#ede9fe", "fillStyle": "solid", "strokeWidth": 2,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "j4",
+      "roundness": { "type": 3 }, "seed": 1905, "version": 1, "versionNonce": 2905, "isDeleted": false,
+      "boundElements": null, "updated": 1787011200000, "link": null, "locked": false
+    },
+    {
+      "id": "claimCheckpointText", "type": "text", "x": 1365, "y": 1525, "width": 520, "height": 350, "angle": 0,
+      "strokeColor": "#4c1d95", "backgroundColor": "transparent", "fillStyle": "solid", "strokeWidth": 1,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "j5",
+      "roundness": null, "seed": 1906, "version": 1, "versionNonce": 2906, "isDeleted": false,
+      "boundElements": null, "updated": 1787011200000, "link": null, "locked": false,
+      "fontSize": 16, "fontFamily": 3,
+      "text": "blockchainIndexerCheckpoint\n\nPK checkpointUid\nUQ indexerName + chainId\nindexerName, chainId\nstartBlock\nlastIndexedBlock, lastIndexedBlockHash\nleaseOwner, leaseExpiresAt\nlastRunAt, lastSuccessAt\nlastErrorMessage\nisActive, isDeleted\ncreatedAt, updatedAt\n\nOne global cursor per chain; events are stored\nbefore this checkpoint advances.",
+      "rawText": "blockchainIndexerCheckpoint\n\nPK checkpointUid\nUQ indexerName + chainId\nindexerName, chainId\nstartBlock\nlastIndexedBlock, lastIndexedBlockHash\nleaseOwner, leaseExpiresAt\nlastRunAt, lastSuccessAt\nlastErrorMessage\nisActive, isDeleted\ncreatedAt, updatedAt\n\nOne global cursor per chain; events are stored\nbefore this checkpoint advances.",
+      "originalText": "blockchainIndexerCheckpoint\n\nPK checkpointUid\nUQ indexerName + chainId\nindexerName, chainId\nstartBlock\nlastIndexedBlock, lastIndexedBlockHash\nleaseOwner, leaseExpiresAt\nlastRunAt, lastSuccessAt\nlastErrorMessage\nisActive, isDeleted\ncreatedAt, updatedAt\n\nOne global cursor per chain; events are stored\nbefore this checkpoint advances.",
+      "textAlign": "left", "verticalAlign": "top", "containerId": null, "lineHeight": 1.25, "autoResize": true
+    },
+    {
+      "id": "registryRegistrationBox", "type": "rectangle", "x": 60, "y": 2010, "width": 570, "height": 500, "angle": 0,
+      "strokeColor": "#b45309", "backgroundColor": "#fef3c7", "fillStyle": "solid", "strokeWidth": 2,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "k0",
+      "roundness": { "type": 3 }, "seed": 2001, "version": 1, "versionNonce": 3001, "isDeleted": false,
+      "boundElements": null, "updated": 1787011200000, "link": null, "locked": false
+    },
+    {
+      "id": "registryRegistrationText", "type": "text", "x": 85, "y": 2035, "width": 520, "height": 450, "angle": 0,
+      "strokeColor": "#78350f", "backgroundColor": "transparent", "fillStyle": "solid", "strokeWidth": 1,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "k1",
+      "roundness": null, "seed": 2002, "version": 1, "versionNonce": 3002, "isDeleted": false,
+      "boundElements": null, "updated": 1787011200000, "link": null, "locked": false,
+      "fontSize": 16, "fontFamily": 3,
+      "text": "identityRegistryRegistration\n\nPK registryRegistrationUid\nUQ interestUid (one operation per subscription)\nUQ txHash\nREL interestUid → tokenInvestmentInterest\nREL tokenUid → tokenMaster\nREL organizationUid → organizationMaster\nREL investorUid → investorMaster\nissuerUserUid, chainId\nidentityRegistryAddress, issuerWalletAddress\ninvestorWalletAddress, investorIdentityAddress\ncountryCode (ISO-3166 numeric / uint16)\nstatus: PENDING | CONFIRMED\ntx + block + event metadata, verifiedAt\nerrorCode, errorMessage\nsync status, cursors, attempts, timestamps\nisActive, isDeleted, createdAt, updatedAt\n\nAtomic success: interest status = registered\nand history eventType = registered.",
+      "rawText": "identityRegistryRegistration\n\nPK registryRegistrationUid\nUQ interestUid (one operation per subscription)\nUQ txHash\nREL interestUid → tokenInvestmentInterest\nREL tokenUid → tokenMaster\nREL organizationUid → organizationMaster\nREL investorUid → investorMaster\nissuerUserUid, chainId\nidentityRegistryAddress, issuerWalletAddress\ninvestorWalletAddress, investorIdentityAddress\ncountryCode (ISO-3166 numeric / uint16)\nstatus: PENDING | CONFIRMED\ntx + block + event metadata, verifiedAt\nerrorCode, errorMessage\nsync status, cursors, attempts, timestamps\nisActive, isDeleted, createdAt, updatedAt\n\nAtomic success: interest status = registered\nand history eventType = registered.",
+      "originalText": "identityRegistryRegistration\n\nPK registryRegistrationUid\nUQ interestUid (one operation per subscription)\nUQ txHash\nREL interestUid → tokenInvestmentInterest\nREL tokenUid → tokenMaster\nREL organizationUid → organizationMaster\nREL investorUid → investorMaster\nissuerUserUid, chainId\nidentityRegistryAddress, issuerWalletAddress\ninvestorWalletAddress, investorIdentityAddress\ncountryCode (ISO-3166 numeric / uint16)\nstatus: PENDING | CONFIRMED\ntx + block + event metadata, verifiedAt\nerrorCode, errorMessage\nsync status, cursors, attempts, timestamps\nisActive, isDeleted, createdAt, updatedAt\n\nAtomic success: interest status = registered\nand history eventType = registered.",
+      "textAlign": "left", "verticalAlign": "top", "containerId": null, "lineHeight": 1.25, "autoResize": true
+    },
+    {
+      "id": "registryEventBox", "type": "rectangle", "x": 700, "y": 2010, "width": 570, "height": 500, "angle": 0,
+      "strokeColor": "#be123c", "backgroundColor": "#ffe4e6", "fillStyle": "solid", "strokeWidth": 2,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "k2",
+      "roundness": { "type": 3 }, "seed": 2003, "version": 1, "versionNonce": 3003, "isDeleted": false,
+      "boundElements": null, "updated": 1787011200000, "link": null, "locked": false
+    },
+    {
+      "id": "registryEventText", "type": "text", "x": 725, "y": 2035, "width": 520, "height": 440, "angle": 0,
+      "strokeColor": "#881337", "backgroundColor": "transparent", "fillStyle": "solid", "strokeWidth": 1,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "k3",
+      "roundness": null, "seed": 2004, "version": 1, "versionNonce": 3004, "isDeleted": false,
+      "boundElements": null, "updated": 1787011200000, "link": null, "locked": false,
+      "fontSize": 16, "fontFamily": 3,
+      "text": "identityRegistryBlockchainEvent\n\nPK registryEventUid\nUQ chainId + txHash + logIndex\nREL matchedRegistrationUid\n  → identityRegistryRegistration\nchainId, identityRegistryAddress\ninvestorWalletAddress\ninvestorIdentityAddress\neventName: IdentityRegistered\ntxHash, blockNumber, blockHash\ntransactionIndex, logIndex\nprocessingStatus: NEW | MATCHED | UNMATCHED | FAILED\nprocessingAttempts, processingMessage, processedAt\nisCanonical, isActive, isDeleted\ncreatedAt, updatedAt\n\nRegistry global cursor reuses\nblockchainIndexerCheckpoint with\nindexerName = identityRegistryRegistration.",
+      "rawText": "identityRegistryBlockchainEvent\n\nPK registryEventUid\nUQ chainId + txHash + logIndex\nREL matchedRegistrationUid\n  → identityRegistryRegistration\nchainId, identityRegistryAddress\ninvestorWalletAddress\ninvestorIdentityAddress\neventName: IdentityRegistered\ntxHash, blockNumber, blockHash\ntransactionIndex, logIndex\nprocessingStatus: NEW | MATCHED | UNMATCHED | FAILED\nprocessingAttempts, processingMessage, processedAt\nisCanonical, isActive, isDeleted\ncreatedAt, updatedAt\n\nRegistry global cursor reuses\nblockchainIndexerCheckpoint with\nindexerName = identityRegistryRegistration.",
+      "originalText": "identityRegistryBlockchainEvent\n\nPK registryEventUid\nUQ chainId + txHash + logIndex\nREL matchedRegistrationUid\n  → identityRegistryRegistration\nchainId, identityRegistryAddress\ninvestorWalletAddress\ninvestorIdentityAddress\neventName: IdentityRegistered\ntxHash, blockNumber, blockHash\ntransactionIndex, logIndex\nprocessingStatus: NEW | MATCHED | UNMATCHED | FAILED\nprocessingAttempts, processingMessage, processedAt\nisCanonical, isActive, isDeleted\ncreatedAt, updatedAt\n\nRegistry global cursor reuses\nblockchainIndexerCheckpoint with\nindexerName = identityRegistryRegistration.",
+      "textAlign": "left", "verticalAlign": "top", "containerId": null, "lineHeight": 1.25, "autoResize": true
     }
   ],
   "appState": {
