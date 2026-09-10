@@ -24,6 +24,8 @@ const start = async () => {
   jobs.identityRegistryReconciliationRunner.start();
   // USDT payment indexer + platform Token Agent mint/recovery worker.
   jobs.tokenPurchaseReconciliationRunner.start();
+  // Manual issuer-funded redemption payment indexer + platform lock/burn/unlock recovery.
+  jobs.tokenRedemptionReconciliationRunner.start();
 
   const shutdown = (signal) => {
     logger.info('Graceful shutdown started', { signal });
@@ -32,6 +34,7 @@ const start = async () => {
     jobs.claimIndexerRunner.stop();
     jobs.identityRegistryReconciliationRunner.stop();
     jobs.tokenPurchaseReconciliationRunner.stop();
+    jobs.tokenRedemptionReconciliationRunner.stop();
     server.close(async () => {
       await closePool();
       logger.info('Graceful shutdown completed');

@@ -121,3 +121,8 @@ Migration: `database/migrations/20260909_add_investor_onboarding.sql` (creates t
 seeds the document types, adds the Investor Onboarding menu and the eight Investor
 `permissionMaster` rows). Idempotent. Investor document files are stored under
 `INVESTOR_UPLOAD_DIR` (default `storage/investor-documents`).
+
+Existing installations must also apply
+`database/migrations/20260910_add_unique_investor_wallet.sql`. The migration deliberately
+fails instead of altering data if historical submitted-wallet duplicates are present; resolve
+such identity conflicts explicitly before rerunning it.

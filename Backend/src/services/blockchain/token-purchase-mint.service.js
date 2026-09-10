@@ -3,7 +3,9 @@ const { env } = require('../../core/config/env');
 const { withTransaction } = require('../../database/connection');
 const { PurchaseBlockchainError } = require('./token-purchase-blockchain.service');
 
-const MINT_LEASE_NAME = 'tokenPurchaseMint';
+// Purchase minting and redemption lock/burn/unlock share one signer/private key. A single
+// distributed lease prevents cross-module nonce races across all API instances.
+const MINT_LEASE_NAME = 'platformTokenAgentExecution';
 
 class TokenPurchaseMintService {
   constructor({ repository, checkpointRepository, blockchain, config = env.blockchain, transactionRunner = withTransaction }) {

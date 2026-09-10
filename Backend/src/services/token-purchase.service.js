@@ -104,6 +104,11 @@ class TokenPurchaseService {
     this.validateContext(context);
     const active = await this.repository.findActiveByInterest(context.interestUid);
     if (active) return { purchase: this.present(active), existing: true };
+    const activeRedemption = typeof this.repository.findActiveRedemptionByInterest === 'function'
+      ? await this.repository.findActiveRedemptionByInterest(context.interestUid) : null;
+    if (activeRedemption) {
+      throw new ApiError(409, 'Complete the active token redemption before starting a purchase.', undefined, 'ACTIVE_REDEMPTION_EXISTS');
+    }
     const investorActive = await this.repository.findActiveByInvestor(context.investorUid);
     if (investorActive) {
       throw new ApiError(409, 'Complete the existing token purchase before starting another one.', undefined, 'ACTIVE_PURCHASE_EXISTS');

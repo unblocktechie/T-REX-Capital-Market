@@ -20,6 +20,7 @@ tags:
   - name: Investor Claims
   - name: Identity Registry
   - name: Token Purchases
+  - name: Token Redemptions
 
 x-list-operation: &listOperation
   security: [{ bearerAuth: [] }]
@@ -728,6 +729,129 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { description: The purchase intent has EXPIRED; create a new intent }
 
+  /api/v1/investments/tokens/{tokenUid}/redemptions:
+    get:
+      tags: [Token Redemptions]
+      summary: List investor-owned redemption history for a token
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: tokenUid, required: true, schema: { type: string, format: uuid } }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { in: query, name: search, schema: { type: string, maxLength: 100 } }
+        - { in: query, name: status, schema: { type: string, default: all } }
+      responses:
+        '200': { description: Newest-first redemption history }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Token Redemptions]
+      summary: Create an investor redemption intent and EIP-712 authorization payload
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: tokenUid, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreateTokenRedemptionInput' } } }
+      responses:
+        '200': { description: Existing idempotent or active redemption returned }
+        '201': { description: Authoritative redemption intent created }
+        '409': { description: Redemption prerequisites or available token balance failed }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/investments/redemptions/{redemptionUid}:
+    get:
+      tags: [Token Redemptions]
+      summary: Get investor-owned redemption, timeline, and blockchain transaction history
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/RedemptionUid' }]
+      responses:
+        '200': { description: Current redemption state }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/investments/redemptions/{redemptionUid}/authorize:
+    post:
+      tags: [Token Redemptions]
+      summary: Verify the registered investor wallet EIP-712 authorization
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/RedemptionUid' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AuthorizeTokenRedemptionInput' } } }
+      responses:
+        '200': { description: Authorization verified or already verified }
+        '422': { description: Invalid, expired, or wrong-wallet signature }
+  /api/v1/investments/redemptions/{redemptionUid}/cancel:
+    post:
+      tags: [Token Redemptions]
+      summary: Cancel before payment; confirmed locks are safely released first
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/RedemptionUid' }]
+      responses:
+        '200': { description: Cancelled or CANCELLATION_PENDING }
+        '409': { description: Cancellation is no longer safe after payment submission }
+  /api/v1/investments/redemptions/{redemptionUid}/retry:
+    post:
+      tags: [Token Redemptions]
+      summary: Queue idempotent settlement reconciliation
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/RedemptionUid' }]
+      responses:
+        '200': { description: Reconciliation queued or terminal state returned }
+  /api/v1/investments/issuer/redemptions:
+    get:
+      tags: [Token Redemptions]
+      summary: List redemption requests belonging to the authenticated issuer
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { in: query, name: search, schema: { type: string, maxLength: 100 } }
+        - { in: query, name: status, schema: { type: string, default: all } }
+      responses:
+        '200': { description: Issuer-owned redemption requests }
+  /api/v1/investments/issuer/redemptions/{redemptionUid}:
+    get:
+      tags: [Token Redemptions]
+      summary: Get issuer-owned redemption detail
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/RedemptionUid' }]
+      responses:
+        '200': { description: Redemption detail including investorName, timeline, and blockchain transaction history }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/investments/issuer/redemptions/{redemptionUid}/approve:
+    post:
+      tags: [Token Redemptions]
+      summary: Approve redemption and queue the platform token lock
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/RedemptionUid' }]
+      requestBody:
+        content: { application/json: { schema: { $ref: '#/components/schemas/ApproveTokenRedemptionInput' } } }
+      responses:
+        '200': { description: Approved with lock queued or submitted }
+  /api/v1/investments/issuer/redemptions/{redemptionUid}/reject:
+    post:
+      tags: [Token Redemptions]
+      summary: Reject a redemption before token locking
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/RedemptionUid' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/RejectTokenRedemptionInput' } } }
+      responses:
+        '200': { description: Redemption rejected }
+  /api/v1/investments/issuer/redemptions/{redemptionUid}/payment/confirm:
+    post:
+      tags: [Token Redemptions]
+      summary: Independently verify issuer USDT payment and queue platform burn
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/RedemptionUid' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ConfirmTokenPurchaseInput' } } }
+      responses:
+        '200': { description: Current payment/burn lifecycle state }
+        '409': { description: Tokens are not locked or another hash is assigned }
+        '422': { description: Definitive on-chain payment mismatch }
+
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -752,6 +876,7 @@ components:
     InterestUid: { in: path, name: interestUid, required: true, schema: { type: string, format: uuid } }
     RegistryRegistrationUid: { in: path, name: registryRegistrationUid, required: true, schema: { type: string, format: uuid } }
     PurchaseUid: { in: path, name: purchaseUid, required: true, schema: { type: string, format: uuid } }
+    RedemptionUid: { in: path, name: redemptionUid, required: true, schema: { type: string, format: uuid } }
   responses:
     Unauthorized: { description: Missing, invalid, expired, or stale JWT }
     Forbidden: { description: Account or role is not allowed to perform the operation }
@@ -1037,3 +1162,33 @@ components:
           type: string
           pattern: '^0x[a-fA-F0-9]{64}$'
           example: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    CreateTokenRedemptionInput:
+      type: object
+      required: [tokenAmount, idempotencyKey]
+      additionalProperties: false
+      properties:
+        tokenAmount:
+          type: string
+          pattern: '^(?:0|[1-9]\d*)(?:\.\d+)?$'
+          example: '1.25'
+        idempotencyKey: { type: string, minLength: 8, maxLength: 100, example: redeem-20260910-0001 }
+    AuthorizeTokenRedemptionInput:
+      type: object
+      required: [signature]
+      additionalProperties: false
+      properties:
+        signature:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{130}$'
+          description: EIP-712 signature produced by the registered investor wallet for the exact typedData returned at creation.
+    ApproveTokenRedemptionInput:
+      type: object
+      additionalProperties: false
+      properties:
+        note: { type: string, maxLength: 1000, nullable: true }
+    RejectTokenRedemptionInput:
+      type: object
+      required: [reason]
+      additionalProperties: false
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 1000 }

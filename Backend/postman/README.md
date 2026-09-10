@@ -14,6 +14,11 @@ Import `T-REX Capital Market Backend.postman_collection.json` into Postman.
 10. For token purchases, run **List Token Purchase History** on page load and after Create/Confirm.
     Confirm returns HTTP `200` for every persisted lifecycle state; inspect `data.status` instead of
     treating HTTP 200 as proof of completion.
+11. For **Token Redemption**, create an intent as the investor, sign the returned
+    `data.authorization.typedData` with the registered wallet, and paste it into
+    `redemptionSignature`. Approve as issuer, wait for `TOKENS_LOCKED`, transfer the exact returned
+    USDT raw amount, and set `redemptionPaymentTxHash`. If a response is missed, use detail/Retry;
+    never send the payment a second time merely because the frontend lost the response.
 
 Revised issuer submissions return `status: resubmitted`; use `status=resubmitted` on the admin list endpoint to filter them.
 

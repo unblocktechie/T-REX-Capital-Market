@@ -122,6 +122,14 @@ const env = Object.freeze({
     purchaseIntentTtlMinutes: Number(process.env.PURCHASE_INTENT_TTL_MINUTES || 15),
     purchaseIndexerStartBlock: Number(process.env.PURCHASE_INDEXER_START_BLOCK || 0),
     purchaseWorkerEnabled: booleanValue(process.env.PURCHASE_WORKER_ENABLED, true),
+    // Manual issuer-funded redemption. Payment and all platform token actions are independently
+    // verified at the conservative redemption confirmation threshold.
+    redemptionUsdtAddress: process.env.REDEMPTION_USDT_ADDRESS
+      || process.env.PURCHASE_USDT_ADDRESS || '0x8fC7e68897bd74c4B6340d2DC857a7ED2677aF6A',
+    redemptionConfirmations: Number(process.env.REDEMPTION_CONFIRMATIONS || 12),
+    redemptionAuthorizationTtlMinutes: Number(process.env.REDEMPTION_AUTHORIZATION_TTL_MINUTES || 30),
+    redemptionIndexerStartBlock: Number(process.env.REDEMPTION_INDEXER_START_BLOCK || 0),
+    redemptionWorkerEnabled: booleanValue(process.env.REDEMPTION_WORKER_ENABLED, true),
   },
 });
 

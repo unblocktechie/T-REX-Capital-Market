@@ -39,6 +39,15 @@ const registryRegistrationParams = Joi.object({
 
 const purchaseParams = Joi.object({ purchaseUid: uid.required() });
 
+const redemptionParams = Joi.object({ redemptionUid: uid.required() });
+
+const REDEMPTION_STATUSES = [
+  'PENDING_INVESTOR_AUTHORIZATION', 'PENDING_ISSUER_APPROVAL', 'ISSUER_APPROVED',
+  'TOKEN_LOCK_SUBMITTED', 'TOKENS_LOCKED', 'PAYMENT_SUBMITTED', 'PAYMENT_CONFIRMED',
+  'BURN_SUBMITTED', 'BURN_CONFIRMED', 'UNLOCK_SUBMITTED', 'CANCELLATION_PENDING',
+  'COMPLETED', 'ISSUER_REJECTED', 'CANCELLED', 'EXPIRED', 'MANUAL_REVIEW',
+];
+
 const purchaseHistoryQuery = Joi.object({
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(100).default(20),
@@ -62,6 +71,32 @@ const createPurchase = Joi.object({
 
 const confirmPurchase = Joi.object({
   txHash: Joi.string().trim().lowercase().pattern(/^0x[a-fA-F0-9]{64}$/).required(),
+});
+
+const createRedemption = Joi.object({
+  tokenAmount: Joi.string().trim().pattern(/^(?:0|[1-9]\d*)(?:\.\d+)?$/).max(80).required().messages({
+    'string.pattern.base': 'tokenAmount must be a positive decimal string.',
+  }),
+  idempotencyKey: Joi.string().trim().min(8).max(100).required(),
+});
+
+const authorizeRedemption = Joi.object({
+  signature: Joi.string().trim().pattern(/^0x[a-fA-F0-9]{130}$/).required(),
+});
+
+const redemptionListQuery = Joi.object({
+  page: Joi.number().integer().min(1).default(1),
+  limit: Joi.number().integer().min(1).max(100).default(20),
+  search: Joi.string().trim().max(100).allow('').default(''),
+  status: Joi.string().valid(...REDEMPTION_STATUSES, 'all').default('all'),
+});
+
+const approveRedemption = Joi.object({
+  note: Joi.string().trim().max(1000).allow('', null),
+});
+
+const rejectRedemption = Joi.object({
+  reason: Joi.string().trim().min(3).max(1000).required(),
 });
 
 const confirmRegistryRegistration = Joi.object({
@@ -99,9 +134,15 @@ module.exports = {
   interestParams,
   registryRegistrationParams,
   purchaseParams,
+  redemptionParams,
   purchaseHistoryQuery,
   createPurchase,
   confirmPurchase,
+  createRedemption,
+  authorizeRedemption,
+  redemptionListQuery,
+  approveRedemption,
+  rejectRedemption,
   confirmRegistryRegistration,
   emptyBody,
   interestDocumentParams,
@@ -109,4 +150,5 @@ module.exports = {
   approveInterest,
   INTEREST_STATUSES,
   REJECT_REASON_TYPES,
+  REDEMPTION_STATUSES,
 };

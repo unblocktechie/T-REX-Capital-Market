@@ -578,6 +578,18 @@ The global USDT indexer recovers missing frontend hashes, and targeted token-eve
 a mint broadcast whose hash was not persisted. See `docs/TOKEN-PURCHASE-FLOW.md` and
 `docs/FRONTEND-TOKEN-PURCHASE-FLOW-GUIDE.md`.
 
+## Manual token redemption (issuer USDT payout)
+
+- `POST /investments/tokens/{tokenUid}/redemptions` creates the authoritative intent and returns an EIP-712 investor authorization payload.
+- `POST /investments/redemptions/{redemptionUid}/authorize` verifies that the registered investor wallet signed the exact intent.
+- Investor list/detail/cancel/retry APIs support the ongoing lifecycle; list supports pagination, search, and status filtering.
+- Issuers review through `/investments/issuer/redemptions`; the issuer detail response includes `investorName`, and approval queues the platform Token Agent token lock.
+- After `TOKENS_LOCKED`, the issuer transfers the exact stored raw USDT amount from the treasury wallet to the investor wallet.
+- `POST /investments/issuer/redemptions/{redemptionUid}/payment/confirm` accepts only `txHash` and verifies canonical chain, sender, USDT contract, calldata, recipient, amount, receipt, and Transfer event.
+- Verified payment queues platform `burn`; any remaining redemption-created partial freeze is released before `COMPLETED`.
+
+The global USDT indexer recovers missing payment hashes. Targeted event recovery finds missing platform lock/burn/unlock hashes before retrying an action. See `docs/TOKEN-REDEMPTION-FLOW.md` and `docs/FRONTEND-TOKEN-REDEMPTION-GUIDE.md`.
+
 ## Status codes
 
 - `200` success/update/delete; `201` created; `202` accepted/pending asynchronous confirmation

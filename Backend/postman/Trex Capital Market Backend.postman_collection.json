@@ -271,6 +271,26 @@
     {
       "key": "purchaseTokenAmount",
       "value": "10.25"
+    },
+    {
+      "key": "redemptionUid",
+      "value": ""
+    },
+    {
+      "key": "redemptionTokenAmount",
+      "value": "1.25"
+    },
+    {
+      "key": "redemptionIdempotencyKey",
+      "value": "redeem-20260910-0001"
+    },
+    {
+      "key": "redemptionSignature",
+      "value": "PASTE_EIP712_SIGNATURE_FROM_INVESTOR_WALLET"
+    },
+    {
+      "key": "redemptionPaymentTxHash",
+      "value": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     }
   ],
   "item": [
@@ -3214,6 +3234,113 @@
               }
             }
           ]
+        }
+      ]
+    },
+    {
+      "name": "Token Redemption",
+      "description": "Manual issuer-funded redemption: investor intent + EIP-712 authorization, issuer approval, platform token lock, issuer USDT payment verification, platform burn, cleanup unlock, and fallback retry.",
+      "item": [
+        {
+          "name": "Investor - Create Redemption",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{investorToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"tokenAmount\": \"{{redemptionTokenAmount}}\",\n  \"idempotencyKey\": \"{{redemptionIdempotencyKey}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/investments/tokens/{{investmentTokenUid}}/redemptions",
+            "description": "Creates the authoritative redemption request. Sign data.authorization.typedData with the registered investor wallet, then store the signature in redemptionSignature."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Redemption intent created or resumed', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+            "const json = pm.response.json(); if (json.data?.redemptionUid) pm.collectionVariables.set('redemptionUid', json.data.redemptionUid);"
+          ] } }]
+        },
+        {
+          "name": "Investor - Authorize Redemption",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{investorToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"signature\": \"{{redemptionSignature}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/investments/redemptions/{{redemptionUid}}/authorize"
+          }
+        },
+        {
+          "name": "Investor - Redemption History",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{investorToken}}" }],
+            "url": "{{baseUrl}}/api/v1/investments/tokens/{{investmentTokenUid}}/redemptions?page=1&limit=20&search=&status=all"
+          }
+        },
+        {
+          "name": "Investor - Redemption Detail",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{investorToken}}" }],
+            "url": "{{baseUrl}}/api/v1/investments/redemptions/{{redemptionUid}}"
+          }
+        },
+        {
+          "name": "Investor - Cancel Redemption",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{investorToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/investments/redemptions/{{redemptionUid}}/cancel"
+          }
+        },
+        {
+          "name": "Investor or Issuer - Retry Synchronization",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{investorToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/investments/redemptions/{{redemptionUid}}/retry"
+          }
+        },
+        {
+          "name": "Issuer - List Redemption Requests",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }],
+            "url": "{{baseUrl}}/api/v1/investments/issuer/redemptions?page=1&limit=20&search=&status=all"
+          }
+        },
+        {
+          "name": "Issuer - Redemption Detail",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }],
+            "url": "{{baseUrl}}/api/v1/investments/issuer/redemptions/{{redemptionUid}}"
+          }
+        },
+        {
+          "name": "Issuer - Approve and Queue Token Lock",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"note\": \"Redemption approved after review.\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/investments/issuer/redemptions/{{redemptionUid}}/approve"
+          }
+        },
+        {
+          "name": "Issuer - Reject Redemption",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"reason\": \"Redemption request requires additional review.\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/investments/issuer/redemptions/{{redemptionUid}}/reject"
+          }
+        },
+        {
+          "name": "Issuer - Confirm USDT Payment",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"txHash\": \"{{redemptionPaymentTxHash}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/investments/issuer/redemptions/{{redemptionUid}}/payment/confirm",
+            "description": "Send only txHash. The backend verifies chain, USDT contract, treasury sender, investor recipient, exact amount, canonical receipt and Transfer event before burning."
+          }
         }
       ]
     },

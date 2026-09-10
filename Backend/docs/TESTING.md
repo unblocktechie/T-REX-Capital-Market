@@ -476,3 +476,41 @@ ONCHAINID, and at least one `SIGNED` issuer claim. Use the investor JWT.
    never expires that row, even if settlement remains queued. To simulate backend downtime, stop
    the server after creating the intent, let the deadline pass, then restart it. The worker must
    first catch the USDT indexer up; it expires the row only after catch-up and event matching.
+
+## Manual token redemption
+
+1. Apply `database/migrations/20260910_add_token_redemption_flow.sql`, configure the redemption
+   environment values, and restart the API so the redemption worker starts.
+2. With a registered investor token, create a redemption for an amount below the investor's
+   unfrozen on-chain balance. Repeat the same idempotency key and verify the same `redemptionUid`
+   is returned.
+3. Sign the returned EIP-712 `authorization.typedData` with the registered investor wallet and call
+   Authorize. Verify a different wallet signature and an expired signature both return `422`.
+4. With the owning issuer token, list/detail the request and approve it. Verify another issuer gets
+   `404`. Poll until the platform lock has 12 confirmations and status is `TOKENS_LOCKED`.
+5. From the exact `issuerPaymentWalletAddress`, call USDT `transfer(investorWalletAddress,
+   usdtAmountRaw)`. Submit only the hash to the payment-confirm endpoint. Wrong sender, recipient,
+   amount, contract, reverted receipt, and non-canonical block must never advance payment.
+6. Poll through `PAYMENT_CONFIRMED`, `BURN_SUBMITTED`, optional `BURN_CONFIRMED` /
+   `UNLOCK_SUBMITTED`, and `COMPLETED`. Verify lock, payment, burn, and cleanup receipt metadata in
+   detail and the append-only transaction/history tables.
+7. Test frontend-crash recovery by paying successfully without calling Confirm. The global
+   `tokenRedemptionPayment` indexer must match the exact Transfer and continue the same row.
+8. Test backend-crash recovery around each platform action. A prepared action with no persisted hash
+   must search for its exact event before rebroadcast. No duplicate redemption or deliberate
+   duplicate platform transaction may be created.
+9. Cancel before approval (immediate), after a confirmed lock (`CANCELLATION_PENDING` followed by
+   verified unlock), and after payment submission (`409 REDEMPTION_CANCELLATION_NOT_ALLOWED`).
+10. Inspect audit state:
+
+   ```sql
+   SELECT status, lockStatus, paymentStatus, burnStatus, unlockStatus,
+          lockTxHash, paymentTxHash, burnTxHash, unlockTxHash, errorCode, syncStatus
+   FROM tokenRedemption WHERE redemptionUid = 'REDEMPTION_UID';
+
+   SELECT stage, txHash, status, blockNumber, blockHash, logIndex, confirmedAt
+   FROM tokenRedemptionTransaction WHERE redemptionUid = 'REDEMPTION_UID' ORDER BY createdAt;
+
+   SELECT * FROM tokenRedemptionHistory WHERE redemptionUid = 'REDEMPTION_UID' ORDER BY createdAt;
+   SELECT * FROM blockchainIndexerCheckpoint WHERE indexerName IN ('tokenRedemptionPayment','platformTokenAgentExecution');
+   ```

@@ -47,6 +47,7 @@ const createV1Router = () => {
     controller: dependencies.controllers.investments,
     registryController: dependencies.controllers.registryRegistrations,
     purchaseController: dependencies.controllers.tokenPurchases,
+    redemptionController: dependencies.controllers.tokenRedemptions,
     authenticate: dependencies.authenticate,
     authorize: dependencies.authorize,
   }));

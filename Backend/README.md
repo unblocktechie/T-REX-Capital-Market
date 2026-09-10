@@ -75,6 +75,8 @@ Apply the dated migrations through `database/migrations/20260909_investor_claim_
 Apply `database/migrations/20260909_add_hybrid_claim_indexer.sql` to add the global claim checkpoint, durable event ledger, synchronization cursors, and worker settings. Set `CLAIM_INDEXER_START_BLOCK` to the earliest investor-claim block before starting production workers.
 Apply `database/migrations/20260909_add_identity_registry_registration.sql` for the issuer Add to Registry flow, RBAC permissions, event ledger, and worker settings. Set `REGISTRY_INDEXER_START_BLOCK` to the earliest relevant Identity Registry deployment block in production. See `docs/IDENTITY-REGISTRY-REGISTRATION.md`.
 Apply `database/migrations/20260909_add_registered_investment_status.sql` so verified registry confirmation atomically advances investment interests to `registered` and records their history event.
+Apply `database/migrations/20260910_add_unique_investor_wallet.sql` to prevent the same normalized wallet address from being registered to multiple submitted investor profiles.
+Apply `database/migrations/20260910_add_token_purchase_flow.sql` for backend-authoritative USDT payment intents, platform Token Agent minting, transaction audit history, RBAC, and hybrid payment/mint recovery. Configure `PURCHASE_USDT_ADDRESS` per network and `PURCHASE_PAYMENT_CONFIRMATIONS` for the synchronous confirm-and-mint path. See `docs/TOKEN-PURCHASE-FLOW.md`.
 
 ```bash
 npm run check
@@ -82,7 +84,7 @@ npm test
 npm start
 ```
 
-See [API documentation](docs/API.md), [investor claim flow](docs/INVESTOR-CLAIM-SUBMISSION.md), [frontend claim Retry guide](docs/FRONTEND-INVESTOR-CLAIM-RETRY-GUIDE.md), [global claim indexer](docs/CLAIM-INDEXER.md), [targeted claim recovery](docs/CLAIM-RECOVERY-RUNNER.md), [frontend organization guide](docs/FRONTEND-ORGANIZATION-GUIDE.md), [frontend token guide](docs/FRONTEND-TOKEN-CREATION-GUIDE.md), [frontend token purchase guide](docs/FRONTEND-TOKEN-PURCHASE-FLOW-GUIDE.md), [testing guide](docs/TESTING.md), [OpenAPI specification](docs/openapi.yaml), [editable database diagram](docs/trex-capital-market-database.excalidraw), and the import-ready [Postman collection](postman/Trex%20Capital%20Market%20Backend.postman_collection.json).
+See [API documentation](docs/API.md), [investor claim flow](docs/INVESTOR-CLAIM-SUBMISSION.md), [frontend claim Retry guide](docs/FRONTEND-INVESTOR-CLAIM-RETRY-GUIDE.md), [global claim indexer](docs/CLAIM-INDEXER.md), [targeted claim recovery](docs/CLAIM-RECOVERY-RUNNER.md), [frontend organization guide](docs/FRONTEND-ORGANIZATION-GUIDE.md), [frontend token guide](docs/FRONTEND-TOKEN-CREATION-GUIDE.md), [frontend token purchase guide](docs/FRONTEND-TOKEN-PURCHASE-FLOW-GUIDE.md), [token redemption architecture](docs/TOKEN-REDEMPTION-FLOW.md), [frontend redemption guide](docs/FRONTEND-TOKEN-REDEMPTION-GUIDE.md), [testing guide](docs/TESTING.md), [OpenAPI specification](docs/openapi.yaml), [editable database diagram](docs/trex-capital-market-database.excalidraw), and the import-ready [Postman collection](postman/Trex%20Capital%20Market%20Backend.postman_collection.json).
 
 ## Response contract
 
@@ -96,5 +98,5 @@ Successful responses contain `success`, `message`, `data`, `timestamp`, and `req
 - Set `ALLOWED_ORIGINS` to exact HTTPS frontend origins. There is no wildcard fallback.
 - Configure `UPLOAD_DIR`, `UPLOAD_MAX_FILE_SIZE_MB`, and `UPLOAD_MAX_FILES`; store production uploads on encrypted persistent storage and include them in backup/retention procedures.
 - Configure token-image storage and a ClamAV executable using the `TOKEN_IMAGE_*` variables when malware scanning is required in production.
-- Monitor `blockchainIndexerCheckpoint` lag/errors and keep both claim workers enabled. The indexer uses a DB lease, so multiple API instances are safe.
+- Monitor `blockchainIndexerCheckpoint` lag/errors and keep claim, registry, purchase, and redemption workers enabled. Indexers and platform-wallet execution use DB leases, so multiple API instances are safe.
 - RBAC changes take effect on the next request. Role changes invalidate existing JWTs immediately.

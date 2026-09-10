@@ -167,7 +167,8 @@ An `EXPIRED` intent returns `409 PURCHASE_EXPIRED`; create a fresh purchase inst
   Rows with a payment hash are never auto-expired.
 - Payment rows with a known hash are verified directly without a historical scan.
 - The worker stores `mintPreparedAtBlock` before broadcast and `mintTxHash` immediately after.
-- API and worker mint broadcasts share the database-backed `tokenPurchaseMint` lease, and the
+- API and worker mint broadcasts share the database-backed `platformTokenAgentExecution` lease with
+  redemption lock/burn/unlock broadcasts, and the
   purchase row can be atomically claimed only once. Concurrent confirm/retry calls cannot submit a
   duplicate mint.
 - If the process crashes after broadcast but before hash persistence, targeted recovery searches
@@ -185,5 +186,7 @@ An `EXPIRED` intent returns `409 PURCHASE_EXPIRED`; create a fresh purchase inst
 - `tokenPurchasePaymentEvent`: durable USDT event ledger for missing-hash reconciliation.
 - `blockchainIndexerCheckpoint`: global checkpoint and distributed lease using indexer name
   `tokenPurchasePayment`.
+
+Migrations: `database/migrations/20260910_add_token_purchase_flow.sql` and, for an existing
 
 Frontend implementation: `docs/FRONTEND-TOKEN-PURCHASE-FLOW-GUIDE.md`.

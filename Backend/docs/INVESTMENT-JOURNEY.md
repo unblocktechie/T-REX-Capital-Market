@@ -55,7 +55,7 @@ internal storage key is never returned. Paginated via the response `meta`
 investor role and always forced to `deployed`.
 
 `GET /api/v1/investments/tokens/:tokenUid`
-Full token details plus `maxInvestors`, `maxBalancePerInvestor`, `countryRestrictionMode`,
+Full token details plus `treasuryWalletAddress`, `maxInvestors`, `maxBalancePerInvestor`, `countryRestrictionMode`,
 `countryRestrictions` (country code / name / numeric code), and `requiredClaimTopics` (the claim
 topics the issuer required).
 

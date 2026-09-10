@@ -108,6 +108,14 @@ class TokenPurchaseRepository {
     return rows[0] || null;
   }
 
+  async findActiveRedemptionByInterest(interestUid, executor) {
+    const rows = await execute(
+      'SELECT `redemptionUid`,`status` FROM `tokenRedemption` WHERE `activeInterestUid`=? AND `isDeleted`=0 LIMIT 1',
+      [interestUid], executor,
+    );
+    return rows[0] || null;
+  }
+
   async findByPaymentTxHash(txHash, executor) {
     const rows = await execute(
       'SELECT * FROM `tokenPurchase` WHERE LOWER(`paymentTxHash`) = LOWER(?) AND `isDeleted` = 0 LIMIT 1',

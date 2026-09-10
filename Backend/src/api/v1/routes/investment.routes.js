@@ -6,7 +6,7 @@ const schemas = require('../../../schemas/investment.schema');
 // All investment routes are authenticated + DB-authorized (permissionMaster). The
 // marketplace list/detail/image are granted to admin + investor; the journey endpoints to
 // investor; the review endpoints to issuer. See 20260909_add_investment_journey.sql.
-const createInvestmentRouter = ({ controller, registryController, purchaseController, authenticate, authorize }) => {
+const createInvestmentRouter = ({ controller, registryController, purchaseController, redemptionController, authenticate, authorize }) => {
   const router = express.Router();
   router.use(authenticate);
 
@@ -21,6 +21,44 @@ const createInvestmentRouter = ({ controller, registryController, purchaseContro
     validate({ params: schemas.tokenParams, body: schemas.createPurchase }),
     authorize,
     asyncHandler(purchaseController.create),
+  );
+
+  // Investor-authorized, issuer-funded manual redemption with platform lock/burn settlement.
+  router.post(
+    '/tokens/:tokenUid/redemptions',
+    validate({ params: schemas.tokenParams, body: schemas.createRedemption }),
+    authorize,
+    asyncHandler(redemptionController.create),
+  );
+  router.get(
+    '/tokens/:tokenUid/redemptions',
+    validate({ params: schemas.tokenParams, query: schemas.redemptionListQuery }),
+    authorize,
+    asyncHandler(redemptionController.investorList),
+  );
+  router.get(
+    '/redemptions/:redemptionUid',
+    validate({ params: schemas.redemptionParams }),
+    authorize,
+    asyncHandler(redemptionController.investorGet),
+  );
+  router.post(
+    '/redemptions/:redemptionUid/authorize',
+    validate({ params: schemas.redemptionParams, body: schemas.authorizeRedemption }),
+    authorize,
+    asyncHandler(redemptionController.authorize),
+  );
+  router.post(
+    '/redemptions/:redemptionUid/cancel',
+    validate({ params: schemas.redemptionParams, body: schemas.emptyBody }),
+    authorize,
+    asyncHandler(redemptionController.cancel),
+  );
+  router.post(
+    '/redemptions/:redemptionUid/retry',
+    validate({ params: schemas.redemptionParams, body: schemas.emptyBody }),
+    authorize,
+    asyncHandler(redemptionController.retry),
   );
   router.get(
     '/tokens/:tokenUid/purchases',
@@ -91,6 +129,36 @@ const createInvestmentRouter = ({ controller, registryController, purchaseContro
 
   // Issuer review.
   router.get('/issuer/interests', validate({ query: schemas.issuerInterestsQuery }), authorize, asyncHandler(controller.issuerInterests));
+  router.get(
+    '/issuer/redemptions',
+    validate({ query: schemas.redemptionListQuery }),
+    authorize,
+    asyncHandler(redemptionController.issuerList),
+  );
+  router.get(
+    '/issuer/redemptions/:redemptionUid',
+    validate({ params: schemas.redemptionParams }),
+    authorize,
+    asyncHandler(redemptionController.issuerGet),
+  );
+  router.post(
+    '/issuer/redemptions/:redemptionUid/approve',
+    validate({ params: schemas.redemptionParams, body: schemas.approveRedemption }),
+    authorize,
+    asyncHandler(redemptionController.approve),
+  );
+  router.post(
+    '/issuer/redemptions/:redemptionUid/reject',
+    validate({ params: schemas.redemptionParams, body: schemas.rejectRedemption }),
+    authorize,
+    asyncHandler(redemptionController.reject),
+  );
+  router.post(
+    '/issuer/redemptions/:redemptionUid/payment/confirm',
+    validate({ params: schemas.redemptionParams, body: schemas.confirmPurchase }),
+    authorize,
+    asyncHandler(redemptionController.confirmPayment),
+  );
   router.get(
     '/issuer/interests/:interestUid',
     validate({ params: schemas.interestParams }),
