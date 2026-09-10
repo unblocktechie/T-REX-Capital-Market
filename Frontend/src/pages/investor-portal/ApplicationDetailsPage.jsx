@@ -14,6 +14,7 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { investorMarketplaceService } from '@/services/investor/investorMarketplaceService';
 import { MARKETPLACE_STATUS } from '@/services/investor/investorMarketplaceLocalService';
 import { getErrorMessage } from '@/utils/error';
+import { isApplicationPurchaseReady } from '@/utils/investmentPurchase';
 
 export default function ApplicationDetailsPage() {
   const { interestUid } = useParams();
@@ -76,6 +77,8 @@ export default function ApplicationDetailsPage() {
   const currentStatus = String(application?.interest?.status || history?.summary?.status || history?.status || application?.status || '').toLowerCase();
   const currentRejectType = String(history?.summary?.rejectReasonType || application?.interest?.rejectReasonType || '').toUpperCase();
   const canResubmit = Boolean(history?.summary?.canResubmit ?? application?.interest?.canResubmit);
+
+  const purchaseReady = useMemo(() => isApplicationPurchaseReady(history, application), [application, history]);
 
 
   const supportContext = useMemo(() => {
@@ -214,7 +217,12 @@ export default function ApplicationDetailsPage() {
         </div>
       </header>
 
-      <ApplicationSummary application={application} history={history} />
+      <ApplicationSummary
+        application={application}
+        history={history}
+        purchaseReady={purchaseReady}
+        onPurchase={purchaseReady ? () => navigate(ROUTES.purchaseToken(interestUid)) : undefined}
+      />
 
       <section className="application-history-section">
         <div className="application-history-section__heading">

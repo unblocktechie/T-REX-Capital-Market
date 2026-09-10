@@ -45,7 +45,7 @@ const SORT_OPTIONS = [
 function matchesApplicationStatus(token, filter) {
   if (filter === 'approved') return token.status === MARKETPLACE_STATUS.APPROVED;
   if (filter === 'review') return token.status === MARKETPLACE_STATUS.PENDING_REVIEW;
-  if (filter === 'action') return [MARKETPLACE_STATUS.ACTION_REQUIRED, MARKETPLACE_STATUS.CLAIM_REQUIRED].includes(token.status);
+  if (filter === 'action') return [MARKETPLACE_STATUS.ACTION_REQUIRED, MARKETPLACE_STATUS.CLAIM_REQUIRED, MARKETPLACE_STATUS.READY_TO_INVEST].includes(token.status);
   if (filter === 'available') return token.status === MARKETPLACE_STATUS.NOT_APPLIED;
   if (filter === 'rejected') return token.status === MARKETPLACE_STATUS.REJECTED;
   return true;
@@ -97,6 +97,7 @@ export default function MarketplacePage() {
       if (sortBy === 'price-low') return sortableNumber(a.price, Infinity) - sortableNumber(b.price, Infinity);
       if (sortBy === 'name') return a.name.localeCompare(b.name);
       const priority = {
+        [MARKETPLACE_STATUS.READY_TO_INVEST]: 0,
         [MARKETPLACE_STATUS.CLAIM_REQUIRED]: 0,
         [MARKETPLACE_STATUS.ACTION_REQUIRED]: 1,
         [MARKETPLACE_STATUS.CLAIMS_SUBMITTED]: 2,
@@ -141,6 +142,11 @@ export default function MarketplacePage() {
 
   const openApplicationOrOffering = (token) => {
     const interestUid = token?.interest?.interestUid || token?.interestUid;
+    if (interestUid && token?.status === MARKETPLACE_STATUS.READY_TO_INVEST) {
+      navigate(ROUTES.purchaseToken(interestUid));
+      return;
+    }
+
     if (interestUid && token?.status === MARKETPLACE_STATUS.CLAIM_REQUIRED) {
       navigate(ROUTES.applicationClaim(interestUid));
       return;

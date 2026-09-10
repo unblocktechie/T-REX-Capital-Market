@@ -22,6 +22,7 @@ const STATUS_ACTION = Object.freeze({
   [MARKETPLACE_STATUS.PENDING_REVIEW]: 'Review Application',
   [MARKETPLACE_STATUS.APPROVED]: 'View Approval',
   [MARKETPLACE_STATUS.VERIFIED_HOLDER]: 'View Holding',
+  [MARKETPLACE_STATUS.READY_TO_INVEST]: 'Invest',
   [MARKETPLACE_STATUS.REJECTED]: 'View Details',
   [MARKETPLACE_STATUS.CANCELLED]: 'View Details',
 });
@@ -34,6 +35,7 @@ const STATUS_ICON = Object.freeze({
   [MARKETPLACE_STATUS.PENDING_REVIEW]: ClipboardCheck,
   [MARKETPLACE_STATUS.APPROVED]: ShieldCheck,
   [MARKETPLACE_STATUS.VERIFIED_HOLDER]: ShieldCheck,
+  [MARKETPLACE_STATUS.READY_TO_INVEST]: Coins,
   [MARKETPLACE_STATUS.REJECTED]: CircleAlert,
   [MARKETPLACE_STATUS.CANCELLED]: Clock3,
 });
@@ -51,6 +53,7 @@ const normalizeApplicationStatus = (value) => {
   if (['claimsubmitted', 'claim_submitted', 'claim-submitted'].includes(status)) return MARKETPLACE_STATUS.CLAIMS_SUBMITTED;
   if (['action_required', 'documents_required'].includes(status)) return MARKETPLACE_STATUS.ACTION_REQUIRED;
   if (status === 'verified_holder') return MARKETPLACE_STATUS.VERIFIED_HOLDER;
+  if (['registered', 'ready_to_invest', 'ready-to-invest'].includes(status)) return MARKETPLACE_STATUS.READY_TO_INVEST;
   return MARKETPLACE_STATUS.NOT_APPLIED;
 };
 

@@ -31,6 +31,9 @@ const MarketplacePage = lazy(() => import('@/pages/investor-portal/MarketplacePa
 const MarketplaceTokenDetailsPage = lazy(() => import('@/pages/investor-portal/MarketplaceTokenDetailsPage'));
 const MyApplicationsPage = lazy(() => import('@/pages/investor-portal/MyApplicationsPage'));
 const ApplicationDetailsPage = lazy(() => import('@/pages/investor-portal/ApplicationDetailsPage'));
+const PurchaseTokenPage = lazy(() => import('@/pages/investor-portal/PurchaseTokenPage'));
+const SendTokenPage = lazy(() => import('@/pages/investor-portal/SendTokenPage'));
+const RedeemTokenPage = lazy(() => import('@/pages/investor-portal/RedeemTokenPage'));
 const SubmitClaimPage = lazy(() => import('@/pages/investor-portal/SubmitClaimPage'));
 const ProfilePage = lazy(() => import('@/pages/profile/ProfilePage'));
 const NotFoundPage = lazy(() => import('@/pages/errors/NotFoundPage'));
@@ -175,6 +178,9 @@ export const router = createBrowserRouter([
                   { path: 'applications', element: withSuspense(<MyApplicationsPage />) },
                   { path: 'applications/:interestUid', element: withSuspense(<ApplicationDetailsPage />) },
                   { path: 'applications/:interestUid/submit-claim', element: withSuspense(<SubmitClaimPage />) },
+                  { path: 'applications/:interestUid/purchase', element: withSuspense(<PurchaseTokenPage />) },
+                  { path: 'applications/:interestUid/send', element: withSuspense(<SendTokenPage />) },
+                  { path: 'applications/:interestUid/redeem', element: withSuspense(<RedeemTokenPage />) },
                 ],
               },
               {

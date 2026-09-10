@@ -290,7 +290,7 @@ button.org-stepper__button {
 .org-required-mark {
   margin-left: 3px;
   color: var(--danger-500);
-  font-weight: 850;
+  font-weight: 700;
 }
 
 .org-upload-field-label {
@@ -361,7 +361,7 @@ button.org-stepper__button {
 
 .org-field__error {
   color: var(--danger-500);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .org-field__hint {
@@ -579,7 +579,7 @@ button.org-stepper__button {
   background: color-mix(in srgb, var(--primary-500) 13%, var(--surface));
   color: var(--primary-700);
   font-size: 12px;
-  font-weight: 850;
+  font-weight: 700;
 }
 
 .org-ubo-card__identity > div {
@@ -735,7 +735,7 @@ button.org-stepper__button {
   margin-top: 15px;
   color: var(--text-muted);
   font-size: 11px;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .org-document-count {
@@ -910,7 +910,7 @@ button.org-stepper__button {
   margin: 0;
   color: var(--text);
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.55;
 }
 
@@ -1354,7 +1354,7 @@ button.org-stepper__button {
   color: #fff;
   font-family: var(--font-display);
   font-size: 20px;
-  font-weight: 850;
+  font-weight: 700;
 }
 
 .org-summary-header h1 {
@@ -1732,7 +1732,7 @@ button.org-stepper__button {
 .org-select-option.is-selected {
   background: color-mix(in srgb, var(--primary-500) 9%, var(--surface));
   color: var(--primary-600);
-  font-weight: 750;
+  font-weight: 700;
 }
 
 .org-select-option span {
@@ -1921,7 +1921,7 @@ button.org-stepper__button {
 .org-calendar-select__option.is-selected {
   background: color-mix(in srgb, var(--primary-500) 10%, var(--surface));
   color: var(--primary-600);
-  font-weight: 750;
+  font-weight: 700;
 }
 
 .org-calendar-select__option:disabled {
@@ -1966,7 +1966,7 @@ button.org-stepper__button {
   color: var(--text-soft);
   font: inherit;
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -2246,7 +2246,7 @@ button.org-stepper__button {
     background: var(--surface);
     color: var(--text-muted);
     font-size: 10px;
-    font-weight: 850;
+    font-weight: 700;
     box-shadow: 0 0 0 3px var(--surface);
   }
 
@@ -2256,7 +2256,7 @@ button.org-stepper__button {
     overflow: hidden;
     color: inherit;
     font-size: 9px;
-    font-weight: 750;
+    font-weight: 700;
     line-height: 1.2;
     text-align: center;
     text-overflow: ellipsis;

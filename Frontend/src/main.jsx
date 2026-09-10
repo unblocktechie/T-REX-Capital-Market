@@ -11,6 +11,7 @@ import '@/assets/styles/global.css';
 import '@/assets/styles/organization.css';
 import '@/assets/styles/token-issuance.css';
 import '@/assets/styles/investor.css';
+import '@/assets/styles/typography.css';
 
 setupAxiosInterceptors();
 

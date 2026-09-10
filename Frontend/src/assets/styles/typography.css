@@ -1,0 +1,80 @@
+/*
+ * Cross-module typography polish.
+ * Keep content weight and hierarchy consistent with the token dashboard:
+ * regular body copy, semibold headings/actions, and restrained status labels.
+ */
+
+body {
+  text-rendering: optimizeLegibility;
+}
+
+.page-stack h1,
+.page-stack h2,
+.page-stack h3,
+.page-stack h4,
+.modal h1,
+.modal h2,
+.modal h3,
+.card h1,
+.card h2,
+.card h3 {
+  font-weight: var(--font-weight-semibold);
+}
+
+.page-stack strong,
+.page-stack b,
+.modal strong,
+.modal b,
+.card strong,
+.card b {
+  font-weight: var(--font-weight-semibold);
+}
+
+.page-stack label,
+.page-stack dt,
+.page-stack th,
+.modal label,
+.modal dt,
+.card label,
+.card dt {
+  font-weight: var(--font-weight-semibold);
+}
+
+.button,
+.link-button,
+.text-button,
+.icon-button,
+.page-stack button,
+.modal button {
+  font-weight: var(--font-weight-semibold);
+}
+
+.badge,
+.app-status-badge,
+.application-detail-summary__badge,
+.application-history-item__badge,
+.marketplace-status-badge,
+.issuer-status-badge,
+.organization-status-badge,
+.investor-profile-status,
+.issuance-status {
+  font-weight: var(--font-weight-semibold);
+}
+
+.eyebrow,
+.page-stack [class$='__label'],
+.page-stack [class$='-label'] {
+  font-weight: var(--font-weight-semibold);
+}
+
+.page-stack code,
+.modal code,
+.card code {
+  font-weight: var(--font-weight-medium);
+}
+
+/* Preserve intentional emphasis without returning to visually heavy 800/900 weights. */
+.page-stack .is-emphasis,
+.page-stack [aria-current='page'] {
+  font-weight: var(--font-weight-semibold);
+}

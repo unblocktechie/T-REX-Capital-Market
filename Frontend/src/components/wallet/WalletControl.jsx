@@ -70,10 +70,12 @@ export function WalletControl({
   prominent = false,
   expanded = false,
   context = 'organization',
+  purpose = '',
 }) {
   const [open, setOpen] = useState(false);
   const wallet = useWalletConnection();
   const isInvestorContext = context === 'investor';
+  const isRegisteredAction = isInvestorContext && purpose === 'registered-action';
 
   const connectWith = async (connector) => {
     try {
@@ -152,9 +154,11 @@ export function WalletControl({
     ? isInvestorContext
       ? 'Investor wallet'
       : 'Organization wallet'
-    : isInvestorContext
-      ? 'Connect investor wallet'
-      : 'Connect organization wallet';
+    : isRegisteredAction
+      ? 'Connect registered investor wallet'
+      : isInvestorContext
+        ? 'Connect investor wallet'
+        : 'Connect organization wallet';
 
   const triggerClasses = prominent
     ? isInvestorContext
@@ -402,9 +406,11 @@ export function WalletControl({
               </span>
               <h3 className="mt-4 mb-1 text-lg font-semibold text-slate-950">Choose a secure wallet</h3>
               <p className="m-0 text-sm leading-6 text-slate-600">
-                {isInvestorContext
-                  ? 'This wallet becomes your primary investor wallet and will be linked to your investor profile.'
-                  : 'This wallet becomes the primary organization wallet and will be used for token creation and future issuer actions.'}
+                {isRegisteredAction
+                  ? 'Connect the investor wallet already registered for this investment. A different wallet cannot be used for this action.'
+                  : isInvestorContext
+                    ? 'This wallet becomes your primary investor wallet and will be linked to your investor profile.'
+                    : 'This wallet becomes the primary organization wallet and will be used for token creation and future issuer actions.'}
               </p>
               <span className="mt-3 inline-flex rounded-full bg-white px-3 py-1 text-xs font-bold text-[var(--primary-700)] shadow-sm">
                 Sepolia testnet only

@@ -15,8 +15,11 @@ import {
   Landmark,
   LockKeyhole,
   Mail,
+  RotateCcw,
   Scale,
+  Send,
   ShieldCheck,
+  ShoppingCart,
   UserRoundCheck,
   UsersRound,
   WalletCards,
@@ -86,7 +89,7 @@ function ComplianceStatus({ token }) {
   );
 }
 
-function OfferingStatusPanel({ token, onPrimaryAction, onSecondaryAction, actionLoading }) {
+function OfferingStatusPanel({ token, onPrimaryAction, onSecondaryAction, onInvest, onSend, onRedeem, actionLoading }) {
   const rejection = token.eligibility?.rejection || token.interest || {};
   const canResubmitDocuments = token.status === MARKETPLACE_STATUS.REJECTED
     && String(rejection.rejectReasonType || '').toUpperCase() === 'DOC_REJECTED'
@@ -100,6 +103,17 @@ function OfferingStatusPanel({ token, onPrimaryAction, onSecondaryAction, action
         <>
           <div className="marketplace-status-callout marketplace-status-callout--neutral"><Info size={19} /><div><strong>Not Applied</strong><span>Your required claim-topic documents are complete. You can submit an interest for issuer review.</span></div></div>
           <Button className="marketplace-status-panel__primary" onClick={onPrimaryAction} loading={actionLoading}>Submit Interest</Button>
+        </>
+      ) : null}
+
+      {token.status === MARKETPLACE_STATUS.READY_TO_INVEST ? (
+        <>
+          <div className="marketplace-status-callout marketplace-status-callout--warning"><CheckCircle2 size={19} /><div><strong>Action Required</strong><span>You are eligible to invest in this token. Choose Invest to continue.</span></div></div>
+          <Button className="marketplace-status-panel__primary" icon={ShoppingCart} onClick={onInvest}>Invest</Button>
+          <div className="marketplace-status-panel__asset-actions" aria-label="Token actions">
+            <Button variant="secondary" icon={Send} onClick={onSend}>Send</Button>
+            <Button variant="secondary" icon={RotateCcw} onClick={onRedeem}>Redeem</Button>
+          </div>
         </>
       ) : null}
 
@@ -425,6 +439,18 @@ export default function MarketplaceTokenDetailsPage() {
                 return;
               }
               navigate(interestUid ? ROUTES.applicationDetail(interestUid) : ROUTES.applications);
+            }}
+            onInvest={() => {
+              const interestUid = token.interest?.interestUid;
+              if (interestUid) navigate(ROUTES.purchaseToken(interestUid));
+            }}
+            onSend={() => {
+              const interestUid = token.interest?.interestUid;
+              if (interestUid) navigate(ROUTES.sendToken(interestUid));
+            }}
+            onRedeem={() => {
+              const interestUid = token.interest?.interestUid;
+              if (interestUid) navigate(ROUTES.redeemToken(interestUid));
             }}
             actionLoading={actionLoading}
           />

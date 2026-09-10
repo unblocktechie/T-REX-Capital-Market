@@ -5,6 +5,10 @@
 :root {
   --font-body: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-display: 'Manrope', var(--font-body);
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
   --primary-50: #eef7ff;
   --primary-100: #dceeff;
   --primary-400: #65aaf7;
@@ -56,7 +60,8 @@ body {
   color: var(--text);
   font-family: var(--font-body);
   font-size: 15px;
-  line-height: 1.5;
+  font-weight: var(--font-weight-regular);
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
 }
 button,
@@ -90,7 +95,12 @@ h2,
 h3 {
   color: var(--text);
   font-family: var(--font-display);
-  letter-spacing: -0.025em;
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.02em;
+}
+strong,
+b {
+  font-weight: var(--font-weight-semibold);
 }
 ::selection {
   background: var(--primary-100);
@@ -112,7 +122,7 @@ h3 {
   border: 1px solid transparent;
   border-radius: var(--radius-md);
   padding: 0 17px;
-  font-weight: 700;
+  font-weight: var(--font-weight-semibold);
   cursor: pointer;
   transition:
     transform var(--transition),
@@ -216,7 +226,7 @@ h3 {
   padding: 0;
   background: transparent;
   color: var(--primary-600);
-  font-weight: 700;
+  font-weight: var(--font-weight-semibold);
   cursor: pointer;
 }
 .link-button:disabled {
@@ -234,7 +244,7 @@ h3 {
 .field label {
   color: var(--text);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: var(--font-weight-semibold);
 }
 .input-shell {
   min-height: 47px;
@@ -5336,7 +5346,7 @@ body,
   gap: 6px;
   color: var(--primary-600);
   font-size: 11px;
-  font-weight: 850;
+  font-weight: 700;
   letter-spacing: 0.11em;
   text-transform: uppercase;
 }
@@ -5404,7 +5414,7 @@ body,
   gap: 7px;
   color: var(--text-soft);
   font-size: 13px;
-  font-weight: 750;
+  font-weight: 700;
 }
 
 .verification-result__link:hover,
@@ -6145,7 +6155,7 @@ body,
   border-radius: 11px;
   padding: 0 12px;
   font-size: 15px;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .sidebar-link > svg {
@@ -6724,4 +6734,49 @@ body,
   .breadcrumbs [aria-current='page'] {
     white-space: nowrap;
   }
+}
+
+/* Reusable compact blockchain address presentation. */
+.compact-address {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  font-weight: var(--font-weight-medium);
+  line-height: 1.35;
+}
+
+.compact-address__value {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  border-radius: 5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+}
+
+.compact-address__copy {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  padding: 0;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+}
+
+.compact-address__copy:hover,
+.compact-address__copy:focus-visible {
+  background: var(--surface-muted);
+  color: var(--text);
 }

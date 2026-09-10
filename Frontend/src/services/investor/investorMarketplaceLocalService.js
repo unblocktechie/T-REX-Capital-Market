@@ -9,6 +9,7 @@ export const MARKETPLACE_STATUS = Object.freeze({
   PENDING_REVIEW: 'pending_review',
   APPROVED: 'approved',
   VERIFIED_HOLDER: 'verified_holder',
+  READY_TO_INVEST: 'ready_to_invest',
   REJECTED: 'rejected',
   CANCELLED: 'cancelled',
 });
@@ -55,6 +56,12 @@ export const MARKETPLACE_STATUS_META = Object.freeze({
     shortLabel: 'Verified Holder',
     tone: 'success',
     description: 'Your identity is whitelisted for this asset.',
+  },
+  [MARKETPLACE_STATUS.READY_TO_INVEST]: {
+    label: 'Action Required',
+    shortLabel: 'Action Required',
+    tone: 'warning',
+    description: 'You are eligible to invest in this token. Choose Invest to continue.',
   },
   [MARKETPLACE_STATUS.REJECTED]: {
     label: 'Rejected',

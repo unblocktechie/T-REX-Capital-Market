@@ -6,6 +6,18 @@ const unwrap = (response) =>
     ? response.data.data
     : response.data;
 
+const unwrapClaimResponse = (response) => {
+  const data = unwrap(response);
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return data;
+  return {
+    ...data,
+    message: response?.data?.message || data.message || '',
+    requestId: response?.data?.requestId || data.requestId || '',
+  };
+};
+
+const accept2xx = (status) => status >= 200 && status < 300;
+
 export const investorApi = Object.freeze({
   getOptions: () =>
     apiClient.get(INVESTOR_ENDPOINTS.options, { skipGlobalLoader: true }).then(unwrap),
@@ -62,32 +74,32 @@ export const investorApi = Object.freeze({
         params: { interestId },
         skipGlobalLoader: true,
       })
-      .then(unwrap),
+      .then(unwrapClaimResponse),
 
   prepareClaim: (claimId, { interestId }) =>
     apiClient
       .post(
         INVESTOR_ENDPOINTS.prepareClaim(claimId),
         { interestId },
-        { skipGlobalLoader: true },
+        { skipGlobalLoader: true, validateStatus: accept2xx },
       )
-      .then(unwrap),
+      .then(unwrapClaimResponse),
 
   retryClaim: (claimId, { interestId }) =>
     apiClient
       .post(
         INVESTOR_ENDPOINTS.retryClaim(claimId),
         { interestId },
-        { skipGlobalLoader: true },
+        { skipGlobalLoader: true, validateStatus: accept2xx },
       )
-      .then(unwrap),
+      .then(unwrapClaimResponse),
 
   submitClaim: (claimId, { interestId, txHash }) =>
     apiClient
       .post(
         INVESTOR_ENDPOINTS.submitClaim(claimId),
         { interestId, txHash },
-        { skipGlobalLoader: true },
+        { skipGlobalLoader: true, validateStatus: accept2xx },
       )
-      .then(unwrap),
+      .then(unwrapClaimResponse),
 });

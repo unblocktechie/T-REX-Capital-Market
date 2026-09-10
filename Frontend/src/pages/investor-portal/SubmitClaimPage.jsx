@@ -48,11 +48,20 @@ const CLAIM_UI_STATUS = Object.freeze({
   FAILED: 'FAILED',
 });
 
-const RECOVERY_RETRY_INTERVAL_MS = 12_000;
+const CLAIM_WORKFLOW_STATUS = Object.freeze({
+  CONFIRMED: 'CONFIRMED',
+  PENDING_CONFIRMATION: 'PENDING_CONFIRMATION',
+  SYNCING: 'SYNCING',
+  TRANSACTION_REQUIRED: 'TRANSACTION_REQUIRED',
+});
+
+const SYNC_POLL_INTERVAL_MS = 5_000;
+const CONFIRMATION_POLL_DELAYS_MS = [5_000, 10_000, 15_000];
+const MAX_AUTO_POLL_DURATION_MS = 90_000;
 const PENDING_VERIFICATION_MESSAGE =
-  "Your claim transaction was submitted successfully. We couldn't verify it right now. We'll automatically retry when the service is available.";
+  'Your transaction is being confirmed. This may take a few moments.';
 const PENDING_GATHERING_MESSAGE =
-  'We’re gathering your details. This may take a few minutes. Please wait…';
+  'Your claim is being processed. No action is needed right now.';
 const WALLET_MISMATCH_MESSAGE =
   'The connected wallet does not match your registered wallet. Please switch to your registered wallet and try again.';
 const WRONG_NETWORK_MESSAGE =
@@ -64,13 +73,25 @@ const normalizeStatus = (value) =>
     .toLowerCase()
     .replace(/[\s_-]+/g, '');
 
+const validTransactionHash = (value) => /^0x[0-9a-fA-F]{64}$/.test(String(value || '').trim());
+
 const backendClaimStatus = (claim) => {
   const status = normalizeStatus(claim?.status);
+  const syncStatus = normalizeStatus(claim?.syncStatus);
   if (status === 'confirmed') return CLAIM_UI_STATUS.CONFIRMED;
   if (status === 'failed') return CLAIM_UI_STATUS.FAILED;
-  if (status === 'pending') return CLAIM_UI_STATUS.WAITING;
+  if (status === 'pending') {
+    if (['queued', 'processing'].includes(syncStatus)) return CLAIM_UI_STATUS.WAITING;
+    if (validTransactionHash(claim?.txHash)) return CLAIM_UI_STATUS.VERIFYING;
+    return CLAIM_UI_STATUS.PENDING;
+  }
   if (['verifying', 'pendingverification'].includes(status)) return CLAIM_UI_STATUS.VERIFYING;
   return CLAIM_UI_STATUS.PENDING;
+};
+
+const workflowStatusOf = (response) => {
+  const status = String(response?.status || '').trim().toUpperCase();
+  return Object.values(CLAIM_WORKFLOW_STATUS).includes(status) ? status : '';
 };
 
 const claimTopicNumber = (claim) => {
@@ -128,7 +149,7 @@ const claimTopicLabel = (claim, metadata, index) =>
 const claimTopicDescription = (claim, metadata, label) =>
   claim?.description ||
   metadata?.description ||
-  `${label} has been approved by the issuer and is ready for investor on-chain submission.`;
+  `${label} has been approved by the issuer and is ready to submit.`;
 
 const claimTopicIcon = (claim, metadata) => {
   const code = String(metadata?.claimTopicCode || claim?.claimTopicCode || claim?.label || '').toUpperCase();
@@ -144,22 +165,33 @@ const claimStateMeta = (status, stage = '') => {
       return { label: 'Confirmed', tone: 'confirmed', Icon: CheckCircle2 };
     case CLAIM_UI_STATUS.SUBMITTING:
       return {
-        label: stage === 'PREPARING' ? 'Preparing claim' : 'Waiting for wallet confirmation',
+        label: stage === 'PREPARING' ? 'Getting claim ready' : 'Waiting for your confirmation',
         tone: 'submitting',
         Icon: WalletCards,
       };
     case CLAIM_UI_STATUS.VERIFYING:
-      return { label: 'Verifying', tone: 'verifying', Icon: Clock3 };
+      return { label: 'Confirming', tone: 'verifying', Icon: Clock3 };
     case CLAIM_UI_STATUS.WAITING:
       return { label: 'Processing', tone: 'waiting', Icon: Clock3 };
     case CLAIM_UI_STATUS.FAILED:
       return { label: 'Verification failed', tone: 'failed', Icon: XCircle };
     default:
-      return { label: 'Approved by Issuer (Off-Chain)', tone: 'pending', Icon: CheckCircle2 };
+      return { label: 'Approved by Issuer', tone: 'pending', Icon: CheckCircle2 };
   }
 };
 
-const validTransactionHash = (value) => /^0x[0-9a-fA-F]{64}$/.test(String(value || '').trim());
+const backendRequestId = (error) =>
+  String(
+    error?.response?.data?.requestId ||
+      error?.response?.headers?.['x-request-id'] ||
+      '',
+  ).trim();
+
+const transactionExplorerUrl = (txHash) => {
+  if (!validTransactionHash(txHash)) return '';
+  const baseUrl = web3Config.requiredChain?.blockExplorers?.default?.url;
+  return baseUrl ? `${baseUrl}/tx/${txHash}` : '';
+};
 
 const preparedClaimPayload = (response) => {
   if (!response || typeof response !== 'object') return null;
@@ -182,6 +214,8 @@ export default function SubmitClaimPage() {
   const submissionLocksRef = useRef(new Set());
   const verificationLocksRef = useRef(new Set());
   const retryLocksRef = useRef(new Set());
+  const pollingMetaRef = useRef(new Map());
+  const pollingInFlightRef = useRef(new Set());
 
   useDocumentTitle(token ? `${token.name} · Submit Claim` : 'Submit Claim');
 
@@ -198,48 +232,67 @@ export default function SubmitClaimPage() {
   const mergeVerificationResponse = useCallback((claimId, response, txHash) => {
     const returnedClaim = response?.claim || null;
     const returnedApplication = response?.application || null;
-    const status = backendClaimStatus(returnedClaim);
+    const workflowStatus = workflowStatusOf(response);
+    const resolvedTxHash = returnedClaim?.txHash || txHash || '';
 
-    if (status === CLAIM_UI_STATUS.CONFIRMED) {
+    if (workflowStatus === CLAIM_WORKFLOW_STATUS.CONFIRMED) {
       investorClaimRecoveryStore.remove(interestUid, claimId);
       updateClaimUi(claimId, {
         status: CLAIM_UI_STATUS.CONFIRMED,
         stage: '',
-        txHash: returnedClaim?.txHash || txHash || '',
+        txHash: resolvedTxHash,
         confirmedAt: returnedClaim?.confirmedAt || '',
         errorCode: '',
+        requestId: response?.requestId || '',
+        pollingTimedOut: false,
         noticeTitle: '',
         message: '',
         noticeTone: '',
       });
-    } else if (status === CLAIM_UI_STATUS.FAILED) {
-      investorClaimRecoveryStore.remove(interestUid, claimId);
-      updateClaimUi(claimId, {
-        status: CLAIM_UI_STATUS.FAILED,
-        stage: '',
-        txHash: returnedClaim?.txHash || txHash || '',
-        errorCode: returnedClaim?.failureReason || 'CLAIM_VERIFICATION_FAILED',
-        noticeTitle: 'Claim verification failed',
-        message: returnedClaim?.failureReason || 'The backend could not verify this claim transaction.',
-        noticeTone: 'error',
-      });
-    } else if (status === CLAIM_UI_STATUS.WAITING) {
-      updateClaimUi(claimId, {
-        status: CLAIM_UI_STATUS.WAITING,
-        stage: '',
-        txHash: returnedClaim?.txHash || txHash || '',
-        noticeTitle: 'Processing your claim',
-        message: PENDING_GATHERING_MESSAGE,
-        noticeTone: 'warning',
-      });
-    } else {
+    } else if (workflowStatus === CLAIM_WORKFLOW_STATUS.PENDING_CONFIRMATION) {
+      if (validTransactionHash(resolvedTxHash)) {
+        investorClaimRecoveryStore.upsert({
+          interestId: interestUid,
+          claimId,
+          txHash: resolvedTxHash,
+          createdAt: new Date().toISOString(),
+        });
+      }
       updateClaimUi(claimId, {
         status: CLAIM_UI_STATUS.VERIFYING,
         stage: '',
-        txHash: returnedClaim?.txHash || txHash || '',
-        noticeTitle: 'Verification pending',
+        txHash: resolvedTxHash,
+        errorCode: '',
+        requestId: response?.requestId || '',
+        pollingTimedOut: false,
+        noticeTitle: 'Transaction is confirming',
         message: PENDING_VERIFICATION_MESSAGE,
         noticeTone: 'warning',
+      });
+    } else if (workflowStatus === CLAIM_WORKFLOW_STATUS.SYNCING) {
+      updateClaimUi(claimId, {
+        status: CLAIM_UI_STATUS.WAITING,
+        stage: '',
+        txHash: resolvedTxHash,
+        errorCode: '',
+        requestId: response?.requestId || '',
+        pollingTimedOut: false,
+        noticeTitle: 'Processing claim',
+        message: PENDING_GATHERING_MESSAGE,
+        noticeTone: 'warning',
+      });
+    } else if (workflowStatus === CLAIM_WORKFLOW_STATUS.TRANSACTION_REQUIRED) {
+      investorClaimRecoveryStore.remove(interestUid, claimId);
+      updateClaimUi(claimId, {
+        status: CLAIM_UI_STATUS.PENDING,
+        stage: '',
+        txHash: '',
+        errorCode: '',
+        requestId: response?.requestId || '',
+        pollingTimedOut: false,
+        noticeTitle: 'Action required',
+        message: 'This claim is ready to be submitted. Continue when you’re ready.',
+        noticeTone: 'info',
       });
     }
 
@@ -269,7 +322,7 @@ export default function SubmitClaimPage() {
       };
     });
 
-    return status;
+    return workflowStatus;
   }, [interestUid, updateClaimUi]);
 
   const verifySubmittedTransaction = useCallback(async (record, { notify = false } = {}) => {
@@ -284,8 +337,8 @@ export default function SubmitClaimPage() {
       stage: '',
       txHash,
       errorCode: '',
-      noticeTitle: 'Verifying transaction',
-      message: 'The wallet transaction was submitted. Waiting for backend confirmation of the exact on-chain claim.',
+      noticeTitle: 'Confirming transaction',
+      message: PENDING_VERIFICATION_MESSAGE,
       noticeTone: 'info',
     });
 
@@ -294,13 +347,14 @@ export default function SubmitClaimPage() {
         interestId: record.interestId,
         txHash,
       });
-      const status = mergeVerificationResponse(claimId, response, txHash);
+      const workflowStatus = mergeVerificationResponse(claimId, response, txHash);
 
-      if (notify && status === CLAIM_UI_STATUS.CONFIRMED) {
+      if (notify && workflowStatus === CLAIM_WORKFLOW_STATUS.CONFIRMED) {
         toast.success('Claim confirmed', {
-          description: 'The backend verified the submitted ONCHAINID claim transaction.',
+          description: 'Your claim has been confirmed successfully.',
         });
       }
+      return workflowStatus;
     } catch (error) {
       if (isRetryableBackendError(error)) {
         updateClaimUi(claimId, {
@@ -308,7 +362,8 @@ export default function SubmitClaimPage() {
           stage: '',
           txHash,
           errorCode: backendErrorCode(error),
-          noticeTitle: 'Verification pending',
+          requestId: backendRequestId(error),
+          noticeTitle: backendErrorCode(error) === 'RPC_UNAVAILABLE' ? 'Check unavailable' : 'Verification pending',
           message: PENDING_VERIFICATION_MESSAGE,
           noticeTone: 'warning',
         });
@@ -316,15 +371,16 @@ export default function SubmitClaimPage() {
         if (notify) {
           toast.warning('Verification pending', { description: PENDING_VERIFICATION_MESSAGE });
         }
+        return CLAIM_WORKFLOW_STATUS.PENDING_CONFIRMATION;
       } else {
-        const message = getErrorMessage(error, 'The backend rejected this claim transaction.');
+        const message = getErrorMessage(error, 'We couldn’t confirm this claim. Please try again.');
         const code = backendErrorCode(error);
-        investorClaimRecoveryStore.remove(record.interestId, claimId);
         updateClaimUi(claimId, {
           status: CLAIM_UI_STATUS.FAILED,
           stage: '',
           txHash,
           errorCode: code,
+          requestId: backendRequestId(error),
           noticeTitle: 'Claim verification failed',
           message,
           noticeTone: 'error',
@@ -333,6 +389,7 @@ export default function SubmitClaimPage() {
         if (notify) {
           toast.error('Claim verification failed', { description: message });
         }
+        return '';
       }
     } finally {
       verificationLocksRef.current.delete(claimId);
@@ -344,10 +401,34 @@ export default function SubmitClaimPage() {
     const records = investorClaimRecoveryStore.list(interestUid);
     if (!records.length) return;
 
-    await Promise.all(
-      records.map((record) => verifySubmittedTransaction(record, { notify })),
-    );
-  }, [interestUid, verifySubmittedTransaction]);
+    await Promise.all(records.map(async (record) => {
+      const claimId = String(record?.claimId || '').trim();
+      if (!claimId || retryLocksRef.current.has(claimId) || pollingInFlightRef.current.has(claimId)) return;
+      retryLocksRef.current.add(claimId);
+      try {
+        const response = await investorApi.retryClaim(claimId, { interestId: interestUid });
+        const workflowStatus = mergeVerificationResponse(claimId, response, record.txHash);
+        if (notify && workflowStatus === CLAIM_WORKFLOW_STATUS.CONFIRMED) {
+          toast.success('Claim confirmed', {
+            description: 'Your claim has been confirmed successfully.',
+          });
+        }
+      } catch (error) {
+        updateClaimUi(claimId, {
+          status: CLAIM_UI_STATUS.VERIFYING,
+          stage: '',
+          txHash: record.txHash,
+          errorCode: backendErrorCode(error),
+          requestId: backendRequestId(error),
+          noticeTitle: 'Status check unavailable',
+          message: getErrorMessage(error, 'We couldn’t check your transaction right now. Please try again shortly.'),
+          noticeTone: 'warning',
+        });
+      } finally {
+        retryLocksRef.current.delete(claimId);
+      }
+    }));
+  }, [interestUid, mergeVerificationResponse, updateClaimUi]);
 
   const loadClaimContext = useCallback(async ({ silent = false } = {}) => {
     if (!interestUid) return;
@@ -419,7 +500,7 @@ export default function SubmitClaimPage() {
               txHash: claim?.txHash || '',
               errorCode: claim?.failureReason || '',
               noticeTitle: 'Claim verification failed',
-              message: claim?.failureReason || 'The previous claim submission failed backend verification.',
+              message: claim?.failureReason || 'The previous claim submission couldn’t be confirmed. Please try again.',
               noticeTone: 'error',
             };
             return;
@@ -526,32 +607,193 @@ export default function SubmitClaimPage() {
   }, [interestUid, loading, recoverPendingTransactions]);
 
   useEffect(() => {
-    if (!interestUid) return undefined;
+    if (!interestUid || !claimContext?.claims) return undefined;
 
-    const retry = async () => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-      if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+    const timers = [];
+    const processingClaimIds = new Set();
 
-      if (investorClaimRecoveryStore.list(interestUid).length) {
-        await recoverPendingTransactions();
+    claimContext.claims.forEach((claim) => {
+      const claimId = claimIdOf(claim);
+      if (!claimId) return;
+
+      const ui = claimUi[claimId] || {};
+      const status = ui.status || backendClaimStatus(claim);
+      if (![CLAIM_UI_STATUS.VERIFYING, CLAIM_UI_STATUS.WAITING].includes(status)) {
+        pollingMetaRef.current.delete(claimId);
+        return;
+      }
+      if (ui.pollingTimedOut) return;
+
+      processingClaimIds.add(claimId);
+      const type = status === CLAIM_UI_STATUS.WAITING ? 'SYNCING' : 'CONFIRMING';
+      let meta = pollingMetaRef.current.get(claimId);
+      if (!meta || meta.type !== type) {
+        meta = { type, startedAt: Date.now(), attempt: 0 };
+        pollingMetaRef.current.set(claimId, meta);
       }
 
-      // A refresh can happen while the backend is unavailable. Keep retrying the
-      // screen context silently so the page recovers without asking the investor to
-      // create another blockchain transaction or manually reload the browser.
-      if (!claimContext) {
-        await loadClaimContext({ silent: true });
+      if (Date.now() - meta.startedAt >= MAX_AUTO_POLL_DURATION_MS) {
+        updateClaimUi(claimId, {
+          pollingTimedOut: true,
+          noticeTitle:
+            status === CLAIM_UI_STATUS.WAITING
+              ? 'Still processing'
+              : 'Still confirming',
+          message:
+            status === CLAIM_UI_STATUS.WAITING
+              ? 'This is taking longer than usual. Try again to check the latest status.'
+              : 'This is taking longer than usual. You can check the status again in a moment.',
+          noticeTone: 'warning',
+        });
+        return;
       }
-    };
 
-    const timer = window.setInterval(() => void retry(), RECOVERY_RETRY_INTERVAL_MS);
-    const handleOnline = () => void retry();
-    window.addEventListener('online', handleOnline);
-    return () => {
-      window.clearInterval(timer);
-      window.removeEventListener('online', handleOnline);
-    };
-  }, [claimContext, interestUid, loadClaimContext, recoverPendingTransactions]);
+      const delay = status === CLAIM_UI_STATUS.WAITING
+        ? SYNC_POLL_INTERVAL_MS
+        : CONFIRMATION_POLL_DELAYS_MS[
+            Math.min(meta.attempt, CONFIRMATION_POLL_DELAYS_MS.length - 1)
+          ];
+
+      const timer = window.setTimeout(async () => {
+        if (pollingInFlightRef.current.has(claimId) || retryLocksRef.current.has(claimId)) return;
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+          updateClaimUi(claimId, { pollingTick: Date.now() });
+          return;
+        }
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+          updateClaimUi(claimId, { pollingTick: Date.now() });
+          return;
+        }
+
+        pollingInFlightRef.current.add(claimId);
+        try {
+          if (status === CLAIM_UI_STATUS.WAITING) {
+            const response = await investorApi.getClaims(interestUid);
+            const claims = Array.isArray(response?.claims) ? response.claims : [];
+            const refreshedClaim = claims.find((item) => claimIdOf(item) === claimId);
+            if (!refreshedClaim) {
+              updateClaimUi(claimId, { pollingTick: Date.now() });
+              return;
+            }
+
+            setClaimContext((current) => current
+              ? {
+                  ...current,
+                  ...response,
+                  claims,
+                }
+              : current);
+
+            const refreshedStatus = backendClaimStatus(refreshedClaim);
+            if (refreshedStatus === CLAIM_UI_STATUS.CONFIRMED) {
+              investorClaimRecoveryStore.remove(interestUid, claimId);
+              pollingMetaRef.current.delete(claimId);
+              updateClaimUi(claimId, {
+                status: CLAIM_UI_STATUS.CONFIRMED,
+                txHash: refreshedClaim?.txHash || '',
+                confirmedAt: refreshedClaim?.confirmedAt || '',
+                errorCode: '',
+                requestId: '',
+                pollingTimedOut: false,
+                noticeTitle: '',
+                message: '',
+                noticeTone: '',
+              });
+              await loadClaimContext({ silent: true });
+              return;
+            }
+
+            if (refreshedStatus === CLAIM_UI_STATUS.FAILED) {
+              pollingMetaRef.current.delete(claimId);
+              updateClaimUi(claimId, {
+                status: CLAIM_UI_STATUS.FAILED,
+                txHash: refreshedClaim?.txHash || ui.txHash || '',
+                errorCode: refreshedClaim?.failureReason || '',
+                requestId: response?.requestId || '',
+                pollingTimedOut: false,
+                noticeTitle: 'Claim verification failed',
+                message: refreshedClaim?.failureReason || 'We couldn’t finish processing this claim. Please try again.',
+                noticeTone: 'error',
+              });
+              return;
+            }
+
+            if (refreshedStatus === CLAIM_UI_STATUS.VERIFYING) {
+              updateClaimUi(claimId, {
+                status: CLAIM_UI_STATUS.VERIFYING,
+                txHash: refreshedClaim?.txHash || ui.txHash || '',
+                requestId: response?.requestId || '',
+                pollingTimedOut: false,
+                noticeTitle: 'Transaction is confirming',
+                message: PENDING_VERIFICATION_MESSAGE,
+                noticeTone: 'warning',
+              });
+              return;
+            }
+
+            if (refreshedStatus === CLAIM_UI_STATUS.PENDING) {
+              pollingMetaRef.current.delete(claimId);
+              updateClaimUi(claimId, {
+                status: CLAIM_UI_STATUS.PENDING,
+                txHash: '',
+                requestId: response?.requestId || '',
+                pollingTimedOut: false,
+                noticeTitle: 'Ready to try again',
+                message: 'Try again when you’re ready to continue your claim submission.',
+                noticeTone: 'info',
+              });
+              return;
+            }
+
+            updateClaimUi(claimId, {
+              status: CLAIM_UI_STATUS.WAITING,
+              requestId: response?.requestId || '',
+              noticeTitle: 'Processing claim',
+              message: PENDING_GATHERING_MESSAGE,
+              noticeTone: 'warning',
+              pollingTick: Date.now(),
+            });
+            return;
+          }
+
+          meta.attempt += 1;
+          const response = await investorApi.retryClaim(claimId, { interestId: interestUid });
+          const workflowStatus = mergeVerificationResponse(claimId, response, ui.txHash || claim?.txHash || '');
+          if (workflowStatus === CLAIM_WORKFLOW_STATUS.CONFIRMED) {
+            pollingMetaRef.current.delete(claimId);
+            await loadClaimContext({ silent: true });
+          } else {
+            updateClaimUi(claimId, { pollingTick: Date.now() });
+          }
+        } catch (error) {
+          const code = backendErrorCode(error);
+          updateClaimUi(claimId, {
+            status,
+            errorCode: code,
+            requestId: backendRequestId(error),
+            noticeTitle: code === 'RPC_UNAVAILABLE' ? 'Check unavailable' : 'Status check unavailable',
+            message: getErrorMessage(
+              error,
+              code === 'RPC_UNAVAILABLE'
+                ? 'We couldn’t check the latest status right now. Please try again in a few moments.'
+                : 'The latest claim status could not be checked right now.',
+            ),
+            noticeTone: 'warning',
+            pollingTick: Date.now(),
+          });
+        } finally {
+          pollingInFlightRef.current.delete(claimId);
+        }
+      }, delay);
+      timers.push(timer);
+    });
+
+    Array.from(pollingMetaRef.current.keys()).forEach((claimId) => {
+      if (!processingClaimIds.has(claimId)) pollingMetaRef.current.delete(claimId);
+    });
+
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [claimContext?.claims, claimUi, interestUid, loadClaimContext, mergeVerificationResponse, updateClaimUi]);
 
   const displayClaims = useMemo(
     () =>
@@ -593,31 +835,32 @@ export default function SubmitClaimPage() {
   );
   const isClaimScreenAllowed = CLAIM_SCREEN_STATUSES.has(backendStatus);
 
-  const handleClaimSubmit = useCallback(async (claim, { allowWaiting = false } = {}) => {
+  const handleClaimSubmit = useCallback(async (claim, { allowWaiting = false, ignoreRecovery = false, force = false } = {}) => {
     const claimId = claimIdOf(claim);
     if (!claimId || submissionLocksRef.current.has(claimId)) return;
 
     const currentStatus = claimUi[claimId]?.status || backendClaimStatus(claim);
-    if (
+    if (!force && (
       currentStatus === CLAIM_UI_STATUS.CONFIRMED ||
       currentStatus === CLAIM_UI_STATUS.SUBMITTING ||
       currentStatus === CLAIM_UI_STATUS.VERIFYING ||
       (currentStatus === CLAIM_UI_STATUS.WAITING && !allowWaiting)
-    ) {
+    )) {
       return;
     }
 
     const recoveryRecord = investorClaimRecoveryStore.get(interestUid, claimId);
-    if (recoveryRecord) {
+    if (recoveryRecord && !ignoreRecovery) {
       updateClaimUi(claimId, {
         status: CLAIM_UI_STATUS.VERIFYING,
         stage: '',
         txHash: recoveryRecord.txHash,
-        noticeTitle: 'Verification pending',
+        noticeTitle: 'Transaction is confirming',
         message: PENDING_VERIFICATION_MESSAGE,
         noticeTone: 'warning',
+        pollingTimedOut: false,
+        pollingTick: Date.now(),
       });
-      await verifySubmittedTransaction(recoveryRecord, { notify: true });
       return;
     }
 
@@ -664,8 +907,9 @@ export default function SubmitClaimPage() {
         stage: 'PREPARING',
         txHash: '',
         errorCode: '',
+        requestId: '',
         noticeTitle: 'Preparing claim',
-        message: 'Validating this claim with the backend before opening your wallet.',
+        message: 'Getting your claim ready. This may take a moment.',
         noticeTone: 'info',
       });
 
@@ -676,7 +920,7 @@ export default function SubmitClaimPage() {
 
       const preparedClaimId = claimIdOf(preparedClaim);
       if (!preparedClaim || !preparedClaimId || preparedClaimId !== claimId) {
-        const error = new Error('The backend returned claim preparation data for a different or invalid claim.');
+        const error = new Error('We couldn’t prepare this claim. Please refresh and try again.');
         error.code = 'INVALID_PREPARE_RESPONSE';
         throw error;
       }
@@ -703,7 +947,7 @@ export default function SubmitClaimPage() {
             }
           : current);
         toast.success('Claim already confirmed', {
-          description: 'The backend confirmed that this claim has already been completed. No new wallet transaction was created.',
+          description: 'This claim has already been completed.',
         });
         submissionLocksRef.current.delete(claimId);
         void loadClaimContext({ silent: true });
@@ -711,7 +955,7 @@ export default function SubmitClaimPage() {
       }
 
       if (preparedStatusValue !== 'pending') {
-        const error = new Error('The backend did not return this claim in a submit-ready state. Refresh the claim requirements and try again.');
+        const error = new Error('This claim isn’t ready to submit yet. Refresh the claim requirements and try again.');
         error.code = 'CLAIM_NOT_PREPARED';
         throw error;
       }
@@ -720,18 +964,20 @@ export default function SubmitClaimPage() {
         status: CLAIM_UI_STATUS.SUBMITTING,
         stage: 'WALLET',
         errorCode: '',
-        noticeTitle: 'Confirm in your wallet',
-        message: 'Review the ONCHAINID claim transaction and confirm it in your connected wallet.',
+        requestId: prepareResponse?.requestId || '',
+        noticeTitle: 'Awaiting signature',
+        message: 'Confirm the transaction in your wallet.',
         noticeTone: 'info',
       });
     } catch (error) {
-      const message = getErrorMessage(error, 'The backend could not prepare this claim for submission.');
+      const message = getErrorMessage(error, 'We couldn’t get this claim ready for submission.');
       const code = backendErrorCode(error) || String(error?.code || '');
       updateClaimUi(claimId, {
         status: CLAIM_UI_STATUS.PENDING,
         stage: '',
         txHash: '',
         errorCode: code,
+        requestId: backendRequestId(error),
         noticeTitle: 'Claim preparation failed',
         message,
         noticeTone: 'error',
@@ -763,12 +1009,16 @@ export default function SubmitClaimPage() {
         stage: '',
         txHash,
         errorCode: '',
-        noticeTitle: 'Verifying transaction',
-        message: 'Transaction submitted successfully. The backend is verifying the exact on-chain claim.',
+        requestId: '',
+        noticeTitle: 'Transaction submitted',
+        message: PENDING_VERIFICATION_MESSAGE,
         noticeTone: 'info',
       });
 
-      await verifySubmittedTransaction(recovery, { notify: true });
+      const workflowStatus = await verifySubmittedTransaction(recovery, { notify: true });
+      if (workflowStatus === CLAIM_WORKFLOW_STATUS.CONFIRMED) {
+        await loadClaimContext({ silent: true });
+      }
     } catch (error) {
       if (isInvestorClaimWalletRejection(error)) {
         updateClaimUi(claimId, {
@@ -823,105 +1073,178 @@ export default function SubmitClaimPage() {
     wallet.isCorrectNetwork,
   ]);
 
-  const handlePendingClaimRetry = useCallback(async (claim) => {
+  const handleClaimRetry = useCallback(async (claim) => {
     const claimId = claimIdOf(claim);
-    if (!claimId || !interestUid || retryLocksRef.current.has(claimId)) return;
+    if (!claimId || !interestUid || retryLocksRef.current.has(claimId) || pollingInFlightRef.current.has(claimId)) return;
 
     const currentStatus = claimUi[claimId]?.status || backendClaimStatus(claim);
-    if (currentStatus !== CLAIM_UI_STATUS.WAITING) return;
+    if ([CLAIM_UI_STATUS.CONFIRMED, CLAIM_UI_STATUS.SUBMITTING].includes(currentStatus)) return;
 
     retryLocksRef.current.add(claimId);
+    pollingMetaRef.current.delete(claimId);
     updateClaimUi(claimId, {
-      status: CLAIM_UI_STATUS.WAITING,
+      status: currentStatus,
       retrying: true,
+      pollingTimedOut: false,
       errorCode: '',
+      requestId: '',
       noticeTitle: 'Checking claim status',
-      message: 'Checking the blockchain and syncing the latest claim status with the platform. No new transaction will be sent.',
+      message: 'Checking the latest claim status. This may take a moment.',
       noticeTone: 'info',
     });
 
     try {
-      // Retry is intentionally reconciliation-first. The backend checks the investor
-      // Identity contract for an already-emitted ClaimAdded/ClaimChanged event before
-      // the frontend considers creating another wallet transaction.
       const response = await investorApi.retryClaim(claimId, { interestId: interestUid });
-      const returnedStatus = backendClaimStatus(response?.claim);
+      const workflowStatus = mergeVerificationResponse(
+        claimId,
+        response,
+        claimUi[claimId]?.txHash || claim?.txHash || '',
+      );
 
-      if (response?.detected === true || returnedStatus === CLAIM_UI_STATUS.CONFIRMED) {
-        mergeVerificationResponse(claimId, response, response?.claim?.txHash || '');
-        toast.success('Claim status synced', {
-          description: 'The on-chain claim was detected and the application status has been updated.',
-        });
-        await loadClaimContext({ silent: true });
-        return;
+      switch (workflowStatus) {
+        case CLAIM_WORKFLOW_STATUS.CONFIRMED:
+          toast.success('Claim confirmed', {
+            description: 'Your claim is already confirmed.',
+          });
+          await loadClaimContext({ silent: true });
+          return;
+
+        case CLAIM_WORKFLOW_STATUS.PENDING_CONFIRMATION:
+          toast.info('Transaction is confirming', {
+            description: PENDING_VERIFICATION_MESSAGE,
+          });
+          return;
+
+        case CLAIM_WORKFLOW_STATUS.SYNCING:
+          toast.info('Claim is processing', {
+            description: PENDING_GATHERING_MESSAGE,
+          });
+          return;
+
+        case CLAIM_WORKFLOW_STATUS.TRANSACTION_REQUIRED:
+          // Retry may open a wallet only after this explicit backend workflow status.
+          // The submit helper performs a fresh Prepare immediately before the wallet call.
+          await handleClaimSubmit(claim, {
+            allowWaiting: true,
+            ignoreRecovery: true,
+            force: true,
+          });
+          return;
+
+        default: {
+          const error = new Error('The retry response did not include a supported workflow status.');
+          error.code = 'INVALID_RETRY_RESPONSE';
+          throw error;
+        }
       }
+    } catch (error) {
+      const httpStatus = Number(error?.response?.status || 0);
+      const code = backendErrorCode(error) || String(error?.code || '');
+      const requestId = backendRequestId(error);
+      const message = getErrorMessage(error, 'We could not check the claim status right now.');
 
-      // If we already know a transaction hash, never ask the investor to sign again.
-      // Re-run phase 2 against that exact transaction instead. This covers the case
-      // where the wallet transaction succeeded but the original backend sync failed.
-      const localRecovery = investorClaimRecoveryStore.get(interestUid, claimId);
-      const knownTxHash = [
-        localRecovery?.txHash,
-        claimUi[claimId]?.txHash,
-        claim?.txHash,
-        response?.claim?.txHash,
-      ].find((candidate) => validTransactionHash(candidate));
-
-      if (knownTxHash) {
-        const recoveryRecord = investorClaimRecoveryStore.upsert({
-          interestId: interestUid,
-          claimId,
-          txHash: knownTxHash,
-          createdAt: localRecovery?.createdAt || claim?.submittedAt || new Date().toISOString(),
-        });
-
+      if (httpStatus === 404 && code === 'CLAIM_SUBMISSION_NOT_PREPARED') {
         updateClaimUi(claimId, {
-          status: CLAIM_UI_STATUS.VERIFYING,
+          status: CLAIM_UI_STATUS.PENDING,
           retrying: false,
-          txHash: knownTxHash,
-          errorCode: '',
-          noticeTitle: 'Verifying existing transaction',
-          message: 'An existing blockchain transaction was found. We are syncing it with the platform; your wallet will not open again.',
+          errorCode: code,
+          requestId,
+          noticeTitle: 'Getting claim ready',
+          message: 'One more step is needed before you can continue. Please wait a moment.',
           noticeTone: 'info',
         });
+        await handleClaimSubmit(claim, {
+          allowWaiting: true,
+          ignoreRecovery: true,
+          force: true,
+        });
+        return;
+      }
 
-        await verifySubmittedTransaction(recoveryRecord, { notify: true });
+      if (httpStatus === 503 || code === 'RPC_UNAVAILABLE') {
+        updateClaimUi(claimId, {
+          status: currentStatus,
+          retrying: false,
+          pollingTimedOut: true,
+          errorCode: code,
+          requestId,
+          noticeTitle: 'Check unavailable',
+          message,
+          noticeTone: 'warning',
+        });
+        toast.warning('Check unavailable', { description: message });
+        return;
+      }
+
+      if (httpStatus === 403) {
+        updateClaimUi(claimId, {
+          status: currentStatus,
+          retrying: false,
+          blocked: true,
+          errorCode: code,
+          requestId,
+          noticeTitle: 'Access denied',
+          message,
+          noticeTone: 'error',
+        });
+        return;
+      }
+
+      if (httpStatus === 409) {
+        updateClaimUi(claimId, {
+          status: currentStatus,
+          retrying: false,
+          errorCode: code,
+          requestId,
+          noticeTitle: 'Application status changed',
+          message,
+          noticeTone: 'warning',
+        });
         await loadClaimContext({ silent: true });
         return;
       }
 
-      // The backend did not detect a matching on-chain event and neither the backend
-      // nor local recovery state has a transaction hash. In this case the previous
-      // flow stopped before a blockchain transaction was created. Re-enter the normal
-      // prepare -> wallet -> submit flow so MetaMask opens only after backend validation.
+      if (httpStatus === 422 && code === 'INVALID_INVESTOR_IDENTITY') {
+        updateClaimUi(claimId, {
+          status: CLAIM_UI_STATUS.FAILED,
+          retrying: false,
+          blocked: true,
+          errorCode: code,
+          requestId,
+          noticeTitle: 'Investor identity action required',
+          message,
+          noticeTone: 'error',
+        });
+        return;
+      }
+
+      if (httpStatus === 422) {
+        await loadClaimContext({ silent: true });
+        updateClaimUi(claimId, {
+          status: currentStatus === CLAIM_UI_STATUS.FAILED
+            ? CLAIM_UI_STATUS.FAILED
+            : CLAIM_UI_STATUS.PENDING,
+          retrying: false,
+          blocked: false,
+          errorCode: code,
+          requestId,
+          noticeTitle: 'Claim verification needs attention',
+          message,
+          noticeTone: 'error',
+        });
+        return;
+      }
+
       updateClaimUi(claimId, {
-        status: CLAIM_UI_STATUS.PENDING,
+        status: currentStatus,
         retrying: false,
-        txHash: '',
-        errorCode: '',
-        noticeTitle: 'No previous transaction detected',
-        message: 'No existing claim transaction was found on-chain. We’ll validate the claim again and open your wallet so you can submit it.',
-        noticeTone: 'info',
-      });
-      toast.info('No previous transaction detected', {
-        description: 'Your wallet will open only after the backend prepares and validates the claim again.',
-      });
-      await handleClaimSubmit(claim, { allowWaiting: true });
-      return;
-    } catch (error) {
-      const message = getErrorMessage(
-        error,
-        'We could not sync the claim status right now. Please wait a moment and retry the status check.',
-      );
-      updateClaimUi(claimId, {
-        status: CLAIM_UI_STATUS.WAITING,
-        retrying: false,
-        errorCode: backendErrorCode(error),
+        errorCode: code,
+        requestId,
         noticeTitle: 'Status check unavailable',
         message,
         noticeTone: 'warning',
       });
-      toast.warning('Unable to sync claim status', { description: message });
+      toast.warning('Unable to check claim status', { description: message });
     } finally {
       retryLocksRef.current.delete(claimId);
       updateClaimUi(claimId, { retrying: false });
@@ -933,7 +1256,6 @@ export default function SubmitClaimPage() {
     loadClaimContext,
     mergeVerificationResponse,
     updateClaimUi,
-    verifySubmittedTransaction,
   ]);
 
   if (loading) {
@@ -961,7 +1283,7 @@ export default function SubmitClaimPage() {
         </p>
         {hasPendingRecovery ? (
           <small className="submit-claim-recovery-count">
-            {localPendingRecoveryCount} submitted claim transaction{localPendingRecoveryCount === 1 ? '' : 's'} waiting for backend verification.
+            {localPendingRecoveryCount} submitted claim{localPendingRecoveryCount === 1 ? '' : 's'} waiting for confirmation.
           </small>
         ) : null}
         <div className="submit-claim-empty-actions">
@@ -1009,7 +1331,7 @@ export default function SubmitClaimPage() {
       <header className="submit-claim-header">
         <div>
           <div className="submit-claim-title-line">
-            <h1>Complete On-Chain Verification</h1>
+            <h1>Complete Claim Submission</h1>
             {allClaimsConfirmed ? (
               <span className="submit-claim-complete-badge"><CheckCircle2 size={13} /> Claims Confirmed</span>
             ) : processingClaimCount > 0 ? (
@@ -1020,11 +1342,11 @@ export default function SubmitClaimPage() {
           </div>
           <p>
             {allClaimsConfirmed ? (
-              <>All required claims for <strong>{token.name} ({token.symbol})</strong> are confirmed on-chain and ready for the next registry step.</>
+              <>All required claims for <strong>{token.name} ({token.symbol})</strong> are confirmed and ready for the next step.</>
             ) : processingClaimCount > 0 ? (
-              <>We’re processing the pending claim details for <strong>{token.name} ({token.symbol})</strong>. You do not need to submit another blockchain transaction while a claim is pending.</>
+              <>Your claim for <strong>{token.name} ({token.symbol})</strong> is being processed. No action is needed right now.</>
             ) : (
-              <>Your off-chain eligibility has been confirmed by the issuer. Submit the issuer-approved claims required for <strong>{token.name} ({token.symbol})</strong> to complete the next verification step.</>
+              <>Your eligibility has been approved by the issuer. Submit the required claims for <strong>{token.name} ({token.symbol})</strong> to continue.</>
             )}
           </p>
         </div>
@@ -1072,11 +1394,15 @@ export default function SubmitClaimPage() {
                 const status = ui.status || CLAIM_UI_STATUS.PENDING;
                 const stateMeta = claimStateMeta(status, ui.stage);
                 const StateIcon = stateMeta.Icon;
-                const isProcessing = [CLAIM_UI_STATUS.SUBMITTING, CLAIM_UI_STATUS.VERIFYING].includes(status);
+                const isSubmitting = status === CLAIM_UI_STATUS.SUBMITTING;
+                const isConfirming = status === CLAIM_UI_STATUS.VERIFYING;
                 const isWaiting = status === CLAIM_UI_STATUS.WAITING;
                 const isConfirmed = status === CLAIM_UI_STATUS.CONFIRMED;
                 const isFailed = status === CLAIM_UI_STATUS.FAILED;
+                const isNotInitiated = normalizeStatus(claim?.status) === 'notinitiated';
+                const shouldRetryBeforeWallet = isFailed || (status === CLAIM_UI_STATUS.PENDING && !isNotInitiated);
                 const missingClaimId = !claimId;
+                const explorerUrl = transactionExplorerUrl(ui.txHash);
 
                 return (
                   <Card
@@ -1095,7 +1421,7 @@ export default function SubmitClaimPage() {
                       </span>
                       <p>
                         {isWaiting
-                          ? 'No action is required while this claim is processing. If it remains stuck, Retry first checks the existing on-chain state and only reopens your wallet when no prior claim transaction is found.'
+                          ? 'Your claim is being processed. No action is needed right now.'
                           : claimTopicDescription(claim, metadata, label)}
                       </p>
 
@@ -1103,51 +1429,86 @@ export default function SubmitClaimPage() {
                         <div className={`submit-claim-notice is-${ui.noticeTone || 'info'}`} role={ui.noticeTone === 'error' ? 'alert' : 'status'}>
                           <strong>{ui.noticeTitle}</strong>
                           <span>{ui.message}</span>
-                          {ui.errorCode ? <small>{ui.errorCode}</small> : null}
+                          {ui.errorCode || ui.requestId ? (
+                            <small className="submit-claim-diagnostics">
+                              {ui.errorCode ? `Code: ${ui.errorCode}` : ''}
+                              {ui.errorCode && ui.requestId ? ' · ' : ''}
+                              {ui.requestId ? `Request ID: ${ui.requestId}` : ''}
+                            </small>
+                          ) : null}
                         </div>
                       ) : null}
                     </div>
                     <div className="submit-claim-topic-card__action">
                       <div className="submit-claim-topic-card__action-buttons">
                         <Button
-                          onClick={() => void handleClaimSubmit(claim)}
-                          disabled={isConfirmed || isWaiting || isProcessing || missingClaimId}
-                          loading={isProcessing}
-                          variant={isFailed ? 'secondary' : 'primary'}
+                          onClick={() => void (shouldRetryBeforeWallet ? handleClaimRetry(claim) : handleClaimSubmit(claim))}
+                          disabled={
+                            isConfirmed ||
+                            isWaiting ||
+                            isConfirming ||
+                            missingClaimId ||
+                            Boolean(ui.blocked)
+                          }
+                          loading={isSubmitting || Boolean(ui.retrying)}
+                          variant={shouldRetryBeforeWallet ? 'secondary' : 'primary'}
                         >
                           {isConfirmed
                             ? <><CheckCircle2 size={16} /> Claim Confirmed</>
                             : isWaiting
-                              ? <><Clock3 size={16} /> Processing Claim</>
-                              : status === CLAIM_UI_STATUS.SUBMITTING
-                                ? ui.stage === 'PREPARING' ? 'Preparing Claim' : 'Waiting for Wallet'
-                                : status === CLAIM_UI_STATUS.VERIFYING
-                                  ? 'Verifying Claim'
-                                  : isFailed
+                              ? <><Clock3 size={16} /> Processing</>
+                              : isSubmitting
+                                ? ui.stage === 'PREPARING' ? 'Getting Claim Ready' : 'Confirm in Wallet'
+                                : isConfirming
+                                  ? <><Clock3 size={16} /> Confirming</>
+                                  : shouldRetryBeforeWallet
                                     ? <><RefreshCw size={16} /> Retry Claim</>
-                                    : <>Submit Claim to Blockchain <WalletCards size={16} /></>}
+                                    : <>Submit Claim <WalletCards size={16} /></>}
                         </Button>
-                        {isWaiting && !missingClaimId ? (
+                        {isConfirming && !missingClaimId ? (
                           <Button
                             variant="secondary"
                             icon={RefreshCw}
                             loading={Boolean(ui.retrying)}
-                            disabled={Boolean(ui.retrying)}
-                            onClick={() => void handlePendingClaimRetry(claim)}
+                            disabled={Boolean(ui.retrying) || Boolean(ui.blocked)}
+                            onClick={() => void handleClaimRetry(claim)}
                           >
-                            Retry Claim
+                            Check status
+                          </Button>
+                        ) : null}
+                        {isWaiting && ui.pollingTimedOut && !missingClaimId ? (
+                          <Button
+                            variant="secondary"
+                            icon={RefreshCw}
+                            loading={Boolean(ui.retrying)}
+                            disabled={Boolean(ui.retrying) || Boolean(ui.blocked)}
+                            onClick={() => void handleClaimRetry(claim)}
+                          >
+                            Retry
                           </Button>
                         ) : null}
                       </div>
                       <small>
                         {missingClaimId
-                          ? 'A valid claim identifier was not returned by the backend.'
+                          ? 'This claim is temporarily unavailable. Please refresh and try again.'
                           : isWaiting
-                            ? 'Retry checks existing on-chain state first. Your wallet opens only if no previous claim transaction is found.'
-                          : ui.txHash
-                            ? `Transaction ${ui.txHash.slice(0, 10)}…${ui.txHash.slice(-8)}`
-                            : `Separate wallet transaction · ${web3Config.requiredChain.name}`}
+                            ? 'Your claim is being processed. No action is needed right now.'
+                            : isConfirming
+                              ? 'Your transaction is being confirmed. You can check the status again at any time.'
+                              : shouldRetryBeforeWallet
+                                ? 'Try again to continue your claim submission.'
+                                : `Ready to submit · ${web3Config.requiredChain.name}`}
                       </small>
+                      {explorerUrl ? (
+                        <a
+                          className="submit-claim-explorer-link"
+                          href={explorerUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          View transaction on block explorer
+                        </a>
+                      ) : null}
                     </div>
                   </Card>
                 );
@@ -1157,8 +1518,8 @@ export default function SubmitClaimPage() {
             <Card className="submit-claim-no-topics">
               <Info size={22} />
               <div>
-                <strong>No issuer-approved claims were returned</strong>
-                <p>The backend did not return any signed claims for this application. Refresh the page or contact the issuer before continuing.</p>
+                <strong>No approved claims are available right now</strong>
+                <p>Refresh the page or contact the issuer if you believe claims should be available.</p>
               </div>
             </Card>
           )}
@@ -1171,9 +1532,9 @@ export default function SubmitClaimPage() {
               <strong>{confirmedClaimCount} of {displayClaims.length} confirmed</strong>
               <span>
                 {allClaimsConfirmed
-                  ? 'All required claims are backend-confirmed.'
+                  ? 'All required claims are confirmed.'
                   : processingClaimCount
-                    ? `${processingClaimCount} claim${processingClaimCount === 1 ? ' is' : 's are'} being processed. No additional blockchain transaction is required.`
+                    ? `${processingClaimCount} claim${processingClaimCount === 1 ? ' is' : 's are'} being processed.`
                     : failedClaimCount
                       ? `${failedClaimCount} claim${failedClaimCount === 1 ? '' : 's'} need${failedClaimCount === 1 ? 's' : ''} attention.`
                       : 'Submit each required claim independently.'}
@@ -1197,16 +1558,16 @@ export default function SubmitClaimPage() {
                       <strong>{label}</strong>
                       <small>
                         {confirmed
-                          ? 'Confirmed by backend'
+                          ? 'Confirmed'
                           : waiting
-                            ? 'Processing — no further action required'
+                            ? 'Processing'
                           : submitting
-                            ? preparing ? 'Backend validation in progress' : 'Waiting for wallet confirmation'
+                            ? preparing ? 'Getting claim ready' : 'Waiting for your confirmation'
                             : verifying
-                              ? 'Verifying submitted transaction'
+                              ? 'Confirming transaction'
                               : failed
                                 ? 'Verification failed — retry available'
-                                : 'Ready for on-chain submission'}
+                                : 'Ready to submit'}
                       </small>
                     </div>
                   </div>
@@ -1217,7 +1578,7 @@ export default function SubmitClaimPage() {
                   {allClaimsConfirmed ? <CheckCircle2 size={11} /> : <Circle size={7} fill="currentColor" />}
                 </span>
                 <div>
-                  <strong>Registry Sync</strong>
+                  <strong>Next Step</strong>
                   <small>
                     {allClaimsConfirmed
                       ? 'Ready for the next registry step'
@@ -1233,8 +1594,8 @@ export default function SubmitClaimPage() {
           <Card className="submit-claim-network-card">
             <div className="submit-claim-network-card__title"><Info size={18} /><strong>Network Information</strong></div>
             <p>
-              Claims are submitted from your registered investor wallet on <strong>{web3Config.requiredChain.name}</strong>.
-              The backend independently verifies each resulting transaction before the claim is shown as confirmed.
+              Claims are submitted using your registered investor wallet on <strong>{web3Config.requiredChain.name}</strong>.
+              When a transaction is required, simply follow the prompt in your wallet to continue.
             </p>
           </Card>
 
@@ -1242,7 +1603,7 @@ export default function SubmitClaimPage() {
             <span className="submit-claim-help-card__icon"><HelpCircle size={19} /></span>
             <div>
               <strong>Need assistance?</strong>
-              <p>Review your application details and issuer decision before starting the on-chain claim flow.</p>
+              <p>Review your application details and issuer decision before continuing with claim submission.</p>
               <button type="button" onClick={() => navigate(ROUTES.applicationDetail(interestUid))}>View Application Details</button>
             </div>
           </Card>

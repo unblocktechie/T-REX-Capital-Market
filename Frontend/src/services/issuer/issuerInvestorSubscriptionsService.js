@@ -54,7 +54,25 @@ const apiService = {
   getClaimVerification(subscriptionId) {
     return issuerClaimsApi.getVerification(subscriptionId);
   },
+
+  prepareRegistryRegistration(interestUid) {
+    return investmentApi.prepareIssuerRegistryRegistration(interestUid);
+  },
+
+  getRegistryRegistration(interestUid) {
+    return investmentApi.getIssuerRegistryRegistration(interestUid);
+  },
+
+  confirmRegistryRegistration(interestUid, registryOperationId, txHash) {
+    return investmentApi.confirmIssuerRegistryRegistration(
+      interestUid,
+      registryOperationId,
+      txHash,
+    );
+  },
 };
+
+const mockRegistryRegistrations = new Map();
 
 const mockService = {
   async listRequests() {
@@ -120,6 +138,49 @@ const mockService = {
       verifiedClaimCount: 0,
       claims: [],
     };
+  },
+
+  async prepareRegistryRegistration(interestUid) {
+    const existing = mockRegistryRegistrations.get(interestUid);
+    if (existing) return existing;
+
+    const registration = {
+      registryOperationId: `mock-registry-${interestUid}`,
+      subscriptionId: interestUid,
+      tokenId: 'mock-token',
+      status: 'PENDING',
+      chainId: 11155111,
+      identityRegistryAddress: '0x0000000000000000000000000000000000000001',
+      investorWalletAddress: '0x0000000000000000000000000000000000000002',
+      onchainIdentityAddress: '0x0000000000000000000000000000000000000003',
+      country: 356,
+      txHash: null,
+    };
+    mockRegistryRegistrations.set(interestUid, registration);
+    return registration;
+  },
+
+  async getRegistryRegistration(interestUid) {
+    const existing = mockRegistryRegistrations.get(interestUid);
+    if (!existing) {
+      const error = new Error('Registry registration has not been prepared yet.');
+      error.response = { status: 404 };
+      throw error;
+    }
+    return existing;
+  },
+
+  async confirmRegistryRegistration(interestUid, registryOperationId, txHash) {
+    const existing = mockRegistryRegistrations.get(interestUid);
+    const registration = {
+      ...(existing || {}),
+      registryOperationId,
+      subscriptionId: interestUid,
+      status: 'CONFIRMED',
+      txHash,
+    };
+    mockRegistryRegistrations.set(interestUid, registration);
+    return registration;
   },
 };
 

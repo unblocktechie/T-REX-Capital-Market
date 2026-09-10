@@ -32,6 +32,10 @@ const interestStatusToMarketplace = (interestStatus) => {
     case 'claim_submitted':
     case 'claim-submitted':
       return MARKETPLACE_STATUS.CLAIMS_SUBMITTED;
+    case 'registered':
+    case 'ready_to_invest':
+    case 'ready-to-invest':
+      return MARKETPLACE_STATUS.READY_TO_INVEST;
     case 'approved':
       return MARKETPLACE_STATUS.APPROVED;
     case 'rejected':

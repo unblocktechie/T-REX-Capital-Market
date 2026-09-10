@@ -1,4 +1,5 @@
-import { CheckCircle2, Clock3, XCircle } from 'lucide-react';
+import { CheckCircle2, Clock3, ShoppingCart, XCircle } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { formatDate } from '@/utils/date';
 
@@ -18,9 +19,11 @@ const summaryStatusMeta = (status) => {
   return { label: 'Pending Review', tone: 'pending', Icon: Clock3 };
 };
 
-export function ApplicationSummary({ application, history }) {
+export function ApplicationSummary({ application, history, purchaseReady = false, onPurchase }) {
   const status = application?.interest?.status || history?.status || application?.status || '';
-  const meta = summaryStatusMeta(status);
+  const meta = purchaseReady
+    ? { label: 'Action Required', tone: 'warning', Icon: CheckCircle2 }
+    : summaryStatusMeta(status);
   const Icon = meta.Icon;
   const issuer = application?.issuer && application.issuer !== '—' ? application.issuer : '—';
   const token = [application?.name, application?.symbol ? `(${application.symbol})` : ''].filter(Boolean).join(' ');
@@ -38,7 +41,16 @@ export function ApplicationSummary({ application, history }) {
       <div className="application-detail-summary__status">
         <span className="application-detail-summary__status-icon"><Icon size={28} /></span>
         <span className={`application-detail-summary__badge is-${meta.tone}`}>{meta.label}</span>
-        {meta.tone === 'danger' ? (
+        {purchaseReady ? (
+          <>
+            <p>You are eligible to invest in this token. Choose Invest to continue.</p>
+            {onPurchase ? (
+              <Button className="application-detail-summary__purchase" icon={ShoppingCart} onClick={onPurchase}>
+                Invest
+              </Button>
+            ) : null}
+          </>
+        ) : meta.tone === 'danger' ? (
           <p>Your application was rejected. Please review the reason.</p>
         ) : ['verifiedbyissuer', 'verified'].includes(normalizeStatus(status)) ? (
           <p>Your application has been approved by the issuer. Submit the required claim to complete verification and enable your investment.</p>

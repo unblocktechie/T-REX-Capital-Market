@@ -15,6 +15,7 @@ import {
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { formatDate } from '@/utils/date';
+import { isRegistryRegistrationConfirmedEvent } from '@/utils/investmentPurchase';
 import { ContactSupportDialog } from './ContactSupportDialog';
 
 const normalizeStatus = (status) => String(status || '')
@@ -36,6 +37,12 @@ const isClaimVerificationEvent = (event, currentStatus) => {
 
 const eventMeta = (event, { viewerRole = '', currentStatus = '' } = {}) => {
   const claimVerificationEvent = isClaimVerificationEvent(event, currentStatus);
+
+  if (isRegistryRegistrationConfirmedEvent(event)) {
+    return viewerRole === 'investor'
+      ? { title: 'Purchase Available', tone: 'success', Icon: CheckCircle2, badge: 'Ready to Purchase' }
+      : { title: 'Investor Added to Registry', tone: 'success', Icon: CheckCircle2, badge: 'Added to Registry' };
+  }
 
   if (claimVerificationEvent && viewerRole === 'investor') {
     return { title: 'Verification Approved', tone: 'success', Icon: CheckCircle2, badge: 'Approved' };
@@ -69,7 +76,13 @@ const formatBytes = (value) => {
   return `${(bytes / (1024 * 1024)).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1)} MB`;
 };
 
-const defaultEventCopy = (event) => {
+const defaultEventCopy = (event, viewerRole = '') => {
+  if (isRegistryRegistrationConfirmedEvent(event)) {
+    return viewerRole === 'investor'
+      ? 'You can now purchase this token.'
+      : 'This investor is now eligible to purchase the token.';
+  }
+
   switch (String(event?.eventType || '').toLowerCase()) {
     case 'claimsubmitted': return 'All required investor claims were successfully submitted and verified on-chain.';
     case 'approved': return 'This application has been approved.';
@@ -228,7 +241,7 @@ export function ApplicationHistoryItem({
             ) : (
               <div className={`application-history-message is-${meta.tone}`}>
                 <FileCheck2 size={16} />
-                <span>{event.note || defaultEventCopy(event)}</span>
+                <span>{isRegistryRegistrationConfirmedEvent(event) ? defaultEventCopy(event, viewerRole) : (event.note || defaultEventCopy(event, viewerRole))}</span>
               </div>
             )}
 

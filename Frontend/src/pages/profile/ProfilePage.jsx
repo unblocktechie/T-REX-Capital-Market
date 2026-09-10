@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { isAddress } from 'viem';
 import { toast } from 'sonner';
 import {
   CalendarDays,
@@ -16,6 +17,7 @@ import { investorApi } from '@/api/investor/investor.api';
 import { mapInvestorDocument } from '@/api/investor/investor.mapper';
 import { investmentApi } from '@/api/investments';
 import { mapEligibility } from '@/api/investments/investment.mapper';
+import { CompactAddress } from '@/components/common/CompactAddress';
 import { InvestorDocumentList } from '@/components/investor/InvestorDocumentReview';
 import { TypedDocumentUploader } from '@/components/investor/TypedDocumentUploader';
 import { Button } from '@/components/ui/Button';
@@ -306,11 +308,19 @@ function InvestorProfilePage() {
           </div>
           <div>
             <span><ShieldCheck size={17} /> ONCHAINID</span>
-            <strong title={profile.onchainId}>{profile.onchainId || 'Created'}</strong>
+            {profile.onchainId && isAddress(profile.onchainId, { strict: false }) ? (
+              <CompactAddress value={profile.onchainId} label="ONCHAINID address" leading={5} trailing={5} />
+            ) : (
+              <strong>{profile.onchainId || 'Created'}</strong>
+            )}
           </div>
           <div>
             <span><WalletCards size={17} /> Primary Wallet</span>
-            <strong title={walletAddress}>{walletAddress}</strong>
+            {isAddress(walletAddress, { strict: false }) ? (
+              <CompactAddress value={walletAddress} label="Primary wallet address" leading={5} trailing={5} />
+            ) : (
+              <strong>{walletAddress}</strong>
+            )}
           </div>
           <div>
             <span><WalletCards size={17} /> Wallet Network</span>
