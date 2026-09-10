@@ -92,6 +92,13 @@ is no admin verification step — the on-chain identity creation replaces it.
 ```json
 { "walletAddress": "0x..." }
 ```
+
+The wallet is normalized to lowercase and may belong to only one submitted investor profile,
+regardless of the account email address. If another submitted investor already owns it, the API
+returns HTTP `409` with code `INVESTOR_WALLET_ALREADY_REGISTERED` before making a blockchain call.
+The database-generated `registeredWalletAddress` and unique index provide the same guarantee for
+concurrent requests. Draft or failed submissions do not reserve a wallet until they become
+`submitted`.
 On success `data` includes `status: "submitted"`, `contractAddress` (the OnchainID identity
 address), `onchainIdReference` (same address), `contractTxnHash`, `contractTxnMessage`, and
 `profileReference` (`INV-XXXXXXXX`).
@@ -104,6 +111,7 @@ hash/message are recorded so the user can retry. Requires `SEPOLIA_RPC_URL`,
 ## Data model
 
 - `investorMaster` — one row per user (`ukInvestorMasterUserUid`): identity + compliance fields,
+  with one normalized wallet per submitted investor (`ukInvestorMasterRegisteredWallet`),
   wallet + profile reference, `currentStep` / `isDraft` / `status`.
 - `investorDocumentTypeMaster` — KYC + accredited document types with `documentCategory`.
 - `investorInvestmentCategory` — child table (replace-pattern) for the multi-select categories.

@@ -43,6 +43,16 @@ const calculateAge = (value) => {
 };
 
 const generateProfileReference = () => `INV-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+const normalizeWalletAddress = (walletAddress) => String(walletAddress).trim().toLowerCase();
+const walletAlreadyRegisteredError = () => new ApiError(
+  409,
+  'This wallet address is already registered to another investor account.',
+  undefined,
+  'INVESTOR_WALLET_ALREADY_REGISTERED',
+);
+
+const isRegisteredWalletDuplicate = (error) => error?.code === 'ER_DUP_ENTRY'
+  && String(error.sqlMessage || error.message || '').includes('ukInvestorMasterRegisteredWallet');
 
 class InvestorService {
   constructor({ repository, optionRepository, locationService, identityService, investmentService = null, transactionRunner = withTransaction }) {
@@ -263,6 +273,16 @@ class InvestorService {
     const investor = await this.repository.findByUserUid(user.userUid);
     if (!investor) throw ApiError.badRequest('Investor onboarding has not been started.');
     this.assertEditable(investor);
+    const normalizedWalletAddress = normalizeWalletAddress(walletAddress);
+
+    // A wallet represents one investor identity regardless of the email/account used.
+    // This early check avoids an unnecessary blockchain call in the normal duplicate case;
+    // the generated unique key in investorMaster remains the final concurrent-request guard.
+    const walletOwner = await this.repository.findSubmittedByWalletAddress(
+      normalizedWalletAddress,
+      investor.investorUid,
+    );
+    if (walletOwner) throw walletAlreadyRegisteredError();
 
     requireFields(investor, [
       'firstName', 'lastName', 'dateOfBirth', 'streetAddress', 'countryUid', 'stateUid', 'cityUid',
@@ -287,11 +307,11 @@ class InvestorService {
     try {
       // Same OnchainID identity factory call the organization approval uses
       // (createOrganizationIdentity is the generic getIdentity/createIdentity routine).
-      contractResult = await this.identityService.createOrganizationIdentity(walletAddress, `investor-${investor.investorUid}`);
+      contractResult = await this.identityService.createOrganizationIdentity(normalizedWalletAddress, `investor-${investor.investorUid}`);
     } catch (error) {
       const contractTxnMessage = this.identityFailureMessage(error);
       await this.repository.updateByUserUid(user.userUid, {
-        walletAddress,
+        walletAddress: normalizedWalletAddress,
         contractTxnHash: error.transactionHash || null,
         contractTxnMessage,
       });
@@ -302,18 +322,23 @@ class InvestorService {
       ? 'On-chain investor identity already existed; onboarding submitted successfully.'
       : 'On-chain investor identity created; onboarding submitted successfully.';
 
-    return this.repository.updateByUserUid(user.userUid, {
-      walletAddress,
-      profileReference: investor.profileReference || generateProfileReference(),
-      onchainIdReference: contractResult.identityAddress,
-      contractAddress: contractResult.identityAddress,
-      contractTxnHash: contractResult.txHash,
-      contractTxnMessage,
-      currentStep: 'completed',
-      isDraft: false,
-      status: 'submitted',
-      submittedAt: new Date(),
-    });
+    try {
+      return await this.repository.updateByUserUid(user.userUid, {
+        walletAddress: normalizedWalletAddress,
+        profileReference: investor.profileReference || generateProfileReference(),
+        onchainIdReference: contractResult.identityAddress,
+        contractAddress: contractResult.identityAddress,
+        contractTxnHash: contractResult.txHash,
+        contractTxnMessage,
+        currentStep: 'completed',
+        isDraft: false,
+        status: 'submitted',
+        submittedAt: new Date(),
+      });
+    } catch (error) {
+      if (isRegisteredWalletDuplicate(error)) throw walletAlreadyRegisteredError();
+      throw error;
+    }
   }
 }
 

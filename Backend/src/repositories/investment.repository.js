@@ -80,7 +80,7 @@ class InvestmentRepository {
 
   async findMarketplaceTokenByUid(tokenUid, executor) {
     const rows = await execute(
-      `SELECT ${MARKETPLACE_TOKEN_COLUMNS}
+      `SELECT ${MARKETPLACE_TOKEN_COLUMNS}, t.\`treasuryWalletAddress\`
        ${MARKETPLACE_TOKEN_FROM}
        WHERE t.\`tokenUid\` = ? AND t.\`isDeleted\` = 0 LIMIT 1`,
       [tokenUid],

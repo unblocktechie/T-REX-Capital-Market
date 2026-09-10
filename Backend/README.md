@@ -82,7 +82,7 @@ npm test
 npm start
 ```
 
-See [API documentation](docs/API.md), [investor claim flow](docs/INVESTOR-CLAIM-SUBMISSION.md), [frontend claim Retry guide](docs/FRONTEND-INVESTOR-CLAIM-RETRY-GUIDE.md), [global claim indexer](docs/CLAIM-INDEXER.md), [targeted claim recovery](docs/CLAIM-RECOVERY-RUNNER.md), [frontend organization guide](docs/FRONTEND-ORGANIZATION-GUIDE.md), [frontend token guide](docs/FRONTEND-TOKEN-CREATION-GUIDE.md), [testing guide](docs/TESTING.md), [OpenAPI specification](docs/openapi.yaml), [editable database diagram](docs/trex-capital-market-database.excalidraw), and the import-ready [Postman collection](postman/Trex%20Capital%20Market%20Backend.postman_collection.json).
+See [API documentation](docs/API.md), [investor claim flow](docs/INVESTOR-CLAIM-SUBMISSION.md), [frontend claim Retry guide](docs/FRONTEND-INVESTOR-CLAIM-RETRY-GUIDE.md), [global claim indexer](docs/CLAIM-INDEXER.md), [targeted claim recovery](docs/CLAIM-RECOVERY-RUNNER.md), [frontend organization guide](docs/FRONTEND-ORGANIZATION-GUIDE.md), [frontend token guide](docs/FRONTEND-TOKEN-CREATION-GUIDE.md), [frontend token purchase guide](docs/FRONTEND-TOKEN-PURCHASE-FLOW-GUIDE.md), [testing guide](docs/TESTING.md), [OpenAPI specification](docs/openapi.yaml), [editable database diagram](docs/trex-capital-market-database.excalidraw), and the import-ready [Postman collection](postman/Trex%20Capital%20Market%20Backend.postman_collection.json).
 
 ## Response contract
 

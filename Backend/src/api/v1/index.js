@@ -46,6 +46,7 @@ const createV1Router = () => {
   router.use('/investments', createInvestmentRouter({
     controller: dependencies.controllers.investments,
     registryController: dependencies.controllers.registryRegistrations,
+    purchaseController: dependencies.controllers.tokenPurchases,
     authenticate: dependencies.authenticate,
     authorize: dependencies.authorize,
   }));

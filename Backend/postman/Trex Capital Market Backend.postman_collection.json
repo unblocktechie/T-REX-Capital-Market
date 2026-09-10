@@ -255,6 +255,22 @@
     {
       "key": "registryTxHash",
       "value": "PASTE_ISSUER_REGISTER_IDENTITY_TX_HASH"
+    },
+    {
+      "key": "purchaseUid",
+      "value": ""
+    },
+    {
+      "key": "purchasePaymentTxHash",
+      "value": "PASTE_INVESTOR_USDT_TRANSFER_HASH"
+    },
+    {
+      "key": "purchaseIdempotencyKey",
+      "value": "checkout-20260910-0001"
+    },
+    {
+      "key": "purchaseTokenAmount",
+      "value": "10.25"
     }
   ],
   "item": [
@@ -1835,7 +1851,7 @@
                 },
                 {
                   "key": "tokenDescription",
-									"value": "Institutional security token for the T-REX Capital Market sample flow.",
+                  "value": "Institutional security token for the T-REX Capital Market sample flow.",
                   "type": "text"
                 },
                 {
@@ -2470,7 +2486,7 @@
               }
             },
             "url": "{{baseUrl}}/api/v1/investors/me/submit",
-            "description": "Finalize onboarding. Validates the full form + at least one KYC and one accreditation document, records the wallet, and sets status to submitted directly (no verification)."
+            "description": "Finalize onboarding. Validates the full form + at least one KYC and one accreditation document, normalizes the wallet, creates/reuses its ONCHAINID, and sets status to submitted. A wallet already used by another submitted investor returns 409 INVESTOR_WALLET_ALREADY_REGISTERED before any blockchain call."
           },
           "event": [
             {
@@ -2550,7 +2566,7 @@
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/api/v1/investments/tokens/{{investmentTokenUid}}",
-            "description": "Full token details plus maxInvestors, maxBalancePerInvestor, countryRestrictionMode, countryRestrictions (code/name/numericCode), organizationCountryName/Code, and requiredClaimTopics."
+            "description": "Full token details plus treasuryWalletAddress, maxInvestors, maxBalancePerInvestor, countryRestrictionMode, countryRestrictions (code/name/numericCode), organizationCountryName/Code, and requiredClaimTopics."
           },
           "event": [
             {
@@ -2572,6 +2588,95 @@
             "url": "{{baseUrl}}/api/v1/investments/tokens/{{investmentTokenUid}}/image",
             "description": "Streams the optimized token image (admin + investor)."
           }
+        },
+        {
+          "name": "Create Pending Token Purchase",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{investorToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tokenAmount\": \"{{purchaseTokenAmount}}\",\n  \"idempotencyKey\": \"{{purchaseIdempotencyKey}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/investments/tokens/{{investmentTokenUid}}/purchases",
+            "description": "Requires a registered investment interest. Creates PENDING_PAYMENT before MetaMask and returns backend-authoritative USDT contract, treasury recipient, token amount, exact raw USDT amount, and expiration.expiresAt. If MetaMask is abandoned and no hash is sent, the background worker changes the intent to EXPIRED; create a new intent with a new idempotency key."
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('Purchase intent created/resumed', () => pm.expect([200, 201]).to.include(pm.response.code));",
+              "const data = pm.response.json().data;",
+              "if (data?.purchaseUid) pm.collectionVariables.set('purchaseUid', data.purchaseUid);",
+              "pm.expect(data.status).to.eql('PENDING_PAYMENT');",
+              "pm.expect(data.expiration.expiresAt).to.be.a('string');",
+              "console.log('Call USDT transfer to', data.treasuryWalletAddress, 'for raw amount', data.usdtAmountRaw);"
+            ] }
+          }]
+        },
+        {
+          "name": "List Token Purchase History",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{investorToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/investments/tokens/{{investmentTokenUid}}/purchases?page=1&limit=20&search=&status=all",
+            "description": "Returns only the authenticated investor's purchases for this token, newest first. Supports search across IDs, hashes, addresses, and amounts plus lifecycle status filtering. Use data.status for table state and meta for pagination."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Purchase history fetched', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.expect(body.data).to.be.an('array');",
+            "pm.expect(body.meta).to.have.keys('page', 'limit', 'total', 'totalPages');"
+          ] } }]
+        },
+        {
+          "name": "Confirm USDT Purchase Payment",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{investorToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"txHash\": \"{{purchasePaymentTxHash}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/investments/purchases/{{purchaseUid}}/confirm",
+            "description": "Send only the MetaMask USDT transfer hash before expiration. Backend verifies chain, sender, USDT contract, transfer recipient/amount, receipt, confirmations, and event, then performs and verifies the platform-agent mint. Valid persisted lifecycle outcomes always return HTTP 200; inspect data.status."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Current purchase state returned', () => pm.response.to.have.status(200));",
+            "pm.expect(pm.response.json().data.status).to.be.oneOf(['PENDING_PAYMENT', 'PAYMENT_CONFIRMED', 'MINT_SUBMITTED', 'COMPLETED', 'EXPIRED']);"
+          ] } }]
+        },
+        {
+          "name": "Get Token Purchase Settlement",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{investorToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/investments/purchases/{{purchaseUid}}",
+            "description": "Poll until COMPLETED. Returns full USDT payment metadata, platform mint metadata, synchronization/error state, and append-only transactionHistory."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Purchase settlement fetched', () => pm.response.to.have.status(200));",
+            "console.log('Purchase status:', pm.response.json().data?.status);"
+          ] } }]
+        },
+        {
+          "name": "Retry Token Purchase Reconciliation",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{investorToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/investments/purchases/{{purchaseUid}}/retry",
+            "description": "Queues idempotent payment/mint recovery. It never creates a duplicate payment row or blindly submits a second mint. Returns 200 if already complete, otherwise 202."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Purchase retry accepted/completed', () => pm.expect([200, 202]).to.include(pm.response.code));"
+          ] } }]
         },
         {
           "name": "Get Required Documents (Eligibility)",

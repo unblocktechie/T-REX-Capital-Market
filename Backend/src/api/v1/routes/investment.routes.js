@@ -6,7 +6,7 @@ const schemas = require('../../../schemas/investment.schema');
 // All investment routes are authenticated + DB-authorized (permissionMaster). The
 // marketplace list/detail/image are granted to admin + investor; the journey endpoints to
 // investor; the review endpoints to issuer. See 20260909_add_investment_journey.sql.
-const createInvestmentRouter = ({ controller, registryController, authenticate, authorize }) => {
+const createInvestmentRouter = ({ controller, registryController, purchaseController, authenticate, authorize }) => {
   const router = express.Router();
   router.use(authenticate);
 
@@ -14,6 +14,38 @@ const createInvestmentRouter = ({ controller, registryController, authenticate, 
   router.get('/tokens', validate({ query: schemas.listTokensQuery }), authorize, asyncHandler(controller.listTokens));
   router.get('/tokens/:tokenUid', validate({ params: schemas.tokenParams }), authorize, asyncHandler(controller.getToken));
   router.get('/tokens/:tokenUid/image', validate({ params: schemas.tokenParams }), authorize, asyncHandler(controller.tokenImage));
+
+  // Backend-authoritative USDT purchase intent -> payment verification -> platform-agent mint.
+  router.post(
+    '/tokens/:tokenUid/purchases',
+    validate({ params: schemas.tokenParams, body: schemas.createPurchase }),
+    authorize,
+    asyncHandler(purchaseController.create),
+  );
+  router.get(
+    '/tokens/:tokenUid/purchases',
+    validate({ params: schemas.tokenParams, query: schemas.purchaseHistoryQuery }),
+    authorize,
+    asyncHandler(purchaseController.history),
+  );
+  router.get(
+    '/purchases/:purchaseUid',
+    validate({ params: schemas.purchaseParams }),
+    authorize,
+    asyncHandler(purchaseController.get),
+  );
+  router.post(
+    '/purchases/:purchaseUid/confirm',
+    validate({ params: schemas.purchaseParams, body: schemas.confirmPurchase }),
+    authorize,
+    asyncHandler(purchaseController.confirm),
+  );
+  router.post(
+    '/purchases/:purchaseUid/retry',
+    validate({ params: schemas.purchaseParams, body: schemas.emptyBody }),
+    authorize,
+    asyncHandler(purchaseController.retry),
+  );
 
   // Investor journey.
   router.get(

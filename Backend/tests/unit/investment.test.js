@@ -15,6 +15,7 @@ const ACC = { claimTopicUid: 'ct-acc', claimTopicCode: 'ACCREDITED_INVESTOR', cl
 const deployedToken = {
   tokenUid: 'tok-1', organizationUid: 'org-1', tokenName: 'Acme', tokenSymbol: 'ACM',
   decimals: 18, initialTokenPrice: '1.50', imageStorageKey: 'img.webp', imageMimeType: 'image/webp',
+  treasuryWalletAddress: `0x${'9'.repeat(40)}`,
   maxInvestors: 100, maxHolder: 100, maxBalancePerInvestor: '5000', countryRestrictionMode: 'allow',
   organizationCountryName: 'United States', organizationCountryCode: 'US',
   status: 'deployed',
@@ -141,6 +142,12 @@ test('an admin may filter by any status; an investor is forced to deployed', asy
   const i = makeService();
   await i.service.listTokens(investor, { status: 'draft' });
   assert.equal(i.state.listArgs.status, 'deployed');
+});
+
+test('token details include the treasury wallet address', async () => {
+  const { service } = makeService();
+  const result = await service.getTokenDetails('tok-1');
+  assert.equal(result.treasuryWalletAddress, deployedToken.treasuryWalletAddress);
 });
 
 test('my-interests returns token cap fields', async () => {

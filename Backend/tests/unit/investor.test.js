@@ -17,6 +17,7 @@ const makeRepo = (seed = null) => ({
   kyc: 0,
   accredited: 0,
   async findByUserUid() { return this.investor; },
+  async findSubmittedByWalletAddress() { return this.walletOwner || null; },
   async createForUser(userUid, data) {
     this.investor = { investorUid: 'inv-1', userUid, status: 'draft', currentStep: 'identityDetails', ...data };
     return { ...this.investor };
@@ -233,6 +234,50 @@ test('submit fails without the required documents, then succeeds and finalizes a
   assert.equal(result.onchainIdReference, IDENTITY_ADDR);
   assert.equal(result.contractAddress, IDENTITY_ADDR);
   assert.equal(result.contractTxnHash, IDENTITY_TX);
+});
+
+test('submit rejects a wallet already registered to another investor before calling the blockchain', async () => {
+  const repo = makeRepo(completeInvestor());
+  repo.walletOwner = { investorUid: 'inv-2', userUid: 'user-2', status: 'submitted' };
+  let identityCalls = 0;
+  const service = makeService(repo, {
+    identityService: {
+      createOrganizationIdentity: async () => {
+        identityCalls += 1;
+        return { identityAddress: IDENTITY_ADDR, txHash: IDENTITY_TX, alreadyExisted: true };
+      },
+    },
+  });
+
+  await assert.rejects(
+    service.submit(investor, { walletAddress: `0x${'A'.repeat(40)}` }),
+    (error) => error.statusCode === 409 && error.code === 'INVESTOR_WALLET_ALREADY_REGISTERED',
+  );
+  assert.equal(identityCalls, 0);
+  assert.equal(repo.investor.status, 'draft');
+});
+
+test('submit translates a concurrent registered-wallet unique conflict into the wallet-specific response', async () => {
+  const repo = makeRepo(completeInvestor());
+  repo.categories = ['public_markets'];
+  repo.kyc = 1;
+  repo.accredited = 1;
+  repo.updateByUserUid = async (userUid, data) => {
+    if (data.status === 'submitted') {
+      const error = new Error("Duplicate entry for key 'ukInvestorMasterRegisteredWallet'");
+      error.code = 'ER_DUP_ENTRY';
+      error.sqlMessage = error.message;
+      throw error;
+    }
+    repo.investor = { ...repo.investor, ...data };
+    return { ...repo.investor };
+  };
+  const service = makeService(repo);
+
+  await assert.rejects(
+    service.submit(investor, { walletAddress: `0x${'2'.repeat(40)}` }),
+    (error) => error.statusCode === 409 && error.code === 'INVESTOR_WALLET_ALREADY_REGISTERED',
+  );
 });
 
 test('submit returns 502 and stays draft when on-chain identity creation fails', async () => {

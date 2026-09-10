@@ -112,6 +112,16 @@ const env = Object.freeze({
     deploymentAttemptTtlMinutes: Number(process.env.DEPLOYMENT_ATTEMPT_TTL_MINUTES || 20),
     // Master switch for the background deployment-sync runner (overrides the DB setting when false).
     deploymentSyncEnabled: booleanValue(process.env.TREX_DEPLOYMENT_SYNC_ENABLED, true),
+    purchaseUsdtAddress: process.env.PURCHASE_USDT_ADDRESS || '0x8fC7e68897bd74c4B6340d2DC857a7ED2677aF6A',
+    // The interactive confirm API may accept a successfully mined payment earlier than the
+    // conservative worker finality threshold so it can submit the platform mint immediately.
+    purchasePaymentConfirmations: Number(process.env.PURCHASE_PAYMENT_CONFIRMATIONS || 1),
+    purchaseConfirmations: Number(process.env.PURCHASE_CONFIRMATIONS || 12),
+    // A payment intent with no submitted hash is abandoned after this period. The worker
+    // applies an additional indexed-chain grace period before changing it to EXPIRED.
+    purchaseIntentTtlMinutes: Number(process.env.PURCHASE_INTENT_TTL_MINUTES || 15),
+    purchaseIndexerStartBlock: Number(process.env.PURCHASE_INDEXER_START_BLOCK || 0),
+    purchaseWorkerEnabled: booleanValue(process.env.PURCHASE_WORKER_ENABLED, true),
   },
 });
 

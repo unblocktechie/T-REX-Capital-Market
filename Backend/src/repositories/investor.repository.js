@@ -26,6 +26,23 @@ class InvestorRepository {
     return rows[0] || null;
   }
 
+  async findSubmittedByWalletAddress(walletAddress, excludeInvestorUid = null, executor) {
+    const params = [walletAddress];
+    const exclusion = excludeInvestorUid ? 'AND i.`investorUid` <> ?' : '';
+    if (excludeInvestorUid) params.push(excludeInvestorUid);
+    const rows = await execute(
+      `SELECT i.*
+       FROM \`investorMaster\` i
+       WHERE LOWER(TRIM(i.\`walletAddress\`)) = LOWER(TRIM(?))
+         AND i.\`status\` = 'submitted'
+         ${exclusion}
+       LIMIT 1`,
+      params,
+      executor,
+    );
+    return rows[0] || null;
+  }
+
   async createForUser(userUid, data, executor) {
     const investorUid = createUid();
     const entries = Object.entries(data).filter(([field, value]) => investorFields.includes(field) && value !== undefined);

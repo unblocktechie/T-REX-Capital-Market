@@ -406,3 +406,73 @@ ONCHAINID, and at least one `SIGNED` issuer claim. Use the investor JWT.
    FROM tokenInvestmentInterestHistory
    WHERE interestUid = 'INTEREST_UID' AND eventType = 'registered';
    ```
+
+## Investor token purchase and mint settlement
+
+1. Configure Sepolia RPC, platform signer, and `PURCHASE_USDT_ADDRESS`. Confirm the platform wallet
+   is a Token Agent for the deployed token and use an investor interest with status `registered`.
+2. Create an intent:
+
+   ```bash
+   curl -X POST http://localhost:3000/api/v1/investments/tokens/TOKEN_UID/purchases \
+     -H "Authorization: Bearer INVESTOR_TOKEN" -H "Content-Type: application/json" \
+     -d '{"tokenAmount":"10.25","idempotencyKey":"checkout-20260910-0001"}'
+   ```
+
+   Expect `201 PENDING_PAYMENT`. Repeat the same key and expect the same row. Copy the returned
+   USDT contract, treasury address, and `usdtAmountRaw` exactly.
+3. From the registered investor wallet, call USDT `transfer(treasuryWalletAddress,
+   usdtAmountRaw)` in MetaMask. Send only the resulting hash:
+
+   ```bash
+   curl -X POST http://localhost:3000/api/v1/investments/purchases/PURCHASE_UID/confirm \
+     -H "Authorization: Bearer INVESTOR_TOKEN" -H "Content-Type: application/json" \
+     -d '{"txHash":"0xPAYMENT_HASH"}'
+   ```
+
+   With both purchase confirmation settings at `1`, normally expect `COMPLETED` from the same API
+   request. Confirm that `mint.txHash`, block number/hash, transaction index, log index, gas used,
+   effective gas price and confirmation timestamp are populated. Confirm always returns HTTP `200`
+   for a persisted lifecycle result; `data.status` shows whether verification/minting is pending.
+4. If step 3 returns `PENDING_PAYMENT`, `PAYMENT_CONFIRMED`, or `MINT_SUBMITTED`, poll
+   `GET /api/v1/investments/purchases/PURCHASE_UID`. The worker verifies the already-submitted mint
+   and progresses it to `COMPLETED`. While waiting, expect `syncStatus: QUEUED`, transaction-history
+   status `PENDING`, and no purchase error.
+5. Negative checks: wrong sender, USDT contract, treasury, amount, function, reverted receipt,
+   reused hash, unregistered interest, inactive token, and an amount over the holder cap must not
+   confirm or mint.
+6. Missing-payment-hash recovery: create intent, transfer USDT, omit confirm, and wait. The global
+   USDT indexer must match and verify the exact stored intent.
+7. Missed-mint-hash recovery: after `mintPreparedAtBlock` is stored, simulate a process crash after
+   broadcast. The targeted token event scan must recover the zero-address Transfer hash without a
+   second mint.
+8. Inspect audit state:
+
+   ```sql
+   SELECT status, paymentTxHash, paymentVerifiedAt, mintStatus, mintTxHash, mintConfirmedAt,
+          errorStage, errorCode, syncStatus, syncAttempts
+   FROM tokenPurchase WHERE purchaseUid = 'PURCHASE_UID';
+
+   SELECT stage, txHash, status, blockNumber, blockHash, logIndex, gasUsed, confirmedAt
+   FROM tokenPurchaseTransaction WHERE purchaseUid = 'PURCHASE_UID' ORDER BY createdAt;
+
+   SELECT * FROM blockchainIndexerCheckpoint WHERE indexerName = 'tokenPurchasePayment';
+   ```
+
+9. Fetch `GET /api/v1/investments/tokens/TOKEN_UID/purchases?page=1&limit=20&search=&status=all` with the investor
+   token. Expect only that investor's rows for the selected token, newest first, and verify
+   `meta.page`, `meta.limit`, `meta.total`, and `meta.totalPages`. Repeat with
+   `status=COMPLETED`, `status=EXPIRED`, a transaction-hash `search`, and an amount `search`.
+
+10. Test an abandoned MetaMask payment. Create a purchase but do not call Confirm. For a quick local
+   test, set `PURCHASE_INTENT_TTL_MINUTES=1`, set `PurchaseIntentExpiryGraceSeconds` to `0`, restart
+   the backend, and wait for the purchase worker. Once the global USDT checkpoint reaches the safe
+   head, expect the row to become `EXPIRED`, with `expiredAt` populated and
+   `expirationReason='PAYMENT_NOT_SUBMITTED'`. Confirm must return HTTP `200` with the current
+   `EXPIRED` state; Retry must return `409 PURCHASE_EXPIRED`. Creating a fresh purchase with a new
+   idempotency key must succeed.
+
+   Also verify safety: submit a valid payment hash before the deadline and confirm that the runner
+   never expires that row, even if settlement remains queued. To simulate backend downtime, stop
+   the server after creating the intent, let the deadline pass, then restart it. The worker must
+   first catch the USDT indexer up; it expires the row only after catch-up and event matching.

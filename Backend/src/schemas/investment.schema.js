@@ -37,6 +37,33 @@ const registryRegistrationParams = Joi.object({
   registryRegistrationUid: uid.required(),
 });
 
+const purchaseParams = Joi.object({ purchaseUid: uid.required() });
+
+const purchaseHistoryQuery = Joi.object({
+  page: Joi.number().integer().min(1).default(1),
+  limit: Joi.number().integer().min(1).max(100).default(20),
+  search: Joi.string().trim().max(100).allow('').default(''),
+  status: Joi.string().valid(
+    'PENDING_PAYMENT',
+    'PAYMENT_CONFIRMED',
+    'MINT_SUBMITTED',
+    'COMPLETED',
+    'EXPIRED',
+    'all',
+  ).default('all'),
+});
+
+const createPurchase = Joi.object({
+  tokenAmount: Joi.string().trim().pattern(/^(?:0|[1-9]\d*)(?:\.\d+)?$/).max(80).required().messages({
+    'string.pattern.base': 'tokenAmount must be a positive decimal string.',
+  }),
+  idempotencyKey: Joi.string().trim().min(8).max(100).required(),
+});
+
+const confirmPurchase = Joi.object({
+  txHash: Joi.string().trim().lowercase().pattern(/^0x[a-fA-F0-9]{64}$/).required(),
+});
+
 const confirmRegistryRegistration = Joi.object({
   txHash: Joi.string().trim().lowercase().pattern(/^0x[a-fA-F0-9]{64}$/).required(),
 });
@@ -71,6 +98,10 @@ module.exports = {
   issuerInterestsQuery,
   interestParams,
   registryRegistrationParams,
+  purchaseParams,
+  purchaseHistoryQuery,
+  createPurchase,
+  confirmPurchase,
   confirmRegistryRegistration,
   emptyBody,
   interestDocumentParams,

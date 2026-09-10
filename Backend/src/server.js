@@ -22,6 +22,8 @@ const start = async () => {
   jobs.claimIndexerRunner.start();
   // IdentityRegistered global indexer + targeted recovery for PENDING registry operations.
   jobs.identityRegistryReconciliationRunner.start();
+  // USDT payment indexer + platform Token Agent mint/recovery worker.
+  jobs.tokenPurchaseReconciliationRunner.start();
 
   const shutdown = (signal) => {
     logger.info('Graceful shutdown started', { signal });
@@ -29,6 +31,7 @@ const start = async () => {
     jobs.claimRecoveryRunner.stop();
     jobs.claimIndexerRunner.stop();
     jobs.identityRegistryReconciliationRunner.stop();
+    jobs.tokenPurchaseReconciliationRunner.stop();
     server.close(async () => {
       await closePool();
       logger.info('Graceful shutdown completed');

@@ -464,6 +464,44 @@
       "rawText": "identityRegistryBlockchainEvent\n\nPK registryEventUid\nUQ chainId + txHash + logIndex\nREL matchedRegistrationUid\n  → identityRegistryRegistration\nchainId, identityRegistryAddress\ninvestorWalletAddress\ninvestorIdentityAddress\neventName: IdentityRegistered\ntxHash, blockNumber, blockHash\ntransactionIndex, logIndex\nprocessingStatus: NEW | MATCHED | UNMATCHED | FAILED\nprocessingAttempts, processingMessage, processedAt\nisCanonical, isActive, isDeleted\ncreatedAt, updatedAt\n\nRegistry global cursor reuses\nblockchainIndexerCheckpoint with\nindexerName = identityRegistryRegistration.",
       "originalText": "identityRegistryBlockchainEvent\n\nPK registryEventUid\nUQ chainId + txHash + logIndex\nREL matchedRegistrationUid\n  → identityRegistryRegistration\nchainId, identityRegistryAddress\ninvestorWalletAddress\ninvestorIdentityAddress\neventName: IdentityRegistered\ntxHash, blockNumber, blockHash\ntransactionIndex, logIndex\nprocessingStatus: NEW | MATCHED | UNMATCHED | FAILED\nprocessingAttempts, processingMessage, processedAt\nisCanonical, isActive, isDeleted\ncreatedAt, updatedAt\n\nRegistry global cursor reuses\nblockchainIndexerCheckpoint with\nindexerName = identityRegistryRegistration.",
       "textAlign": "left", "verticalAlign": "top", "containerId": null, "lineHeight": 1.25, "autoResize": true
+    },
+    {
+      "id": "tokenPurchaseBox", "type": "rectangle", "x": 60, "y": 2580, "width": 610, "height": 560, "angle": 0,
+      "strokeColor": "#047857", "backgroundColor": "#d1fae5", "fillStyle": "solid", "strokeWidth": 2,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "l0",
+      "roundness": { "type": 3 }, "seed": 2101, "version": 1, "versionNonce": 3101, "isDeleted": false,
+      "boundElements": null, "updated": 1787100000000, "link": null, "locked": false
+    },
+    {
+      "id": "tokenPurchaseText", "type": "text", "x": 85, "y": 2605, "width": 560, "height": 510, "angle": 0,
+      "strokeColor": "#064e3b", "backgroundColor": "transparent", "fillStyle": "solid", "strokeWidth": 1,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "l1",
+      "roundness": null, "seed": 2102, "version": 1, "versionNonce": 3102, "isDeleted": false,
+      "boundElements": null, "updated": 1787100000000, "link": null, "locked": false,
+      "fontSize": 16, "fontFamily": 3,
+      "text": "tokenPurchase\n\nPK purchaseUid\nUQ investorUserUid + idempotencyKey\nUQ activeInterestUid / activeInvestorUid\nUQ paymentTxHash / mintTxHash\nREL interestUid → tokenInvestmentInterest\nREL tokenUid → tokenMaster\nREL investorUid → investorMaster\nchain + USDT + token + investor + treasury + platform addresses\ntoken price/amount/raw + USDT amount/raw + decimals\nstatus: PENDING_PAYMENT → PAYMENT_CONFIRMED\n  → MINT_SUBMITTED → COMPLETED\n  or PENDING_PAYMENT → EXPIRED\nexpiresAt, expiredAt, expirationReason\npayment block/hash/log/gas/timestamps\nmint block/hash/log/gas/timestamps\nprepared/mintPrepared blocks\nerror stage/code/message\nsync status/attempts/timestamps\ncreatedAt, updatedAt",
+      "rawText": "tokenPurchase\n\nPK purchaseUid\nUQ investorUserUid + idempotencyKey\nUQ activeInterestUid / activeInvestorUid\nUQ paymentTxHash / mintTxHash\nREL interestUid → tokenInvestmentInterest\nREL tokenUid → tokenMaster\nREL investorUid → investorMaster\nchain + USDT + token + investor + treasury + platform addresses\ntoken price/amount/raw + USDT amount/raw + decimals\nstatus: PENDING_PAYMENT → PAYMENT_CONFIRMED\n  → MINT_SUBMITTED → COMPLETED\n  or PENDING_PAYMENT → EXPIRED\nexpiresAt, expiredAt, expirationReason\npayment block/hash/log/gas/timestamps\nmint block/hash/log/gas/timestamps\nprepared/mintPrepared blocks\nerror stage/code/message\nsync status/attempts/timestamps\ncreatedAt, updatedAt",
+      "originalText": "tokenPurchase\n\nPK purchaseUid\nUQ investorUserUid + idempotencyKey\nUQ activeInterestUid / activeInvestorUid\nUQ paymentTxHash / mintTxHash\nREL interestUid → tokenInvestmentInterest\nREL tokenUid → tokenMaster\nREL investorUid → investorMaster\nchain + USDT + token + investor + treasury + platform addresses\ntoken price/amount/raw + USDT amount/raw + decimals\nstatus: PENDING_PAYMENT → PAYMENT_CONFIRMED\n  → MINT_SUBMITTED → COMPLETED\n  or PENDING_PAYMENT → EXPIRED\nexpiresAt, expiredAt, expirationReason\npayment block/hash/log/gas/timestamps\nmint block/hash/log/gas/timestamps\nprepared/mintPrepared blocks\nerror stage/code/message\nsync status/attempts/timestamps\ncreatedAt, updatedAt",
+      "textAlign": "left", "verticalAlign": "top", "containerId": null, "lineHeight": 1.25, "autoResize": true
+    },
+    {
+      "id": "tokenPurchaseAuditBox", "type": "rectangle", "x": 700, "y": 2580, "width": 570, "height": 560, "angle": 0,
+      "strokeColor": "#0369a1", "backgroundColor": "#e0f2fe", "fillStyle": "solid", "strokeWidth": 2,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "l2",
+      "roundness": { "type": 3 }, "seed": 2103, "version": 1, "versionNonce": 3103, "isDeleted": false,
+      "boundElements": null, "updated": 1787100000000, "link": null, "locked": false
+    },
+    {
+      "id": "tokenPurchaseAuditText", "type": "text", "x": 725, "y": 2605, "width": 520, "height": 510, "angle": 0,
+      "strokeColor": "#0c4a6e", "backgroundColor": "transparent", "fillStyle": "solid", "strokeWidth": 1,
+      "strokeStyle": "solid", "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null, "index": "l3",
+      "roundness": null, "seed": 2104, "version": 1, "versionNonce": 3104, "isDeleted": false,
+      "boundElements": null, "updated": 1787100000000, "link": null, "locked": false,
+      "fontSize": 16, "fontFamily": 3,
+      "text": "tokenPurchaseTransaction\n\nPK purchaseTransactionUid\nUQ txHash\nREL purchaseUid → tokenPurchase\nstage: PAYMENT | MINT\nstatus: RECEIVED | SUBMITTED | PENDING | CONFIRMED | FAILED\nblock/hash/index/log/gas metadata\nerror + confirmedAt + audit timestamps\n\ntokenPurchasePaymentEvent\n\nPK paymentEventUid\nUQ chainId + txHash + logIndex\nREL matchedPurchaseUid → tokenPurchase\nUSDT contract, from/to wallets, amountRaw\nblock/hash/index/log\nprocessing status/attempts/message\nisCanonical + timestamps\n\nGlobal cursor: blockchainIndexerCheckpoint\nindexerName = tokenPurchasePayment",
+      "rawText": "tokenPurchaseTransaction\n\nPK purchaseTransactionUid\nUQ txHash\nREL purchaseUid → tokenPurchase\nstage: PAYMENT | MINT\nstatus: RECEIVED | SUBMITTED | PENDING | CONFIRMED | FAILED\nblock/hash/index/log/gas metadata\nerror + confirmedAt + audit timestamps\n\ntokenPurchasePaymentEvent\n\nPK paymentEventUid\nUQ chainId + txHash + logIndex\nREL matchedPurchaseUid → tokenPurchase\nUSDT contract, from/to wallets, amountRaw\nblock/hash/index/log\nprocessing status/attempts/message\nisCanonical + timestamps\n\nGlobal cursor: blockchainIndexerCheckpoint\nindexerName = tokenPurchasePayment",
+      "originalText": "tokenPurchaseTransaction\n\nPK purchaseTransactionUid\nUQ txHash\nREL purchaseUid → tokenPurchase\nstage: PAYMENT | MINT\nstatus: RECEIVED | SUBMITTED | PENDING | CONFIRMED | FAILED\nblock/hash/index/log/gas metadata\nerror + confirmedAt + audit timestamps\n\ntokenPurchasePaymentEvent\n\nPK paymentEventUid\nUQ chainId + txHash + logIndex\nREL matchedPurchaseUid → tokenPurchase\nUSDT contract, from/to wallets, amountRaw\nblock/hash/index/log\nprocessing status/attempts/message\nisCanonical + timestamps\n\nGlobal cursor: blockchainIndexerCheckpoint\nindexerName = tokenPurchasePayment",
+      "textAlign": "left", "verticalAlign": "top", "containerId": null, "lineHeight": 1.25, "autoResize": true
     }
   ],
   "appState": {

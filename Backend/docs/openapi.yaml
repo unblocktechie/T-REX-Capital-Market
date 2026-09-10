@@ -17,6 +17,9 @@ tags:
   - name: Organization
   - name: Token Creation
   - name: Admin Organizations
+  - name: Investor Claims
+  - name: Identity Registry
+  - name: Token Purchases
 
 x-list-operation: &listOperation
   security: [{ bearerAuth: [] }]
@@ -465,6 +468,13 @@ paths:
         - { $ref: '#/components/parameters/Search' }
         - in: query
           name: status
+          schema:
+            type: string
+            enum: [all, PENDING_PAYMENT, PAYMENT_CONFIRMED, MINT_SUBMITTED, COMPLETED, EXPIRED]
+            default: all
+        - { $ref: '#/components/parameters/Search' }
+        - in: query
+          name: status
           schema: { type: string, enum: [submitted, resubmitted, underReview, approved, rejected] }
         - in: query
           name: sortBy
@@ -529,6 +539,194 @@ paths:
         '409': { description: Only submitted or resubmitted applications can be reviewed }
         '422': { $ref: '#/components/responses/ValidationError' }
         '502': { description: On-chain identity creation failed and application status was not changed }
+  /api/v1/investor/claims:
+    get:
+      tags: [Investor Claims]
+      summary: List issuer-signed claims and synchronization states for an investor application
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: interestId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Trusted claim parameters and current submission states }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/investor/claims/{claimId}/prepare:
+    post:
+      tags: [Investor Claims]
+      summary: Prepare the single claim-submission row before the wallet transaction
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/ClaimId' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/InvestorClaimInterestInput' } } }
+      responses:
+        '201': { description: Submission prepared and trusted on-chain parameters returned }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: Application is not ready for claim submission }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/investor/claims/{claimId}/submit:
+    post:
+      tags: [Investor Claims]
+      summary: Persist and verify the wallet claim transaction
+      description: Returns CONFIRMED, or HTTP 202 PENDING_CONFIRMATION while the durable hash awaits mining/confirmations.
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/ClaimId' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/InvestorClaimSubmitInput' } } }
+      responses:
+        '200': { description: Exact claim event verified and existing row confirmed }
+        '202': { description: Hash persisted; transaction is awaiting mining or confirmations }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { description: Definitive chain, receipt, identity, or claim mismatch }
+        '503': { description: RPC is temporarily unavailable; submission remains pending }
+  /api/v1/investor/claims/{claimId}/retry:
+    post:
+      tags: [Investor Claims]
+      summary: Fast idempotent claim recovery without a synchronous historical log scan
+      description: Verifies an existing hash or performs one Identity.getClaim read. Returns CONFIRMED, PENDING_CONFIRMATION, TRANSACTION_REQUIRED, or HTTP 202 SYNCING.
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/ClaimId' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/InvestorClaimInterestInput' } } }
+      responses:
+        '200': { description: Confirmed, pending confirmation, or a new wallet transaction is required }
+        '202': { description: Exact claim exists; background synchronization is queued }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { description: Claim submission must be prepared before Retry }
+        '503': { description: RPC is temporarily unavailable }
+  /api/v1/investments/issuer/interests/{interestUid}/registry-registration:
+    post:
+      tags: [Identity Registry]
+      summary: Create or resume a backend-authoritative registry operation
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/InterestUid' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: false } } }
+      responses:
+        '200': { description: Existing pending or confirmed operation returned }
+        '201': { description: PENDING operation created before MetaMask }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: Subscription, claims, country, agent, or registry state is not eligible }
+    get:
+      tags: [Identity Registry]
+      summary: Resume the issuer-owned registry operation
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/InterestUid' }]
+      responses:
+        '200': { description: Registry operation state }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/investments/issuer/interests/{interestUid}/registry-registration/{registryRegistrationUid}/confirm:
+    post:
+      tags: [Identity Registry]
+      summary: Independently verify a registerIdentity transaction and conditionally confirm
+      description: The client may send only txHash. Every expected value comes from the PENDING database row.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/InterestUid' }
+        - { $ref: '#/components/parameters/RegistryRegistrationUid' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegistryConfirmationInput' }
+      responses:
+        '200': { description: Transaction/event/state verified; registry operation CONFIRMED, interest registered, and history recorded atomically }
+        '202': { description: Hash stored; transaction is not mined or sufficiently confirmed yet }
+        '409': { description: Operation/hash ownership or idempotency conflict }
+        '422': { description: Definitive sender, target, calldata, receipt, event, or state mismatch }
+        '503': { description: RPC unavailable; operation remains PENDING and recoverable }
+
+  /api/v1/investments/tokens/{tokenUid}/purchases:
+    get:
+      tags: [Token Purchases]
+      summary: List the authenticated investor's purchase history for a token
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: tokenUid
+          required: true
+          schema: { type: string, format: uuid }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+      responses:
+        '200': { description: Newest-first investor-owned purchase rows with pagination metadata }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Token Purchases]
+      summary: Create an authoritative pending USDT purchase intent
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: tokenUid
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreateTokenPurchaseInput' } } }
+      responses:
+        '200': { description: Existing idempotent or active purchase returned }
+        '201': { description: PENDING_PAYMENT intent created with authoritative transfer parameters and expiration deadline }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: Investor/token/agent/cap prerequisites are not satisfied }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { description: Blockchain prerequisites are temporarily unavailable }
+  /api/v1/investments/purchases/{purchaseUid}:
+    get:
+      tags: [Token Purchases]
+      summary: Get investor-owned payment, mint, synchronization, and transaction history
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/PurchaseUid' }]
+      responses:
+        '200': { description: Current purchase settlement state }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/investments/purchases/{purchaseUid}/confirm:
+    post:
+      tags: [Token Purchases]
+      summary: Verify the USDT transfer and synchronously submit the platform mint
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/PurchaseUid' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ConfirmTokenPurchaseInput' } } }
+      responses:
+        '200': { description: Current persisted lifecycle state; inspect data.status for pending, minting, completed, or expired }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: Hash is already used or another payment hash is assigned }
+        '422': { description: Sender, contract, calldata, amount, receipt, or event mismatch }
+  /api/v1/investments/purchases/{purchaseUid}/retry:
+    post:
+      tags: [Token Purchases]
+      summary: Queue idempotent payment or mint reconciliation
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/PurchaseUid' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: false } } }
+      responses:
+        '200': { description: Purchase was already completed }
+        '202': { description: Reconciliation queued }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: The purchase intent has EXPIRED; create a new intent }
 
 components:
   securitySchemes:
@@ -550,6 +748,10 @@ components:
     StateUid: { in: path, name: stateUid, required: true, schema: { type: string, format: uuid } }
     DocumentUid: { in: path, name: documentUid, required: true, schema: { type: string, format: uuid } }
     OrganizationUid: { in: path, name: organizationUid, required: true, schema: { type: string, format: uuid } }
+    ClaimId: { in: path, name: claimId, required: true, schema: { type: string, format: uuid } }
+    InterestUid: { in: path, name: interestUid, required: true, schema: { type: string, format: uuid } }
+    RegistryRegistrationUid: { in: path, name: registryRegistrationUid, required: true, schema: { type: string, format: uuid } }
+    PurchaseUid: { in: path, name: purchaseUid, required: true, schema: { type: string, format: uuid } }
   responses:
     Unauthorized: { description: Missing, invalid, expired, or stale JWT }
     Forbidden: { description: Account or role is not allowed to perform the operation }
@@ -788,6 +990,50 @@ components:
       additionalProperties: false
       properties:
         transactionHash:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{64}$'
+          example: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    InvestorClaimInterestInput:
+      type: object
+      required: [interestId]
+      additionalProperties: false
+      properties:
+        interestId: { type: string, format: uuid }
+    InvestorClaimSubmitInput:
+      type: object
+      required: [interestId, txHash]
+      additionalProperties: false
+      properties:
+        interestId: { type: string, format: uuid }
+        txHash:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{64}$'
+          example: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    RegistryConfirmationInput:
+      type: object
+      required: [txHash]
+      additionalProperties: false
+      properties:
+        txHash:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{64}$'
+          example: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    CreateTokenPurchaseInput:
+      type: object
+      required: [tokenAmount, idempotencyKey]
+      additionalProperties: false
+      properties:
+        tokenAmount:
+          type: string
+          pattern: '^(?:0|[1-9]\d*)(?:\.\d+)?$'
+          example: '10.25'
+        idempotencyKey: { type: string, minLength: 8, maxLength: 100, example: checkout-20260910-0001 }
+    ConfirmTokenPurchaseInput:
+      type: object
+      required: [txHash]
+      additionalProperties: false
+      properties:
+        txHash:
           type: string
           pattern: '^0x[a-fA-F0-9]{64}$'
           example: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'

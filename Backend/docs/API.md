@@ -541,6 +541,43 @@ Unmined/under-confirmed hashes return `202`; definitive mismatches remain `PENDI
 The global registry indexer plus targeted recovery worker reconciles frontend-crash cases without
 creating transactions or trusting events alone. See `docs/IDENTITY-REGISTRY-REGISTRATION.md`.
 
+## Investor token purchase (USDT)
+
+- `POST /investments/tokens/{tokenUid}/purchases` with
+  `{ "tokenAmount": "10.25", "idempotencyKey": "checkout-202600910-0001" }` creates the
+  authoritative `PENDING_PAYMENT` intent. The interest must be `registered`.
+- `GET /investments/tokens/{tokenUid}/purchases?page=1&limit=20&search=&status=all` returns the
+  authenticated investor's purchase history for that token, newest first, with pagination,
+  free-text search, and lifecycle-status filtering.
+- `POST /investments/purchases/{purchaseUid}/confirm` accepts only `{ "txHash": "0x..." }` and
+  independently verifies the configured USDT contract, investor sender, treasury recipient, exact
+  raw amount, calldata, successful receipt, interactive confirmation threshold, and Transfer event.
+- `GET /investments/purchases/{purchaseUid}` returns payment, mint, synchronization, errors, and
+  the append-only transaction history.
+- `POST /investments/purchases/{purchaseUid}/retry` queues payment/mint reconciliation.
+
+Each created intent returns `expiration.expiresAt`. A `PENDING_PAYMENT` row with no submitted
+payment hash becomes `EXPIRED` in the background after the configured TTL and grace period, but
+only after the global USDT indexer has caught up to the safe chain head. Confirm returns HTTP `200`
+with `data.status = EXPIRED`; Retry returns `409 PURCHASE_EXPIRED`. The investor must create a fresh
+intent with a new idempotency key.
+Rows with a payment hash are not auto-expired.
+
+After verified USDT payment the same API call acquires the global mint lease and submits
+`mint(investorWalletAddress, tokenAmountRaw)`, waits for the configured confirmation, verifies the
+mint transaction/event/final state, persists all receipt metadata, and normally returns `COMPLETED`.
+If the wait times out, it returns HTTP `200` with `MINT_SUBMITTED` and the worker finalizes the same
+stored hash. Confirm returns HTTP `200` for every persisted lifecycle result, including
+`PENDING_PAYMENT`, `PAYMENT_CONFIRMED`, `MINT_SUBMITTED`, `COMPLETED`, and `EXPIRED`; clients must
+branch on `data.status`. Definitive verification errors and conflicts remain 4xx responses.
+An under-confirmed but successful transaction remains queued with transaction-history status
+`PENDING`; it is not exposed as a synchronization failure and does not populate purchase error fields.
+Status progresses `PENDING_PAYMENT -> PAYMENT_CONFIRMED -> MINT_SUBMITTED -> COMPLETED`, or
+`PENDING_PAYMENT -> EXPIRED` when the payment was abandoned before any hash was received.
+The global USDT indexer recovers missing frontend hashes, and targeted token-event recovery handles
+a mint broadcast whose hash was not persisted. See `docs/TOKEN-PURCHASE-FLOW.md` and
+`docs/FRONTEND-TOKEN-PURCHASE-FLOW-GUIDE.md`.
+
 ## Status codes
 
 - `200` success/update/delete; `201` created; `202` accepted/pending asynchronous confirmation
