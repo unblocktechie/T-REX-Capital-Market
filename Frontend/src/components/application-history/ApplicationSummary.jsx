@@ -9,7 +9,8 @@ const normalizeStatus = (status) => String(status || '')
 
 const summaryStatusMeta = (status) => {
   const value = normalizeStatus(status);
-  if (value === 'verifiedbyissuer') return { label: 'Action Required', tone: 'warning', Icon: Clock3 };
+  if (['verifiedbyissuer', 'verified'].includes(value)) return { label: 'Action Required', tone: 'warning', Icon: Clock3 };
+  if (value === 'claimsubmitted') return { label: 'Claims Submitted', tone: 'pending', Icon: CheckCircle2 };
   if (value === 'approved') return { label: 'Approved', tone: 'success', Icon: CheckCircle2 };
   if (value === 'rejected') return { label: 'Rejected', tone: 'danger', Icon: XCircle };
   if (value === 'cancelled') return { label: 'Cancelled', tone: 'neutral', Icon: XCircle };
@@ -39,8 +40,10 @@ export function ApplicationSummary({ application, history }) {
         <span className={`application-detail-summary__badge is-${meta.tone}`}>{meta.label}</span>
         {meta.tone === 'danger' ? (
           <p>Your application was rejected. Please review the reason.</p>
-        ) : normalizeStatus(status) === 'verifiedbyissuer' ? (
+        ) : ['verifiedbyissuer', 'verified'].includes(normalizeStatus(status)) ? (
           <p>Your application has been approved by the issuer. Submit the required claim to complete verification and enable your investment.</p>
+        ) : normalizeStatus(status) === 'claimsubmitted' ? (
+          <p>All required investor claims successfully submitted and verified on-chain. The issuer is now completing the final verification step. This may take 1–2 business days.</p>
         ) : meta.tone === 'success' ? (
           <p>Your application has been approved by the issuer.</p>
         ) : (

@@ -55,4 +55,39 @@ export const investorApi = Object.freeze({
         { skipGlobalLoader: true },
       )
       .then(unwrap),
+
+  getClaims: (interestId) =>
+    apiClient
+      .get(INVESTOR_ENDPOINTS.claims, {
+        params: { interestId },
+        skipGlobalLoader: true,
+      })
+      .then(unwrap),
+
+  prepareClaim: (claimId, { interestId }) =>
+    apiClient
+      .post(
+        INVESTOR_ENDPOINTS.prepareClaim(claimId),
+        { interestId },
+        { skipGlobalLoader: true },
+      )
+      .then(unwrap),
+
+  retryClaim: (claimId, { interestId }) =>
+    apiClient
+      .post(
+        INVESTOR_ENDPOINTS.retryClaim(claimId),
+        { interestId },
+        { skipGlobalLoader: true },
+      )
+      .then(unwrap),
+
+  submitClaim: (claimId, { interestId, txHash }) =>
+    apiClient
+      .post(
+        INVESTOR_ENDPOINTS.submitClaim(claimId),
+        { interestId, txHash },
+        { skipGlobalLoader: true },
+      )
+      .then(unwrap),
 });

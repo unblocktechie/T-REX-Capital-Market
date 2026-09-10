@@ -5,6 +5,7 @@ export const MARKETPLACE_STATUS = Object.freeze({
   NOT_APPLIED: 'not_applied',
   ACTION_REQUIRED: 'action_required',
   CLAIM_REQUIRED: 'claim_required',
+  CLAIMS_SUBMITTED: 'claims_submitted',
   PENDING_REVIEW: 'pending_review',
   APPROVED: 'approved',
   VERIFIED_HOLDER: 'verified_holder',
@@ -29,7 +30,13 @@ export const MARKETPLACE_STATUS_META = Object.freeze({
     label: 'Action Required',
     shortLabel: 'Action Required',
     tone: 'warning',
-    description: 'The issuer approved the application. Submit the required claim to complete verification.',
+    description: 'Your application has been approved by the issuer. Submit the required claim to complete verification and enable your investment.',
+  },
+  [MARKETPLACE_STATUS.CLAIMS_SUBMITTED]: {
+    label: 'Claims Submitted',
+    shortLabel: 'Claims Submitted',
+    tone: 'pending',
+    description: 'All required investor claims successfully submitted and verified on-chain. The issuer is now completing the final verification step. This may take 1–2 business days.',
   },
   [MARKETPLACE_STATUS.PENDING_REVIEW]: {
     label: 'Pending Review',

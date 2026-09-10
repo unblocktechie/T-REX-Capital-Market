@@ -6698,3 +6698,30 @@ body,
     width: min(294px, calc(100vw - 28px));
   }
 }
+
+/* Mobile breadcrumb readability: keep every breadcrumb label visible.
+   Items wrap as complete units onto the next line instead of being clipped
+   or requiring horizontal scrolling. */
+@media (max-width: 620px) {
+  .breadcrumbs {
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 0;
+    row-gap: 6px;
+    max-width: 100%;
+    overflow: visible;
+    padding-bottom: 0;
+    white-space: normal;
+  }
+
+  .breadcrumbs > span {
+    flex: 0 0 auto;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .breadcrumbs a,
+  .breadcrumbs [aria-current='page'] {
+    white-space: nowrap;
+  }
+}

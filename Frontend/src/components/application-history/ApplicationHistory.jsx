@@ -15,24 +15,40 @@ import {
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { formatDate } from '@/utils/date';
+import { ContactSupportDialog } from './ContactSupportDialog';
 
 const normalizeStatus = (status) => String(status || '')
   .trim()
   .toLowerCase()
   .replace(/[\s_-]+/g, '');
 
-const isVerifiedByIssuerStatus = (status) => normalizeStatus(status) === 'verifiedbyissuer';
+const isVerifiedByIssuerStatus = (status) => ['verifiedbyissuer', 'verified'].includes(normalizeStatus(status));
 
-const eventMeta = (eventType, { viewerRole = '', currentStatus = '' } = {}) => {
-  const verifiedByIssuer = isVerifiedByIssuerStatus(currentStatus);
-  switch (String(eventType || '').toLowerCase()) {
+const isClaimVerificationEvent = (event, currentStatus) => {
+  if (!isVerifiedByIssuerStatus(currentStatus)) return false;
+
+  const eventType = normalizeStatus(event?.eventType);
+  if (['approved', 'verified', 'verifiedbyissuer', 'claimverified', 'claimsverified'].includes(eventType)) return true;
+
+  const note = String(event?.note || '').trim().toLowerCase();
+  return note.includes('claim') && (note.includes('verified') || note.includes('verification'));
+};
+
+const eventMeta = (event, { viewerRole = '', currentStatus = '' } = {}) => {
+  const claimVerificationEvent = isClaimVerificationEvent(event, currentStatus);
+
+  if (claimVerificationEvent && viewerRole === 'investor') {
+    return { title: 'Verification Approved', tone: 'success', Icon: CheckCircle2, badge: 'Approved' };
+  }
+
+  if (claimVerificationEvent && viewerRole === 'issuer') {
+    return { title: 'Claim Verified', tone: 'success', Icon: CheckCircle2, badge: 'Verified' };
+  }
+
+  switch (String(event?.eventType || '').toLowerCase()) {
+    case 'claimsubmitted':
+      return { title: 'Claims Submitted', tone: 'success', Icon: CheckCircle2, badge: 'Confirmed On-Chain' };
     case 'approved':
-      if (verifiedByIssuer && viewerRole === 'investor') {
-        return { title: 'Verification Approved', tone: 'success', Icon: CheckCircle2, badge: 'Approved' };
-      }
-      if (verifiedByIssuer && viewerRole === 'issuer') {
-        return { title: 'Claim Verified', tone: 'success', Icon: CheckCircle2, badge: 'Verified' };
-      }
       return { title: 'Application Approved', tone: 'success', Icon: CheckCircle2, badge: 'Approved' };
     case 'rejected':
       return { title: 'Application Rejected', tone: 'danger', Icon: XCircle, badge: 'Rejected' };
@@ -55,7 +71,8 @@ const formatBytes = (value) => {
 
 const defaultEventCopy = (event) => {
   switch (String(event?.eventType || '').toLowerCase()) {
-    case 'approved': return 'Final review completed. This application is now approved.';
+    case 'claimsubmitted': return 'All required investor claims were successfully submitted and verified on-chain.';
+    case 'approved': return 'This application has been approved.';
     case 'rejected': return event?.rejectReason || 'The issuer rejected this application submission.';
     case 'resubmitted': return 'The investor resubmitted updated documents for review.';
     case 'submitted': return 'The investor submitted this application for issuer review.';
@@ -106,16 +123,18 @@ export function ApplicationHistoryItem({
   showDownload = false,
   canReupload = false,
   onReupload,
+  onSubmitClaim,
   actorNames = {},
   viewerRole = '',
   currentStatus = '',
-  onSubmitClaim,
+  supportContext = {},
 }) {
-  const verifiedByIssuer = isVerifiedByIssuerStatus(currentStatus);
-  const isApprovedEvent = String(event.eventType || '').toLowerCase() === 'approved';
-  const isInvestorClaimAction = verifiedByIssuer && viewerRole === 'investor' && isApprovedEvent;
-  const isIssuerWaitingForInvestor = verifiedByIssuer && viewerRole === 'issuer' && isApprovedEvent;
-  const meta = eventMeta(event.eventType, { viewerRole, currentStatus });
+  const claimVerificationEvent = isClaimVerificationEvent(event, currentStatus);
+  const isInvestorClaimAction = claimVerificationEvent && viewerRole === 'investor';
+  const isIssuerWaitingForInvestor = claimVerificationEvent && viewerRole === 'issuer';
+  const isInvestorClaimsSubmitted = viewerRole === 'investor' && normalizeStatus(event?.eventType) === 'claimsubmitted';
+  const [contactSupportOpen, setContactSupportOpen] = useState(false);
+  const meta = eventMeta(event, { viewerRole, currentStatus });
   const Icon = meta.Icon;
   const hasDocuments = Array.isArray(event.documents) && event.documents.length > 0;
   const hasDetails = Boolean(
@@ -181,7 +200,7 @@ export function ApplicationHistoryItem({
             ) : isInvestorClaimAction ? (
               <div className="application-history-message application-history-message--claim-action is-success">
                 <FileCheck2 size={16} />
-                <span>Your application has been approved. Submit the required claim to complete verification and continue with your investment.</span>
+                <span>Your application has been approved by the issuer. Submit the required claim to complete verification and enable your investment.</span>
                 {onSubmitClaim ? <Button size="sm" onClick={onSubmitClaim}>Submit Claim</Button> : null}
               </div>
             ) : isIssuerWaitingForInvestor ? (
@@ -190,6 +209,20 @@ export function ApplicationHistoryItem({
                 <div>
                   <strong>Waiting for Investor Action</strong>
                   <span>The investor needs to submit the required claim from their side. Once submitted, you can add the investor to the registry.</span>
+                </div>
+              </div>
+            ) : isInvestorClaimsSubmitted ? (
+              <div className="application-history-investor-claim-submitted">
+                <div className={`application-history-message application-history-message--notify-issuer is-${meta.tone}`}>
+                  <FileCheck2 size={16} />
+                  <span>All required investor claims successfully submitted and verified on-chain. The issuer is now completing the final verification step. This may take 1–2 business days.</span>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setContactSupportOpen(true)}
+                  >
+                    Notify Issuer
+                  </Button>
                 </div>
               </div>
             ) : (
@@ -226,6 +259,11 @@ export function ApplicationHistoryItem({
           </div>
         ) : null}
       </div>
+      <ContactSupportDialog
+        open={contactSupportOpen}
+        onClose={() => setContactSupportOpen(false)}
+        context={supportContext}
+      />
     </article>
   );
 }
@@ -238,10 +276,11 @@ export function ApplicationHistory({
   showDownload = false,
   reuploadEventId = '',
   onReupload,
+  onSubmitClaim,
   actorNames = {},
   viewerRole = '',
   currentStatus = '',
-  onSubmitClaim,
+  supportContext = {},
   emptyTitle = 'No application history yet',
   emptyDescription = 'Activity for this application will appear here when it is recorded by the backend.',
 }) {
@@ -295,10 +334,11 @@ export function ApplicationHistory({
           showDownload={showDownload}
           canReupload={Boolean(reuploadEventId && event.id === reuploadEventId)}
           onReupload={onReupload}
+          onSubmitClaim={onSubmitClaim}
           actorNames={actorNames}
           viewerRole={viewerRole}
           currentStatus={currentStatus}
-          onSubmitClaim={onSubmitClaim}
+          supportContext={supportContext}
         />
       ))}
     </div>

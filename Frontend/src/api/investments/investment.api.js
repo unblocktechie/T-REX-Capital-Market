@@ -4,6 +4,8 @@ import { INVESTMENT_ENDPOINTS } from './investment.endpoints';
 const INTEREST_STATUS_MAP = new Map([
   ['pending', 'pending'],
   ['submitintrest', 'submitIntrest'],
+  ['verifiedbyissuer', 'verifiedByIssuer'],
+  ['claimsubmitted', 'claimSubmitted'],
   ['approved', 'approved'],
   ['rejected', 'rejected'],
   ['cancelled', 'cancelled'],

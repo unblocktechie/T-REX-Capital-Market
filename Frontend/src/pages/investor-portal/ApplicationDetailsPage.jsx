@@ -77,6 +77,54 @@ export default function ApplicationDetailsPage() {
   const currentRejectType = String(history?.summary?.rejectReasonType || application?.interest?.rejectReasonType || '').toUpperCase();
   const canResubmit = Boolean(history?.summary?.canResubmit ?? application?.interest?.canResubmit);
 
+
+  const supportContext = useMemo(() => {
+    const interest = application?.interest || {};
+    const raw = interest?.raw || {};
+    const investor = raw?.investor || raw?.investorSummary || raw?.identity || {};
+    const tokenRaw = raw?.token || raw?.tokenSummary || raw?.tokenInvestment || {};
+    const identity = investor?.identity || {};
+    const firstValue = (...values) => values.find((value) => String(value ?? '').trim()) || '';
+
+    return {
+      name: firstValue(user?.name, user?.fullName),
+      email: firstValue(user?.email, investor?.email),
+      userId: firstValue(user?.userUid, user?.id, interest?.investorUserUid, raw?.investorUserUid, investor?.userUid),
+      walletAddress: firstValue(interest?.walletAddress, raw?.walletAddress, investor?.walletAddress),
+      onchainIdAddress: firstValue(
+        raw?.investorIdentityAddress,
+        raw?.investorOnchainId,
+        raw?.investorOnchainID,
+        raw?.identityAddress,
+        raw?.onchainIdentityAddress,
+        raw?.identityContractAddress,
+        investor?.investorIdentityAddress,
+        investor?.identityAddress,
+        investor?.onchainIdentityAddress,
+        investor?.identityContractAddress,
+        investor?.onchainIdAddress,
+        investor?.onchainIDAddress,
+        identity?.address,
+        identity?.identityAddress,
+        identity?.onchainId,
+        identity?.onchainID,
+      ),
+      tokenAddress: firstValue(
+        application?.tokenAddress,
+        application?.contractAddress,
+        tokenRaw?.tokenAddress,
+        tokenRaw?.contractAddress,
+        tokenRaw?.address,
+        tokenRaw?.deployment?.tokenAddress,
+        raw?.tokenAddress,
+        raw?.contractAddress,
+      ),
+      tokenName: firstValue(application?.name, application?.tokenName, tokenRaw?.name, tokenRaw?.tokenName),
+      applicationId: firstValue(application?.interestUid, interest?.interestUid, raw?.subscriptionId, interestUid),
+      applicationStatus: firstValue(application?.statusMeta?.label, application?.interest?.status, history?.summary?.status, currentStatus),
+    };
+  }, [application, currentStatus, history?.summary?.status, interestUid, user]);
+
   const reuploadEventId = useMemo(() => {
     if (currentStatus !== 'rejected' || currentRejectType !== 'DOC_REJECTED' || !canResubmit) return '';
     return [...(history?.timeline || [])]
@@ -181,6 +229,7 @@ export default function ApplicationDetailsPage() {
           timeline={history.timeline}
           viewerRole="investor"
           currentStatus={currentStatus}
+          supportContext={supportContext}
           onSubmitClaim={() => navigate(ROUTES.applicationClaim(interestUid))}
           onViewDocument={setSelectedDocument}
           reuploadEventId={reuploadEventId}

@@ -26,7 +26,12 @@ const interestStatusToMarketplace = (interestStatus) => {
     case 'verifiedbyissuer':
     case 'verified_by_issuer':
     case 'verified-by-issuer':
+    case 'verified':
       return MARKETPLACE_STATUS.CLAIM_REQUIRED;
+    case 'claimsubmitted':
+    case 'claim_submitted':
+    case 'claim-submitted':
+      return MARKETPLACE_STATUS.CLAIMS_SUBMITTED;
     case 'approved':
       return MARKETPLACE_STATUS.APPROVED;
     case 'rejected':
@@ -74,8 +79,84 @@ const getMappedInterests = async (params) => {
   return extractList(response).map(mapInterest);
 };
 
-const findInterest = (interests, tokenUid) =>
-  interests.find((interest) => String(interest.tokenUid) === String(tokenUid)) || null;
+const normalizeMatchValue = (value) => String(value || '').trim().toLowerCase();
+
+const tokenIdentifiers = (token = {}) => {
+  const raw = token?.raw || {};
+  const values = [
+    token?.id,
+    token?.tokenUid,
+    token?.tokenId,
+    token?.tokenAddress,
+    token?.contractAddress,
+    raw?.id,
+    raw?.uid,
+    raw?.tokenUid,
+    raw?.tokenId,
+    raw?.tokenAddress,
+    raw?.contractAddress,
+  ];
+  return new Set(values.map(normalizeMatchValue).filter(Boolean));
+};
+
+const interestTokenIdentifiers = (interest = {}) => {
+  const raw = interest?.raw || {};
+  const nested = interest?.token || {};
+  const rawToken = raw?.token || raw?.tokenSummary || raw?.tokenInvestment || {};
+  const values = [
+    interest?.tokenUid,
+    interest?.tokenId,
+    nested?.id,
+    nested?.tokenUid,
+    nested?.tokenId,
+    nested?.tokenAddress,
+    nested?.contractAddress,
+    raw?.tokenUid,
+    raw?.tokenId,
+    rawToken?.id,
+    rawToken?.uid,
+    rawToken?.tokenUid,
+    rawToken?.tokenId,
+    raw?.tokenAddress,
+    raw?.contractAddress,
+    rawToken?.tokenAddress,
+    rawToken?.contractAddress,
+  ];
+  return new Set(values.map(normalizeMatchValue).filter(Boolean));
+};
+
+const findInterest = (interests, token) => {
+  const expectedIds = tokenIdentifiers(token);
+  const byIdentifier = interests.find((interest) => {
+    const interestIds = interestTokenIdentifiers(interest);
+    return [...expectedIds].some((id) => interestIds.has(id));
+  });
+  if (byIdentifier) return byIdentifier;
+
+  // Fallback only when both token name and symbol match, preventing a different
+  // offering from being treated as the investor's application.
+  const expectedName = normalizeMatchValue(token?.name || token?.tokenName);
+  const expectedSymbol = normalizeMatchValue(token?.symbol || token?.tokenSymbol);
+  if (!expectedName || !expectedSymbol) return null;
+
+  return interests.find((interest) => {
+    const interestToken = interest?.token || {};
+    const interestRaw = interest?.raw || {};
+    const interestName = normalizeMatchValue(
+      interestToken?.name
+      || interestToken?.tokenName
+      || interestRaw?.tokenName
+      || interestRaw?.name,
+    );
+    const interestSymbol = normalizeMatchValue(
+      interestToken?.symbol
+      || interestToken?.tokenSymbol
+      || interestRaw?.tokenSymbol
+      || interestRaw?.symbol,
+    );
+    return interestName === expectedName && interestSymbol === expectedSymbol;
+  }) || null;
+};
 
 const apiService = {
   async listOfferings({ page = 1, limit = 12, search = '', status = 'deployed' } = {}) {
@@ -85,7 +166,7 @@ const apiService = {
     ]);
     const items = extractList(catalogue.data).map((raw) => {
       const token = mapMarketplaceToken(raw);
-      return withStatus(token, findInterest(interests, token.id), null);
+      return withStatus(token, findInterest(interests, token), null);
     });
     return { items, meta: catalogue.meta || {} };
   },
@@ -98,7 +179,7 @@ const apiService = {
     ]);
     const eligibility = mapEligibility(rawEligibility || {});
     const token = mapMarketplaceToken(rawToken || {}, { eligibility });
-    return withStatus(token, findInterest(interests, tokenUid), eligibility);
+    return withStatus(token, findInterest(interests, token), eligibility);
   },
 
   async listApplications({ status } = {}) {

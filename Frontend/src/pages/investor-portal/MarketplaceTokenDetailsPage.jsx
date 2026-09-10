@@ -125,6 +125,13 @@ function OfferingStatusPanel({ token, onPrimaryAction, onSecondaryAction, action
         </>
       ) : null}
 
+      {token.status === MARKETPLACE_STATUS.CLAIMS_SUBMITTED ? (
+        <>
+          <div className="marketplace-status-callout marketplace-status-callout--pending"><Clock3 size={19} /><div><strong>Claims Submitted</strong><span>All required investor claims successfully submitted and verified on-chain. The issuer is now completing the final verification step. This may take 1–2 business days.</span></div></div>
+          <Button className="marketplace-status-panel__primary" onClick={onSecondaryAction}>View Application</Button>
+        </>
+      ) : null}
+
       {token.status === MARKETPLACE_STATUS.APPROVED ? (
         <>
           <div className="marketplace-status-callout marketplace-status-callout--success"><CheckCircle2 size={19} /><div><strong>Approved</strong><span>The issuer approved your investment interest.</span></div></div>

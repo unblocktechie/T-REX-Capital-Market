@@ -330,6 +330,15 @@ export const mapMarketplaceToken = (raw = {}, { interest = null, eligibility = n
     expectedApy: text(raw?.expectedApy, raw?.apy),
     liquidity: text(raw?.liquidity, raw?.liquidityType),
     registryAddress: text(raw?.registryAddress, raw?.identityRegistryAddress, raw?.contracts?.identityRegistry),
+    tokenAddress: text(
+      raw?.tokenAddress,
+      raw?.contractAddress,
+      raw?.address,
+      tokenInformation?.tokenAddress,
+      tokenInformation?.contractAddress,
+      raw?.contracts?.token,
+      raw?.contracts?.tokenAddress,
+    ),
     onchainId: text(raw?.onchainId, raw?.onchainID, organization?.onchainId, organization?.onchainID),
     permittedCountries: array(raw?.permittedCountries, compliance?.permittedCountries)
       .map((country) => typeof country === 'string' ? country : text(country?.countryName, country?.name))
@@ -351,7 +360,7 @@ export const mapMarketplaceToken = (raw = {}, { interest = null, eligibility = n
 
 export const mapInterest = (raw = {}) => {
   const tokenRaw = raw?.token || raw?.tokenSummary || raw?.tokenInvestment || {};
-  const tokenUid = text(raw?.tokenUid, tokenRaw?.tokenUid, tokenRaw?.uid, tokenRaw?.id);
+  const tokenUid = text(raw?.tokenUid, raw?.tokenId, tokenRaw?.tokenUid, tokenRaw?.tokenId, tokenRaw?.uid, tokenRaw?.id);
   const imageStorageKey = text(
     tokenRaw?.imageStorageKey,
     tokenRaw?.tokenImageStorageKey,
@@ -433,6 +442,14 @@ export const mapInterest = (raw = {}) => {
     imageStorageKey,
     hasImage: first(tokenRaw?.hasImage, raw?.hasImage, Boolean(imageStorageKey)),
     imageUrl: first(tokenRaw?.imageUrl, tokenRaw?.tokenImageUrl, raw?.imageUrl, raw?.tokenImageUrl),
+    tokenAddress: first(
+      tokenRaw?.tokenAddress,
+      tokenRaw?.contractAddress,
+      tokenRaw?.address,
+      raw?.tokenAddress,
+      raw?.contractAddress,
+      raw?.address,
+    ),
     // Do not treat the interest's pending/approved status as the token deployment status.
     status: first(tokenRaw?.status, raw?.tokenStatus, raw?.deploymentStatus),
     deploymentStatus: first(tokenRaw?.deploymentStatus, raw?.tokenStatus, raw?.deploymentStatus),

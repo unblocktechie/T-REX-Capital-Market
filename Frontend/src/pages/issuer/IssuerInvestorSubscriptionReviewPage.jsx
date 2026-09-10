@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
+  Clock3,
   RefreshCw,
   ShieldCheck,
+  UserPlus,
   XCircle,
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -20,11 +22,19 @@ import { issuerInvestorSubscriptionsService } from '@/services/issuer/issuerInve
 import { formatDate } from '@/utils/date';
 import { getErrorMessage } from '@/utils/error';
 
+const normalizeStatus = (status) => String(status || '')
+  .trim()
+  .toLowerCase()
+  .replace(/[\s_-]+/g, '');
+
+const isClaimVerifiedStatus = (status) => ['verifiedbyissuer', 'verified'].includes(normalizeStatus(status));
+const isClaimSubmittedStatus = (status) => normalizeStatus(status) === 'claimsubmitted';
+
 const statusMeta = (status) => {
   const value = String(status || '').toLowerCase();
-  const compact = value.replace(/[\s_-]+/g, '');
-  if (compact === 'verifiedbyissuer') return { label: 'Verified', tone: 'success' };
-  if (['approved', 'verified'].includes(value)) return { label: value === 'approved' ? 'Approved' : 'Verified', tone: 'success' };
+  if (isClaimSubmittedStatus(status)) return { label: 'Claims Submitted', tone: 'success' };
+  if (isClaimVerifiedStatus(status)) return { label: 'Claim Verified', tone: 'success' };
+  if (value === 'approved') return { label: 'Approved', tone: 'success' };
   if (value === 'rejected') return { label: 'Rejected', tone: 'danger' };
   if (value === 'cancelled') return { label: 'Cancelled', tone: 'neutral' };
   if (value === 'pending') return { label: 'Documents Required', tone: 'pending' };
@@ -156,9 +166,16 @@ export default function IssuerInvestorSubscriptionReviewPage() {
   }
 
   const requestStatus = String(request.status || '').toLowerCase();
+  const historyHasClaimSubmitted = Boolean(history?.timeline?.some((event) => isClaimSubmittedStatus(event?.eventType)));
+  const claimSubmitted = isClaimSubmittedStatus(request.status)
+    || isClaimSubmittedStatus(history?.status)
+    || isClaimSubmittedStatus(history?.summary?.status)
+    || historyHasClaimSubmitted;
+  const claimVerified = !claimSubmitted && isClaimVerifiedStatus(request.status);
+  const effectiveStatus = claimSubmitted ? 'claimSubmitted' : request.status;
   const canReject = requestStatus === 'submitintrest';
-  const canVerify = requestStatus === 'submitintrest' || requestStatus.replace(/[\s_-]+/g, '') === 'verifiedbyissuer';
-  const currentMeta = statusMeta(request.status);
+  const canVerify = requestStatus === 'submitintrest';
+  const currentMeta = statusMeta(effectiveStatus);
   const submissionNumber = request.submissionNumber || history?.timeline?.reduce((max, event) => Math.max(max, Number(event?.submissionNumber) || 0), 0) || null;
 
   return (
@@ -180,7 +197,7 @@ export default function IssuerInvestorSubscriptionReviewPage() {
         </div>
       </header>
 
-      <Card className="issuer-application-overview-card">
+      <Card className={`issuer-application-overview-card${claimVerified ? ' is-claim-verified' : ''}`}>
         <div className="issuer-application-overview-card__identity">
           <span>{request.investorName?.slice(0, 1).toUpperCase() || 'I'}</span>
           <div>
@@ -193,13 +210,27 @@ export default function IssuerInvestorSubscriptionReviewPage() {
           <div><span>Token</span><strong>{[request.tokenName, request.tokenSymbol ? `(${request.tokenSymbol})` : ''].filter(Boolean).join(' ') || '—'}</strong></div>
           <div><span>Submitted</span><strong>{formatDate(request.submittedAt || request.requestedDate, 'MMM DD, YYYY hh:mm A')}</strong></div>
           <div><span>Latest Submission</span><strong>{submissionNumber ? `Submission ${submissionNumber}` : '—'}</strong></div>
-          <div><span>Status</span><AppStatusBadge status={request.status} label={currentMeta.label} tone={currentMeta.tone} compact /></div>
+          <div><span>Status</span><AppStatusBadge status={effectiveStatus} label={currentMeta.label} tone={currentMeta.tone} compact /></div>
           <div><span>Resubmissions</span><strong>{history?.summary?.timesResubmitted ?? request?.resubmissionSummary?.timesResubmitted ?? 0}</strong></div>
         </div>
-        <div className="issuer-application-overview-card__actions">
-          <Button variant="danger" icon={XCircle} disabled={!canReject || decisionLoading} onClick={() => setDecisionModal('reject')}>Reject Request</Button>
-          <Button icon={ShieldCheck} disabled={!canVerify || decisionLoading} onClick={() => setDecisionModal('verify')}>Verify Claims</Button>
-        </div>
+        {claimSubmitted ? (
+          <div className="issuer-application-overview-card__actions issuer-application-overview-card__actions--registry">
+            <Button type="button" icon={UserPlus}>Add to Registry</Button>
+          </div>
+        ) : claimVerified ? (
+          <div className="issuer-application-overview-card__waiting" role="status">
+            <Clock3 size={18} />
+            <div>
+              <strong>Waiting for Investor Action</strong>
+              <span>The investor needs to submit the required claim from their side. Once submitted, you can add the investor to the registry.</span>
+            </div>
+          </div>
+        ) : (
+          <div className="issuer-application-overview-card__actions">
+            <Button variant="danger" icon={XCircle} disabled={!canReject || decisionLoading} onClick={() => setDecisionModal('reject')}>Reject Request</Button>
+            <Button icon={ShieldCheck} disabled={!canVerify || decisionLoading} onClick={() => setDecisionModal('verify')}>Verify Claims</Button>
+          </div>
+        )}
       </Card>
 
       <section className="application-history-section issuer-application-history-section">

@@ -15,7 +15,10 @@ import { getErrorMessage } from '@/utils/error';
 
 const INTEREST_STATUS_OPTIONS = [
   { value: 'all', label: 'All Requests', description: 'All visible investment request statuses' },
-  { value: 'submitIntrest', label: 'Pending Review', description: 'Requests ready for issuer review' },
+  { value: 'pending', label: 'Pending', description: 'Requests waiting for the next action' },
+  { value: 'submitIntrest', label: 'Submit Interest', description: 'Investment interests submitted for issuer review' },
+  { value: 'verifiedByIssuer', label: 'Verified by Issuer', description: 'Requests whose claims were verified by the issuer' },
+  { value: 'claimSubmitted', label: 'Claim Submitted', description: 'Requests with investor claims submitted on-chain' },
   { value: 'approved', label: 'Approved', description: 'Requests that have been approved' },
   { value: 'rejected', label: 'Rejected', description: 'Requests that were not approved' },
   { value: 'cancelled', label: 'Cancelled', description: 'Requests that are no longer active' },
@@ -24,7 +27,8 @@ const INTEREST_STATUS_OPTIONS = [
 const requestStatusMeta = (value) => {
   const normalized = String(value || '').trim().toLowerCase();
   const compact = normalized.replace(/[\s_-]+/g, '');
-  if (compact === 'verifiedbyissuer') return { label: 'Verified', tone: 'success' };
+  if (['verifiedbyissuer', 'verified'].includes(compact)) return { label: 'Claim Verified', tone: 'success' };
+  if (compact === 'claimsubmitted') return { label: 'Claims Submitted', tone: 'success' };
   if (normalized === 'approved') return { label: 'Approved', tone: 'success' };
   if (normalized === 'rejected') return { label: 'Rejected', tone: 'danger' };
   if (normalized === 'cancelled') return { label: 'Cancelled', tone: 'neutral' };
@@ -134,6 +138,7 @@ export default function IssuerInvestorsPage() {
             onChange={setStatusFilter}
             icon={Filter}
             ariaLabel="Filter investment interests by status"
+            align="end"
             className="issuer-status-dropdown"
           />
           <Button variant="secondary" icon={Download} disabled={!requests.length} onClick={handleExport}>Export CSV</Button>

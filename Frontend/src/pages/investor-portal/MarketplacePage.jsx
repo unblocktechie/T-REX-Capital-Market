@@ -99,10 +99,11 @@ export default function MarketplacePage() {
       const priority = {
         [MARKETPLACE_STATUS.CLAIM_REQUIRED]: 0,
         [MARKETPLACE_STATUS.ACTION_REQUIRED]: 1,
-        [MARKETPLACE_STATUS.APPROVED]: 2,
-        [MARKETPLACE_STATUS.PENDING_REVIEW]: 3,
-        [MARKETPLACE_STATUS.NOT_APPLIED]: 4,
-        [MARKETPLACE_STATUS.REJECTED]: 5,
+        [MARKETPLACE_STATUS.CLAIMS_SUBMITTED]: 2,
+        [MARKETPLACE_STATUS.APPROVED]: 3,
+        [MARKETPLACE_STATUS.PENDING_REVIEW]: 4,
+        [MARKETPLACE_STATUS.NOT_APPLIED]: 5,
+        [MARKETPLACE_STATUS.REJECTED]: 6,
       };
       return (priority[a.status] ?? 9) - (priority[b.status] ?? 9);
     });
@@ -147,6 +148,7 @@ export default function MarketplacePage() {
 
     const shouldOpenApplication = Boolean(interestUid) && [
       MARKETPLACE_STATUS.PENDING_REVIEW,
+      MARKETPLACE_STATUS.CLAIMS_SUBMITTED,
       MARKETPLACE_STATUS.APPROVED,
       MARKETPLACE_STATUS.REJECTED,
       MARKETPLACE_STATUS.CANCELLED,
