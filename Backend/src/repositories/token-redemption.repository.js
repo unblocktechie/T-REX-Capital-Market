@@ -1,5 +1,6 @@
 const { execute } = require('../database/connection');
 const { createUid } = require('../utils/token');
+const { sqlInteger } = require('../utils/sql');
 
 const TERMINAL_STATUSES = ['COMPLETED', 'ISSUER_REJECTED', 'CANCELLED', 'EXPIRED'];
 
@@ -139,14 +140,16 @@ class TokenRedemptionRepository {
       params.push(pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern);
     }
     const where = conditions.join(' AND '); const offset = (safePage - 1) * safeLimit;
+    const limitSql = sqlInteger(safeLimit, { min: 1, name: 'limit' });
+    const offsetSql = sqlInteger(offset, { name: 'offset' });
     const [rows, counts] = await Promise.all([
       execute(`SELECT r.*, t.\`tokenName\`, t.\`tokenSymbol\`,
         TRIM(CONCAT(COALESCE(i.\`firstName\`,''),' ',COALESCE(i.\`lastName\`,''))) AS \`investorName\`
         FROM \`tokenRedemption\` r
         LEFT JOIN \`tokenMaster\` t ON t.\`tokenUid\`=r.\`tokenUid\`
         LEFT JOIN \`investorMaster\` i ON i.\`investorUid\`=r.\`investorUid\`
-        WHERE ${where} ORDER BY r.\`createdAt\` DESC, r.\`redemptionUid\` DESC LIMIT ? OFFSET ?`,
-      [...params, safeLimit, offset], executor),
+        WHERE ${where} ORDER BY r.\`createdAt\` DESC, r.\`redemptionUid\` DESC LIMIT ${limitSql} OFFSET ${offsetSql}`,
+      params, executor),
       execute(`SELECT COUNT(*) AS \`total\` FROM \`tokenRedemption\` r WHERE ${where}`, params, executor),
     ]);
     return { rows, total: Number(counts[0]?.total || 0), page: safePage, limit: safeLimit };
@@ -233,22 +236,24 @@ class TokenRedemptionRepository {
   }
 
   async schedule(redemptionUid, seconds = 30, executor) {
+    const secondsSql = sqlInteger(Math.max(1, Math.trunc(seconds)), { min: 1, name: 'seconds' });
     await execute(
       `UPDATE \`tokenRedemption\` SET \`syncStatus\`='QUEUED',\`syncCompletedAt\`=UTC_TIMESTAMP(3),
-       \`nextSyncAt\`=DATE_ADD(UTC_TIMESTAMP(3),INTERVAL ? SECOND),\`updatedAt\`=UTC_TIMESTAMP(3)
+       \`nextSyncAt\`=DATE_ADD(UTC_TIMESTAMP(3),INTERVAL ${secondsSql} SECOND),\`updatedAt\`=UTC_TIMESTAMP(3)
        WHERE \`redemptionUid\`=? AND \`status\` NOT IN ('COMPLETED','ISSUER_REJECTED','CANCELLED','EXPIRED')`,
-      [Math.max(1, Math.trunc(seconds)), redemptionUid], executor,
+      [redemptionUid], executor,
     );
   }
 
   async recordError(redemptionUid, stage, code, message, retrySeconds = null, executor) {
+    const retrySecondsSql = sqlInteger(retrySeconds == null ? 0 : retrySeconds, { name: 'retrySeconds' });
     await execute(
       `UPDATE \`tokenRedemption\` SET \`errorStage\`=?,\`errorCode\`=?,\`errorMessage\`=?,
        \`syncStatus\`=?,\`syncCompletedAt\`=UTC_TIMESTAMP(3),
-       \`nextSyncAt\`=CASE WHEN ? IS NULL THEN NULL ELSE DATE_ADD(UTC_TIMESTAMP(3),INTERVAL ? SECOND) END,
+       \`nextSyncAt\`=CASE WHEN ? IS NULL THEN NULL ELSE DATE_ADD(UTC_TIMESTAMP(3),INTERVAL ${retrySecondsSql} SECOND) END,
        \`updatedAt\`=UTC_TIMESTAMP(3) WHERE \`redemptionUid\`=? AND \`isDeleted\`=0`,
       [stage, code, String(message || '').slice(0, 2000), retrySeconds === null ? 'FAILED' : 'QUEUED',
-        retrySeconds, retrySeconds || 0, redemptionUid], executor,
+        retrySeconds, redemptionUid], executor,
     );
   }
 
@@ -261,24 +266,26 @@ class TokenRedemptionRepository {
   }
 
   async listRecoveryCandidates(limit = 50, executor) {
+    const limitSql = sqlInteger(Math.max(1, Math.trunc(limit)), { min: 1, name: 'limit' });
     return execute(
       `SELECT * FROM \`tokenRedemption\` WHERE \`status\` NOT IN
        ('PENDING_INVESTOR_AUTHORIZATION','PENDING_ISSUER_APPROVAL','COMPLETED','ISSUER_REJECTED','CANCELLED','EXPIRED','MANUAL_REVIEW')
        AND \`isDeleted\`=0 AND (\`syncStatus\` IN ('IDLE','QUEUED','FAILED') OR
        (\`syncStatus\`='PROCESSING' AND \`syncStartedAt\`<DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 5 MINUTE)))
        AND (\`nextSyncAt\` IS NULL OR \`nextSyncAt\`<=UTC_TIMESTAMP(3))
-       ORDER BY (\`syncStatus\`='QUEUED') DESC,\`createdAt\` LIMIT ?`,
-      [Math.max(1, Math.trunc(limit))], executor,
+       ORDER BY (\`syncStatus\`='QUEUED') DESC,\`createdAt\` LIMIT ${limitSql}`,
+      [], executor,
     );
   }
 
   async expireUnsigned(limit = 50, executor) {
+    const limitSql = sqlInteger(Math.max(1, Math.trunc(limit)), { min: 1, name: 'limit' });
     const result = await execute(
       `UPDATE \`tokenRedemption\` SET \`status\`='EXPIRED',\`expiredAt\`=UTC_TIMESTAMP(3),
        \`syncStatus\`='IDLE',\`nextSyncAt\`=NULL,\`updatedAt\`=UTC_TIMESTAMP(3)
        WHERE \`status\`='PENDING_INVESTOR_AUTHORIZATION' AND \`authorizationSignature\` IS NULL
-       AND \`expiresAt\`<=UTC_TIMESTAMP(3) AND \`isDeleted\`=0 ORDER BY \`expiresAt\` LIMIT ?`,
-      [Math.max(1, Math.trunc(limit))], executor,
+       AND \`expiresAt\`<=UTC_TIMESTAMP(3) AND \`isDeleted\`=0 ORDER BY \`expiresAt\` LIMIT ${limitSql}`,
+      [], executor,
     );
     return result.affectedRows;
   }
@@ -299,11 +306,12 @@ class TokenRedemptionRepository {
   }
 
   async listPaymentEvents(chainId, limit = 200, executor) {
+    const limitSql = sqlInteger(Math.max(1, Math.trunc(limit)), { min: 1, name: 'limit' });
     return execute(
       `SELECT * FROM \`tokenRedemptionPaymentEvent\` WHERE \`chainId\`=? AND \`isCanonical\`=1
        AND \`processingStatus\` IN ('NEW','UNMATCHED','FAILED') AND \`processingAttempts\`<20
-       ORDER BY \`blockNumber\`,\`logIndex\` LIMIT ?`,
-      [chainId, Math.max(1, Math.trunc(limit))], executor,
+       ORDER BY \`blockNumber\`,\`logIndex\` LIMIT ${limitSql}`,
+      [chainId], executor,
     );
   }
 

@@ -23,6 +23,38 @@ const createInvestmentRouter = ({ controller, registryController, purchaseContro
     asyncHandler(purchaseController.create),
   );
 
+  // Backend-authoritative investor-to-investor ERC-3643 transfer intent and verification.
+  router.post(
+    '/tokens/:tokenUid/transfers',
+    validate({ params: schemas.tokenParams, body: schemas.createTransfer }),
+    authorize,
+    asyncHandler(transferController.create),
+  );
+  router.get(
+    '/tokens/:tokenUid/transfers',
+    validate({ params: schemas.tokenParams, query: schemas.transferHistoryQuery }),
+    authorize,
+    asyncHandler(transferController.list),
+  );
+  router.get(
+    '/transfers/:transferUid',
+    validate({ params: schemas.transferParams }),
+    authorize,
+    asyncHandler(transferController.get),
+  );
+  router.post(
+    '/transfers/:transferUid/confirm',
+    validate({ params: schemas.transferParams, body: schemas.confirmPurchase }),
+    authorize,
+    asyncHandler(transferController.confirm),
+  );
+  router.post(
+    '/transfers/:transferUid/retry',
+    validate({ params: schemas.transferParams, body: schemas.emptyBody }),
+    authorize,
+    asyncHandler(transferController.retry),
+  );
+
   // Investor-authorized, issuer-funded manual redemption with platform lock/burn settlement.
   router.post(
     '/tokens/:tokenUid/redemptions',
@@ -87,6 +119,12 @@ const createInvestmentRouter = ({ controller, registryController, purchaseContro
 
   // Investor journey.
   router.get(
+    '/me/portfolio',
+    validate({ query: schemas.portfolioQuery }),
+    authorize,
+    asyncHandler(purchaseController.portfolio),
+  );
+  router.get(
     '/tokens/:tokenUid/required-documents',
     validate({ params: schemas.tokenParams }),
     authorize,
@@ -126,8 +164,38 @@ const createInvestmentRouter = ({ controller, registryController, purchaseContro
     authorize,
     asyncHandler(controller.myInterestHistory),
   );
+  router.get(
+    '/me/invitations',
+    validate({ query: schemas.investorInvitationsQuery }),
+    authorize,
+    asyncHandler(invitationController.investorList),
+  );
+  router.get(
+    '/me/invitations/:invitationUid',
+    validate({ params: schemas.invitationParams }),
+    authorize,
+    asyncHandler(invitationController.investorGet),
+  );
+  router.patch(
+    '/me/invitations/:invitationUid/viewed',
+    validate({ params: schemas.invitationParams, body: schemas.emptyBody }),
+    authorize,
+    asyncHandler(invitationController.investorViewed),
+  );
 
   // Issuer review.
+  router.get(
+    '/issuer/investors',
+    validate({ query: schemas.issuerInvestorsQuery }),
+    authorize,
+    asyncHandler(invitationController.issuerInvestors),
+  );
+  router.post(
+    '/issuer/investors/:investorUid/invitations',
+    validate({ params: schemas.investorParams, body: schemas.createInvestorInvitation }),
+    authorize,
+    asyncHandler(invitationController.invite),
+  );
   router.get('/issuer/interests', validate({ query: schemas.issuerInterestsQuery }), authorize, asyncHandler(controller.issuerInterests));
   router.get(
     '/issuer/redemptions',

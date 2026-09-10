@@ -20,6 +20,14 @@ const createTokenPurchaseController = (service) => ({
       meta: result.pagination,
     });
   },
+  portfolio: async (req, res) => {
+    const result = await service.portfolio(req.user, req.query);
+    return sendSuccess(req, res, {
+      message: 'Investor portfolio fetched successfully.',
+      data: result.items,
+      meta: result.pagination,
+    });
+  },
   confirm: async (req, res) => {
     const result = await service.confirm(req.user, req.params.purchaseUid, req.body.txHash);
     let message = 'USDT payment verified.';

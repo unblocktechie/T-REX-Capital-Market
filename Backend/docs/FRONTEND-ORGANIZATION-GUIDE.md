@@ -438,6 +438,14 @@ The backend revalidates everything. On success:
 
 Clear stale editable form state, invalidate the organization query, and navigate to `/organization/status`. Submitted, under-review, and approved organizations are read-only.
 
+If the backend returns `409 WALLET_ALREADY_ASSIGNED_TO_INVESTOR`, keep the form editable and show:
+"This wallet is already assigned to an investor account. Connect a different issuer wallet."
+Do not retry submission with the same address.
+
+If the backend returns `409 ISSUER_WALLET_ALREADY_REGISTERED`, show:
+"This wallet is already registered to another issuer organization. Connect a different wallet."
+Changing the login email does not make the wallet eligible for another organization.
+
 ### Rejection and one-time revision UI
 
 Use the organization response to choose the rejection experience:

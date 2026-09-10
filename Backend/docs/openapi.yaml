@@ -21,6 +21,7 @@ tags:
   - name: Identity Registry
   - name: Token Purchases
   - name: Token Redemptions
+  - name: Investor Invitations
 
 x-list-operation: &listOperation
   security: [{ bearerAuth: [] }]
@@ -615,12 +616,13 @@ paths:
         required: true
         content: { application/json: { schema: { type: object, additionalProperties: false } } }
       responses:
-        '200': { description: Existing pending or confirmed operation returned }
+        '200': { description: Existing operation returned or existing on-chain registration inserted directly as CONFIRMED }
         '201': { description: PENDING operation created before MetaMask }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { description: Subscription, claims, country, agent, or registry state is not eligible }
+        '409': { description: Subscription, claims, country, agent, or expected registry state is not eligible }
+        '503': { description: Existing on-chain registration evidence is temporarily unavailable; retry without opening MetaMask }
     get:
       tags: [Identity Registry]
       summary: Resume the issuer-owned registry operation
@@ -686,6 +688,19 @@ paths:
         '409': { description: Investor/token/agent/cap prerequisites are not satisfied }
         '422': { $ref: '#/components/responses/ValidationError' }
         '503': { description: Blockchain prerequisites are temporarily unavailable }
+  /api/v1/investments/me/portfolio:
+    get:
+      tags: [Token Purchases]
+      summary: List the authenticated investor's aggregated completed-token portfolio
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Search' }
+      responses:
+        '200': { description: Marketplace token data with chain, purchase, redemption, and net holding aggregates }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /api/v1/investments/purchases/{purchaseUid}:
     get:
       tags: [Token Purchases]
@@ -728,6 +743,73 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { description: The purchase intent has EXPIRED; create a new intent }
+
+  /api/v1/investments/tokens/{tokenUid}/transfers:
+    get:
+      tags: [Token Transfers]
+      summary: List sent and received token transfers
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: tokenUid, required: true, schema: { type: string, format: uuid } }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Search' }
+        - { in: query, name: status, schema: { type: string, enum: [PENDING_TRANSFER, COMPLETED, EXPIRED, MANUAL_REVIEW, all], default: all } }
+        - { in: query, name: direction, schema: { type: string, enum: [sent, received, all], default: all } }
+      responses:
+        '200': { description: Accessible transfer rows with pagination metadata }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Token Transfers]
+      summary: Create an authoritative pending investor token transfer
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: tokenUid, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreateTokenTransferInput' } } }
+      responses:
+        '200': { description: Existing idempotent or active transfer returned }
+        '201': { description: PENDING_TRANSFER intent and authoritative transactionRequest created }
+        '409': { description: Investor, registry, balance, compliance, or holder-cap prerequisite failed }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { description: Blockchain prerequisites are temporarily unavailable }
+  /api/v1/investments/transfers/{transferUid}:
+    get:
+      tags: [Token Transfers]
+      summary: Get sender/recipient accessible transfer detail and hash history
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/TransferUid' }]
+      responses:
+        '200': { description: Current transfer lifecycle and audit state }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/investments/transfers/{transferUid}/confirm:
+    post:
+      tags: [Token Transfers]
+      summary: Independently verify an investor token transfer transaction
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/TransferUid' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ConfirmTokenPurchaseInput' } } }
+      responses:
+        '200': { description: Current persisted status; inspect data.status for PENDING_TRANSFER, COMPLETED, or EXPIRED }
+        '409': { description: Transaction is reused, already assigned, or operation is terminal }
+        '422': { description: Chain, token, sender, calldata, receipt, event, or state mismatch }
+  /api/v1/investments/transfers/{transferUid}/retry:
+    post:
+      tags: [Token Transfers]
+      summary: Queue idempotent transfer hash/event reconciliation
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/TransferUid' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: false } } }
+      responses:
+        '200': { description: Already complete or a new wallet transaction is required }
+        '202': { description: Reconciliation queued }
+        '409': { description: Transfer is expired or requires manual review }
 
   /api/v1/investments/tokens/{tokenUid}/redemptions:
     get:
@@ -852,6 +934,76 @@ paths:
         '409': { description: Tokens are not locked or another hash is assigned }
         '422': { description: Definitive on-chain payment mismatch }
 
+  /api/v1/investments/issuer/investors:
+    get:
+      tags: [Investor Invitations]
+      summary: List completed investor profiles for an issuer-owned deployed token
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: query, name: tokenUid, required: true, schema: { type: string, format: uuid } }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Search' }
+        - in: query
+          name: invitationStatus
+          schema: { type: string, enum: [all, notInvited, PENDING, SENT, VIEWED], default: all }
+      responses:
+        '200': { description: Completed investors with eligibility and invitation state }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { description: Token is not owned by authenticated issuer }
+        '409': { description: Organization or token is not eligible to invite }
+  /api/v1/investments/issuer/investors/{investorUid}/invitations:
+    post:
+      tags: [Investor Invitations]
+      summary: Create or idempotently return a token invitation and deliver its email
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: investorUid, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreateInvestorInvitationInput' } } }
+      responses:
+        '201': { description: Invitation created and email sent }
+        '200': { description: Existing sent/in-progress invitation returned without duplicate delivery }
+        '409': { description: Investor, country, organization, token, or existing interest is ineligible }
+        '502': { description: Invitation saved but SMTP delivery failed; retry the same operation }
+  /api/v1/investments/me/invitations:
+    get:
+      tags: [Investor Invitations]
+      summary: List authenticated investor's delivered token invitations
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Search' }
+        - { in: query, name: status, schema: { type: string, enum: [all, SENT, VIEWED], default: all } }
+      responses:
+        '200': { description: Paginated invitations with marketplace token and issuer detail }
+        '409': { description: Investor profile is incomplete }
+  /api/v1/investments/me/invitations/{invitationUid}:
+    get:
+      tags: [Investor Invitations]
+      summary: Get an investor-owned delivered invitation
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: invitationUid, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Invitation with marketplace token and issuer detail }
+        '404': { description: Invitation does not belong to the investor }
+  /api/v1/investments/me/invitations/{invitationUid}/viewed:
+    patch:
+      tags: [Investor Invitations]
+      summary: Idempotently mark an investor-owned invitation viewed
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: invitationUid, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: false } } }
+      responses:
+        '200': { description: Invitation is VIEWED }
+        '404': { description: Invitation does not belong to the investor }
+
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -877,6 +1029,7 @@ components:
     RegistryRegistrationUid: { in: path, name: registryRegistrationUid, required: true, schema: { type: string, format: uuid } }
     PurchaseUid: { in: path, name: purchaseUid, required: true, schema: { type: string, format: uuid } }
     RedemptionUid: { in: path, name: redemptionUid, required: true, schema: { type: string, format: uuid } }
+    TransferUid: { in: path, name: transferUid, required: true, schema: { type: string, format: uuid } }
   responses:
     Unauthorized: { description: Missing, invalid, expired, or stale JWT }
     Forbidden: { description: Account or role is not allowed to perform the operation }
@@ -1192,3 +1345,9 @@ components:
       additionalProperties: false
       properties:
         reason: { type: string, minLength: 3, maxLength: 1000 }
+    CreateInvestorInvitationInput:
+      type: object
+      required: [tokenUid]
+      additionalProperties: false
+      properties:
+        tokenUid: { type: string, format: uuid }

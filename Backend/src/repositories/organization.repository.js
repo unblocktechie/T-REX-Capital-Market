@@ -1,6 +1,7 @@
 const { execute } = require('../database/connection');
 const { createUid } = require('../utils/token');
 const { identifier } = require('./base.repository');
+const { sqlInteger } = require('../utils/sql');
 
 const organizationFields = [
   'legalCompanyName', 'entityTypeUid', 'registrationNumber', 'streetAddress', 'countryUid', 'stateUid',
@@ -96,9 +97,11 @@ class OrganizationRepository {
   }
 
   async listSubmittedApplications(options = {}, executor) {
-    const page = options.page || 1;
-    const limit = options.limit || 20;
+    const page = Math.max(1, Math.trunc(Number(options.page) || 1));
+    const limit = Math.max(1, Math.trunc(Number(options.limit) || 20));
     const offset = (page - 1) * limit;
+    const limitSql = sqlInteger(limit, { min: 1, name: 'limit' });
+    const offsetSql = sqlInteger(offset, { name: 'offset' });
     const conditions = [
       'o.`isDeleted` = 0',
       'o.`submittedAt` IS NOT NULL',
@@ -144,8 +147,8 @@ class OrganizationRepository {
        LEFT JOIN \`countryMaster\` c ON c.\`countryUid\` = o.\`countryUid\`
        WHERE ${where}
        ORDER BY ${sortBy} ${sortOrder}
-       LIMIT ? OFFSET ?`,
-      [...params, limit, offset],
+       LIMIT ${limitSql} OFFSET ${offsetSql}`,
+      params,
       executor,
     );
     const total = Number(countRows[0].total);

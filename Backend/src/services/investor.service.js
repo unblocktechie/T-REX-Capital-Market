@@ -51,17 +51,25 @@ const walletAlreadyRegisteredError = () => new ApiError(
   'INVESTOR_WALLET_ALREADY_REGISTERED',
 );
 
+const issuerWalletConflictError = () => new ApiError(
+  409,
+  'This wallet address is already assigned to an issuer organization and cannot be used as an investor wallet.',
+  undefined,
+  'WALLET_ALREADY_ASSIGNED_TO_ISSUER',
+);
+
 const isRegisteredWalletDuplicate = (error) => error?.code === 'ER_DUP_ENTRY'
   && String(error.sqlMessage || error.message || '').includes('ukInvestorMasterRegisteredWallet');
 
 class InvestorService {
-  constructor({ repository, optionRepository, locationService, identityService, investmentService = null, transactionRunner = withTransaction }) {
+  constructor({ repository, optionRepository, locationService, identityService, walletOwnershipRepository, investmentService = null, transactionRunner = withTransaction }) {
     this.repository = repository;
     this.optionRepository = optionRepository;
     this.locationService = locationService;
     // Reuses the shared OnchainID identity factory service (the same one the organization
     // approval flow uses) to create the investor's on-chain identity.
     this.identityService = identityService;
+    this.walletOwnershipRepository = walletOwnershipRepository;
     // Optional: enforces the investment-interest document-upload gate and promotes/repairs
     // interest records after a submitted investor uploads claim documents.
     this.investmentService = investmentService;
@@ -274,6 +282,9 @@ class InvestorService {
     if (!investor) throw ApiError.badRequest('Investor onboarding has not been started.');
     this.assertEditable(investor);
     const normalizedWalletAddress = normalizeWalletAddress(walletAddress);
+
+    const issuerWalletOwner = await this.walletOwnershipRepository.findIssuerOwner(normalizedWalletAddress);
+    if (issuerWalletOwner) throw issuerWalletConflictError();
 
     // A wallet represents one investor identity regardless of the email/account used.
     // This early check avoids an unnecessary blockchain call in the normal duplicate case;

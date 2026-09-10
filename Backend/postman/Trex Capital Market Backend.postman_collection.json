@@ -237,6 +237,14 @@
       "value": ""
     },
     {
+      "key": "invitationInvestorUid",
+      "value": ""
+    },
+    {
+      "key": "investorInvitationUid",
+      "value": ""
+    },
+    {
       "key": "interestUid",
       "value": ""
     },
@@ -290,6 +298,26 @@
     },
     {
       "key": "redemptionPaymentTxHash",
+      "value": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "key": "transferUid",
+      "value": ""
+    },
+    {
+      "key": "transferRecipientWalletAddress",
+      "value": "0x4444444444444444444444444444444444444444"
+    },
+    {
+      "key": "transferTokenAmount",
+      "value": "1.25"
+    },
+    {
+      "key": "transferIdempotencyKey",
+      "value": "send-flow-0001"
+    },
+    {
+      "key": "transferTxHash",
       "value": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     }
   ],
@@ -2652,6 +2680,21 @@
           ] } }]
         },
         {
+          "name": "Get Investor Portfolio",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{investorToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/investments/me/portfolio?page=1&limit=20&search=",
+            "description": "Returns one row per token with at least one completed purchase. Includes marketplace token/image/issuer/claim/restriction data, chain ID, purchased and redeemed totals, net token amount, USDT invested, average price, counts, and activity dates."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Investor portfolio fetched', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json(); pm.expect(body.data).to.be.an('array');",
+            "pm.expect(body.meta).to.have.keys('page', 'limit', 'total', 'totalPages');"
+          ] } }]
+        },
+        {
           "name": "Confirm USDT Purchase Payment",
           "request": {
             "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{investorToken}}", "type": "string" }] },
@@ -2885,7 +2928,7 @@
               "options": { "raw": { "language": "json" } }
             },
             "url": "{{baseUrl}}/api/v1/investments/issuer/interests/{{interestUid}}/registry-registration",
-            "description": "Requires interest status claimSubmitted. Creates PENDING before MetaMask or returns the existing row. Use only the returned registry/wallet/identity/country values for registerIdentity().",
+            "description": "Requires a claimSubmitted or already synchronized registered interest. For a new on-chain registration, creates PENDING before MetaMask. If matching on-chain registry state already exists, no PENDING row or MetaMask call is created: the backend finds and verifies the authoritative IdentityRegistered transaction, inserts CONFIRMED directly, and returns 200. A temporary 503 must be retried without opening MetaMask. Use only the returned registry/wallet/identity/country values for registerIdentity().",
             "auth": {
               "type": "bearer",
               "bearer": [{ "key": "token", "value": "{{userToken}}", "type": "string" }]
@@ -2896,7 +2939,7 @@
             "script": {
               "type": "text/javascript",
               "exec": [
-                "pm.test('Registry operation created or resumed', () => pm.expect([200, 201]).to.include(pm.response.code));",
+                "pm.test('Registry operation created, resumed, or synchronized', () => pm.expect([200, 201]).to.include(pm.response.code));",
                 "const data = pm.response.json().data;",
                 "pm.expect(data.status).to.be.oneOf(['PENDING', 'CONFIRMED']);",
                 "if (data.registryOperationId) pm.collectionVariables.set('registryRegistrationUid', data.registryOperationId);"
@@ -3238,6 +3281,71 @@
       ]
     },
     {
+      "name": "Investor Invitations",
+      "description": "Issuer discovery and idempotent token invitations, followed by the investor invitation inbox and VIEWED acknowledgement.",
+      "item": [
+        {
+          "name": "Issuer - List Completed Investors",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }],
+            "url": "{{baseUrl}}/api/v1/investments/issuer/investors?tokenUid={{investmentTokenUid}}&page=1&limit=20&search=&invitationStatus=all",
+            "description": "Lists only active submitted investor profiles. Each row includes invitation state, existing-interest state, and country eligibility for the issuer-owned deployed token."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Completed investors listed', () => pm.response.to.have.status(200));",
+            "const first = pm.response.json().data?.[0]; if (first?.investorUid) pm.collectionVariables.set('invitationInvestorUid', first.investorUid);"
+          ] } }]
+        },
+        {
+          "name": "Issuer - Invite Investor",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"tokenUid\": \"{{investmentTokenUid}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/investments/issuer/investors/{{invitationInvestorUid}}/invitations",
+            "description": "Creates the unique invitation and sends its styled email. Repeating a successfully sent invitation returns the same row and does not send another email."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Invitation created or returned idempotently', () => pm.expect([200, 201]).to.include(pm.response.code));",
+            "const uid = pm.response.json().data?.invitation?.invitationUid; if (uid) pm.collectionVariables.set('investorInvitationUid', uid);"
+          ] } }]
+        },
+        {
+          "name": "Investor - List Invitations",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{investorToken}}" }],
+            "url": "{{baseUrl}}/api/v1/investments/me/invitations?page=1&limit=20&search=&status=all",
+            "description": "Returns delivered invitations with marketplace-equivalent token detail and issuer organization detail."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Investor invitations listed', () => pm.response.to.have.status(200));",
+            "const uid = pm.response.json().data?.[0]?.invitationUid; if (uid) pm.collectionVariables.set('investorInvitationUid', uid);"
+          ] } }]
+        },
+        {
+          "name": "Investor - Get Invitation",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{investorToken}}" }],
+            "url": "{{baseUrl}}/api/v1/investments/me/invitations/{{investorInvitationUid}}",
+            "description": "Gets one investor-owned invitation. Other investors receive INVITATION_NOT_FOUND."
+          }
+        },
+        {
+          "name": "Investor - Mark Invitation Viewed",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{investorToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/investments/me/invitations/{{investorInvitationUid}}/viewed",
+            "description": "Idempotently changes SENT to VIEWED and stores viewedAt."
+          }
+        }
+      ]
+    },
+    {
       "name": "Token Redemption",
       "description": "Manual issuer-funded redemption: investor intent + EIP-712 authorization, issuer approval, platform token lock, issuer USDT payment verification, platform burn, cleanup unlock, and fallback retry.",
       "item": [
@@ -3340,6 +3448,68 @@
             "body": { "mode": "raw", "raw": "{\n  \"txHash\": \"{{redemptionPaymentTxHash}}\"\n}", "options": { "raw": { "language": "json" } } },
             "url": "{{baseUrl}}/api/v1/investments/issuer/redemptions/{{redemptionUid}}/payment/confirm",
             "description": "Send only txHash. The backend verifies chain, USDT contract, treasury sender, investor recipient, exact amount, canonical receipt and Transfer event before burning."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Token Transfer",
+      "item": [
+        {
+          "name": "Investor - Create Pending Transfer",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{investorToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"recipientWalletAddress\": \"{{transferRecipientWalletAddress}}\",\n  \"tokenAmount\": \"{{transferTokenAmount}}\",\n  \"idempotencyKey\": \"{{transferIdempotencyKey}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/investments/tokens/{{investmentTokenUid}}/transfers",
+            "description": "Creates the backend-authoritative PENDING_TRANSFER row before MetaMask. The recipient must be another completed investor registered for the same token. Use only data.transactionRequest for the wallet call."
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Pending transfer intent is returned', () => pm.expect([200, 201]).to.include(pm.response.code));",
+                "const json = pm.response.json();",
+                "if (json.data?.transferUid) pm.collectionVariables.set('transferUid', json.data.transferUid);"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "Investor - Confirm Transfer Transaction",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{investorToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"txHash\": \"{{transferTxHash}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/investments/transfers/{{transferUid}}/confirm",
+            "description": "Send only the MetaMask hash. HTTP 200 may be PENDING_TRANSFER or COMPLETED; data.status is authoritative."
+          }
+        },
+        {
+          "name": "Investor - Get Transfer Detail",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{investorToken}}" }],
+            "url": "{{baseUrl}}/api/v1/investments/transfers/{{transferUid}}"
+          }
+        },
+        {
+          "name": "Investor - List Sent and Received Transfers",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{investorToken}}" }],
+            "url": "{{baseUrl}}/api/v1/investments/tokens/{{investmentTokenUid}}/transfers?page=1&limit=20&search=&status=all&direction=all"
+          }
+        },
+        {
+          "name": "Investor - Retry Transfer Synchronization",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{investorToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/v1/investments/transfers/{{transferUid}}/retry",
+            "description": "Queues lightweight verification/targeted recovery. It never submits another blockchain transaction."
           }
         }
       ]

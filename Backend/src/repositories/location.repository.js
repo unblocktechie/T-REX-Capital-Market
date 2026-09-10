@@ -1,12 +1,17 @@
 const { execute } = require('../database/connection');
+const { sqlInteger } = require('../utils/sql');
 
 class LocationRepository {
   async paginate(sqlBase, countBase, params, { page = 1, limit = 50 }) {
-    const offset = (page - 1) * limit;
+    const safePage = Math.max(1, Math.trunc(Number(page) || 1));
+    const safeLimit = Math.max(1, Math.trunc(Number(limit) || 50));
+    const offset = (safePage - 1) * safeLimit;
+    const limitSql = sqlInteger(safeLimit, { min: 1, name: 'limit' });
+    const offsetSql = sqlInteger(offset, { name: 'offset' });
     const counts = await execute(countBase, params);
-    const rows = await execute(`${sqlBase} LIMIT ? OFFSET ?`, [...params, limit, offset]);
+    const rows = await execute(`${sqlBase} LIMIT ${limitSql} OFFSET ${offsetSql}`, params);
     const total = Number(counts[0].total);
-    return { rows, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+    return { rows, pagination: { page: safePage, limit: safeLimit, total, totalPages: Math.ceil(total / safeLimit) } };
   }
 
   async listCountries({ page = 1, limit = 50, search }) {

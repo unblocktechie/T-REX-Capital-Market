@@ -1,5 +1,6 @@
 const { execute } = require('../database/connection');
 const { createUid } = require('../utils/token');
+const { sqlInteger } = require('../utils/sql');
 
 class ClaimIndexerRepository {
   async ensureCheckpoint(indexerName, chainId, startBlock = 0, executor) {
@@ -27,27 +28,29 @@ class ClaimIndexerRepository {
   }
 
   async acquireLease(indexerName, chainId, leaseOwner, leaseSeconds, executor) {
+    const leaseSecondsSql = sqlInteger(Math.max(10, Math.trunc(leaseSeconds)), { min: 10, name: 'leaseSeconds' });
     const result = await execute(
       `UPDATE \`blockchainIndexerCheckpoint\`
        SET \`leaseOwner\` = ?,
-           \`leaseExpiresAt\` = DATE_ADD(UTC_TIMESTAMP(3), INTERVAL ? SECOND),
+            \`leaseExpiresAt\` = DATE_ADD(UTC_TIMESTAMP(3), INTERVAL ${leaseSecondsSql} SECOND),
            \`lastRunAt\` = UTC_TIMESTAMP(3),
            \`updatedAt\` = UTC_TIMESTAMP(3)
        WHERE \`indexerName\` = ? AND \`chainId\` = ? AND \`isActive\` = 1 AND \`isDeleted\` = 0
          AND (\`leaseOwner\` IS NULL OR \`leaseExpiresAt\` IS NULL OR \`leaseExpiresAt\` < UTC_TIMESTAMP(3) OR \`leaseOwner\` = ?)`,
-      [leaseOwner, Math.max(10, Math.trunc(leaseSeconds)), indexerName, chainId, leaseOwner],
+      [leaseOwner, indexerName, chainId, leaseOwner],
       executor,
     );
     return result.affectedRows > 0;
   }
 
   async renewLease(indexerName, chainId, leaseOwner, leaseSeconds, executor) {
+    const leaseSecondsSql = sqlInteger(Math.max(10, Math.trunc(leaseSeconds)), { min: 10, name: 'leaseSeconds' });
     const result = await execute(
       `UPDATE \`blockchainIndexerCheckpoint\`
-       SET \`leaseExpiresAt\` = DATE_ADD(UTC_TIMESTAMP(3), INTERVAL ? SECOND),
+       SET \`leaseExpiresAt\` = DATE_ADD(UTC_TIMESTAMP(3), INTERVAL ${leaseSecondsSql} SECOND),
            \`updatedAt\` = UTC_TIMESTAMP(3)
        WHERE \`indexerName\` = ? AND \`chainId\` = ? AND \`leaseOwner\` = ? AND \`isDeleted\` = 0`,
-      [Math.max(10, Math.trunc(leaseSeconds)), indexerName, chainId, leaseOwner],
+      [indexerName, chainId, leaseOwner],
       executor,
     );
     return result.affectedRows > 0;
@@ -112,26 +115,28 @@ class ClaimIndexerRepository {
   }
 
   async listProcessableEvents(chainId, limit = 200, executor) {
+    const limitSql = sqlInteger(Math.max(1, Math.trunc(limit)), { min: 1, name: 'limit' });
     return execute(
       `SELECT * FROM \`investorClaimBlockchainEvent\`
        WHERE \`chainId\` = ? AND \`processingStatus\` IN ('NEW', 'UNMATCHED', 'FAILED')
          AND \`isCanonical\` = 1 AND \`isDeleted\` = 0 AND \`processingAttempts\` < 20
        ORDER BY \`blockNumber\` ASC, \`transactionIndex\` ASC, \`logIndex\` ASC
-       LIMIT ?`,
-      [chainId, Math.max(1, Math.trunc(limit))],
+       LIMIT ${limitSql}`,
+      [chainId],
       executor,
     );
   }
 
   async findEventsForClaim({ chainId, identityAddress, issuerIdentityAddress, claimTopic }, limit = 20, executor) {
+    const limitSql = sqlInteger(Math.max(1, Math.trunc(limit)), { min: 1, name: 'limit' });
     return execute(
       `SELECT * FROM \`investorClaimBlockchainEvent\`
        WHERE \`chainId\` = ? AND LOWER(\`identityAddress\`) = LOWER(?)
          AND LOWER(\`issuerIdentityAddress\`) = LOWER(?) AND \`claimTopic\` = ?
          AND \`isCanonical\` = 1 AND \`isDeleted\` = 0
        ORDER BY \`blockNumber\` DESC, \`transactionIndex\` DESC, \`logIndex\` DESC
-       LIMIT ?`,
-      [chainId, identityAddress, issuerIdentityAddress, claimTopic, Math.max(1, Math.trunc(limit))],
+       LIMIT ${limitSql}`,
+      [chainId, identityAddress, issuerIdentityAddress, claimTopic],
       executor,
     );
   }

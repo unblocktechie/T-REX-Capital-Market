@@ -196,9 +196,9 @@ class TokenPurchaseBlockchainService {
       if (!matched) throw new PurchaseBlockchainError('MINT_EVENT_MISSING', 'Expected mint Transfer event was not emitted.');
       try {
         const token = this.contractFactory(expected.tokenAddress, TREX_TOKEN_ABI, provider);
-        const finalBalance = await token.balanceOf(expected.investorWalletAddress);
-        if (finalBalance < BigInt(expected.tokenAmountRaw)) {
-          throw new PurchaseBlockchainError('MINT_STATE_MISMATCH', 'Investor token balance does not reflect the verified mint.');
+        const balanceAtMintBlock = await token.balanceOf(expected.investorWalletAddress, { blockTag: receipt.blockNumber });
+        if (balanceAtMintBlock < BigInt(expected.tokenAmountRaw)) {
+          throw new PurchaseBlockchainError('MINT_STATE_MISMATCH', 'Investor token balance at the mint block does not reflect the verified mint.');
         }
       } catch (error) {
         if (error instanceof PurchaseBlockchainError) throw error;

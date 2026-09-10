@@ -26,6 +26,8 @@ const start = async () => {
   jobs.tokenPurchaseReconciliationRunner.start();
   // Manual issuer-funded redemption payment indexer + platform lock/burn/unlock recovery.
   jobs.tokenRedemptionReconciliationRunner.start();
+  // ERC-3643 investor transfer indexer + missing-hash/confirmation recovery.
+  jobs.tokenTransferReconciliationRunner.start();
 
   const shutdown = (signal) => {
     logger.info('Graceful shutdown started', { signal });
@@ -35,6 +37,7 @@ const start = async () => {
     jobs.identityRegistryReconciliationRunner.stop();
     jobs.tokenPurchaseReconciliationRunner.stop();
     jobs.tokenRedemptionReconciliationRunner.stop();
+    jobs.tokenTransferReconciliationRunner.stop();
     server.close(async () => {
       await closePool();
       logger.info('Graceful shutdown completed');

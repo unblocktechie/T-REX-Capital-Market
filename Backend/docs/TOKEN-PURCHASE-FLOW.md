@@ -188,5 +188,7 @@ An `EXPIRED` intent returns `409 PURCHASE_EXPIRED`; create a fresh purchase inst
   `tokenPurchasePayment`.
 
 Migrations: `database/migrations/20260910_add_token_purchase_flow.sql` and, for an existing
+installation, `database/migrations/20260910_expire_abandoned_token_purchases.sql` and
+`database/migrations/20260910_add_investor_token_purchase_history.sql`.
 
 Frontend implementation: `docs/FRONTEND-TOKEN-PURCHASE-FLOW-GUIDE.md`.

@@ -1,5 +1,6 @@
 const { execute } = require('../database/connection');
 const { createUid } = require('../utils/token');
+const { sqlInteger } = require('../utils/sql');
 
 class IdentityRegistryRegistrationRepository {
   async findContextByInterest(interestUid, executor) {
@@ -87,6 +88,20 @@ class IdentityRegistryRegistrationRepository {
     return rows[0] || null;
   }
 
+  async findCanonicalEvent(expected, executor) {
+    const rows = await execute(
+      `SELECT * FROM \`identityRegistryBlockchainEvent\`
+       WHERE \`chainId\` = ? AND LOWER(\`identityRegistryAddress\`) = LOWER(?)
+         AND LOWER(\`investorWalletAddress\`) = LOWER(?)
+         AND LOWER(\`investorIdentityAddress\`) = LOWER(?)
+         AND \`isCanonical\` = 1 AND \`isDeleted\` = 0
+       ORDER BY \`blockNumber\` DESC, \`logIndex\` DESC LIMIT 1`,
+      [expected.chainId, expected.identityRegistryAddress, expected.investorWalletAddress,
+        expected.investorIdentityAddress], executor,
+    );
+    return rows[0] || null;
+  }
+
   async createPending(data, executor) {
     const registryRegistrationUid = createUid();
     await execute(
@@ -99,6 +114,27 @@ class IdentityRegistryRegistrationRepository {
         data.issuerUserUid, data.chainId, data.identityRegistryAddress, data.issuerWalletAddress,
         data.investorWalletAddress, data.investorIdentityAddress, data.countryCode, data.preparedAtBlock ?? null],
       executor,
+    );
+    return this.findByUid(registryRegistrationUid, executor);
+  }
+
+  async createConfirmed(data, verified, executor) {
+    const registryRegistrationUid = createUid();
+    await execute(
+      `INSERT INTO \`identityRegistryRegistration\`
+        (\`registryRegistrationUid\`, \`interestUid\`, \`tokenUid\`, \`organizationUid\`, \`investorUid\`,
+         \`issuerUserUid\`, \`chainId\`, \`identityRegistryAddress\`, \`issuerWalletAddress\`,
+         \`investorWalletAddress\`, \`investorIdentityAddress\`, \`countryCode\`, \`status\`, \`txHash\`,
+         \`preparedAtBlock\`, \`lastScannedBlock\`, \`blockNumber\`, \`blockHash\`, \`transactionIndex\`,
+         \`logIndex\`, \`verifiedAt\`, \`syncStatus\`, \`syncCompletedAt\`)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'CONFIRMED', ?, ?, ?, ?, ?, ?, ?,
+         UTC_TIMESTAMP(3), 'IDLE', UTC_TIMESTAMP(3))`,
+      [registryRegistrationUid, data.interestUid, data.tokenUid, data.organizationUid, data.investorUid,
+        data.issuerUserUid, data.chainId, data.identityRegistryAddress, data.issuerWalletAddress,
+        data.investorWalletAddress, data.investorIdentityAddress, data.countryCode,
+        verified.txHash.toLowerCase(), data.preparedAtBlock ?? verified.blockNumber,
+        verified.blockNumber, verified.blockNumber, verified.blockHash || null,
+        verified.transactionIndex, verified.logIndex], executor,
     );
     return this.findByUid(registryRegistrationUid, executor);
   }
@@ -117,15 +153,16 @@ class IdentityRegistryRegistrationRepository {
   }
 
   async recordError(registryRegistrationUid, code, message, { retrySeconds = null } = {}, executor) {
+    const retrySecondsSql = sqlInteger(retrySeconds == null ? 0 : retrySeconds, { name: 'retrySeconds' });
     await execute(
       `UPDATE \`identityRegistryRegistration\`
        SET \`errorCode\` = ?, \`errorMessage\` = ?,
            \`syncStatus\` = ?, \`syncCompletedAt\` = UTC_TIMESTAMP(3),
-           \`nextSyncAt\` = CASE WHEN ? IS NULL THEN NULL ELSE DATE_ADD(UTC_TIMESTAMP(3), INTERVAL ? SECOND) END,
+            \`nextSyncAt\` = CASE WHEN ? IS NULL THEN NULL ELSE DATE_ADD(UTC_TIMESTAMP(3), INTERVAL ${retrySecondsSql} SECOND) END,
            \`updatedAt\` = UTC_TIMESTAMP(3)
        WHERE \`registryRegistrationUid\` = ? AND \`status\` = 'PENDING' AND \`isDeleted\` = 0`,
       [code, String(message || '').slice(0, 1000), retrySeconds === null ? 'IDLE' : 'FAILED',
-        retrySeconds, retrySeconds || 0, registryRegistrationUid], executor,
+        retrySeconds, registryRegistrationUid], executor,
     );
   }
 
@@ -146,6 +183,7 @@ class IdentityRegistryRegistrationRepository {
   }
 
   async findRecoveryCandidates(limit = 100, executor) {
+    const limitSql = sqlInteger(Math.max(1, Math.trunc(limit)), { min: 1, name: 'limit' });
     return execute(
       `SELECT * FROM \`identityRegistryRegistration\`
        WHERE \`status\` = 'PENDING' AND \`isDeleted\` = 0
@@ -153,8 +191,8 @@ class IdentityRegistryRegistrationRepository {
            ('TRANSACTION_NOT_FOUND', 'INSUFFICIENT_CONFIRMATIONS', 'RPC_UNAVAILABLE', 'REGISTRY_STATE_UNAVAILABLE', 'CHAIN_REORGANIZATION'))
          AND \`syncStatus\` IN ('IDLE', 'QUEUED', 'FAILED')
          AND (\`nextSyncAt\` IS NULL OR \`nextSyncAt\` <= UTC_TIMESTAMP(3))
-       ORDER BY (\`syncStatus\` = 'QUEUED') DESC, COALESCE(\`syncRequestedAt\`, \`createdAt\`) ASC LIMIT ?`,
-      [Math.max(1, Math.trunc(limit))], executor,
+       ORDER BY (\`syncStatus\` = 'QUEUED') DESC, COALESCE(\`syncRequestedAt\`, \`createdAt\`) ASC LIMIT ${limitSql}`,
+      [], executor,
     );
   }
 
@@ -171,15 +209,16 @@ class IdentityRegistryRegistrationRepository {
   }
 
   async finishSync(registryRegistrationUid, { lastScannedBlock, errorCode = null, errorMessage = null, retrySeconds = 60 }, executor) {
+    const retrySecondsSql = sqlInteger(retrySeconds == null ? 0 : retrySeconds, { name: 'retrySeconds' });
     await execute(
       `UPDATE \`identityRegistryRegistration\`
        SET \`syncStatus\` = ?, \`lastScannedBlock\` = COALESCE(?, \`lastScannedBlock\`),
            \`syncCompletedAt\` = UTC_TIMESTAMP(3), \`errorCode\` = ?, \`errorMessage\` = ?,
-           \`nextSyncAt\` = CASE WHEN ? IS NULL THEN NULL ELSE DATE_ADD(UTC_TIMESTAMP(3), INTERVAL ? SECOND) END,
+            \`nextSyncAt\` = CASE WHEN ? IS NULL THEN NULL ELSE DATE_ADD(UTC_TIMESTAMP(3), INTERVAL ${retrySecondsSql} SECOND) END,
            \`updatedAt\` = UTC_TIMESTAMP(3)
        WHERE \`registryRegistrationUid\` = ? AND \`status\` = 'PENDING' AND \`isDeleted\` = 0`,
       [errorCode ? 'FAILED' : 'IDLE', lastScannedBlock ?? null, errorCode,
-        errorMessage ? String(errorMessage).slice(0, 1000) : null, retrySeconds, retrySeconds || 0,
+        errorMessage ? String(errorMessage).slice(0, 1000) : null, retrySeconds,
         registryRegistrationUid], executor,
     );
   }
@@ -221,12 +260,13 @@ class IdentityRegistryRegistrationRepository {
   }
 
   async listProcessableEvents(chainId, limit = 200, executor) {
+    const limitSql = sqlInteger(Math.max(1, Math.trunc(limit)), { min: 1, name: 'limit' });
     return execute(
       `SELECT * FROM \`identityRegistryBlockchainEvent\`
        WHERE \`chainId\` = ? AND \`processingStatus\` IN ('NEW', 'UNMATCHED', 'FAILED')
          AND \`processingAttempts\` < 20 AND \`isCanonical\` = 1 AND \`isDeleted\` = 0
-       ORDER BY \`blockNumber\`, \`transactionIndex\`, \`logIndex\` LIMIT ?`,
-      [chainId, Math.max(1, Math.trunc(limit))], executor,
+       ORDER BY \`blockNumber\`, \`transactionIndex\`, \`logIndex\` LIMIT ${limitSql}`,
+      [chainId], executor,
     );
   }
 

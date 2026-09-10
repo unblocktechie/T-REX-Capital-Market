@@ -13,12 +13,23 @@ Import `T-REX Capital Market Backend.postman_collection.json` into Postman.
 9. For **Add to Registry**, use an issuer-owned `claimSubmitted` interest. Run Create or Resume Registry Registration, use only its returned parameters in MetaMask, paste the real Sepolia hash into `registryTxHash`, and run Confirm Registry Transaction. The create test captures `registryRegistrationUid`; `202` means keep polling and only `CONFIRMED` is complete.
 10. For token purchases, run **List Token Purchase History** on page load and after Create/Confirm.
     Confirm returns HTTP `200` for every persisted lifecycle state; inspect `data.status` instead of
-    treating HTTP 200 as proof of completion.
+    treating HTTP 200 as proof of completion. Run **Get Investor Portfolio** after at least one
+    purchase reaches `COMPLETED`; it returns one aggregated row per invested token.
 11. For **Token Redemption**, create an intent as the investor, sign the returned
     `data.authorization.typedData` with the registered wallet, and paste it into
     `redemptionSignature`. Approve as issuer, wait for `TOKENS_LOCKED`, transfer the exact returned
     USDT raw amount, and set `redemptionPaymentTxHash`. If a response is missed, use detail/Retry;
     never send the payment a second time merely because the frontend lost the response.
+12. For **Investor Invitations**, set `investmentTokenUid`, run **Issuer - List Completed Investors**
+    with the issuer `userToken`, then run **Issuer - Invite Investor**. The test stores
+    `invitationInvestorUid` and `investorInvitationUid`. Switch to `investorToken` for inbox,
+    detail, and mark-viewed requests. Re-run the issuer invite to verify it returns HTTP `200` and
+    does not send another email.
+13. For **Token Transfer**, use an `investorToken` whose wallet owns the selected token and set
+    `transferRecipientWalletAddress` to another completed investor registered for that token. Run
+    Create, submit exactly `data.transactionRequest` through MetaMask, set `transferTxHash`, then
+    run Confirm. Poll Detail/History while `data.status=PENDING_TRANSFER`; never submit a duplicate
+    transaction just because the backend response was missed.
 
 Revised issuer submissions return `status: resubmitted`; use `status=resubmitted` on the admin list endpoint to filter them.
 

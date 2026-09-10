@@ -1,6 +1,7 @@
 const { execute } = require('../database/connection');
 const { createUid } = require('../utils/token');
 const { identifier } = require('./base.repository');
+const { sqlInteger } = require('../utils/sql');
 
 // Columns an investor "submit interest" row is created from.
 const interestFields = [
@@ -42,6 +43,8 @@ class InvestmentRepository {
   // Read-only token catalogue. `status` defaults to 'deployed' (only live tokens are
   // investable); pass status = 'all' to list every non-deleted token (admin view).
   async listMarketplaceTokens({ search, status = 'deployed', page = 1, limit = 20 } = {}, executor) {
+    const safePage = Math.max(1, Math.trunc(Number(page) || 1));
+    const safeLimit = Math.max(1, Math.trunc(Number(limit) || 20));
     const where = ['t.`isDeleted` = 0'];
     const params = [];
     if (status && status !== 'all') {
@@ -53,7 +56,9 @@ class InvestmentRepository {
       params.push(`%${search}%`, `%${search}%`);
     }
     const whereSql = where.join(' AND ');
-    const offset = (Math.max(1, page) - 1) * limit;
+    const offset = (safePage - 1) * safeLimit;
+    const limitSql = sqlInteger(safeLimit, { min: 1, name: 'limit' });
+    const offsetSql = sqlInteger(offset, { name: 'offset' });
 
     const [rows, countRows] = await Promise.all([
       execute(
@@ -61,8 +66,8 @@ class InvestmentRepository {
          ${MARKETPLACE_TOKEN_FROM}
          WHERE ${whereSql}
          ORDER BY t.\`deployedAt\` DESC, t.\`createdAt\` DESC
-         LIMIT ? OFFSET ?`,
-        [...params, limit, offset],
+         LIMIT ${limitSql} OFFSET ${offsetSql}`,
+        params,
         executor,
       ),
       execute(

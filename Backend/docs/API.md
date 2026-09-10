@@ -309,7 +309,7 @@ DELETE /organizations/me/documents/{documentUid}
 }
 ```
 
-`walletAddress` is required and must be a valid EVM address (`0x` followed by 40 hexadecimal characters). Final submission saves it on the organization and revalidates every required company and jurisdiction field, location hierarchy, entity/industry references, owners, and every required document type. An initial submission sets `status: submitted`; the allowed revised submission sets `status: resubmitted`. Both set `isDraft: false`, `currentStep: completed`, and `submittedAt`.
+`walletAddress` is required and must be a valid EVM address (`0x` followed by 40 hexadecimal characters). It is normalized before storage. If the address is already assigned to an Investor account, submission returns HTTP `409` with code `WALLET_ALREADY_ASSIGNED_TO_INVESTOR`; an investor wallet cannot become an issuer wallet. If another issuer organization already owns the wallet, including one created under another email address, submission returns `409 ISSUER_WALLET_ALREADY_REGISTERED`. Final submission saves the address on the organization and revalidates every required company and jurisdiction field, location hierarchy, entity/industry references, owners, and every required document type. An initial submission sets `status: submitted`; the allowed revised submission sets `status: resubmitted`. Both set `isDraft: false`, `currentStep: completed`, and `submittedAt`.
 
 ## Token creation
 
@@ -527,7 +527,10 @@ See `docs/INVESTOR-CLAIM-SUBMISSION.md` for payloads and
 
 - `POST /investments/issuer/interests/{interestUid}/registry-registration` validates ownership,
   token/investor/claim/country eligibility and registry agent state, then creates or returns the one
-  `PENDING` operation with backend-authoritative `registerIdentity` arguments.
+  `PENDING` operation with backend-authoritative `registerIdentity` arguments. If matching registry
+  state already exists, it recovers and fully verifies the historical registration transaction,
+  inserts the operation directly as `CONFIRMED` without a PENDING stage or MetaMask transaction,
+  and synchronizes the subscription instead of returning `INVESTOR_ALREADY_REGISTERED`.
 - `GET /investments/issuer/interests/{interestUid}/registry-registration` resumes the operation.
 - `POST /investments/issuer/interests/{interestUid}/registry-registration/{registryRegistrationUid}/confirm`
   accepts only `{ "txHash": "0x..." }`. It verifies chain, sender, recipient, calldata, receipt,
@@ -542,6 +545,13 @@ The global registry indexer plus targeted recovery worker reconciles frontend-cr
 creating transactions or trusting events alone. See `docs/IDENTITY-REGISTRY-REGISTRATION.md`.
 
 ## Investor token purchase (USDT)
+
+- `GET /investments/me/portfolio?page=1&limit=20&search=` returns one row per token for which the
+  authenticated investor has at least one `COMPLETED` purchase. Search covers token name, symbol,
+  token address, and issuer company. Each row includes full marketplace token metadata, image URL,
+  chain ID, issuer information, country restrictions, required claim topics, and portfolio totals.
+  The totals include purchase/redemption counts, tokens purchased, USDT invested, completed tokens
+  redeemed, remaining database-derived net token amount, average purchase price, and activity dates.
 
 - `POST /investments/tokens/{tokenUid}/purchases` with
   `{ "tokenAmount": "10.25", "idempotencyKey": "checkout-202600910-0001" }` creates the
@@ -589,6 +599,56 @@ a mint broadcast whose hash was not persisted. See `docs/TOKEN-PURCHASE-FLOW.md`
 - Verified payment queues platform `burn`; any remaining redemption-created partial freeze is released before `COMPLETED`.
 
 The global USDT indexer recovers missing payment hashes. Targeted event recovery finds missing platform lock/burn/unlock hashes before retrying an action. See `docs/TOKEN-REDEMPTION-FLOW.md` and `docs/FRONTEND-TOKEN-REDEMPTION-GUIDE.md`.
+
+## Investor token transfer (ERC-3643)
+
+- `POST /investments/tokens/{tokenUid}/transfers` creates `PENDING_TRANSFER` before MetaMask. Body:
+  `{ "recipientWalletAddress": "0x...", "tokenAmount": "1.25", "idempotencyKey": "send-..." }`.
+- `POST /investments/transfers/{transferUid}/confirm` accepts only `{ "txHash": "0x..." }` and
+  independently verifies chain, token contract, sender, exact transfer calldata, recipient, raw
+  amount, successful receipt, confirmations, canonical block, Transfer event, and receipt-block balances.
+- `GET /investments/transfers/{transferUid}` returns detail and append-only hash history to its sender
+  or recipient.
+- `GET /investments/tokens/{tokenUid}/transfers?page=1&limit=20&search=&status=all&direction=all`
+  returns sent/received history with pagination, search, status, and direction filters.
+- `POST /investments/transfers/{transferUid}/retry` queues recovery and never creates a chain transaction.
+
+Both investors must have completed profiles, ONCHAINIDs, and `registered` interests for the same
+deployed token. The backend also checks Identity Registry state, `canTransfer`, token pause state,
+unfrozen sender balance, and recipient holder cap before creating the intent. Status is
+`PENDING_TRANSFER -> COMPLETED`, or `PENDING_TRANSFER -> EXPIRED` when no hash or matching safe-chain
+event exists by the deadline. The global deployed-token event indexer recovers missing frontend
+hashes; a bounded targeted scan covers address-snapshot races. See `docs/TOKEN-TRANSFER-FLOW.md`.
+
+## Investor invitations
+
+Issuer endpoints require an issuer JWT and an issuer-owned, deployed `tokenUid`:
+
+- `GET /investments/issuer/investors?tokenUid={tokenUid}&page=1&limit=20&search=&invitationStatus=all`
+  returns only active users whose investor profile is complete (`status = submitted`). Search covers
+  investor name, email, wallet, and profile reference. `invitationStatus` supports `all`,
+  `notInvited`, `PENDING`, `SENT`, and `VIEWED`. Every row contains profile/location/compliance
+  details, current invitation state, existing token-interest state, and `eligibleForInvitation`.
+- `POST /investments/issuer/investors/{investorUid}/invitations` with
+  `{ "tokenUid": "uuid" }` validates issuer ownership, approved organization, deployed token,
+  completed investor profile, active email, token country rules, and absence of an existing
+  investment interest. It creates the unique invitation before sending email.
+
+The database uniqueness key is `(organizationUid, tokenUid, investorUid)`. Repeating an invitation
+whose email was successfully sent returns the existing row with HTTP `200` and never sends a second
+email. A failed delivery remains the same `PENDING` row with `emailStatus = FAILED`; retrying reuses
+that row. A short `PROCESSING` lease also suppresses concurrent duplicate sends.
+
+Investor endpoints require a completed investor profile:
+
+- `GET /investments/me/invitations?page=1&limit=20&search=&status=all`
+- `GET /investments/me/invitations/{invitationUid}`
+- `PATCH /investments/me/invitations/{invitationUid}/viewed` with `{}`
+
+Only successfully delivered invitations appear in the inbox. Responses include marketplace-equivalent
+token detail (image URL, country restrictions, required claim topics) and issuer organization detail.
+The viewed endpoint idempotently changes `SENT` to `VIEWED`. The email button points to
+`{FRONTEND_URL}/app/marketplace/{tokenUid}`. See `docs/INVESTOR-INVITATIONS.md`.
 
 ## Status codes
 

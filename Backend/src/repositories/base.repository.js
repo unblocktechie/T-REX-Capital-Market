@@ -1,6 +1,7 @@
 const { execute } = require('../database/connection');
 const { ApiError } = require('../core/errors/api-error');
 const { createUid } = require('../utils/token');
+const { sqlInteger } = require('../utils/sql');
 
 const identifier = (value) => {
   if (!/^[A-Za-z][A-Za-z0-9]*$/.test(value)) throw new Error(`Unsafe SQL identifier: ${value}`);
@@ -31,9 +32,11 @@ class BaseRepository {
   }
 
   async list(options = {}, executor) {
-    const page = options.page || 1;
-    const limit = options.limit || 20;
+    const page = Math.max(1, Math.trunc(Number(options.page) || 1));
+    const limit = Math.max(1, Math.trunc(Number(options.limit) || 20));
     const offset = (page - 1) * limit;
+    const limitSql = sqlInteger(limit, { min: 1, name: 'limit' });
+    const offsetSql = sqlInteger(offset, { name: 'offset' });
     const conditions = ['`isDeleted` = 0'];
     const params = [];
 
@@ -54,8 +57,8 @@ class BaseRepository {
     const where = conditions.join(' AND ');
     const countRows = await execute(`SELECT COUNT(*) AS total FROM ${identifier(this.table)} WHERE ${where}`, params, executor);
     const rows = await execute(
-      `SELECT ${this.selectSql} FROM ${identifier(this.table)} WHERE ${where} ORDER BY ${identifier(sortBy)} ${sortOrder} LIMIT ? OFFSET ?`,
-      [...params, limit, offset],
+      `SELECT ${this.selectSql} FROM ${identifier(this.table)} WHERE ${where} ORDER BY ${identifier(sortBy)} ${sortOrder} LIMIT ${limitSql} OFFSET ${offsetSql}`,
+      params,
       executor,
     );
     const total = Number(countRows[0].total);

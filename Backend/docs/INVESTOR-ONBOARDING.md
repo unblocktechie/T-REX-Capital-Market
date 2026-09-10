@@ -96,6 +96,8 @@ is no admin verification step — the on-chain identity creation replaces it.
 The wallet is normalized to lowercase and may belong to only one submitted investor profile,
 regardless of the account email address. If another submitted investor already owns it, the API
 returns HTTP `409` with code `INVESTOR_WALLET_ALREADY_REGISTERED` before making a blockchain call.
+If the wallet is already assigned to an issuer organization, the API returns HTTP `409` with code
+`WALLET_ALREADY_ASSIGNED_TO_ISSUER`. An issuer wallet can never be reassigned as an investor wallet.
 The database-generated `registeredWalletAddress` and unique index provide the same guarantee for
 concurrent requests. Draft or failed submissions do not reserve a wallet until they become
 `submitted`.

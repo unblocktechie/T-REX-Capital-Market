@@ -32,6 +32,10 @@ const make = (over = {}) => {
       state.historyRequest = { userUid, tokenUid, options };
       return { rows: over.historyRows || [], total: (over.historyRows || []).length };
     },
+    listPortfolio: async (userUid, options) => {
+      state.portfolioRequest = { userUid, options };
+      return { rows: over.portfolioRows || [], total: (over.portfolioRows || []).length };
+    },
     findByUid: async () => state.row,
     findByPaymentTxHash: async () => null,
     assignPaymentHash: async (uid, txHash) => { state.row.paymentTxHash = txHash; state.row.paymentTxReceivedAt = new Date(); return state.row; },
@@ -67,6 +71,8 @@ const make = (over = {}) => {
   };
   return { state, repository, service: new TokenPurchaseService({
     repository, blockchain, mintService,
+    investmentRepository: { listCountryRestrictionsForTokens: async () => over.restrictions || [] },
+    tokenRepository: { listClaimTopics: async () => over.claimTopics || [] },
     config: { purchaseUsdtAddress: address('5'), purchasePaymentConfirmations: 1 },
     transactionRunner: (work) => work({}),
   }) };
@@ -160,5 +166,34 @@ test('lists investor-owned purchase history with pagination, search, and status 
     userUid: investor.userUid,
     tokenUid: 'token-1',
     options: { page: 1, limit: 10, search: '0xabc', status: 'COMPLETED' },
+  });
+});
+
+test('portfolio returns completed token metadata with purchase and redemption aggregates', async () => {
+  const portfolioRows = [{
+    tokenUid: 'token-1', organizationUid: 'org-1', tokenName: 'Acme Token', tokenSymbol: 'ACME',
+    decimals: 2, initialTokenPrice: '190', imageStorageKey: 'acme.webp', imageMimeType: 'image/webp',
+    status: 'deployed', chainId: 11155111, interestUid: 'interest-1', investorWalletAddress: address('1'),
+    usdtContractAddress: address('5'), usdtDecimals: 6, purchaseCount: 3, redemptionCount: 1,
+    totalPurchasedTokenAmount: '10.00', totalPurchasedTokenAmountRaw: '1000',
+    totalInvestedUsdtAmount: '1900.00', totalInvestedUsdtAmountRaw: '1900000000',
+    totalRedeemedTokenAmount: '2.00', totalRedeemedTokenAmountRaw: '200',
+    netTokenAmount: '8.00', netTokenAmountRaw: '800', averagePurchasePrice: '190.00',
+    firstPurchaseAt: new Date('2026-08-01T00:00:00Z'), latestPurchaseAt: new Date('2026-08-02T00:00:00Z'),
+    latestRedemptionAt: new Date('2026-08-03T00:00:00Z'),
+  }];
+  const restriction = { tokenUid: 'token-1', countryUid: 'country-1', countryCode: 'IN', countryName: 'India', numericCode: '356' };
+  const claimTopic = { claimTopicUid: 'claim-1', claimTopicCode: 'KYC', claimTopicName: 'KYC', value: 1 };
+  const setup = make({ portfolioRows, restrictions: [restriction], claimTopics: [claimTopic] });
+  const result = await setup.service.portfolio(investor, { page: 1, limit: 20, search: 'acme' });
+  assert.equal(result.items[0].tokenName, 'Acme Token');
+  assert.equal(result.items[0].imageUrl, '/api/v1/investments/tokens/token-1/image');
+  assert.equal(result.items[0].chainId, 11155111);
+  assert.equal(result.items[0].portfolio.totalPurchasedTokenAmount, '10.00');
+  assert.equal(result.items[0].portfolio.netTokenAmount, '8.00');
+  assert.equal(result.items[0].countryRestrictions[0].numericCode, '356');
+  assert.equal(result.items[0].requiredClaimTopics[0].claimTopicCode, 'KYC');
+  assert.deepEqual(setup.state.portfolioRequest, {
+    userUid: investor.userUid, options: { page: 1, limit: 20, search: 'acme' },
   });
 });

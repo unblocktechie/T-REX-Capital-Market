@@ -19,11 +19,31 @@ const hashFile = (filePath) => new Promise((resolve, reject) => {
   stream.on('end', () => resolve(hash.digest('hex')));
 });
 
+const normalizeWalletAddress = (walletAddress) => String(walletAddress).trim().toLowerCase();
+
+const investorWalletConflictError = () => new ApiError(
+  409,
+  'This wallet address is already assigned to an investor account and cannot be used as an issuer wallet.',
+  undefined,
+  'WALLET_ALREADY_ASSIGNED_TO_INVESTOR',
+);
+
+const issuerWalletAlreadyRegisteredError = () => new ApiError(
+  409,
+  'This wallet address is already registered to another issuer organization.',
+  undefined,
+  'ISSUER_WALLET_ALREADY_REGISTERED',
+);
+
+const isRegisteredIssuerWalletDuplicate = (error) => error?.code === 'ER_DUP_ENTRY'
+  && String(error.sqlMessage || error.message || '').includes('ukOrganizationMasterRegisteredWallet');
+
 class OrganizationService {
-  constructor({ repository, optionRepository, locationService }) {
+  constructor({ repository, optionRepository, locationService, walletOwnershipRepository }) {
     this.repository = repository;
     this.optionRepository = optionRepository;
     this.locationService = locationService;
+    this.walletOwnershipRepository = walletOwnershipRepository;
   }
 
   assertIssuer(user) {
@@ -228,6 +248,14 @@ class OrganizationService {
     const organization = await this.repository.findByUserUid(user.userUid);
     if (!organization) throw ApiError.badRequest('Organization form has not been started.');
     this.assertEditable(organization);
+    const normalizedWalletAddress = normalizeWalletAddress(walletAddress);
+    const investorWalletOwner = await this.walletOwnershipRepository.findInvestorOwner(normalizedWalletAddress);
+    if (investorWalletOwner) throw investorWalletConflictError();
+    const issuerWalletOwner = await this.walletOwnershipRepository.findIssuerOwner(
+      normalizedWalletAddress,
+      organization.organizationUid,
+    );
+    if (issuerWalletOwner) throw issuerWalletAlreadyRegisteredError();
     requireFields(organization, [
       'legalCompanyName', 'entityTypeUid', 'registrationNumber', 'streetAddress', 'countryUid', 'stateUid', 'cityUid', 'postalCode',
       'countryOfIncorporationUid', 'dateOfIncorporation', 'taxIdentificationNumber', 'industryUid', 'businessActivity',
@@ -247,16 +275,21 @@ class OrganizationService {
         documentTypeUid: type.documentTypeUid, documentTypeCode: type.documentTypeCode, message: `${type.documentTypeName} is required.`,
       })));
     }
-    return this.repository.updateByUserUid(user.userUid, {
-      walletAddress,
-      currentStep: 'completed',
-      isDraft: false,
-      status: this.submissionStatus(organization),
-      submittedAt: new Date(),
-      rejectionReason: null,
-      canResubmit: false,
-      isUserNotified: false,
-    });
+    try {
+      return await this.repository.updateByUserUid(user.userUid, {
+        walletAddress: normalizedWalletAddress,
+        currentStep: 'completed',
+        isDraft: false,
+        status: this.submissionStatus(organization),
+        submittedAt: new Date(),
+        rejectionReason: null,
+        canResubmit: false,
+        isUserNotified: false,
+      });
+    } catch (error) {
+      if (isRegisteredIssuerWalletDuplicate(error)) throw issuerWalletAlreadyRegisteredError();
+      throw error;
+    }
   }
 }
 

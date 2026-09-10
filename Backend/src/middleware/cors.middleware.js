@@ -1,10 +1,10 @@
 const cors = require('cors');
-const { env } = require('../core/config/env');
+const { env, normalizeOrigin } = require('../core/config/env');
 const { ApiError } = require('../core/errors/api-error');
 
 const corsMiddleware = cors({
   origin(origin, callback) {
-    if (!origin || env.cors.allowedOrigins.includes(origin)) return callback(null, true);
+    if (!origin || env.cors.allowedOrigins.includes(normalizeOrigin(origin))) return callback(null, true);
     return callback(ApiError.forbidden('This origin is not allowed by the CORS policy.'));
   },
   credentials: env.cors.credentials,

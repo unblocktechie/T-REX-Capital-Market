@@ -48,6 +48,8 @@ const createV1Router = () => {
     registryController: dependencies.controllers.registryRegistrations,
     purchaseController: dependencies.controllers.tokenPurchases,
     redemptionController: dependencies.controllers.tokenRedemptions,
+    transferController: dependencies.controllers.tokenTransfers,
+    invitationController: dependencies.controllers.investorInvitations,
     authenticate: dependencies.authenticate,
     authorize: dependencies.authorize,
   }));

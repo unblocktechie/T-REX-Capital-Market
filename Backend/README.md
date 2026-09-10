@@ -77,6 +77,15 @@ Apply `database/migrations/20260909_add_identity_registry_registration.sql` for 
 Apply `database/migrations/20260909_add_registered_investment_status.sql` so verified registry confirmation atomically advances investment interests to `registered` and records their history event.
 Apply `database/migrations/20260910_add_unique_investor_wallet.sql` to prevent the same normalized wallet address from being registered to multiple submitted investor profiles.
 Apply `database/migrations/20260910_add_token_purchase_flow.sql` for backend-authoritative USDT payment intents, platform Token Agent minting, transaction audit history, RBAC, and hybrid payment/mint recovery. Configure `PURCHASE_USDT_ADDRESS` per network and `PURCHASE_PAYMENT_CONFIRMATIONS` for the synchronous confirm-and-mint path. See `docs/TOKEN-PURCHASE-FLOW.md`.
+Apply `database/migrations/20260910_expire_abandoned_token_purchases.sql` to expire abandoned no-hash payment intents after their configurable deadline. The worker waits for the global USDT indexer to catch up before expiring them.
+
+Apply `database/migrations/20260910_add_investor_token_purchase_history.sql` for the investor-owned token purchase history endpoint. Frontend integration is documented in `docs/FRONTEND-TOKEN-PURCHASE-FLOW-GUIDE.md`.
+
+Apply `database/migrations/20260910_add_token_redemption_flow.sql` for investor-authorized manual redemption, issuer USDT payout verification, platform token lock/burn/unlock settlement, RBAC, audit history, and hybrid fallback recovery. Configure `REDEMPTION_USDT_ADDRESS`, keep `REDEMPTION_CONFIRMATIONS=12` in production, and set the indexer start block. See `docs/TOKEN-REDEMPTION-FLOW.md` and `docs/FRONTEND-TOKEN-REDEMPTION-GUIDE.md`.
+
+Apply `database/migrations/20260910_add_investor_invitations.sql` for issuer discovery of completed investor profiles, unique token invitations, durable email-delivery state, and the investor invitation inbox. Invitation links use `FRONTEND_URL/app/marketplace/{tokenUid}`. See `docs/INVESTOR-INVITATIONS.md`.
+
+Apply `database/migrations/20260910_add_investor_portfolio_permission.sql` to grant investors access to the aggregated completed-investment portfolio endpoint.
 
 ```bash
 npm run check
@@ -84,7 +93,7 @@ npm test
 npm start
 ```
 
-See [API documentation](docs/API.md), [investor claim flow](docs/INVESTOR-CLAIM-SUBMISSION.md), [frontend claim Retry guide](docs/FRONTEND-INVESTOR-CLAIM-RETRY-GUIDE.md), [global claim indexer](docs/CLAIM-INDEXER.md), [targeted claim recovery](docs/CLAIM-RECOVERY-RUNNER.md), [frontend organization guide](docs/FRONTEND-ORGANIZATION-GUIDE.md), [frontend token guide](docs/FRONTEND-TOKEN-CREATION-GUIDE.md), [frontend token purchase guide](docs/FRONTEND-TOKEN-PURCHASE-FLOW-GUIDE.md), [token redemption architecture](docs/TOKEN-REDEMPTION-FLOW.md), [frontend redemption guide](docs/FRONTEND-TOKEN-REDEMPTION-GUIDE.md), [testing guide](docs/TESTING.md), [OpenAPI specification](docs/openapi.yaml), [editable database diagram](docs/trex-capital-market-database.excalidraw), and the import-ready [Postman collection](postman/Trex%20Capital%20Market%20Backend.postman_collection.json).
+See [API documentation](docs/API.md), [investor claim flow](docs/INVESTOR-CLAIM-SUBMISSION.md), [frontend claim Retry guide](docs/FRONTEND-INVESTOR-CLAIM-RETRY-GUIDE.md), [global claim indexer](docs/CLAIM-INDEXER.md), [targeted claim recovery](docs/CLAIM-RECOVERY-RUNNER.md), [frontend organization guide](docs/FRONTEND-ORGANIZATION-GUIDE.md), [frontend token guide](docs/FRONTEND-TOKEN-CREATION-GUIDE.md), [frontend token purchase guide](docs/FRONTEND-TOKEN-PURCHASE-FLOW-GUIDE.md), [token transfer flow](docs/TOKEN-TRANSFER-FLOW.md), [token redemption architecture](docs/TOKEN-REDEMPTION-FLOW.md), [frontend redemption guide](docs/FRONTEND-TOKEN-REDEMPTION-GUIDE.md), [investor invitations](docs/INVESTOR-INVITATIONS.md), [testing guide](docs/TESTING.md), [OpenAPI specification](docs/openapi.yaml), [editable database diagram](docs/trex-capital-market-database.excalidraw), and the import-ready [Postman collection](postman/Trex%20Capital%20Market%20Backend.postman_collection.json).
 
 ## Response contract
 

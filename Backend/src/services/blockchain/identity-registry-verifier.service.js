@@ -50,26 +50,43 @@ class IdentityRegistryVerifierService {
     }
   }
 
-  async withProvider(work) {
-    if (!this.config.sepoliaRpcUrl) {
+  async withProvider(work, { retryOnNull = false } = {}) {
+    const rpcUrls = [this.config.sepoliaRpcUrl, ...(this.config.sepoliaFallbackRpcUrls || [])]
+      .filter((url, index, values) => url && values.indexOf(url) === index);
+    if (!rpcUrls.length) {
       throw new RegistryVerificationError('RPC_UNAVAILABLE', 'Blockchain RPC is not configured.', { transient: true });
     }
-    const provider = this.providerFactory(this.config.sepoliaRpcUrl);
-    try {
-      let network;
+    let lastError = null;
+    let receivedNull = false;
+    for (let index = 0; index < rpcUrls.length; index += 1) {
+      const provider = this.providerFactory(rpcUrls[index]);
       try {
-        network = await provider.getNetwork();
-      } catch {
-        throw new RegistryVerificationError('RPC_UNAVAILABLE', 'Could not reach the blockchain RPC provider.', { transient: true });
+        let network;
+        try {
+          network = await provider.getNetwork();
+        } catch {
+          throw new RegistryVerificationError('RPC_UNAVAILABLE', 'Could not reach the blockchain RPC provider.', { transient: true });
+        }
+        const chainId = Number(network.chainId);
+        if (!this.supportedChainIds().includes(chainId)) {
+          throw new RegistryVerificationError('WRONG_CHAIN', `RPC is connected to unsupported chain ${chainId}.`);
+        }
+        const result = await work(provider, chainId);
+        if (result === null && retryOnNull && index < rpcUrls.length - 1) {
+          receivedNull = true;
+          continue;
+        }
+        return result;
+      } catch (error) {
+        lastError = error;
+        const retryable = error instanceof RegistryVerificationError && (error.transient || error.pending);
+        if (!retryable || index === rpcUrls.length - 1) throw error;
+      } finally {
+        if (provider && typeof provider.destroy === 'function') provider.destroy();
       }
-      const chainId = Number(network.chainId);
-      if (!this.supportedChainIds().includes(chainId)) {
-        throw new RegistryVerificationError('WRONG_CHAIN', `RPC is connected to unsupported chain ${chainId}.`);
-      }
-      return await work(provider, chainId);
-    } finally {
-      if (provider && typeof provider.destroy === 'function') provider.destroy();
     }
+    if (receivedNull) return null;
+    throw lastError || new RegistryVerificationError('RPC_UNAVAILABLE', 'Blockchain RPC providers are unavailable.', { transient: true });
   }
 
   async getLatestBlockNumber() {
@@ -110,7 +127,143 @@ class IdentityRegistryVerifierService {
     });
   }
 
-  async verifyRegistration({ txHash, ...expected }) {
+  async findRegistrationEvent(expected, { fromBlock = 0, toBlock = null } = {}) {
+    this.validateExpected(expected);
+    return this.withProvider(async (provider, chainId) => {
+      if (Number(expected.chainId) !== chainId) {
+        throw new RegistryVerificationError('WRONG_CHAIN', `Registry operation expects chain ${expected.chainId}, not ${chainId}.`);
+      }
+      let latestBlock;
+      try {
+        latestBlock = Number(await provider.getBlockNumber());
+      } catch {
+        throw new RegistryVerificationError('RPC_UNAVAILABLE', 'Could not determine the registry recovery block range.', { transient: true });
+      }
+      const requiredConfirmations = Math.max(1, Number(
+        this.config.registryConfirmations ?? this.config.confirmations ?? 12,
+      ));
+      const safeLatestBlock = Math.max(0, latestBlock - requiredConfirmations + 1);
+      const requestedEnd = toBlock === null ? safeLatestBlock : Math.min(safeLatestBlock, Number(toBlock));
+      const lookbackBlocks = Math.max(1000, Number(this.config.registryRecoveryLookbackBlocks || 200000));
+      const earliestAllowed = Math.max(0, requestedEnd - lookbackBlocks + 1);
+      const requestedStart = Math.max(0, Number(fromBlock || 0));
+      const start = Math.max(earliestAllowed, requestedStart);
+      if (start > requestedEnd) return null;
+
+      const event = this.interface.getEvent('IdentityRegistered');
+      const topics = [
+        event.topicHash,
+        ethers.zeroPadValue(expected.investorWalletAddress, 32),
+        ethers.zeroPadValue(expected.investorIdentityAddress, 32),
+      ];
+      const blockOffset = Math.max(1000, Number(this.config.registryRecoveryBlockOffset || 20000));
+      const rpcAttempts = Math.max(1, Number(this.config.registryRpcEvidenceAttempts || 5));
+      let hadSuccessfulQuery = false;
+      let hadFailedQuery = false;
+      for (let attempt = 0; attempt < rpcAttempts; attempt += 1) {
+        for (let end = requestedEnd; end >= start; end -= blockOffset) {
+          const beginning = Math.max(start, end - blockOffset + 1);
+          let logs;
+          try {
+            logs = await provider.getLogs({
+              address: expected.identityRegistryAddress,
+              topics,
+              fromBlock: beginning,
+              toBlock: end,
+            });
+            hadSuccessfulQuery = true;
+          } catch {
+            hadFailedQuery = true;
+            continue;
+          }
+          const matching = [...logs].reverse().find((log) => addressEqual(log.address, expected.identityRegistryAddress));
+          if (matching) {
+            return {
+              chainId,
+              identityRegistryAddress: ethers.getAddress(matching.address),
+              investorWalletAddress: ethers.getAddress(expected.investorWalletAddress),
+              investorIdentityAddress: ethers.getAddress(expected.investorIdentityAddress),
+              eventName: 'IdentityRegistered',
+              txHash: String(matching.transactionHash).toLowerCase(),
+              blockNumber: Number(matching.blockNumber),
+              blockHash: matching.blockHash || null,
+              transactionIndex: Number(matching.transactionIndex ?? 0),
+              logIndex: Number(matching.index ?? matching.logIndex ?? 0),
+            };
+          }
+        }
+      }
+      if (!hadSuccessfulQuery || hadFailedQuery) {
+        throw new RegistryVerificationError('RPC_UNAVAILABLE', 'Could not reliably search for the existing IdentityRegistered event.', { transient: true });
+      }
+      return null;
+    }, { retryOnNull: true });
+  }
+
+  async fetchTransactionEvidence(provider, txHash, blockNumberHint = null) {
+    let transaction;
+    let receipt;
+    const attempts = Math.max(1, Number(this.config.registryRpcEvidenceAttempts || 5));
+    for (let attempt = 0; attempt < attempts && (!transaction || !receipt); attempt += 1) {
+      if (!transaction) {
+        try { transaction = await provider.getTransaction(txHash); } catch { /* try block evidence below */ }
+      }
+      if (!receipt) {
+        try { receipt = await provider.getTransactionReceipt(txHash); } catch { /* try block evidence below */ }
+      }
+    }
+
+    const blockNumber = receipt?.blockNumber ?? transaction?.blockNumber ?? blockNumberHint;
+    if ((!transaction || !receipt) && blockNumber !== null && blockNumber !== undefined) {
+      const blockTag = ethers.toQuantity(Number(blockNumber));
+      if (!transaction) {
+        for (let attempt = 0; attempt < attempts && !transaction; attempt += 1) {
+          try {
+          const block = await provider.send('eth_getBlockByNumber', [blockTag, true]);
+          const raw = (block?.transactions || []).find(
+            (item) => String(item.hash).toLowerCase() === txHash.toLowerCase(),
+          );
+          if (raw) {
+            transaction = {
+              to: raw.to,
+              from: raw.from,
+              chainId: raw.chainId === null || raw.chainId === undefined ? null : Number(raw.chainId),
+              value: raw.value || 0,
+              data: raw.input || raw.data || '0x',
+              blockNumber: Number(raw.blockNumber ?? blockNumber),
+            };
+          }
+          } catch { /* another RPC attempt may succeed */ }
+        }
+      }
+      if (!receipt) {
+        for (let attempt = 0; attempt < attempts && !receipt; attempt += 1) {
+          try {
+          const receipts = await provider.send('eth_getBlockReceipts', [blockTag]);
+          const raw = (receipts || []).find(
+            (item) => String(item.transactionHash).toLowerCase() === txHash.toLowerCase(),
+          );
+          if (raw) {
+            receipt = {
+              status: Number(raw.status),
+              blockNumber: Number(raw.blockNumber),
+              blockHash: raw.blockHash || null,
+              index: Number(raw.transactionIndex ?? 0),
+              logs: (raw.logs || []).map((log) => ({
+                ...log,
+                index: Number(log.logIndex ?? 0),
+                logIndex: Number(log.logIndex ?? 0),
+              })),
+            };
+          }
+          } catch { /* another RPC attempt may succeed */ }
+        }
+      }
+    }
+    return { transaction, receipt };
+  }
+
+  async verifyRegistration({ txHash, blockNumberHint = null, ...expected }) {
     if (!ethers.isHexString(txHash, 32)) {
       throw new RegistryVerificationError('INVALID_TX_HASH', 'The transaction hash must be a 32-byte hexadecimal value.');
     }
@@ -120,15 +273,7 @@ class IdentityRegistryVerifierService {
         throw new RegistryVerificationError('WRONG_CHAIN', `Registry operation expects chain ${expected.chainId}, not ${chainId}.`);
       }
 
-      let transaction;
-      let receipt;
-      try {
-        [transaction, receipt] = await Promise.all([
-          provider.getTransaction(txHash), provider.getTransactionReceipt(txHash),
-        ]);
-      } catch {
-        throw new RegistryVerificationError('RPC_UNAVAILABLE', 'Could not fetch the registry transaction.', { transient: true });
-      }
+      const { transaction, receipt } = await this.fetchTransactionEvidence(provider, txHash, blockNumberHint);
       if (!transaction || !receipt) {
         throw new RegistryVerificationError('TRANSACTION_NOT_FOUND', 'Transaction is not yet available on-chain.', { pending: true });
       }

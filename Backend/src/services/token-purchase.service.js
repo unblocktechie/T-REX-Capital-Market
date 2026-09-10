@@ -3,14 +3,25 @@ const { ApiError } = require('../core/errors/api-error');
 const { env } = require('../core/config/env');
 const { withTransaction } = require('../database/connection');
 const { PurchaseBlockchainError } = require('./blockchain/token-purchase-blockchain.service');
+const { presentToken } = require('./investment.service');
 
 const ceilDiv = (value, divisor) => (value + divisor - 1n) / divisor;
 
 class TokenPurchaseService {
-  constructor({ repository, blockchain, mintService, config = env.blockchain, transactionRunner = withTransaction }) {
+  constructor({
+    repository,
+    blockchain,
+    mintService,
+    investmentRepository = null,
+    tokenRepository = null,
+    config = env.blockchain,
+    transactionRunner = withTransaction,
+  }) {
     this.repository = repository;
     this.blockchain = blockchain;
     this.mintService = mintService;
+    this.investmentRepository = investmentRepository;
+    this.tokenRepository = tokenRepository;
     this.config = config;
     this.transactionRunner = transactionRunner;
   }
@@ -183,6 +194,82 @@ class TokenPurchaseService {
         page,
         limit,
         total: result.total,
+        totalPages: result.total === 0 ? 0 : Math.ceil(result.total / limit),
+      },
+    };
+  }
+
+  async portfolio(user, query = {}) {
+    this.assertInvestor(user);
+    const page = Number(query.page || 1);
+    const limit = Number(query.limit || 20);
+    const result = await this.repository.listPortfolio(user.userUid, {
+      page, limit, search: query.search || '',
+    });
+    const tokenUids = result.rows.map((row) => row.tokenUid);
+    const restrictions = this.investmentRepository
+      ? await this.investmentRepository.listCountryRestrictionsForTokens(tokenUids) : [];
+    const restrictionsByToken = new Map();
+    for (const restriction of restrictions) {
+      if (!restrictionsByToken.has(restriction.tokenUid)) restrictionsByToken.set(restriction.tokenUid, []);
+      restrictionsByToken.get(restriction.tokenUid).push(restriction);
+    }
+    const topicsByToken = new Map();
+    if (this.tokenRepository) {
+      await Promise.all(tokenUids.map(async (tokenUid) => {
+        topicsByToken.set(tokenUid, await this.tokenRepository.listClaimTopics(tokenUid));
+      }));
+    }
+    return {
+      items: result.rows.map((row) => {
+        const {
+          interestUid, chainId, investorWalletAddress, usdtContractAddress, usdtDecimals,
+          purchaseCount, redemptionCount, totalPurchasedTokenAmount, totalPurchasedTokenAmountRaw,
+          totalInvestedUsdtAmount, totalInvestedUsdtAmountRaw, totalRedeemedTokenAmount,
+          totalRedeemedTokenAmountRaw, totalSentTokenAmount, totalSentTokenAmountRaw,
+          totalReceivedTokenAmount, totalReceivedTokenAmountRaw, sentTransferCount,
+          receivedTransferCount, netTokenAmount, netTokenAmountRaw, averagePurchasePrice,
+          firstPurchaseAt, latestPurchaseAt, latestRedemptionAt, latestSentAt, latestReceivedAt,
+          ...tokenRow
+        } = row;
+        const token = presentToken(tokenRow, restrictionsByToken.get(row.tokenUid) || []);
+        return {
+          ...token,
+          chainId: Number(chainId),
+          networkName: this.config.networkName || null,
+          requiredClaimTopics: topicsByToken.get(row.tokenUid) || [],
+          portfolio: {
+            interestUid,
+            investorWalletAddress,
+            usdtContractAddress,
+            usdtDecimals: Number(usdtDecimals),
+            purchaseCount: Number(purchaseCount),
+            redemptionCount: Number(redemptionCount || 0),
+            totalPurchasedTokenAmount: String(totalPurchasedTokenAmount),
+            totalPurchasedTokenAmountRaw: String(totalPurchasedTokenAmountRaw),
+            totalInvestedUsdtAmount: String(totalInvestedUsdtAmount),
+            totalInvestedUsdtAmountRaw: String(totalInvestedUsdtAmountRaw),
+            totalRedeemedTokenAmount: String(totalRedeemedTokenAmount),
+            totalRedeemedTokenAmountRaw: String(totalRedeemedTokenAmountRaw),
+            totalSentTokenAmount: String(totalSentTokenAmount || '0'),
+            totalSentTokenAmountRaw: String(totalSentTokenAmountRaw || '0'),
+            totalReceivedTokenAmount: String(totalReceivedTokenAmount || '0'),
+            totalReceivedTokenAmountRaw: String(totalReceivedTokenAmountRaw || '0'),
+            sentTransferCount: Number(sentTransferCount || 0),
+            receivedTransferCount: Number(receivedTransferCount || 0),
+            netTokenAmount: String(netTokenAmount),
+            netTokenAmountRaw: String(netTokenAmountRaw),
+            averagePurchasePrice: String(averagePurchasePrice),
+            firstPurchaseAt,
+            latestPurchaseAt,
+            latestRedemptionAt: latestRedemptionAt || null,
+            latestSentAt: latestSentAt || null,
+            latestReceivedAt: latestReceivedAt || null,
+          },
+        };
+      }),
+      pagination: {
+        page, limit, total: result.total,
         totalPages: result.total === 0 ? 0 : Math.ceil(result.total / limit),
       },
     };

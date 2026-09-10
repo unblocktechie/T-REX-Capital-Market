@@ -19,6 +19,9 @@ const { ClaimIndexerRepository } = require('../repositories/claim-indexer.reposi
 const { IdentityRegistryRegistrationRepository } = require('../repositories/identity-registry-registration.repository');
 const { TokenPurchaseRepository } = require('../repositories/token-purchase.repository');
 const { TokenRedemptionRepository } = require('../repositories/token-redemption.repository');
+const { TokenTransferRepository } = require('../repositories/token-transfer.repository');
+const { InvestorInvitationRepository } = require('../repositories/investor-invitation.repository');
+const { WalletOwnershipRepository } = require('../repositories/wallet-ownership.repository');
 const { UserService } = require('../services/user.service');
 const { RoleService } = require('../services/role.service');
 const { MenuService } = require('../services/menu.service');
@@ -52,6 +55,10 @@ const { TokenRedemptionService } = require('../services/token-redemption.service
 const { TokenRedemptionBlockchainService } = require('../services/blockchain/token-redemption-blockchain.service');
 const { TokenRedemptionExecutionService } = require('../services/blockchain/token-redemption-execution.service');
 const { TokenRedemptionReconciliationService } = require('../services/blockchain/token-redemption-reconciliation.service');
+const { TokenTransferService } = require('../services/token-transfer.service');
+const { TokenTransferBlockchainService } = require('../services/blockchain/token-transfer-blockchain.service');
+const { TokenTransferReconciliationService } = require('../services/blockchain/token-transfer-reconciliation.service');
+const { InvestorInvitationService } = require('../services/investor-invitation.service');
 const { TokenImageService } = require('../services/common/token-image.service');
 const { TrexDeploymentSyncRunner } = require('../jobs/trex-deployment-sync.runner');
 const { ClaimRecoveryService } = require('../services/blockchain/claim-recovery.service');
@@ -60,6 +67,7 @@ const { ClaimIndexerRunner } = require('../jobs/claim-indexer.runner');
 const { IdentityRegistryReconciliationRunner } = require('../jobs/identity-registry-reconciliation.runner');
 const { TokenPurchaseReconciliationRunner } = require('../jobs/token-purchase-reconciliation.runner');
 const { TokenRedemptionReconciliationRunner } = require('../jobs/token-redemption-reconciliation.runner');
+const { TokenTransferReconciliationRunner } = require('../jobs/token-transfer-reconciliation.runner');
 const emailService = require('../services/common/email.service');
 const { createCrudController } = require('../api/v1/controllers/crud.controller');
 const { createAuthController } = require('../api/v1/controllers/auth.controller');
@@ -75,6 +83,8 @@ const { createInvestorClaimController } = require('../api/v1/controllers/investo
 const { createIdentityRegistryRegistrationController } = require('../api/v1/controllers/identity-registry-registration.controller');
 const { createTokenPurchaseController } = require('../api/v1/controllers/token-purchase.controller');
 const { createTokenRedemptionController } = require('../api/v1/controllers/token-redemption.controller');
+const { createTokenTransferController } = require('../api/v1/controllers/token-transfer.controller');
+const { createInvestorInvitationController } = require('../api/v1/controllers/investor-invitation.controller');
 const { createAuthenticate } = require('../middleware/authenticate.middleware');
 const { createAuthorize } = require('../middleware/authorize.middleware');
 
@@ -100,6 +110,9 @@ const claimIndexerRepository = new ClaimIndexerRepository();
 const identityRegistryRegistrationRepository = new IdentityRegistryRegistrationRepository();
 const tokenPurchaseRepository = new TokenPurchaseRepository();
 const tokenRedemptionRepository = new TokenRedemptionRepository();
+const tokenTransferRepository = new TokenTransferRepository();
+const investorInvitationRepository = new InvestorInvitationRepository();
+const walletOwnershipRepository = new WalletOwnershipRepository();
 const claimSignatureService = new ClaimSignatureService();
 const claimSubmissionVerifierService = new ClaimSubmissionVerifierService();
 const claimStateService = new ClaimStateService();
@@ -108,6 +121,7 @@ const tokenImageService = new TokenImageService();
 const tokenDeploymentReceiptService = new TokenDeploymentReceiptService();
 const tokenPurchaseBlockchainService = new TokenPurchaseBlockchainService();
 const tokenRedemptionBlockchainService = new TokenRedemptionBlockchainService();
+const tokenTransferBlockchainService = new TokenTransferBlockchainService();
 
 const userService = new UserService(userRepository, roleRepository);
 const roleService = new RoleService(roleRepository, userRepository, permissionRepository);
@@ -120,6 +134,7 @@ const organizationService = new OrganizationService({
   repository: organizationRepository,
   optionRepository: organizationOptionRepository,
   locationService,
+  walletOwnershipRepository,
 });
 const organizationAdminService = new OrganizationAdminService(
   organizationRepository,
@@ -185,6 +200,8 @@ const tokenPurchaseService = new TokenPurchaseService({
   repository: tokenPurchaseRepository,
   blockchain: tokenPurchaseBlockchainService,
   mintService: tokenPurchaseMintService,
+  investmentRepository,
+  tokenRepository,
 });
 const tokenPurchaseReconciliationService = new TokenPurchaseReconciliationService({
   settingRepository,
@@ -213,6 +230,17 @@ const tokenRedemptionReconciliationService = new TokenRedemptionReconciliationSe
   redemptionService: tokenRedemptionService,
 });
 const tokenRedemptionReconciliationRunner = new TokenRedemptionReconciliationRunner(tokenRedemptionReconciliationService);
+const tokenTransferService = new TokenTransferService({
+  repository: tokenTransferRepository,
+  blockchain: tokenTransferBlockchainService,
+});
+const tokenTransferReconciliationService = new TokenTransferReconciliationService({
+  settingRepository,
+  repository: tokenTransferRepository,
+  checkpointRepository: claimIndexerRepository,
+  blockchain: tokenTransferBlockchainService,
+});
+const tokenTransferReconciliationRunner = new TokenTransferReconciliationRunner(tokenTransferReconciliationService);
 const investmentService = new InvestmentService({
   repository: investmentRepository,
   tokenRepository,
@@ -222,11 +250,18 @@ const investmentService = new InvestmentService({
   // approveInterest requires a SIGNED issuer claim verification before promoting to verifiedByIssuer.
   issuerClaimRepository,
 });
+const investorInvitationService = new InvestorInvitationService({
+  repository: investorInvitationRepository,
+  investorRepository,
+  investmentService,
+  emailService,
+});
 const investorService = new InvestorService({
   repository: investorRepository,
   optionRepository: investorOptionRepository,
   locationService,
   identityService: organizationIdentityService,
+  walletOwnershipRepository,
   // Enforces the investment-interest upload gate + resubmission sync on document upload.
   investmentService,
 });
@@ -269,6 +304,8 @@ const controllers = {
   registryRegistrations: createIdentityRegistryRegistrationController(identityRegistryRegistrationService),
   tokenPurchases: createTokenPurchaseController(tokenPurchaseService),
   tokenRedemptions: createTokenRedemptionController(tokenRedemptionService),
+  tokenTransfers: createTokenTransferController(tokenTransferService),
+  investorInvitations: createInvestorInvitationController(investorInvitationService),
 };
 
 module.exports = {
@@ -283,6 +320,8 @@ module.exports = {
     tokenPurchaseService, tokenPurchaseBlockchainService, tokenPurchaseMintService, tokenPurchaseReconciliationService,
     tokenRedemptionService, tokenRedemptionBlockchainService, tokenRedemptionExecutionService,
     tokenRedemptionReconciliationService,
+    tokenTransferService, tokenTransferBlockchainService, tokenTransferReconciliationService,
+    investorInvitationService,
   },
   repositories: {
     userRepository, roleRepository, menuRepository, permissionRepository, settingRepository, authTokenRepository,
@@ -292,6 +331,8 @@ module.exports = {
     identityRegistryRegistrationRepository,
     tokenPurchaseRepository,
     tokenRedemptionRepository,
+    tokenTransferRepository,
+    investorInvitationRepository,
   },
   jobs: {
     trexDeploymentSyncRunner,
@@ -300,6 +341,7 @@ module.exports = {
     identityRegistryReconciliationRunner,
     tokenPurchaseReconciliationRunner,
     tokenRedemptionReconciliationRunner,
+    tokenTransferReconciliationRunner,
   },
   authenticate: createAuthenticate(userRepository),
   authorize: createAuthorize(permissionRepository),

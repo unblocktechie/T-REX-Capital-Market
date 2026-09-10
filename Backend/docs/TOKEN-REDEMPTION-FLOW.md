@@ -134,6 +134,15 @@ The real event transaction hash is stored. If the now-safe range contains no mat
 - Definitive unexpected settlement mismatches move the request to `MANUAL_REVIEW`; the worker does not guess a hash or continue to burn.
 - If USDT is paid and burn fails transiently, payment stays confirmed and burn retries; the issuer is never asked to pay again.
 
+## Database and configuration
+
+Apply `database/migrations/20260910_add_token_redemption_flow.sql`. It creates:
+
+- `tokenRedemption`
+- `tokenRedemptionTransaction`
+- `tokenRedemptionHistory`
+- `tokenRedemptionPaymentEvent`
+
 Required runtime configuration:
 
 ```dotenv

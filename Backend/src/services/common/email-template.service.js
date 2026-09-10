@@ -45,4 +45,30 @@ const passwordResetEmail = ({ fullName, token }) => {
   };
 };
 
-module.exports = { verificationEmail, passwordResetEmail, escapeHtml };
+const investmentInvitationEmail = ({
+  investorName,
+  issuerName,
+  companyName,
+  tokenName,
+  tokenSymbol,
+  marketplaceUrl,
+}) => ({
+  subject: `${companyName} invited you to explore ${tokenName}`,
+  text: `Hello ${investorName}, ${companyName}${issuerName ? ` (${issuerName})` : ''} invited you to explore ${tokenName} (${tokenSymbol}) on ${env.appName}. View the token details here: ${marketplaceUrl}`,
+  html: layout({
+    preheader: `${companyName} sent you a token investment invitation.`,
+    title: 'You have a new investment invitation',
+    greeting: `Hello ${investorName},`,
+    content: `${companyName}${issuerName ? `, represented by ${issuerName},` : ''} invited you to review ${tokenName} (${tokenSymbol}) on ${env.appName}. Open the token page to review its issuer, pricing, compliance rules, and investment requirements before deciding whether to submit an interest.`,
+    buttonText: 'View token details',
+    buttonUrl: marketplaceUrl,
+    footer: 'This invitation is informational and is not financial advice. Sign in to your T-REX Capital Market account before submitting an investment interest.',
+  }),
+});
+
+module.exports = {
+  verificationEmail,
+  passwordResetEmail,
+  investmentInvitationEmail,
+  escapeHtml,
+};

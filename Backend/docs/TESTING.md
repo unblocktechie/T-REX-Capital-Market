@@ -190,7 +190,7 @@ Finally submit:
 curl -X POST http://localhost:3000/api/v1/organizations/me/submit -H "Authorization: Bearer ISSUER_TOKEN" -H "Content-Type: application/json" -d '{"walletAddress":"0x1111111111111111111111111111111111111111"}'
 ```
 
-Expected: `200`, the submitted wallet address, `status: submitted`, `isDraft: false`, and a UTC `submittedAt`. Missing or invalid wallet addresses return `422`. Missing organization fields, invalid location relationships, owners under 18, beneficial ownership that does not total exactly 100%, or missing required document types return a standardized `400`; invalid file type/size returns `422`. Individual owners may hold less than 25%.
+Expected: `200`, the normalized submitted wallet address, `status: submitted`, `isDraft: false`, and a UTC `submittedAt`. Missing or invalid wallet addresses return `422`. Using a wallet already assigned to an Investor returns `409 WALLET_ALREADY_ASSIGNED_TO_INVESTOR`. Using another issuer organization's wallet from a new email returns `409 ISSUER_WALLET_ALREADY_REGISTERED`. Conversely, investor submission with an existing issuer organization wallet returns `409 WALLET_ALREADY_ASSIGNED_TO_ISSUER`. These conflicts must occur before blockchain identity creation or onboarding submission. Missing organization fields, invalid location relationships, owners under 18, beneficial ownership that does not total exactly 100%, or missing required document types return a standardized `400`; invalid file type/size returns `422`. Individual owners may hold less than 25%.
 
 Mark the current issuer as notified:
 
@@ -477,6 +477,14 @@ ONCHAINID, and at least one `SIGNED` issuer claim. Use the investor JWT.
    the server after creating the intent, let the deadline pass, then restart it. The worker must
    first catch the USDT indexer up; it expires the row only after catch-up and event matching.
 
+11. Apply `database/migrations/20260910_add_investor_portfolio_permission.sql` and call
+    `GET /api/v1/investments/me/portfolio?page=1&limit=20&search=`. Expect only tokens with at least
+    one `COMPLETED` purchase for the authenticated investor. Verify token name, symbol, image URL,
+    token/registry addresses, chain ID, issuer, restrictions, required claims, purchase totals, USDT
+    totals, completed-redemption totals, net token amount, average price, counts, and dates. Search
+    by token name, symbol, token address, and issuer company. Confirm a second investor cannot see
+    the first investor's portfolio.
+
 ## Manual token redemption
 
 1. Apply `database/migrations/20260910_add_token_redemption_flow.sql`, configure the redemption
@@ -513,4 +521,35 @@ ONCHAINID, and at least one `SIGNED` issuer claim. Use the investor JWT.
 
    SELECT * FROM tokenRedemptionHistory WHERE redemptionUid = 'REDEMPTION_UID' ORDER BY createdAt;
    SELECT * FROM blockchainIndexerCheckpoint WHERE indexerName IN ('tokenRedemptionPayment','platformTokenAgentExecution');
+   ```
+
+## Investor invitations
+
+1. Apply `database/migrations/20260910_add_investor_invitations.sql` and confirm `FRONTEND_URL` and
+   SMTP settings point to the frontend and test mailbox.
+2. Finish one investor profile and leave another as a draft. As the issuer, call
+   `GET /api/v1/investments/issuer/investors?tokenUid=TOKEN_UID&page=1&limit=20&invitationStatus=all`.
+   Expect only the submitted profile; verify search by name, email, wallet, and profile reference.
+3. Try a token belonging to another issuer, a non-deployed token, and an investor excluded by the
+   token's country rules. Expect stable 404/409 errors and no invitation row.
+4. Invite the eligible investor with
+   `POST /api/v1/investments/issuer/investors/INVESTOR_UID/invitations` and
+   `{ "tokenUid": "TOKEN_UID" }`. Expect HTTP `201`, `status=SENT`, `emailStatus=SENT`, and one
+   styled email whose button is `{FRONTEND_URL}/app/marketplace/{tokenUid}`.
+5. Repeat the same request and send two concurrent requests. Expect the same `invitationUid`, HTTP
+   `200` for already-sent state, and only one accepted SMTP email.
+6. Temporarily make SMTP fail. Expect `502 INVITATION_EMAIL_FAILED` and one row with `PENDING / FAILED`.
+   Restore SMTP and retry; expect the same row to become `SENT`, not a second row.
+7. As the invited investor, list and get the invitation. Verify it contains the marketplace token
+   fields, country restrictions, required claim topics, issuer organization data, and marketplace URL.
+   Another investor must receive `INVITATION_NOT_FOUND` for the detail UID.
+8. Call `PATCH /api/v1/investments/me/invitations/INVITATION_UID/viewed` twice with `{}`. Both calls
+   return `200`, the state remains `VIEWED`, and `viewedAt` is written only once.
+9. Verify persistence:
+
+   ```sql
+   SELECT invitationUid, organizationUid, tokenUid, investorUid, status, emailStatus,
+          emailAttempts, emailMessageId, sentAt, viewedAt, createdAt, updatedAt
+   FROM investorInvitation
+   WHERE invitationUid = 'INVITATION_UID';
    ```

@@ -48,6 +48,7 @@ const identityOk = {
 const makeService = (repo, overrides = {}) => new InvestorService({
   repository: repo, optionRepository: optionRepo, locationService,
   identityService: overrides.identityService || identityOk, transactionRunner: runner,
+  walletOwnershipRepository: overrides.walletOwnershipRepository || { findIssuerOwner: async () => null },
 });
 
 const completeInvestor = () => ({
@@ -252,6 +253,29 @@ test('submit rejects a wallet already registered to another investor before call
   await assert.rejects(
     service.submit(investor, { walletAddress: `0x${'A'.repeat(40)}` }),
     (error) => error.statusCode === 409 && error.code === 'INVESTOR_WALLET_ALREADY_REGISTERED',
+  );
+  assert.equal(identityCalls, 0);
+  assert.equal(repo.investor.status, 'draft');
+});
+
+test('submit rejects an issuer wallet before creating an investor identity', async () => {
+  const repo = makeRepo(completeInvestor());
+  let identityCalls = 0;
+  const service = makeService(repo, {
+    walletOwnershipRepository: {
+      findIssuerOwner: async () => ({ organizationUid: 'org-2', userUid: 'issuer-2', roleName: 'Issuer' }),
+    },
+    identityService: {
+      createOrganizationIdentity: async () => {
+        identityCalls += 1;
+        return { identityAddress: IDENTITY_ADDR, txHash: IDENTITY_TX, alreadyExisted: true };
+      },
+    },
+  });
+
+  await assert.rejects(
+    service.submit(investor, { walletAddress: `0x${'B'.repeat(40)}` }),
+    (error) => error.statusCode === 409 && error.code === 'WALLET_ALREADY_ASSIGNED_TO_ISSUER',
   );
   assert.equal(identityCalls, 0);
   assert.equal(repo.investor.status, 'draft');

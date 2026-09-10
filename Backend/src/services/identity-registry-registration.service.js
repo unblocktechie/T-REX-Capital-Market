@@ -54,7 +54,7 @@ class IdentityRegistryRegistrationService {
   }
 
   validateContext(context) {
-    if (context.interestStatus !== 'claimSubmitted') {
+    if (!['claimSubmitted', 'registered'].includes(context.interestStatus)) {
       throw new ApiError(409, 'All required investor claims must be confirmed before registry registration.', undefined, 'CLAIMS_NOT_COMPLETED');
     }
     if (context.tokenStatus !== 'deployed') {
@@ -131,11 +131,150 @@ class IdentityRegistryRegistrationService {
     }
   }
 
+  recoveryStartBlock(context, latestBlock) {
+    const deployedAtBlock = Number(context.deployedAtBlock || 0);
+    if (deployedAtBlock > 0) return deployedAtBlock;
+    const lookback = Math.max(1000, Number(this.config.registryRecoveryLookbackBlocks || 200000));
+    return Math.max(0, Number(latestBlock) - lookback + 1);
+  }
+
+  async findExistingRegistrationEvidence(expected, context, latestBlock) {
+    let event;
+    try {
+      event = await this.repository.findCanonicalEvent(expected);
+      if (!event) {
+        event = await this.verifier.findRegistrationEvent(expected, {
+          fromBlock: this.recoveryStartBlock(context, latestBlock),
+        });
+      }
+      if (!event) {
+        throw new RegistryVerificationError(
+          'REGISTRY_EVENT_NOT_FOUND',
+          'Investor is registered on-chain, but the authoritative IdentityRegistered event is temporarily unavailable.',
+          { transient: true },
+        );
+      }
+      const verified = await this.verifier.verifyRegistration({
+        txHash: event.txHash,
+        blockNumberHint: event.blockNumber,
+        ...expected,
+      });
+      return { event, verified };
+    } catch (error) {
+      if (!(error instanceof RegistryVerificationError)) throw error;
+      if (error.pending || error.transient) {
+        throw new ApiError(
+          503,
+          'Existing registry transaction evidence is temporarily unavailable. Retry this API; do not open MetaMask.',
+          [{ field: 'identityRegistryAddress', message: error.message }],
+          error.code || 'REGISTRY_EVIDENCE_UNAVAILABLE',
+        );
+      }
+      throw new ApiError(422, 'Existing registry transaction could not be verified.', [
+        { field: 'identityRegistryAddress', message: error.message },
+      ], error.code || 'REGISTRY_VERIFICATION_FAILED');
+    }
+  }
+
+  async persistExistingRegistration(user, context, expected, evidence, existing = null) {
+    try {
+      const finalized = await this.transactionRunner(async (connection) => {
+        let registration = existing
+          ? await this.repository.findByUidForUpdate(existing.registryRegistrationUid, connection)
+          : await this.repository.findByInterest(context.interestUid, connection);
+        if (registration?.status === 'CONFIRMED'
+          && String(registration.txHash || '').toLowerCase() !== evidence.verified.txHash.toLowerCase()) {
+          throw new ApiError(409, 'Registry operation is already confirmed with a different transaction.', undefined, 'REGISTRY_OPERATION_ALREADY_CONFIRMED');
+        }
+        if (!registration) {
+          registration = await this.repository.createConfirmed({
+            interestUid: context.interestUid,
+            tokenUid: context.tokenUid,
+            organizationUid: context.organizationUid,
+            investorUid: context.investorUid,
+            issuerUserUid: user.userUid,
+            ...expected,
+            preparedAtBlock: this.recoveryStartBlock(context, evidence.verified.blockNumber),
+          }, evidence.verified, connection);
+        } else if (registration.status === 'PENDING') {
+          const confirmed = await this.repository.confirm(
+            registration.registryRegistrationUid,
+            evidence.verified,
+            connection,
+          );
+          if (!confirmed) throw new ApiError(409, 'Registry operation changed during synchronization.', undefined, 'REGISTRY_OPERATION_STATE_CHANGED');
+          registration = await this.repository.findByUidForUpdate(registration.registryRegistrationUid, connection);
+        }
+
+        const interest = await this.interestRepository.findInterestForUpdate(context.interestUid, connection);
+        if (!interest || !['claimSubmitted', 'registered'].includes(interest.status)) {
+          throw new ApiError(409, 'Subscription is not ready for registry synchronization.', undefined, 'SUBSCRIPTION_NOT_READY_FOR_REGISTRATION');
+        }
+        const transitioned = await this.interestRepository.transitionInterestStatus(
+          context.interestUid,
+          'claimSubmitted',
+          'registered',
+          connection,
+        );
+        if (transitioned) {
+          await this.interestRepository.createHistory({
+            interestUid: context.interestUid,
+            tokenUid: context.tokenUid,
+            organizationUid: context.organizationUid,
+            investorUid: context.investorUid,
+            eventType: 'registered',
+            actorRole: 'issuer',
+            actorUserUid: user.userUid,
+            note: `Existing Identity Registry registration confirmed in transaction ${evidence.verified.txHash}.`,
+          }, connection);
+        }
+        await this.repository.storeEvents([evidence.event], connection);
+        const storedEvent = await this.repository.findCanonicalEvent(expected, connection);
+        if (storedEvent) {
+          await this.repository.markEvent(
+            storedEvent.registryEventUid,
+            'MATCHED',
+            registration.registryRegistrationUid,
+            'Existing on-chain registration independently verified and synchronized.',
+            connection,
+          );
+        }
+        return {
+          operation: await this.repository.findByUid(registration.registryRegistrationUid, connection),
+          interest: await this.interestRepository.findInterestForUpdate(context.interestUid, connection),
+        };
+      });
+      return {
+        operation: { ...this.present(finalized.operation), subscriptionStatus: finalized.interest.status },
+        existing: true,
+        alreadyRegistered: true,
+      };
+    } catch (error) {
+      if (error?.code !== 'ER_DUP_ENTRY') throw error;
+      const raced = await this.repository.findByInterest(context.interestUid);
+      if (!raced) throw new ApiError(409, 'Registry transaction is already associated with another operation.', undefined, 'TRANSACTION_ALREADY_USED');
+      const finalized = await this.finalizeConfirmedOperation(
+        raced.registryRegistrationUid,
+        raced.status === 'PENDING' ? evidence.verified : null,
+      );
+      return {
+        operation: { ...this.present(finalized.operation), subscriptionStatus: finalized.interest.status },
+        existing: true,
+        alreadyRegistered: true,
+      };
+    }
+  }
+
   async create(user, interestUid) {
     const context = await this.loadOwnedContext(user, interestUid);
-    const existing = await this.repository.findByInterest(interestUid);
-    if (existing) {
-      return { operation: this.present(existing), existing: true, alreadyRegistered: existing.status === 'CONFIRMED' };
+    let existing = await this.repository.findByInterest(interestUid);
+    if (existing?.status === 'CONFIRMED') {
+      const finalized = await this.finalizeConfirmedOperation(existing.registryRegistrationUid);
+      return {
+        operation: { ...this.present(finalized.operation), subscriptionStatus: finalized.interest.status },
+        existing: true,
+        alreadyRegistered: true,
+      };
     }
 
     const countryCode = this.validateContext(context);
@@ -144,13 +283,25 @@ class IdentityRegistryRegistrationService {
       throw new ApiError(409, 'Every token-required claim must be confirmed on-chain before registration.', completion.missing, 'CLAIMS_NOT_COMPLETED');
     }
 
-    const expected = this.expectedFrom(context, countryCode);
+    const expected = existing ? this.expectedFromRegistration(existing) : this.expectedFrom(context, countryCode);
     const { state, preparedAtBlock } = await this.inspectBeforeCreate(expected);
     if (!state.issuerIsAgent) {
       throw new ApiError(409, 'The issuer wallet is not an agent of this Identity Registry.', undefined, 'ISSUER_NOT_REGISTRY_AGENT');
     }
     if (state.contains) {
-      throw new ApiError(409, 'Investor is already registered for this token.', undefined, 'INVESTOR_ALREADY_REGISTERED');
+      if (!state.matches) {
+        throw new ApiError(
+          409,
+          'Investor registry state does not match the expected ONCHAINID or country.',
+          undefined,
+          'REGISTRY_STATE_MISMATCH',
+        );
+      }
+      const evidence = await this.findExistingRegistrationEvidence(expected, context, preparedAtBlock);
+      return this.persistExistingRegistration(user, context, expected, evidence, existing);
+    }
+    if (existing) {
+      return { operation: this.present(existing), existing: true, alreadyRegistered: false };
     }
     try {
       const created = await this.repository.createPending({

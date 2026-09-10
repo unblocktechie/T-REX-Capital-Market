@@ -114,6 +114,10 @@ test('organization submission persists the wallet address', async () => {
       validateHierarchy: async () => {},
       repository: { findCountry: async () => ({}) },
     },
+    walletOwnershipRepository: {
+      findInvestorOwner: async () => null,
+      findIssuerOwner: async () => null,
+    },
   });
   const walletAddress = '0x1111111111111111111111111111111111111111';
 
@@ -127,6 +131,87 @@ test('organization submission persists the wallet address', async () => {
   assert.equal(update.fields.canResubmit, false);
   assert.equal(result.walletAddress, walletAddress);
   assert.equal(result.status, 'submitted');
+});
+
+test('organization submission rejects a wallet assigned to an investor', async () => {
+  let updateCalled = false;
+  const service = new OrganizationService({
+    repository: {
+      findByUserUid: async () => ({ organizationUid: 'organization-1', status: 'draft' }),
+      updateByUserUid: async () => { updateCalled = true; },
+    },
+    walletOwnershipRepository: {
+      findInvestorOwner: async () => ({ investorUid: 'investor-1', userUid: 'investor-user-1', roleName: 'Investor' }),
+    },
+  });
+
+  await assert.rejects(
+    service.submit(
+      { userUid: 'issuer-user-1', roleName: 'Issuer' },
+      { walletAddress: `0x${'A'.repeat(40)}` },
+    ),
+    (error) => error.statusCode === 409 && error.code === 'WALLET_ALREADY_ASSIGNED_TO_INVESTOR',
+  );
+  assert.equal(updateCalled, false);
+});
+
+test('organization submission rejects a wallet registered to another issuer email', async () => {
+  let updateCalled = false;
+  const service = new OrganizationService({
+    repository: {
+      findByUserUid: async () => ({ organizationUid: 'organization-new', status: 'draft' }),
+      updateByUserUid: async () => { updateCalled = true; },
+    },
+    walletOwnershipRepository: {
+      findInvestorOwner: async () => null,
+      findIssuerOwner: async (_wallet, excludedOrganizationUid) => {
+        assert.equal(excludedOrganizationUid, 'organization-new');
+        return { organizationUid: 'organization-existing', userUid: 'another-issuer', roleName: 'Issuer' };
+      },
+    },
+  });
+
+  await assert.rejects(
+    service.submit(
+      { userUid: 'new-issuer-user', roleName: 'Issuer' },
+      { walletAddress: '0xDbBdcA99d568B54feaAb6c6D34e8f0093c509859' },
+    ),
+    (error) => error.statusCode === 409 && error.code === 'ISSUER_WALLET_ALREADY_REGISTERED',
+  );
+  assert.equal(updateCalled, false);
+});
+
+test('organization submission translates a concurrent issuer-wallet unique conflict', async () => {
+  const organization = {
+    organizationUid: 'organization-new', status: 'draft', legalCompanyName: 'Acme', entityTypeUid: 'entity-1',
+    registrationNumber: 'REG-1', streetAddress: 'Street', countryUid: 'country-1', stateUid: 'state-1', cityUid: 'city-1',
+    postalCode: '10001', countryOfIncorporationUid: 'country-1', dateOfIncorporation: '2020-01-01',
+    taxIdentificationNumber: 'TAX-1', industryUid: 'industry-1', businessActivity: 'Tokenization',
+  };
+  const service = new OrganizationService({
+    repository: {
+      findByUserUid: async () => organization,
+      listBeneficialOwners: async () => [{ fullName: 'Owner', dateOfBirth: '1980-01-01', nationalityCountryUid: 'country-1', ownershipPercentage: 100 }],
+      listDocuments: async () => [],
+      updateByUserUid: async () => {
+        const error = new Error("Duplicate entry for key 'ukOrganizationMasterRegisteredWallet'");
+        error.code = 'ER_DUP_ENTRY'; error.sqlMessage = error.message; throw error;
+      },
+    },
+    optionRepository: {
+      findEntityType: async () => ({}), findIndustry: async () => ({}), listRequiredDocumentTypes: async () => [],
+    },
+    locationService: { validateHierarchy: async () => {}, repository: { findCountry: async () => ({}) } },
+    walletOwnershipRepository: { findInvestorOwner: async () => null, findIssuerOwner: async () => null },
+  });
+
+  await assert.rejects(
+    service.submit(
+      { userUid: 'new-issuer-user', roleName: 'Issuer' },
+      { walletAddress: '0xDbBdcA99d568B54feaAb6c6D34e8f0093c509859' },
+    ),
+    (error) => error.statusCode === 409 && error.code === 'ISSUER_WALLET_ALREADY_REGISTERED',
+  );
 });
 
 test('individual beneficial owners may hold less than 25 percent when total ownership is 100 percent', () => {

@@ -10,6 +10,7 @@ Do not infer blockchain state from an HTTP 200 response alone.
 POST /api/v1/investments/tokens/:tokenUid/purchases
 POST /api/v1/investments/purchases/:purchaseUid/confirm
 GET  /api/v1/investments/tokens/:tokenUid/purchases?page=1&limit=20&search=&status=all
+GET  /api/v1/investments/me/portfolio?page=1&limit=20&search=
 GET  /api/v1/investments/purchases/:purchaseUid
 POST /api/v1/investments/purchases/:purchaseUid/retry
 ```
@@ -194,3 +195,16 @@ pollTimer                -> refreshes only while active rows are visible
 
 Never remove an older row just because a new checkout begins. Refresh from the history endpoint and
 let `purchaseUid` identify each row.
+
+## Portfolio screen
+
+Call `GET /api/v1/investments/me/portfolio` when the Portfolio menu opens and after a purchase or
+redemption reaches `COMPLETED`. Render one card/row per returned token. Use the top-level token
+fields for name, symbol, image, price, issuer, chain, addresses, restrictions, and required claims.
+Use the nested `portfolio` object for `totalPurchasedTokenAmount`, `totalInvestedUsdtAmount`,
+`totalRedeemedTokenAmount`, `netTokenAmount`, `averagePurchasePrice`, counts, and activity dates.
+
+The endpoint contains only tokens having at least one completed purchase. It excludes pending,
+failed, and expired purchase amounts. The net amount subtracts only completed redemptions. Use
+`imageUrl` as an authenticated relative API URL, and use `tokenUid` to navigate to the existing
+marketplace token-details route.

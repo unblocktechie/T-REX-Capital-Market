@@ -66,6 +66,28 @@ test('strictly verifies platform mint calldata and zero-address Transfer event',
   assert.equal(verified.logIndex, 3);
 });
 
+test('verifies mint state at the receipt block rather than using a later wallet balance', async () => {
+  const iface = new ethers.Interface(TREX_TOKEN_ABI);
+  const encoded = iface.encodeEventLog(iface.getEvent('Transfer'), [ethers.ZeroAddress, INVESTOR, 2n]);
+  const tx = { to: TOKEN, from: PLATFORM, data: iface.encodeFunctionData('mint', [INVESTOR, 2n]), value: 0n };
+  const receipt = { status: 1, blockNumber: 100, blockHash: `0x${'c'.repeat(64)}`, index: 1, gasUsed: 90000n, gasPrice: 12n,
+    logs: [{ address: TOKEN, topics: encoded.topics, data: encoded.data, index: 3 }] };
+  let checkedBlockTag;
+  const token = {
+    balanceOf: async (_wallet, overrides) => {
+      checkedBlockTag = overrides?.blockTag;
+      return overrides?.blockTag === receipt.blockNumber ? 2n : 1n;
+    },
+  };
+
+  const verified = await serviceWith(tx, receipt, () => token).verifyMint(TX, {
+    tokenAddress: TOKEN, platformWalletAddress: PLATFORM, investorWalletAddress: INVESTOR, tokenAmountRaw: '2',
+  });
+
+  assert.equal(verified.blockNumber, 100);
+  assert.equal(checkedBlockTag, 100);
+});
+
 test('waits for a mined mint and returns complete receipt metadata at one confirmation', async () => {
   const iface = new ethers.Interface(TREX_TOKEN_ABI);
   const encoded = iface.encodeEventLog(iface.getEvent('Transfer'), [ethers.ZeroAddress, INVESTOR, 2n]);

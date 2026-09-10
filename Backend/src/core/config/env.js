@@ -12,6 +12,10 @@ const csv = (value) => String(value || '')
   .map((item) => item.trim())
   .filter(Boolean);
 
+const normalizeOrigin = (value) => String(value || '').trim().replace(/\/+$/, '');
+
+const csvOrigins = (value) => [...new Set(csv(value).map(normalizeOrigin).filter(Boolean))];
+
 const csvNumbers = (value) => csv(value)
   .map((item) => Number(item))
   .filter((item) => Number.isInteger(item) && item > 0);
@@ -52,7 +56,7 @@ const env = Object.freeze({
     fromEmail: process.env.SMTP_FROM_EMAIL,
   },
   cors: {
-    allowedOrigins: csv(process.env.ALLOWED_ORIGINS || process.env.FRONTEND_URL || 'http://localhost:5173'),
+    allowedOrigins: csvOrigins(process.env.ALLOWED_ORIGINS || process.env.FRONTEND_URL || 'http://localhost:5173'),
     credentials: booleanValue(process.env.CORS_CREDENTIALS, true),
   },
   rateLimit: {
@@ -86,6 +90,7 @@ const env = Object.freeze({
   },
   blockchain: {
     sepoliaRpcUrl: process.env.SEPOLIA_RPC_URL,
+    sepoliaFallbackRpcUrls: csv(process.env.SEPOLIA_FALLBACK_RPC_URLS),
     deployerPrivateKey: process.env.DEPLOYER_PRIVATE_KEY,
     deployerAddress: process.env.DEPLOYER_ADDRESS,
     identityFactoryAddress: process.env.IDENTITY_FACTORY_ADDRESS,
@@ -93,6 +98,9 @@ const env = Object.freeze({
     confirmations: Number(process.env.BLOCKCHAIN_CONFIRMATIONS || 1),
     // Registry confirmation is intentionally conservative because CONFIRMED is authoritative.
     registryConfirmations: Number(process.env.REGISTRY_CONFIRMATIONS || 12),
+    registryRecoveryLookbackBlocks: Number(process.env.REGISTRY_RECOVERY_LOOKBACK_BLOCKS || 200000),
+    registryRecoveryBlockOffset: Number(process.env.REGISTRY_RECOVERY_BLOCK_OFFSET || 20000),
+    registryRpcEvidenceAttempts: Number(process.env.REGISTRY_RPC_EVIDENCE_ATTEMPTS || 5),
     transactionTimeoutMs: Number(process.env.BLOCKCHAIN_TRANSACTION_TIMEOUT_MS || 120000),
     // Block to start on-chain log lookups from (factory deploy block). 0 = from genesis.
     trexFactoryStartBlock: Number(process.env.TREX_FACTORY_START_BLOCK || 0),
@@ -130,6 +138,13 @@ const env = Object.freeze({
     redemptionAuthorizationTtlMinutes: Number(process.env.REDEMPTION_AUTHORIZATION_TTL_MINUTES || 30),
     redemptionIndexerStartBlock: Number(process.env.REDEMPTION_INDEXER_START_BLOCK || 0),
     redemptionWorkerEnabled: booleanValue(process.env.REDEMPTION_WORKER_ENABLED, true),
+    // Investor-to-investor ERC-3643 transfers. Interactive confirmation can be low for local
+    // UX while the global fallback indexer remains behind a conservative safe head.
+    transferConfirmations: Number(process.env.TRANSFER_CONFIRMATIONS || 1),
+    transferIndexerConfirmations: Number(process.env.TRANSFER_INDEXER_CONFIRMATIONS || 12),
+    transferIntentTtlMinutes: Number(process.env.TRANSFER_INTENT_TTL_MINUTES || 15),
+    transferIndexerStartBlock: Number(process.env.TRANSFER_INDEXER_START_BLOCK || 0),
+    transferWorkerEnabled: booleanValue(process.env.TRANSFER_WORKER_ENABLED, true),
   },
 });
 
@@ -152,4 +167,4 @@ const validateEnvironment = () => {
   }
 };
 
-module.exports = { env, validateEnvironment, csv, csvNumbers };
+module.exports = { env, validateEnvironment, csv, csvNumbers, normalizeOrigin, csvOrigins };

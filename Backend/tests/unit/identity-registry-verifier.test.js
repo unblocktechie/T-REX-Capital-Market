@@ -36,6 +36,10 @@ const makeVerifier = ({ to = REGISTRY, from = ISSUER, args = [INVESTOR, IDENTITY
       logs: includeEvent ? [{ address: REGISTRY, topics: event.topics, data: event.data, index: 7 }] : [],
     }),
     getBlockNumber: async () => 120,
+    getLogs: async () => [{
+      address: REGISTRY, topics: event.topics, data: event.data, transactionHash: TX,
+      blockNumber: 100, blockHash: `0x${'cd'.repeat(32)}`, transactionIndex: 2, index: 7,
+    }],
     destroy() {},
   };
   const contract = {
@@ -86,4 +90,34 @@ test('registry verifier validates the current registry state and issuer agent ro
   assert.equal(state.contains, true);
   assert.equal(state.matches, true);
   assert.equal(state.issuerIsAgent, true);
+});
+
+test('registry verifier finds the exact historical registration event in a bounded safe range', async () => {
+  const event = await makeVerifier().findRegistrationEvent(expected, { fromBlock: 50 });
+  assert.equal(event.txHash, TX);
+  assert.equal(event.blockNumber, 100);
+  assert.equal(event.investorWalletAddress, INVESTOR);
+  assert.equal(event.investorIdentityAddress, IDENTITY);
+});
+
+test('historical registration lookup fails over when the primary RPC returns an empty log result', async () => {
+  const encoded = iface.encodeEventLog(iface.getEvent('IdentityRegistered'), [INVESTOR, IDENTITY]);
+  const providerFactory = (url) => ({
+    getNetwork: async () => ({ chainId: 11155111n }),
+    getBlockNumber: async () => 120,
+    getLogs: async () => (url === 'primary' ? [] : [{
+      address: REGISTRY, topics: encoded.topics, data: encoded.data, transactionHash: TX,
+      blockNumber: 100, blockHash: `0x${'cd'.repeat(32)}`, transactionIndex: 2, index: 7,
+    }]),
+    destroy() {},
+  });
+  const verifier = new IdentityRegistryVerifierService({
+    sepoliaRpcUrl: 'primary', sepoliaFallbackRpcUrls: ['fallback'], chainId: 11155111,
+    supportedChainIds: [11155111], registryConfirmations: 2, registryRpcEvidenceAttempts: 1,
+  }, { providerFactory });
+
+  const event = await verifier.findRegistrationEvent(expected, { fromBlock: 50 });
+
+  assert.equal(event.txHash, TX);
+  assert.equal(event.blockNumber, 100);
 });

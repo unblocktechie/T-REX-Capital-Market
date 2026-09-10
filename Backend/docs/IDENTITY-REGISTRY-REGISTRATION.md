@@ -23,6 +23,21 @@ Identity Registry address, submitted investor onboarding, investor wallet and ON
 ISO-3166 numeric country, token country restrictions, `claimSubmitted` state, every independently
 `CONFIRMED` required claim, current non-membership, and the issuer wallet's registry agent role.
 
+If the investor is already present in the expected registry but the application has no confirmed
+operation, Create performs idempotent recovery instead of returning `INVESTOR_ALREADY_REGISTERED`.
+It does not create a PENDING operation and the frontend must not open MetaMask. The backend first
+locates the exact canonical `IdentityRegistered` event, fully verifies its transaction and final
+state, then inserts the operation directly as `CONFIRMED`, changes the investment interest to
+`registered`, and returns the normal HTTP `200` success response. If authoritative evidence is
+temporarily unavailable, the API returns `503` and asks the client to retry the API without opening
+MetaMask; registry state alone is never treated as confirmation proof.
+The synchronous recovery scan is bounded by `REGISTRY_RECOVERY_LOOKBACK_BLOCKS`, split into
+`REGISTRY_RECOVERY_BLOCK_OFFSET` ranges, and retries inconsistent public-RPC evidence reads up to
+`REGISTRY_RPC_EVIDENCE_ATTEMPTS` times before handing recovery back to the worker.
+`SEPOLIA_FALLBACK_RPC_URLS` accepts a comma-separated list of independent RPC endpoints. Historical
+event lookup and transaction verification fail over when the primary endpoint errors, returns
+incomplete transaction evidence, or returns no matching log for a state-confirmed registration.
+
 Success creates exactly one `identityRegistryRegistration` row with `PENDING` and `txHash = NULL`:
 
 ```json

@@ -3,11 +3,14 @@ const { sendSuccess } = require('../../../utils/response');
 const createIdentityRegistryRegistrationController = (service) => ({
   create: async (req, res) => {
     const result = await service.create(req.user, req.params.interestUid);
-    const message = result.alreadyRegistered
-      ? 'Investor is already registered for this token.'
-      : (result.existing ? 'Existing registry operation returned.' : 'Registry operation created.');
+    let message = 'Registry operation created.';
+    if (result.alreadyRegistered) {
+      message = 'Existing on-chain registry registration synchronized successfully.';
+    } else if (result.existing) {
+      message = 'Existing registry operation returned.';
+    }
     return sendSuccess(req, res, {
-      statusCode: result.existing ? 200 : 201,
+      statusCode: result.existing || result.alreadyRegistered ? 200 : 201,
       message,
       data: result.operation,
     });

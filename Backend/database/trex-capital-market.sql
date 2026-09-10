@@ -234,10 +234,19 @@ CREATE TABLE IF NOT EXISTS `organizationMaster` (
   `isUserNotified` BOOLEAN NOT NULL DEFAULT FALSE,
   `isActive` BOOLEAN NOT NULL DEFAULT TRUE,
   `isDeleted` BOOLEAN NOT NULL DEFAULT FALSE,
+  `registeredWalletAddress` VARCHAR(42)
+    GENERATED ALWAYS AS (
+      CASE
+        WHEN `walletAddress` IS NOT NULL AND TRIM(`walletAddress`) <> '' AND `isDeleted` = FALSE
+          THEN LOWER(TRIM(`walletAddress`))
+        ELSE NULL
+      END
+    ) STORED,
   `createdAt` DATETIME(3) NOT NULL DEFAULT (UTC_TIMESTAMP(3)),
   `updatedAt` DATETIME(3) NOT NULL DEFAULT (UTC_TIMESTAMP(3)) ON UPDATE CURRENT_TIMESTAMP(3),
   PRIMARY KEY (`organizationUid`),
   UNIQUE KEY `ukOrganizationMasterUserUid` (`userUid`),
+  UNIQUE KEY `ukOrganizationMasterRegisteredWallet` (`registeredWalletAddress`),
   UNIQUE KEY `ukOrganizationRegistration` (`countryOfIncorporationUid`, `registrationNumber`),
   KEY `idxOrganizationMasterStatus` (`status`, `isDraft`, `isActive`, `isDeleted`),
   KEY `idxOrganizationMasterLocation` (`countryUid`, `stateUid`, `cityUid`)

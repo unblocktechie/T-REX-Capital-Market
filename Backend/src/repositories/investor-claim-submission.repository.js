@@ -1,5 +1,6 @@
 const { execute } = require('../database/connection');
 const { createUid } = require('../utils/token');
+const { sqlInteger } = require('../utils/sql');
 const { identifier } = require('./base.repository');
 
 const submissionFields = [
@@ -90,14 +91,15 @@ class InvestorClaimSubmissionRepository {
   // Recovery candidates: prepared submissions that never recorded a transaction. These are the
   // suspicious/incomplete rows the fallback runner tries to reconcile from the chain.
   async findRecoveryCandidates(limit = 100, executor) {
+    const limitSql = sqlInteger(Math.max(1, Math.trunc(limit)), { min: 1, name: 'limit' });
     return execute(
       `SELECT * FROM \`investorClaimSubmission\`
        WHERE \`status\` = 'PENDING' AND \`txHash\` IS NULL AND \`isDeleted\` = 0
          AND \`syncStatus\` IN ('IDLE', 'QUEUED', 'FAILED')
          AND (\`nextSyncAt\` IS NULL OR \`nextSyncAt\` <= UTC_TIMESTAMP(3))
        ORDER BY (\`syncStatus\` = 'QUEUED') DESC, COALESCE(\`syncRequestedAt\`, \`createdAt\`) ASC
-       LIMIT ?`,
-      [Math.max(1, Math.trunc(limit))],
+       LIMIT ${limitSql}`,
+      [],
       executor,
     );
   }
@@ -134,15 +136,16 @@ class InvestorClaimSubmissionRepository {
   async finishSynchronization(submissionUid, {
     syncStatus = 'IDLE', lastScannedBlock, failureReason = null, nextRetrySeconds = 60,
   } = {}, executor) {
+    const retrySecondsSql = sqlInteger(nextRetrySeconds == null ? 0 : nextRetrySeconds, { name: 'nextRetrySeconds' });
     await execute(
       `UPDATE \`investorClaimSubmission\`
        SET \`syncStatus\` = ?, \`lastScannedBlock\` = COALESCE(?, \`lastScannedBlock\`),
            \`syncCompletedAt\` = UTC_TIMESTAMP(3), \`syncFailureReason\` = ?,
-           \`nextSyncAt\` = CASE WHEN ? IS NULL THEN NULL ELSE DATE_ADD(UTC_TIMESTAMP(3), INTERVAL ? SECOND) END,
+            \`nextSyncAt\` = CASE WHEN ? IS NULL THEN NULL ELSE DATE_ADD(UTC_TIMESTAMP(3), INTERVAL ${retrySecondsSql} SECOND) END,
            \`updatedAt\` = UTC_TIMESTAMP(3)
        WHERE \`submissionUid\` = ? AND \`isDeleted\` = 0`,
       [syncStatus, lastScannedBlock ?? null, failureReason ? String(failureReason).slice(0, 1000) : null,
-        nextRetrySeconds, nextRetrySeconds || 0, submissionUid],
+        nextRetrySeconds, submissionUid],
       executor,
     );
   }

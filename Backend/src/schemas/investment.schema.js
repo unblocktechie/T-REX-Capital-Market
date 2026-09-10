@@ -32,6 +32,27 @@ const issuerInterestsQuery = Joi.object({
 
 const interestParams = Joi.object({ interestUid: uid.required() });
 
+const investorParams = Joi.object({ investorUid: uid.required() });
+
+const invitationParams = Joi.object({ invitationUid: uid.required() });
+
+const issuerInvestorsQuery = Joi.object({
+  tokenUid: uid.required(),
+  page: Joi.number().integer().min(1).default(1),
+  limit: Joi.number().integer().min(1).max(100).default(20),
+  search: Joi.string().trim().max(100).allow('').default(''),
+  invitationStatus: Joi.string().valid('all', 'notInvited', 'PENDING', 'SENT', 'VIEWED').default('all'),
+});
+
+const createInvestorInvitation = Joi.object({ tokenUid: uid.required() });
+
+const investorInvitationsQuery = Joi.object({
+  page: Joi.number().integer().min(1).default(1),
+  limit: Joi.number().integer().min(1).max(100).default(20),
+  search: Joi.string().trim().max(100).allow('').default(''),
+  status: Joi.string().valid('all', 'SENT', 'VIEWED').default('all'),
+});
+
 const registryRegistrationParams = Joi.object({
   interestUid: uid.required(),
   registryRegistrationUid: uid.required(),
@@ -40,6 +61,8 @@ const registryRegistrationParams = Joi.object({
 const purchaseParams = Joi.object({ purchaseUid: uid.required() });
 
 const redemptionParams = Joi.object({ redemptionUid: uid.required() });
+
+const transferParams = Joi.object({ transferUid: uid.required() });
 
 const REDEMPTION_STATUSES = [
   'PENDING_INVESTOR_AUTHORIZATION', 'PENDING_ISSUER_APPROVAL', 'ISSUER_APPROVED',
@@ -62,11 +85,35 @@ const purchaseHistoryQuery = Joi.object({
   ).default('all'),
 });
 
+const portfolioQuery = Joi.object({
+  page: Joi.number().integer().min(1).default(1),
+  limit: Joi.number().integer().min(1).max(100).default(20),
+  search: Joi.string().trim().max(100).allow('').default(''),
+});
+
 const createPurchase = Joi.object({
   tokenAmount: Joi.string().trim().pattern(/^(?:0|[1-9]\d*)(?:\.\d+)?$/).max(80).required().messages({
     'string.pattern.base': 'tokenAmount must be a positive decimal string.',
   }),
   idempotencyKey: Joi.string().trim().min(8).max(100).required(),
+});
+
+const createTransfer = Joi.object({
+  recipientWalletAddress: Joi.string().trim().pattern(/^0x[a-fA-F0-9]{40}$/).required().messages({
+    'string.pattern.base': 'recipientWalletAddress must be a valid EVM address.',
+  }),
+  tokenAmount: Joi.string().trim().pattern(/^(?:0|[1-9]\d*)(?:\.\d+)?$/).max(80).required().messages({
+    'string.pattern.base': 'tokenAmount must be a positive decimal string.',
+  }),
+  idempotencyKey: Joi.string().trim().min(8).max(100).required(),
+});
+
+const transferHistoryQuery = Joi.object({
+  page: Joi.number().integer().min(1).default(1),
+  limit: Joi.number().integer().min(1).max(100).default(20),
+  search: Joi.string().trim().max(100).allow('').default(''),
+  status: Joi.string().valid('PENDING_TRANSFER', 'COMPLETED', 'EXPIRED', 'MANUAL_REVIEW', 'all').default('all'),
+  direction: Joi.string().valid('sent', 'received', 'all').default('all'),
 });
 
 const confirmPurchase = Joi.object({
@@ -132,11 +179,20 @@ module.exports = {
   myInterestsQuery,
   issuerInterestsQuery,
   interestParams,
+  investorParams,
+  invitationParams,
+  issuerInvestorsQuery,
+  createInvestorInvitation,
+  investorInvitationsQuery,
   registryRegistrationParams,
   purchaseParams,
   redemptionParams,
+  transferParams,
   purchaseHistoryQuery,
+  portfolioQuery,
   createPurchase,
+  createTransfer,
+  transferHistoryQuery,
   confirmPurchase,
   createRedemption,
   authorizeRedemption,
