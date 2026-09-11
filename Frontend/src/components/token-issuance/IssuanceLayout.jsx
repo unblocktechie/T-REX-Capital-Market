@@ -111,10 +111,10 @@ export function IssuanceLayout({
       {backend.isLocked ? (
         <InfoCallout title="Token configuration is locked" tone="info">
           {normalizedBackendStatus === 'deploymentpending'
-            ? 'A deployment attempt is active. The immutable token settings remain locked while the wallet transaction is submitted and verified.'
+            ? 'Token creation is in progress. Locked token settings cannot be changed while the wallet transaction is being submitted and verified.'
             : normalizedBackendStatus === 'deploymentfailed'
-              ? 'The previous on-chain deployment did not complete successfully. Review the deployment status before retrying; immutable settings remain locked.'
-              : 'This proposal has already been validated and submitted as ready to deploy. Its immutable settings can no longer be changed.'}
+              ? 'The previous token-creation transaction did not complete. Review its status before trying again; locked token settings remain unchanged.'
+              : 'This token setup has already been validated for creation. Its locked settings can no longer be changed.'}
         </InfoCallout>
       ) : null}
 

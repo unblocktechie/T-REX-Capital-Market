@@ -121,7 +121,7 @@ export const validateIdentityClaims = (data) => {
   const enabledClaims = (data.claimTopics || []).filter((topic) => topic.enabled);
   const hasEnabledClaim = enabledClaims.length > 0;
   if (!hasEnabledClaim) {
-    errors.claimTopics = 'Enable at least one claim topic before continuing.';
+    errors.claimTopics = 'Select at least one verification requirement before continuing.';
   } else if (enabledClaims.some((topic) => !topic.claimTopicUid)) {
     errors.claimTopics = 'The selected claim is not available for this token.';
   }

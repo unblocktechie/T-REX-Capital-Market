@@ -206,7 +206,7 @@ export default function InvitationsPage() {
 
       <div className="investor-invitations-help-note">
         <MailOpen size={16} aria-hidden="true" />
-        <span>Opening an invitation only takes you to the token details. It does not submit an investment interest or perform a blockchain transaction.</span>
+        <span>Opening an invitation only takes you to the token details. It does not submit an investment request or perform a blockchain transaction.</span>
       </div>
     </div>
   );

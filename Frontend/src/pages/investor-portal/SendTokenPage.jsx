@@ -389,7 +389,7 @@ export default function SendTokenPage({
   const completionRef = useRef('');
 
   useDocumentTitle(
-    embedded ? 'Asset Management' : token ? `${token.name} · Send Tokens` : 'Send Tokens',
+    embedded ? 'Manage Tokens' : token ? `${token.name} · Send Tokens` : 'Send Tokens',
   );
 
   const context = useMemo(() => getInvestmentActionContext(token || application), [application, token]);
@@ -815,7 +815,7 @@ export default function SendTokenPage({
 
   const validateFormForNewIntent = () => {
     if (!walletGuard.ready) {
-      toast.error('Connect the registered investor wallet on the required network to continue.');
+      toast.error('Connect the investor wallet linked to your profile on the required network to continue.');
       return false;
     }
     if (!addressChecked || recipientError || !isAddress(recipient.trim())) {
@@ -831,7 +831,7 @@ export default function SendTokenPage({
 
   const handleSend = async () => {
     if (!walletGuard.ready) {
-      toast.error('Connect the registered investor wallet on the required network to continue.');
+      toast.error('Connect the investor wallet linked to your profile on the required network to continue.');
       return;
     }
 
@@ -1048,13 +1048,13 @@ export default function SendTokenPage({
         <InvestorTokenActionHeader
           eyebrow="Token action"
           title="Send Tokens"
-          description="Send your registered ERC-3643 tokens to another eligible investor wallet."
+          description="Send tokens to another wallet that is approved to receive this security token."
         />
       ) : null}
 
       <div className="investor-token-action-layout">
         <main className="investor-token-action-main">
-          <InvestorTokenIdentityCard token={token} readyLabel="Registered investor" />
+          <InvestorTokenIdentityCard token={token} readyLabel="Approved investor" />
 
           <Card className="investor-token-action-card">
             <div className="investor-token-action-card__heading">

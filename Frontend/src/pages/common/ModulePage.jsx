@@ -17,18 +17,18 @@ const modules = {
   projects: {
     eyebrow: 'Issuer workspace',
     title: 'Token projects',
-    description: 'Create, review and manage compliant security token deployments.',
+    description: 'Create, review and manage compliant security tokens.',
     action: 'New project',
     cards: [
       ['Active projects', '3', 'Projects currently in preparation or live'],
-      ['Ready to deploy', '1', 'All required issuer and compliance steps complete'],
+      ['Ready to create', '1', 'All required setup and verification steps complete'],
       ['Draft projects', '2', 'Continue setup when your documentation is ready'],
     ],
   },
   createToken: {
-    eyebrow: 'Guided deployment',
+    eyebrow: 'Guided token setup',
     title: 'Create an ERC-3643 token',
-    description: 'Complete each stage to configure, validate and deploy your compliant token.',
+    description: 'Complete each stage to configure, review and create your compliant token.',
     action: 'Start setup',
     cards: [
       ['1. Issuer', 'Organization', 'Company profile, authority and jurisdiction'],
@@ -38,18 +38,18 @@ const modules = {
   },
   identity: {
     eyebrow: 'On-chain identity',
-    title: 'Identity registry',
-    description: 'Manage ONCHAINID identities, claims and trusted claim issuers.',
+    title: 'Approved investors',
+    description: 'Manage verified investors and the credentials that allow them to hold your token.',
     action: 'Add identity',
     cards: [
       ['Registered identities', '248', 'Wallets linked to verified on-chain identities'],
-      ['Trusted issuers', '4', 'Approved KYC and accreditation claim providers'],
-      ['Claims expiring', '7', 'Claims requiring renewal in the next 30 days'],
+      ['Verification providers', '4', 'Approved providers for KYC and investor eligibility'],
+      ['Verification expiring', '7', 'Credentials requiring renewal in the next 30 days'],
     ],
   },
   compliance: {
     eyebrow: 'Transfer controls',
-    title: 'Compliance rules',
+    title: 'Transfer rules',
     description: 'Configure modular rules that determine who can hold and transfer tokens.',
     action: 'Add rule',
     cards: [
@@ -66,18 +66,18 @@ const modules = {
     cards: [
       ['Verified investors', '248', 'KYC and eligibility checks completed'],
       ['Pending review', '18', 'Applications awaiting compliance review'],
-      ['Accredited', '96', 'Investors with current accreditation claims'],
+      ['Accredited', '96', 'Investors with current accreditation verification'],
     ],
   },
   transactions: {
     eyebrow: 'Token operations',
     title: 'Transactions',
-    description: 'Review minting, burning, transfers, freezes and recovery operations.',
+    description: 'Review token issuance, removals, transfers, freezes and wallet recovery operations.',
     action: 'Export activity',
     cards: [
       ['Total transactions', '1,842', 'All compliant token operations'],
       ['Pending', '6', 'Transactions awaiting signature or confirmation'],
-      ['Blocked', '12', 'Transfers rejected by compliance rules'],
+      ['Blocked', '12', 'Transfers stopped by your configured transfer rules'],
     ],
   },
   corporateActions: {

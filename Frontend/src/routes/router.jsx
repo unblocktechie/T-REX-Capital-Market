@@ -158,6 +158,11 @@ export const router = createBrowserRouter([
               {
                 element: <RoleMiddleware roles={[ROLES.issuer]} />,
                 children: [
+                  // `/app/tokens` is the natural breadcrumb destination, but there is no
+                  // standalone token-list page for issuers. Route it through the existing
+                  // token entry point so the creation guard can send issuers to the correct
+                  // wizard/review/deploying/token-details screen instead of a 404.
+                  { path: 'tokens', element: <Navigate to={ROUTES.createToken} replace /> },
                   {
                     element: <TokenCreationAccessGuard />,
                     children: [

@@ -41,7 +41,7 @@ const eventMeta = (event, { viewerRole = '', currentStatus = '' } = {}) => {
   if (isRegistryRegistrationConfirmedEvent(event)) {
     return viewerRole === 'investor'
       ? { title: 'Purchase Available', tone: 'success', Icon: CheckCircle2, badge: 'Ready to Purchase' }
-      : { title: 'Investor Added to Registry', tone: 'success', Icon: CheckCircle2, badge: 'Added to Registry' };
+      : { title: 'Investor Approved for Token', tone: 'success', Icon: CheckCircle2, badge: 'Approved Investor' };
   }
 
   if (claimVerificationEvent && viewerRole === 'investor') {
@@ -49,12 +49,12 @@ const eventMeta = (event, { viewerRole = '', currentStatus = '' } = {}) => {
   }
 
   if (claimVerificationEvent && viewerRole === 'issuer') {
-    return { title: 'Claim Verified', tone: 'success', Icon: CheckCircle2, badge: 'Verified' };
+    return { title: 'Verification Approved', tone: 'success', Icon: CheckCircle2, badge: 'Verified' };
   }
 
   switch (String(event?.eventType || '').toLowerCase()) {
     case 'claimsubmitted':
-      return { title: 'Claims Submitted', tone: 'success', Icon: CheckCircle2, badge: 'Confirmed On-Chain' };
+      return { title: 'Verification Submitted', tone: 'success', Icon: CheckCircle2, badge: 'Submitted' };
     case 'approved':
       return { title: 'Application Approved', tone: 'success', Icon: CheckCircle2, badge: 'Approved' };
     case 'rejected':
@@ -84,7 +84,7 @@ const defaultEventCopy = (event, viewerRole = '') => {
   }
 
   switch (String(event?.eventType || '').toLowerCase()) {
-    case 'claimsubmitted': return 'All required investor claims were successfully submitted and verified on-chain.';
+    case 'claimsubmitted': return 'All required investor verification was submitted successfully.';
     case 'approved': return 'This application has been approved.';
     case 'rejected': return event?.rejectReason || 'The issuer rejected this application submission.';
     case 'resubmitted': return 'The investor resubmitted updated documents for review.';
@@ -213,22 +213,22 @@ export function ApplicationHistoryItem({
             ) : isInvestorClaimAction ? (
               <div className="application-history-message application-history-message--claim-action is-success">
                 <FileCheck2 size={16} />
-                <span>Your application has been approved by the issuer. Submit the required claim to complete verification and enable your investment.</span>
-                {onSubmitClaim ? <Button size="sm" onClick={onSubmitClaim}>Submit Claim</Button> : null}
+                <span>Your application has been approved. Complete the required verification to unlock investing in this token.</span>
+                {onSubmitClaim ? <Button size="sm" onClick={onSubmitClaim}>Complete Verification</Button> : null}
               </div>
             ) : isIssuerWaitingForInvestor ? (
               <div className="application-history-waiting-action">
                 <Clock3 size={17} />
                 <div>
                   <strong>Waiting for Investor Action</strong>
-                  <span>The investor needs to submit the required claim from their side. Once submitted, you can add the investor to the registry.</span>
+                  <span>The investor still needs to complete the required verification. Once it is submitted, you can approve them to hold this token.</span>
                 </div>
               </div>
             ) : isInvestorClaimsSubmitted ? (
               <div className="application-history-investor-claim-submitted">
                 <div className={`application-history-message application-history-message--notify-issuer is-${meta.tone}`}>
                   <FileCheck2 size={16} />
-                  <span>All required investor claims successfully submitted and verified on-chain. The issuer is now completing the final verification step. This may take 1–2 business days.</span>
+                  <span>The investor has submitted all required verification. You can now complete the final approval step.</span>
                   <Button
                     size="sm"
                     variant="secondary"

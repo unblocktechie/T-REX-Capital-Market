@@ -189,7 +189,7 @@ export default function TokenDetailsPage() {
   const countryNames = (compliance.countries || [])
     .map((country) => country?.countryName || country?.label || String(country || ''))
     .filter(Boolean);
-  const displayStatus = token.isDeployed ? 'Created' : 'Ready to Deploy';
+  const displayStatus = token.isDeployed ? 'Created' : 'Ready to Create';
   const initialPrice = mapped.supplyPricing?.initialPrice;
   const currentPrice = mapped.supplyPricing?.currentPrice || initialPrice;
   const priceValidationError = newPrice ? validateCurrentTokenPrice(newPrice) : '';
@@ -264,7 +264,7 @@ export default function TokenDetailsPage() {
             )}
           </span>
           <div>
-            <span className="eyebrow">ERC-3643 security token</span>
+            <span className="eyebrow">Security token · ERC-3643</span>
             <h1>{tokenName} <span>({symbol})</span></h1>
             <div className="token-dashboard-header__status">
               <StatusBadge status="valid">{displayStatus}</StatusBadge>
@@ -284,7 +284,7 @@ export default function TokenDetailsPage() {
         </div>
         <p className="token-dashboard-header__description">
           {information.description ||
-            'Review the token identity, governance agents, enabled claims and compliance rules from one secure dashboard.'}
+            'Review investor access, platform permissions, verification requirements and transfer rules from one place.'}
         </p>
         <div className="token-dashboard-header__deployment-meta">
           <AddressDisplay
@@ -324,14 +324,14 @@ export default function TokenDetailsPage() {
       <div className="token-dashboard-grid">
         <section className="token-dashboard-card">
           <header>
-            <div><Fingerprint size={20} /><h2>Identity Registry</h2></div>
+            <div><Fingerprint size={20} /><h2>Approved Investor System</h2></div>
             <StatusBadge status="valid">Configured</StatusBadge>
           </header>
           <div className="token-dashboard-card__body token-dashboard-addresses">
             <AddressDisplay
-              label="Organization ONCHAINID"
+              label="Organization On-chain Identity (ONCHAINID)"
               address={organizationOnchainId}
-              emptyLabel="Pending organization identity address"
+              emptyLabel="Pending organization on-chain identity"
               explorerUrl={
                 organizationOnchainId && explorerBase
                   ? `${explorerBase}/address/${organizationOnchainId}`
@@ -340,7 +340,7 @@ export default function TokenDetailsPage() {
               showFullAddress
             />
             <AddressDisplay
-              label="Identity Registry"
+              label="Approved Investor List (Registry)"
               address={identityRegistryAddress}
               emptyLabel="Token contract not recorded"
               explorerUrl={
@@ -351,7 +351,7 @@ export default function TokenDetailsPage() {
               showFullAddress
             />
             <AddressDisplay
-              label="Identity Registry Storage"
+              label="Technical Registry Storage"
               address={identityRegistryStorageAddress}
               emptyLabel="Token contract not recorded"
               explorerUrl={
@@ -366,26 +366,26 @@ export default function TokenDetailsPage() {
 
         <section className="token-dashboard-card">
           <header>
-            <div><UsersRound size={20} /><h2>Management Agents</h2></div>
+            <div><UsersRound size={20} /><h2>Platform Permissions</h2></div>
             <StatusBadge status="valid">Prepared</StatusBadge>
           </header>
           <div className="token-dashboard-card__body token-dashboard-addresses">
             <AddressDisplay
-              label="Identity Manager"
+              label="Investor Verification Manager"
               address={agents.identityRegistryAgent?.address}
               emptyLabel="Not assigned"
               showFullAddress
             />
             <AddressDisplay
-              label="Token Agent"
+              label="Token Operations Wallet"
               address={agents.tokenAgent?.address}
               emptyLabel="Not assigned"
               showFullAddress
             />
             <div className="token-dashboard-permissions">
-              <span>Identity management</span>
-              <span>Mint</span>
-              <span>Burn</span>
+              <span>Investor approval</span>
+              <span>Issue tokens</span>
+              <span>Remove tokens</span>
               <span>Freeze</span>
             </div>
           </div>
@@ -393,7 +393,7 @@ export default function TokenDetailsPage() {
 
         <section className="token-dashboard-card">
           <header>
-            <div><Fingerprint size={20} /><h2>Claim Topics</h2></div>
+            <div><Fingerprint size={20} /><h2>Verification Requirements</h2></div>
             <StatusBadge status="valid">{enabledClaims.length} enabled</StatusBadge>
           </header>
           <div className="token-dashboard-card__body">
@@ -410,10 +410,10 @@ export default function TokenDetailsPage() {
                 ))}
               </div>
             ) : (
-              <p className="token-dashboard-empty">No claim topics are available for this token.</p>
+              <p className="token-dashboard-empty">No verification requirements are available for this token.</p>
             )}
             <AddressDisplay
-              label="Primary Trusted Claim Issuer"
+              label="Verification Provider"
               address={identityClaims.trustedIssuer?.address || ownerAddress}
               emptyLabel="Not configured"
               showFullAddress
@@ -423,7 +423,7 @@ export default function TokenDetailsPage() {
 
         <section className="token-dashboard-card">
           <header>
-            <div><Landmark size={20} /><h2>Compliance Modules</h2></div>
+            <div><Landmark size={20} /><h2>Transfer Rules</h2></div>
             <StatusBadge status="valid">Active</StatusBadge>
           </header>
           <div className="token-dashboard-card__body token-dashboard-settings">

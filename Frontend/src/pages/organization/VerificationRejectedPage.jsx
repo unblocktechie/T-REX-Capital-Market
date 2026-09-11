@@ -56,7 +56,7 @@ export default function VerificationRejectedPage() {
             Verification Rejected
           </h1>
           <p className="mt-4 mb-0 max-w-[680px] text-sm leading-7 text-slate-500 sm:text-base">
-            Your organization application requires corrections before it can continue to ERC-3643 token issuance.
+            Your organization application needs a few corrections before you can continue to token creation.
           </p>
 
           <div className="mt-7 max-w-[720px] rounded-2xl border border-rose-200 bg-rose-50/70 p-4 sm:p-5" role="alert">

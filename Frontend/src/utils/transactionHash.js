@@ -44,7 +44,7 @@ export const assertValidTransactionHash = (value) => {
   const transactionHash = normalizeTransactionHash(value);
 
   if (!isValidTransactionHash(transactionHash)) {
-    const error = new Error('A valid confirmed blockchain transaction hash is required.');
+    const error = new Error('A valid confirmed blockchain transaction ID is required.');
     error.code = 'INVALID_TRANSACTION_HASH';
     throw error;
   }

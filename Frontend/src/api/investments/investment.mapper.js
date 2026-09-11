@@ -85,7 +85,7 @@ export const mapClaimTopic = (topic, index = 0) => {
     topicObject?.name,
     topicObject?.label,
     topicObject?.claimTopic?.claimTopicName,
-    humanize(claimTopicCode || (claimTopicValue !== null ? `Claim Topic ${claimTopicValue}` : `Claim Topic ${index + 1}`)),
+    humanize(claimTopicCode || (claimTopicValue !== null ? `Verification Requirement ${claimTopicValue}` : `Verification Requirement ${index + 1}`)),
   );
 
   return {

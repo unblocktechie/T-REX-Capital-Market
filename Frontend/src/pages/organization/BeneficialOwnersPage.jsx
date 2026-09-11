@@ -143,7 +143,7 @@ export default function BeneficialOwnersPage() {
           items={[
             'AML and financial crime compliance',
             'Sanctions and politically exposed person screening',
-            'Investor eligibility and identity registry rules',
+            'Investor eligibility and approved-investor rules',
             'Mandatory control-person disclosure',
           ]}
         />

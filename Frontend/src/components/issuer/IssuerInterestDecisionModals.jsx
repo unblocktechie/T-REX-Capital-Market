@@ -30,7 +30,7 @@ import { shortenWalletAddress } from '@/utils/wallet';
 import { getErrorMessage, sanitizeUserFacingMessage } from '@/utils/error';
 import { issuerInvestorSubscriptionsService } from '@/services/issuer/issuerInvestorSubscriptionsService';
 
-const claimLabel = (topic) => topic?.label || String(topic?.claimTopicCode || 'Claim Topic').replaceAll('_', ' ');
+const claimLabel = (topic) => topic?.label || String(topic?.claimTopicCode || 'Verification Requirement').replaceAll('_', ' ');
 
 export function RejectInterestModal({ open, onClose, topics = [], onConfirm, loading = false }) {
   const [reasonType, setReasonType] = useState('');
@@ -77,7 +77,7 @@ export function RejectInterestModal({ open, onClose, topics = [], onConfirm, loa
   const submit = async () => {
     if (!valid) {
       setError(reasonType === 'DOC_REJECTED'
-        ? 'Select at least one requested claim topic.'
+        ? 'Select at least one verification requirement.'
         : reasonType === 'OTHER'
           ? 'Provide the reason for rejection.'
           : 'Select a rejection reason.');
@@ -95,7 +95,7 @@ export function RejectInterestModal({ open, onClose, topics = [], onConfirm, loa
     <Modal
       open={open}
       onClose={loading ? () => {} : onClose}
-      title={<span className="issuer-decision-title issuer-decision-title--danger"><XCircle size={19} /> Reject Subscription Request</span>}
+      title={<span className="issuer-decision-title issuer-decision-title--danger"><XCircle size={19} /> Reject Investment Request</span>}
       className="issuer-decision-modal sm:max-w-md"
       bodyClassName="issuer-decision-modal__body"
       trapFocus
@@ -114,7 +114,7 @@ export function RejectInterestModal({ open, onClose, topics = [], onConfirm, loa
           <MarketplaceDropdown
             value={reasonType}
             options={[
-              { value: 'DOC_REJECTED', label: 'Document Requested', description: 'Ask the investor to replace one or more claim-topic documents.' },
+              { value: 'DOC_REJECTED', label: 'Document Requested', description: 'Ask the investor to replace one or more verification documents.' },
               { value: 'OTHER', label: 'Other', description: 'Reject for a reason that is not related to a document.' },
             ]}
             onChange={setReasonType}
@@ -130,15 +130,15 @@ export function RejectInterestModal({ open, onClose, topics = [], onConfirm, loa
             <span>Requested Documents</span>
             <MarketplaceDropdown
               value=""
-              options={availableClaims.map((option) => ({ ...option, description: 'Request a replacement document for this claim topic.' }))}
+              options={availableClaims.map((option) => ({ ...option, description: 'Request a replacement document for this verification requirement.' }))}
               onChange={addClaim}
-              ariaLabel="Select requested claim topic"
-              placeholder={availableClaims.length ? 'Select documents…' : 'All required topics selected'}
+              ariaLabel="Select requested verification requirement"
+              placeholder={availableClaims.length ? 'Select documents…' : 'All requirements selected'}
               className="issuer-decision-dropdown"
               disabled={loading || !availableClaims.length}
             />
             {selectedClaims.length ? (
-              <div className="issuer-decision-chips" aria-label="Requested claim topics">
+              <div className="issuer-decision-chips" aria-label="Requested verification requirements">
                 {selectedClaims.map((claim) => {
                   const option = claimOptions.find((item) => item.value === claim);
                   return (
@@ -178,7 +178,7 @@ export function ApproveInterestModal({ open, onClose, onConfirm, loading = false
     <Modal
       open={open}
       onClose={loading ? () => {} : onClose}
-      title={<span className="issuer-decision-title issuer-decision-title--success"><ShieldCheck size={19} /> Verify Subscription Request</span>}
+      title={<span className="issuer-decision-title issuer-decision-title--success"><ShieldCheck size={19} /> Approve Investment Request</span>}
       className="issuer-decision-modal sm:max-w-md"
       bodyClassName="issuer-decision-modal__body"
       trapFocus
@@ -190,7 +190,7 @@ export function ApproveInterestModal({ open, onClose, onConfirm, loading = false
       )}
     >
       <div className="issuer-decision-stack">
-        <p className="issuer-decision-copy">Confirm that the submitted claim-topic documents have been reviewed and the investment interest can be approved.</p>
+        <p className="issuer-decision-copy">Confirm that the requested verification documents have been reviewed and this investment request can be approved.</p>
         <label className="issuer-decision-field">
           <span>Review Note <small>(Optional)</small></span>
           <textarea rows={4} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Add an optional note for this decision…" disabled={loading} />
@@ -205,36 +205,36 @@ const signingErrorCopy = (error) => {
   if (error?.kind === 'wallet-mismatch') {
     return {
       title: 'Organization wallet does not match',
-      description: 'Connect the same wallet address that was registered as the Organization Wallet before signing claims.',
+      description: 'Connect the same Organization Wallet used during onboarding before signing the investor verification.',
     };
   }
   if (error?.kind === 'rejected') {
     return {
-      title: 'Signature request denied',
-      description: 'The wallet signature request was cancelled.',
+      title: 'Wallet confirmation cancelled',
+      description: 'The wallet confirmation was cancelled. No approval was submitted.',
     };
   }
   if (error?.kind === 'verification') {
     return {
-      title: 'Signature verification failed',
-      description: sanitizeUserFacingMessage(error.message) || 'One or more claim signatures could not be verified by the service. Please retry the signing process.',
+      title: 'Verification approval failed',
+      description: sanitizeUserFacingMessage(error.message) || 'One or more verification approvals could not be confirmed. Please try again.',
     };
   }
   if (error?.kind === 'network') {
     return {
       title: 'Verification could not be completed',
-      description: sanitizeUserFacingMessage(error.message) || 'The signatures were collected, but verification could not be completed. Please retry.',
+      description: sanitizeUserFacingMessage(error.message) || 'Your wallet approvals were collected, but verification could not be completed. Please try again.',
     };
   }
   if (error?.kind === 'configuration') {
     return {
-      title: 'Claim signing is not ready',
+      title: 'Verification approval is not ready',
       description: sanitizeUserFacingMessage(error.message),
     };
   }
   return {
-    title: 'Claim signing failed',
-    description: sanitizeUserFacingMessage(error?.message) || 'The wallet could not complete the signature request. Check the connection and try again.',
+    title: 'Verification approval failed',
+    description: sanitizeUserFacingMessage(error?.message) || 'The wallet could not complete the approval request. Check the connection and try again.',
   };
 };
 
@@ -272,13 +272,13 @@ export function VerifyIdentityClaimsModal({
   const walletMatches = addressesMatch(connectedWallet, registeredWallet);
   const isBusy = status === ISSUER_CLAIM_SIGNING_STATUS.SIGNING || status === ISSUER_CLAIM_SIGNING_STATUS.VERIFYING;
   const configurationError = !subscriptionId
-    ? 'The subscription identifier is missing.'
+    ? 'The investment request information is missing.'
     : !investorIdentityAddress || !isAddress(investorIdentityAddress)
-      ? 'A valid investor identity contract address is required.'
+      ? 'The investor’s verification profile is not ready yet.'
       : !claims.length
-        ? 'The current token does not contain any required claim topics.'
+        ? 'This token does not have any verification requirements configured.'
         : invalidTopic
-          ? `${invalidTopic.label} does not contain a numeric claim-topic value.`
+          ? `${invalidTopic.label} is missing its technical verification identifier. Refresh and try again.`
           : !registeredWallet || !isAddress(registeredWallet)
             ? 'A valid registered Organization Wallet is required.'
             : '';
@@ -342,7 +342,7 @@ export function VerifyIdentityClaimsModal({
     if (!wallet.isConnected || !wallet.connector) {
       failSigning({
         kind: 'wallet',
-        message: 'Connect the registered Organization Wallet before starting claim signing.',
+        message: 'Connect your approved Organization Wallet before signing the investor verification.',
       });
       return;
     }
@@ -442,8 +442,8 @@ export function VerifyIdentityClaimsModal({
         kind: backendStatus === 'NETWORK_ERROR' ? 'network' : 'verification',
         message: verificationMessage || (
           backendStatus === 'PENDING'
-            ? 'The server did not verify every required claim topic. Please retry the signing process.'
-            : 'One or more claim signatures could not be verified by the server. Please retry the signing process.'
+            ? 'Not every required verification approval could be confirmed. Please try again.'
+            : 'One or more verification approvals could not be confirmed. Please try again.'
         ),
       });
     } catch (error) {
@@ -454,7 +454,7 @@ export function VerifyIdentityClaimsModal({
 
       failSigning(
         signingStage === 'backend'
-          ? { kind: 'network', message: getErrorMessage(error, 'Unable to submit the collected claim signatures for verification.') }
+          ? { kind: 'network', message: getErrorMessage(error, 'Unable to submit the verification approvals. Please try again.') }
           : { kind: 'wallet', message: error?.shortMessage || error?.message },
       );
     }
@@ -480,7 +480,7 @@ export function VerifyIdentityClaimsModal({
             disabled={isBusy || verificationLoading || organizationLoading || Boolean(configurationError) || !wallet.isConnected || !walletMatches}
           >
             {isBusy ? <LoaderCircle className="issuer-claim-spin" size={15} /> : <ShieldCheck size={15} />}
-            {verificationLoading ? 'Checking status…' : status === ISSUER_CLAIM_SIGNING_STATUS.VERIFYING ? 'Verifying…' : isBusy ? 'Waiting for signature…' : `Verify & Sign ${claims.length || ''} Claim${claims.length === 1 ? '' : 's'}`}
+            {verificationLoading ? 'Checking status…' : status === ISSUER_CLAIM_SIGNING_STATUS.VERIFYING ? 'Verifying…' : isBusy ? 'Waiting for wallet…' : `Approve ${claims.length || ''} Verification${claims.length === 1 ? '' : 's'}`}
           </Button>
         </>
       );
@@ -489,7 +489,7 @@ export function VerifyIdentityClaimsModal({
     <Modal
       open={open}
       onClose={close}
-      title="Verify Identity Claims"
+      title="Approve Investor Verification"
       className="issuer-claim-signature-modal sm:max-w-lg"
       bodyClassName="issuer-claim-signature-modal__body"
       trapFocus
@@ -501,8 +501,8 @@ export function VerifyIdentityClaimsModal({
             <div className="issuer-claim-signature-intro">
               <span className="issuer-claim-signature-intro__icon"><ShieldCheck size={20} /></span>
               <div>
-                <strong>Review and sign every required claim</strong>
-                <p>The current token requires {claims.length} issuer signature{claims.length === 1 ? '' : 's'}. Your wallet will request one confirmation for each claim topic.</p>
+                <strong>Review and sign each verification requirement</strong>
+                <p>This token requires {claims.length} verification approval{claims.length === 1 ? '' : 's'}. Your Organization Wallet will ask you to confirm each requirement separately.</p>
               </div>
             </div>
 
@@ -534,7 +534,7 @@ export function VerifyIdentityClaimsModal({
                 <Wallet size={17} />
                 <div>
                   <strong>Wallet connection required</strong>
-                  <span>Connect your Organization Wallet using the existing wallet control, then return here to sign the claims.</span>
+                  <span>Connect your Organization Wallet using the wallet control, then return here to sign the verification requirements.</span>
                 </div>
               </div>
             ) : null}
@@ -548,8 +548,8 @@ export function VerifyIdentityClaimsModal({
 
             <div className="issuer-claim-list-section">
               <div className="issuer-claim-list-section__heading">
-                <span>Claims to Sign ({claims.length})</span>
-                <small>One signature per topic</small>
+                <span>Verification to Approve ({claims.length})</span>
+                <small>One wallet confirmation per requirement</small>
               </div>
               <div className="issuer-claim-list">
                 {claims.map((claim) => (
@@ -557,9 +557,9 @@ export function VerifyIdentityClaimsModal({
                     <span className="issuer-claim-list__check"><Check size={13} /></span>
                     <div>
                       <strong>{claim.label}</strong>
-                      <small>{claim.description || 'Issuer verification claim for this investor identity.'}</small>
+                      <small>{claim.description || 'Verification credential for this investor. Technical standard: ERC-3643 claim.'}</small>
                     </div>
-                    <code>Topic: {claim.claimTopic ?? '—'}</code>
+                    <code>Technical requirement ID: {claim.claimTopic ?? '—'}</code>
                   </div>
                 ))}
               </div>
@@ -570,10 +570,10 @@ export function VerifyIdentityClaimsModal({
         {status === ISSUER_CLAIM_SIGNING_STATUS.SIGNING ? (
           <div className="issuer-claim-signing-state" aria-live="polite">
             <span className="issuer-claim-signing-state__spinner"><LoaderCircle size={30} /></span>
-            <strong>Awaiting wallet signature</strong>
+            <strong>Waiting for wallet confirmation</strong>
             <p>
-              Confirm {currentClaim?.label || 'the current claim'} in your wallet.
-              {claims.length > 1 ? ` Signature ${activeClaimIndex + 1} of ${claims.length}.` : ''}
+              Confirm {currentClaim?.label || 'the current verification'} in your wallet.
+              {claims.length > 1 ? ` Approval ${activeClaimIndex + 1} of ${claims.length}.` : ''}
             </p>
             <div className="issuer-claim-progress-bar" aria-hidden="true">
               <span style={{ width: `${Math.max(8, (collectedClaims.length / claims.length) * 100)}%` }} />
@@ -586,20 +586,20 @@ export function VerifyIdentityClaimsModal({
                   <div key={`${claim.claimTopic ?? 'invalid'}-${claim.index}`} className={signed ? 'is-signed' : active ? 'is-active' : ''}>
                     {signed ? <CheckCircle2 size={16} /> : active ? <LoaderCircle className="issuer-claim-spin" size={16} /> : <Circle size={16} />}
                     <span>{claim.label}</span>
-                    <small>{signed ? 'Signed' : active ? 'Waiting for wallet' : 'Pending'}</small>
+                    <small>{signed ? 'Approved' : active ? 'Waiting for wallet' : 'Pending'}</small>
                   </div>
                 );
               })}
             </div>
-            <span className="issuer-claim-signing-state__note">Do not close this window until all required signatures are completed.</span>
+            <span className="issuer-claim-signing-state__note">Keep this window open until all verification approvals are complete.</span>
           </div>
         ) : null}
 
         {status === ISSUER_CLAIM_SIGNING_STATUS.VERIFYING ? (
           <div className="issuer-claim-signing-state" aria-live="polite">
             <span className="issuer-claim-signing-state__spinner"><LoaderCircle size={30} /></span>
-            <strong>Verifying signatures…</strong>
-            <p>All wallet signatures were collected. Please wait while the server verifies every required claim topic.</p>
+            <strong>Confirming approvals…</strong>
+            <p>All wallet confirmations were collected. Please wait while each verification approval is confirmed.</p>
             <span className="issuer-claim-signing-state__note">Keep this window open until verification is complete.</span>
           </div>
         ) : null}
@@ -621,15 +621,15 @@ export function VerifyIdentityClaimsModal({
         {status === ISSUER_CLAIM_SIGNING_STATUS.SIGNED ? (
           <div className="issuer-claim-result-state issuer-claim-result-state--success" aria-live="polite">
             <span className="issuer-claim-result-state__icon"><CheckCircle2 size={26} /></span>
-            <strong>Claims successfully verified</strong>
-            <p>Every required claim topic was signed with the registered Organization Wallet and verified by the server.</p>
-            <span className="issuer-claim-status-pill">Status: SIGNED</span>
+            <strong>Investor verification approved</strong>
+            <p>Every required verification item was signed with your Organization Wallet and confirmed successfully.</p>
+            <span className="issuer-claim-status-pill">Status: Completed</span>
             <div className="issuer-claim-success-list">
               {claims.map((claim) => (
                 <div key={`${claim.claimTopic ?? 'invalid'}-${claim.index}`}>
                   <span><UserRound size={15} /></span>
-                  <div><strong>{claim.label}</strong><small>Topic {claim.claimTopic}</small></div>
-                  <span className="issuer-claim-success-list__verified"><CheckCircle2 size={14} /> Signed</span>
+                  <div><strong>{claim.label}</strong><small>Technical requirement ID {claim.claimTopic}</small></div>
+                  <span className="issuer-claim-success-list__verified"><CheckCircle2 size={14} /> Approved</span>
                 </div>
               ))}
             </div>

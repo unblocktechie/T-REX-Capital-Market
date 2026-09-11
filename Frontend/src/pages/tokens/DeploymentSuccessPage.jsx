@@ -101,7 +101,7 @@ export default function DeploymentSuccessPage() {
 
         <div className="deployment-complete-card__records deployment-complete-card__records--single">
           <AddressDisplay
-            label="Transaction hash"
+            label="Transaction ID"
             address={transactionHash}
             explorerUrl={transactionExplorer}
             showFullAddress

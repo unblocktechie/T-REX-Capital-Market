@@ -59,13 +59,13 @@ export default function IdentityDocumentsStep() {
 
   return (
     <InvestorLayout
-      title="Identity Documents"
-      description="Upload one or more clear government-issued identity documents. At least one valid document is required to continue."
-      side={<InvestorSecurityCard title="Document privacy" description="Files are uploaded securely to your investor account. Only document metadata is kept in the form state, and review downloads are requested securely when needed." />}
+      title="Identity Verification"
+      description="Upload a clear government-issued document so we can verify the identity on your investor profile."
+      side={<InvestorSecurityCard title="Your documents stay protected" description="Your files are uploaded securely and are available only for the verification and review steps that require them." />}
     >
       <InvestorFormCard className="investor-form-card--spaced">
         <TypedDocumentUploader
-          documentTypeLabel="Identity Document Type"
+          documentTypeLabel="Document Type"
           documentTypeOptions={options.identityDocumentTypes}
           documentTypeValue={selectedIdentityDocumentType}
           onDocumentTypeChange={setSelectedIdentityDocumentType}
@@ -74,7 +74,7 @@ export default function IdentityDocumentsStep() {
           onUpload={uploadDocument}
           onDelete={deleteDocument}
           error={errors.identityDocuments}
-          selectionHint="Select an identity document type first, then upload the matching file. You can add one or more identity documents. Re-uploading a type replaces the previously stored file for that type."
+          selectionHint="Choose the document type, then upload the matching file. You can add more than one document; uploading the same type again replaces the previous file."
         />
       </InvestorFormCard>
 
@@ -94,7 +94,7 @@ export default function IdentityDocumentsStep() {
       <InvestorActionBar>
         <Button variant="ghost" icon={ArrowLeft} onClick={() => setStep(1, { markReached: false })}>Back</Button>
         <span className="investor-action-bar__spacer" />
-        <Button icon={ArrowRight} onClick={continueFlow} disabled={!uploadsReady}>Continue to Compliance</Button>
+        <Button icon={ArrowRight} onClick={continueFlow} disabled={!uploadsReady}>Continue to Eligibility</Button>
       </InvestorActionBar>
     </InvestorLayout>
   );

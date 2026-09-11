@@ -164,7 +164,7 @@ export default function MarketplacePage() {
         <div>
           <span className="eyebrow">Investor marketplace</span>
           <h1>Explore compliant tokenized investments</h1>
-          <p>Browse created ERC-3643 security tokens and submit an investment interest when your required investor documents are complete.</p>
+          <p>Browse available security tokens and request to invest when your investor profile and required documents are ready.</p>
         </div>
         <label className="marketplace-header-search">
           <Search size={17} aria-hidden="true" />

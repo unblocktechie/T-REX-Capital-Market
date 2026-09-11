@@ -9,7 +9,7 @@ import {
   ShieldCheck,
   WalletCards,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Modal } from '@/components/ui/Modal';
 import { useWalletConnection } from '@/hooks/useWalletConnection';
@@ -76,6 +76,17 @@ export function WalletControl({
   const wallet = useWalletConnection();
   const isInvestorContext = context === 'investor';
   const isRegisteredAction = isInvestorContext && purpose === 'registered-action';
+
+  useEffect(() => {
+    const handleOpenWalletControl = (event) => {
+      const requestedContext = String(event?.detail?.context || '').trim();
+      if (requestedContext && requestedContext !== context) return;
+      setOpen(true);
+    };
+
+    window.addEventListener('trex:open-wallet-control', handleOpenWalletControl);
+    return () => window.removeEventListener('trex:open-wallet-control', handleOpenWalletControl);
+  }, [context]);
 
   const connectWith = async (connector) => {
     try {
@@ -348,7 +359,7 @@ export function WalletControl({
               >
                 <span>
                   <strong className="block text-sm">{wallet.requiredChain.name}</strong>
-                  <small className="block text-xs opacity-70">{isInvestorContext ? 'Required investor network' : 'Required deployment network'}</small>
+                  <small className="block text-xs opacity-70">{isInvestorContext ? 'Required investor network' : 'Required token network'}</small>
                 </span>
                 {wallet.isCorrectNetwork ? (
                   <Check size={18} />

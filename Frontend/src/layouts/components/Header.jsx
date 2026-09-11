@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, LogOut, Menu, UserRound } from 'lucide-react';
+import { Building2, ChevronDown, LogOut, Menu, UserRound } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { authService } from '@/api/auth';
 import { TrexLogo } from '@/components/branding/TrexLogo';
@@ -34,11 +34,11 @@ export function Header({ onboardingOnly = false }) {
     !location.pathname.startsWith(ROUTES.createToken);
   const roleAwareMeta =
     user?.role === ROLES.investor && location.pathname === ROUTES.dashboard
-      ? { title: 'Investor Dashboard', description: 'Profile, applications, invitations and registered assets' }
+      ? { title: 'Investor Dashboard', description: 'Your investments, invitations and token activity' }
       : user?.role === ROLES.investor && location.pathname === ROUTES.profile
-        ? { title: 'Investor Profile', description: 'Submitted investor identity and verification details' }
+        ? { title: 'Investor Profile', description: 'Your submitted identity and verification details' }
         : user?.role === ROLES.investor && location.pathname === ROUTES.investors
-          ? { title: 'Investor Onboarding', description: 'Investor identity and qualification setup' }
+          ? { title: 'Investor Onboarding', description: 'Set up your investor profile and eligibility' }
           : null;
   const currentMeta =
     roleAwareMeta ||
@@ -105,7 +105,7 @@ export function Header({ onboardingOnly = false }) {
         type="button"
         className="account-menu__trigger"
         onClick={() => setProfileOpen((value) => !value)}
-        aria-label={`Open ${roleLabel} profile menu`}
+        aria-label={onboardingOnly ? 'Open logout menu' : `Open ${roleLabel} profile menu`}
         title={`${user?.name || 'User'} · ${roleLabel}`}
         aria-haspopup="menu"
         aria-expanded={profileOpen}
@@ -123,18 +123,34 @@ export function Header({ onboardingOnly = false }) {
       </button>
 
       {profileOpen ? (
-        <div className="account-menu__panel" role="menu" aria-label="Profile menu">
-          <div className="account-menu__identity">
-            <span className="avatar account-menu__panel-avatar">{initials || 'U'}</span>
-            <span>
-              <strong>{user?.name || 'Issuer User'}</strong>
-              <small>{user?.email || roleLabel}</small>
-            </span>
-          </div>
-          <Link className="account-menu__item" to={ROUTES.profile} role="menuitem">
-            <UserRound size={18} aria-hidden="true" />
-            <span>Profile</span>
-          </Link>
+        <div
+          className="account-menu__panel"
+          role="menu"
+          aria-label={onboardingOnly ? 'Logout menu' : 'Profile menu'}
+        >
+          {!onboardingOnly ? (
+            <>
+              <div className="account-menu__identity">
+                <span className="avatar account-menu__panel-avatar">{initials || 'U'}</span>
+                <span>
+                  <strong>{user?.name || 'Issuer User'}</strong>
+                  <small>{user?.email || roleLabel}</small>
+                </span>
+              </div>
+              <Link
+                className="account-menu__item"
+                to={user?.role === ROLES.issuer ? ROUTES.organization : ROUTES.profile}
+                role="menuitem"
+              >
+                {user?.role === ROLES.issuer ? (
+                  <Building2 size={18} aria-hidden="true" />
+                ) : (
+                  <UserRound size={18} aria-hidden="true" />
+                )}
+                <span>{user?.role === ROLES.issuer ? 'My Organization' : 'Profile'}</span>
+              </Link>
+            </>
+          ) : null}
           <button
             type="button"
             className="account-menu__item account-menu__item--logout"

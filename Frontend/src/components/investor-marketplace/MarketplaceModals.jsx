@@ -20,7 +20,7 @@ const SUPPORTED_MIME_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/jp
 const SUPPORTED_EXTENSIONS = new Set(['pdf', 'jpg', 'jpeg', 'png']);
 
 const topicIcon = (code) => code === 'ACCREDITED_INVESTOR' ? BadgeCheck : UserRoundCheck;
-const topicLabel = (topic) => topic?.label || String(topic?.claimTopicCode || 'Required claim').replaceAll('_', ' ');
+const topicLabel = (topic) => topic?.label || String(topic?.claimTopicCode || 'Required verification').replaceAll('_', ' ');
 const optionUid = (option) => String(option?.documentTypeUid || option?.value || '').trim();
 const optionLabel = (option) => option?.label || option?.documentTypeName || optionUid(option);
 
@@ -155,7 +155,7 @@ export function UploadMissingDocumentsModal({
 
   const uploadFile = async (file) => {
     if (!selectedTopic) {
-      setLocalError('All required claim-topic documents are already complete.');
+      setLocalError('All required verification documents are already complete.');
       return;
     }
     if (!selectedDocumentTypeUid) {
@@ -281,7 +281,7 @@ export function UploadMissingDocumentsModal({
       footer={(
         <>
           <Button variant="secondary" onClick={handleClose} disabled={uploading || completing || Boolean(removingDocumentKey)}>Cancel</Button>
-          <Button onClick={handleComplete} loading={completing || uploading} disabled={!canComplete}>Submit Interest</Button>
+          <Button onClick={handleComplete} loading={completing || uploading} disabled={!canComplete}>Request to Invest</Button>
         </>
       )}
     >
@@ -319,18 +319,18 @@ export function UploadMissingDocumentsModal({
 
         {outstandingTopics.length > 1 ? (
           <div className="marketplace-upload-field">
-            <span>Claim Topic</span>
+            <span>Verification Requirement</span>
             <MarketplaceDropdown
               value={selectedClaimCode}
               options={claimTopicOptions}
               onChange={setSelectedClaimCode}
-              ariaLabel="Select claim topic"
+              ariaLabel="Select verification requirement"
               className="marketplace-upload-dropdown"
               disabled={uploading || Boolean(removingDocumentKey)}
             />
           </div>
         ) : selectedTopic ? (
-          <p className="marketplace-upload-claim-label">Claim Topic: <strong>{topicLabel(selectedTopic)}</strong></p>
+          <p className="marketplace-upload-claim-label">Verification Requirement: <strong>{topicLabel(selectedTopic)}</strong></p>
         ) : null}
 
         {selectedTopic ? (
@@ -345,7 +345,7 @@ export function UploadMissingDocumentsModal({
               className="marketplace-upload-dropdown"
               disabled={uploading || documentTypesLoading || Boolean(removingDocumentKey) || !documentTypeOptions.length}
             />
-            {!documentTypesLoading && !matchingDocumentTypes.length ? <small>No upload type is configured for this claim topic. Please contact support.</small> : null}
+            {!documentTypesLoading && !matchingDocumentTypes.length ? <small>No document type is configured for this verification requirement. Please contact support.</small> : null}
           </div>
         ) : null}
 
@@ -392,7 +392,7 @@ export function UploadMissingDocumentsModal({
                     <span>
                       <strong>{file.name}</strong>
                       <small>
-                        <span className="marketplace-upload-claim-chip">{file.claimTopicLabel || file.claimTopicCode || 'Claim topic'}</span>
+                        <span className="marketplace-upload-claim-chip">{file.claimTopicLabel || file.claimTopicCode || 'Verification requirement'}</span>
                         <span>{file.documentTypeLabel || 'Uploaded document'}</span>
                       </small>
                     </span>
@@ -439,22 +439,22 @@ export function SubmitInterestModal({ open, onClose, token, onConfirm, loading =
     <Modal
       open={open}
       onClose={onClose}
-      title="Submit Investment Interest"
+      title="Request to Invest"
       className="sm:max-w-lg"
       trapFocus
       footer={(
         <>
           <Button variant="secondary" onClick={onClose} disabled={loading}>Cancel</Button>
-          <Button onClick={onConfirm} loading={loading}>Submit Interest</Button>
+          <Button onClick={onConfirm} loading={loading}>Request to Invest</Button>
         </>
       )}
     >
       <div className="marketplace-modal-stack">
         <div className="marketplace-modal-hero-icon"><FileCheck2 size={21} /></div>
-        <p className="marketplace-modal-copy">Your investor identity and eligible documents will be available to <strong>{token.issuer}</strong> for review. Submitting interest does not start a blockchain transaction.</p>
+        <p className="marketplace-modal-copy">Your verified profile and selected documents will be available to <strong>{token.issuer}</strong> for review. Submitting interest does not start a blockchain transaction.</p>
         {requiredTopics.length ? (
           <div>
-            <span className="marketplace-modal-label">Required claim topics</span>
+            <span className="marketplace-modal-label">Required Verification</span>
             <div className="marketplace-modal-document-list">
               {requiredTopics.map((topic) => {
                 const Icon = topicIcon(topic.claimTopicCode);
@@ -475,7 +475,7 @@ export function SubmitInterestModal({ open, onClose, token, onConfirm, loading =
 export function SubmitClaimsModal({ open, onClose }) {
   return (
     <Modal open={open} onClose={onClose} title="Required Documents" className="sm:max-w-lg" trapFocus footer={<Button onClick={onClose}>Close</Button>}>
-      <div className="marketplace-modal-stack"><p className="marketplace-modal-copy">Required claim topics are satisfied by uploading matching investor documents.</p></div>
+      <div className="marketplace-modal-stack"><p className="marketplace-modal-copy">Complete each verification requirement by uploading a matching investor document.</p></div>
     </Modal>
   );
 }

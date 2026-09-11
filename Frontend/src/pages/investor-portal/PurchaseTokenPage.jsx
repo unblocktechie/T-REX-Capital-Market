@@ -49,6 +49,7 @@ import {
   waitForInvestorPurchasePaymentReceipt,
 } from '@/services/investor/investorTokenPurchaseTransaction.service';
 import { getErrorMessage, sanitizeUserFacingMessage } from '@/utils/error';
+import { getWalletErrorMessage } from '@/utils/wallet';
 import { getInvestmentActionContext } from '@/utils/investmentPurchase';
 import { resolveCurrentTokenPriceExact } from '@/utils/tokenPrice';
 
@@ -273,6 +274,38 @@ const historyHasActiveRows = (rows) => (
   && rows.some((row) => PROCESSING_PURCHASE_STATUSES.has(normalizeStatus(row?.status)))
 );
 
+const isPurchaseBlockingNewCheckout = (purchase) => (
+  PROCESSING_PURCHASE_STATUSES.has(normalizeStatus(purchase?.status))
+);
+
+const isPaymentAcceptedStatus = (purchase) => {
+  const status = normalizeStatus(purchase?.status);
+  return [
+    PURCHASE_STATUS.PAYMENT_CONFIRMED,
+    PURCHASE_STATUS.MINT_SUBMITTED,
+    PURCHASE_STATUS.COMPLETED,
+  ].includes(status);
+};
+
+const isPurchaseStateAdvanceResponse = (error) => {
+  const code = clean(
+    error?.response?.data?.error?.code
+    || error?.response?.data?.code,
+  ).toUpperCase();
+  const message = clean(
+    error?.response?.data?.error?.message
+    || error?.response?.data?.message
+    || error?.message,
+  ).toLowerCase();
+
+  return [
+    'PURCHASE_STATE_CHANGED',
+    'PURCHASE_STATUS_CHANGED',
+    'PURCHASE_ALREADY_CONFIRMED',
+    'PAYMENT_ALREADY_CONFIRMED',
+  ].includes(code) || /purchase changed while payment was being verified|payment (?:is |was )?already confirmed|purchase (?:is |was )?already being finalized/.test(message);
+};
+
 export default function PurchaseTokenPage({
   interestUid: interestUidOverride,
   embedded = false,
@@ -307,6 +340,11 @@ export default function PurchaseTokenPage({
   const [purchaseHistoryRefreshing, setPurchaseHistoryRefreshing] = useState(false);
   const [purchaseHistoryError, setPurchaseHistoryError] = useState('');
   const [purchaseHistoryRefreshVersion, setPurchaseHistoryRefreshVersion] = useState(0);
+  const [latestPurchase, setLatestPurchase] = useState(null);
+  const [purchaseGateTokenUid, setPurchaseGateTokenUid] = useState('');
+  const [purchaseGateLoading, setPurchaseGateLoading] = useState(true);
+  const [purchaseGateError, setPurchaseGateError] = useState('');
+  const [purchaseGateRefreshVersion, setPurchaseGateRefreshVersion] = useState(0);
   const operationLockRef = useRef(false);
   const recoveryLoadKeyRef = useRef('');
   const pollStartedAtRef = useRef({ purchaseUid: '', startedAt: 0 });
@@ -314,9 +352,10 @@ export default function PurchaseTokenPage({
   const walletTokenAutoPromptRef = useRef(false);
   const purchaseHistoryRequestRef = useRef({ controller: null, inFlight: false });
   const purchaseHistoryLoadedVersionRef = useRef(0);
+  const purchaseGateRequestRef = useRef({ controller: null, inFlight: false });
 
   useDocumentTitle(
-    embedded ? 'Asset Management' : token ? `${token.name} · Purchase Token` : 'Purchase Token',
+    embedded ? 'Manage Tokens' : token ? `${token.name} · Purchase Token` : 'Purchase Token',
   );
 
   const applicationRoute = ROUTES.applicationDetail(interestUid);
@@ -441,7 +480,71 @@ export default function PurchaseTokenPage({
 
   const refreshPurchaseHistory = useCallback(() => {
     setPurchaseHistoryRefreshVersion((current) => current + 1);
+    setPurchaseGateRefreshVersion((current) => current + 1);
   }, []);
+
+  const loadLatestPurchaseForGate = useCallback(async ({ mode = 'load' } = {}) => {
+    if (!historyTokenUid) return;
+    if (mode === 'poll' && purchaseGateRequestRef.current.inFlight) return;
+
+    if (mode !== 'poll' && purchaseGateRequestRef.current.controller) {
+      purchaseGateRequestRef.current.controller.abort();
+    }
+
+    const controller = new AbortController();
+    purchaseGateRequestRef.current = { controller, inFlight: true };
+    if (mode !== 'poll') setPurchaseGateLoading(true);
+    setPurchaseGateError('');
+
+    try {
+      const result = await investmentApi.listTokenPurchases(historyTokenUid, {
+        page: 1,
+        limit: 1,
+        search: '',
+        status: 'all',
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted) return;
+      const rows = Array.isArray(result?.data) ? result.data : [];
+      setLatestPurchase(rows[0] || null);
+      setPurchaseGateTokenUid(historyTokenUid);
+    } catch (gateError) {
+      if (controller.signal.aborted || gateError?.code === 'ERR_CANCELED' || gateError?.name === 'CanceledError') return;
+      setPurchaseGateTokenUid(historyTokenUid);
+      setPurchaseGateError(getErrorMessage(gateError, 'Your latest purchase status could not be verified right now.'));
+    } finally {
+      if (purchaseGateRequestRef.current.controller === controller) {
+        purchaseGateRequestRef.current = { controller: null, inFlight: false };
+        setPurchaseGateLoading(false);
+      }
+    }
+  }, [historyTokenUid]);
+
+  useEffect(() => {
+    if (!ready || !historyTokenUid) return undefined;
+    void loadLatestPurchaseForGate({ mode: 'load' });
+    return () => {
+      purchaseGateRequestRef.current.controller?.abort();
+    };
+  }, [historyTokenUid, loadLatestPurchaseForGate, purchaseGateRefreshVersion, ready]);
+
+  useEffect(() => {
+    if (!ready || !historyTokenUid || !isPurchaseBlockingNewCheckout(latestPurchase)) return undefined;
+
+    const poll = () => {
+      if (!document.hidden) void loadLatestPurchaseForGate({ mode: 'poll' });
+    };
+    const timer = window.setInterval(poll, HISTORY_POLL_INTERVAL_MS);
+    const handleVisibilityChange = () => {
+      if (!document.hidden) poll();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [historyTokenUid, latestPurchase, loadLatestPurchaseForGate, ready]);
 
   const loadPurchaseHistory = useCallback(async ({ mode = 'load' } = {}) => {
     if (!historyTokenUid) return;
@@ -555,6 +658,12 @@ export default function PurchaseTokenPage({
     }));
     if (nextHash) setBroadcastTxHash(nextHash);
     setPurchaseRequestId(clean(nextPurchase.requestId));
+    if (nextUid) {
+      setLatestPurchase((current) => ({ ...(current || {}), ...nextPurchase, purchaseUid: nextUid }));
+      setPurchaseGateTokenUid(clean(token?.id || token?.tokenUid));
+      setPurchaseGateError('');
+      setPurchaseGateLoading(false);
+    }
 
     const status = normalizeStatus(nextPurchase.status);
     const serverError = purchaseDataError(nextPurchase);
@@ -866,12 +975,13 @@ export default function PurchaseTokenPage({
       applyPurchase(next, txHash);
       refreshPurchaseHistory();
       const serverError = purchaseDataError(next);
-      if (serverError) {
+      if (serverError && !isPaymentAcceptedStatus(next)) {
         setVerificationBlocked(true);
         toast.error('Purchase needs attention', { description: serverError.message });
       } else {
-        // MINT_SUBMITTED (including HTTP 202) is a normal response here. The GET
-        // poll owns the flow from this point until the backend reports COMPLETED.
+        // PAYMENT_CONFIRMED / MINT_SUBMITTED (including HTTP 202) are normal
+        // progression states. The GET poll owns the flow from this point until
+        // the purchase reaches COMPLETED.
         setVerificationBlocked(false);
         setPurchaseError('');
         setPurchaseErrorCode('');
@@ -880,6 +990,42 @@ export default function PurchaseTokenPage({
     } catch (confirmError) {
       refreshPurchaseHistory();
       if (isDefinitiveApiFailure(confirmError)) {
+        // Confirmation and the purchase worker can advance the same purchase at
+        // nearly the same time. If that happens, a stale Confirm response must
+        // not be presented as a payment failure. Re-read the authoritative
+        // purchase and treat PAYMENT_CONFIRMED/MINT_SUBMITTED/COMPLETED as a
+        // successful progression of the existing purchase.
+        try {
+          const reconciled = await investmentApi.getTokenPurchase(currentPurchaseUid);
+          if (!purchaseDataError(reconciled) && isPaymentAcceptedStatus(reconciled)) {
+            const reconciledStatus = normalizeStatus(reconciled?.status);
+            applyPurchase(reconciled, txHash);
+            refreshPurchaseHistory();
+            setVerificationBlocked(false);
+            setPurchaseError('');
+            setPurchaseErrorCode('');
+            if (reconciledStatus !== PURCHASE_STATUS.COMPLETED) {
+              toast.success('Payment received', {
+                description: 'Your payment is confirmed and your purchase is being finalized.',
+              });
+            }
+            return reconciled;
+          }
+        } catch {
+          // If reconciliation cannot be read, fall through to the original
+          // verification error so the investor still receives a clear message.
+        }
+
+        if (isPurchaseStateAdvanceResponse(confirmError)) {
+          setVerificationBlocked(false);
+          setPurchaseError('');
+          setPurchaseErrorCode('');
+          toast.info('Purchase is being finalized', {
+            description: 'Your purchase status was updated while payment verification was in progress. We will keep checking automatically.',
+          });
+          return null;
+        }
+
         const { message } = recordError(confirmError, 'Your payment could not be verified. Please check the details before trying again.');
         setVerificationBlocked(true);
         toast.error('Payment needs attention', { description: message });
@@ -939,8 +1085,27 @@ export default function PurchaseTokenPage({
 
   const handlePurchase = async () => {
     if (operationLockRef.current) return;
+
+    const gateMatchesToken = Boolean(historyTokenUid) && purchaseGateTokenUid === historyTokenUid;
+    if (purchaseGateLoading || !gateMatchesToken) {
+      toast.info('Checking your latest purchase status. Please wait a moment.');
+      return;
+    }
+    if (purchaseGateError) {
+      toast.error('Purchase temporarily unavailable', {
+        description: 'We could not verify whether your previous purchase has finished. Refresh the purchase history and try again.',
+      });
+      return;
+    }
+    if (isPurchaseBlockingNewCheckout(latestPurchase)) {
+      toast.info('Your previous purchase is still being finalized.', {
+        description: 'You can start another purchase after the current purchase is completed.',
+      });
+      return;
+    }
+
     if (!walletGuard.ready) {
-      toast.error('Connect the registered investor wallet on the required network to continue.');
+      toast.error('Connect the investor wallet linked to your profile on the required network to continue.');
       return;
     }
     if (!normalizedTokenAmount || tokenAmountError) {
@@ -994,7 +1159,9 @@ export default function PurchaseTokenPage({
       preparedStatus === PURCHASE_STATUS.PAYMENT_CONFIRMED
       || preparedStatus === PURCHASE_STATUS.MINT_SUBMITTED
     ) {
-      toast.info('Your payment is already confirmed. Your purchase is being finalized.');
+      toast.success('Payment already confirmed', {
+        description: 'Your purchase is being finalized. You can start another purchase after it is completed.',
+      });
       setBusyAction('');
       operationLockRef.current = false;
       return;
@@ -1063,7 +1230,7 @@ export default function PurchaseTokenPage({
         if (safePreBroadcastCodes.has(clean(walletError?.code))) {
           persistRecovery({ purchaseUid: preparedUid, paymentAttemptStarted: false });
         }
-        const message = getErrorMessage(walletError, 'The wallet could not submit this payment. Please try again.');
+        const message = getWalletErrorMessage(walletError, 'The wallet could not submit this payment. Please try again.');
         setPurchaseError(message);
         setPurchaseErrorCode(clean(walletError?.code));
         toast.error('Unable to submit payment', { description: message });
@@ -1097,12 +1264,12 @@ export default function PurchaseTokenPage({
     if (!isCompleted || !wasFirstTokenPurchase || walletTokenAdded || addingWalletToken) return;
     if (!walletGuard.ready) {
       if (!automatic) {
-        toast.error('Connect your registered investor wallet on the required network to add this token.');
+        toast.error('Connect the investor wallet linked to your profile on the required network to add this token.');
       }
       return;
     }
     if (!tokenContractAddress) {
-      if (!automatic) toast.error('The token contract is unavailable. Refresh the page and try again.');
+      if (!automatic) toast.error('The token details are temporarily unavailable. Refresh the page and try again.');
       return;
     }
 
@@ -1194,8 +1361,15 @@ export default function PurchaseTokenPage({
   const currentTokenAmount = normalizedTokenAmount;
   const exactTreasury = clean(purchase?.treasuryWalletAddress) || context.issuerTreasuryAddress;
   const paymentContract = clean(purchase?.usdtContractAddress);
-  const actionLabel = 'Purchase';
-  const actionDisabled = Boolean(busyAction) || !walletGuard.ready;
+  const purchaseGateMatchesToken = Boolean(historyTokenUid) && purchaseGateTokenUid === historyTokenUid;
+  const latestPurchaseStatus = normalizeStatus(latestPurchase?.status);
+  const purchaseBlockedByPrevious = purchaseGateMatchesToken && isPurchaseBlockingNewCheckout(latestPurchase);
+  const purchaseAvailabilityUnverified = purchaseGateLoading || !purchaseGateMatchesToken || Boolean(purchaseGateError);
+  const actionLabel = purchaseBlockedByPrevious ? 'Purchase processing' : 'Purchase';
+  const actionDisabled = Boolean(busyAction)
+    || !walletGuard.ready
+    || purchaseAvailabilityUnverified
+    || purchaseBlockedByPrevious;
   const historyTotal = Number(
     purchaseHistoryMeta?.total
     ?? purchaseHistoryMeta?.totalCount
@@ -1236,7 +1410,7 @@ export default function PurchaseTokenPage({
           <Card className="investor-token-action-card">
             <div className="investor-token-action-card__heading">
               <div>
-                <span>Locked identity &amp; settlement</span>
+                <span>Verified wallet &amp; payment</span>
                 <h2>Your verified investment details</h2>
               </div>
               <ShieldCheck size={19} />
@@ -1244,7 +1418,7 @@ export default function PurchaseTokenPage({
             <div className="investor-token-action-address-grid">
               <LockedAddressField label="Primary Investment Wallet" value={preparedInvestorWallet} />
               <LockedAddressField label="Issuer Treasury Wallet" value={exactTreasury} emptyLabel="Treasury wallet unavailable" />
-              {paymentContract ? <LockedAddressField label="Payment Token Contract" value={paymentContract} /> : null}
+              {paymentContract ? <LockedAddressField label="USDT Contract Address" value={paymentContract} /> : null}
             </div>
             <p className="investor-token-action-helper">
               These details are read from your verified application and the current purchase request. They cannot be edited here.
@@ -1292,7 +1466,7 @@ export default function PurchaseTokenPage({
           <Card className="investor-token-action-card">
             <div className="investor-token-action-card__heading">
               <div>
-                <span>Compliance pre-check</span>
+                <span>Purchase eligibility</span>
                 <h2>Investment eligibility</h2>
               </div>
               <CheckCircle2 size={19} />
@@ -1300,20 +1474,20 @@ export default function PurchaseTokenPage({
             <div className="investor-token-action-checks">
               <TokenActionCheck
                 icon={UserRoundCheck}
-                label="Registered investor"
-                detail="Your investor identity is registered for this token."
+                label="Approved investor"
+                detail="Your verified profile is approved to hold this token."
                 status="Ready"
               />
               <TokenActionCheck
                 icon={ShieldCheck}
-                label="Required claims"
-                detail={allRequiredClaimsReady ? 'Your required investor claims are complete.' : 'Eligibility is checked again before the purchase is accepted.'}
+                label="Verification complete"
+                detail={allRequiredClaimsReady ? 'You have completed the required investor verification.' : 'Eligibility is checked again before the purchase is accepted.'}
                 status={allRequiredClaimsReady ? 'Ready' : 'Verified at checkout'}
                 tone={allRequiredClaimsReady ? 'success' : 'neutral'}
               />
               <TokenActionCheck
                 icon={Scale}
-                label="Holder limit"
+                label="Holding limit"
                 detail={maxTokenBalanceExact ? `Maximum configured holder balance: ${maxTokenBalanceExact} ${token.symbol}.` : 'The configured holder limit is enforced when the purchase is created.'}
                 status="Enforced"
               />
@@ -1377,12 +1551,22 @@ export default function PurchaseTokenPage({
             </Button>
             <small className="investor-token-order-card__footnote">
               {!walletGuard.ready
-                ? 'Connect the registered investor wallet on the required network to purchase.'
-                : tokenAmountError
-                  ? tokenAmountError
-                  : busyAction
-                    ? 'Your current purchase action is in progress.'
-                    : 'Enter a token amount and choose Purchase.'}
+                ? 'Connect the investor wallet linked to your profile on the required network to purchase.'
+                : purchaseGateLoading || !purchaseGateMatchesToken
+                  ? 'Checking your latest purchase status…'
+                  : purchaseGateError
+                    ? 'Purchase availability could not be verified. Refresh the purchase history and try again.'
+                    : purchaseBlockedByPrevious
+                      ? latestPurchaseStatus === PURCHASE_STATUS.PENDING_PAYMENT
+                        ? 'Your previous purchase is still awaiting payment confirmation. Another purchase will be available after it finishes.'
+                        : latestPurchaseStatus === PURCHASE_STATUS.PAYMENT_CONFIRMED
+                          ? 'Your payment has been received. Another purchase will be available after this purchase is completed.'
+                          : 'Your tokens are being finalized. Another purchase will be available after this purchase is completed.'
+                      : tokenAmountError
+                        ? tokenAmountError
+                        : busyAction
+                          ? 'Your current purchase action is in progress.'
+                          : 'Enter a token amount and choose Purchase.'}
             </small>
           </Card>
 
@@ -1457,7 +1641,7 @@ export default function PurchaseTokenPage({
               value={purchaseHistorySearch}
               onChange={handleHistorySearchChange}
               maxLength={100}
-              placeholder="Search purchase ID, amount or transaction hash"
+              placeholder="Search purchase ID, amount or transaction ID"
             />
           </label>
           <div className="investor-token-purchase-history__filter">

@@ -18,7 +18,7 @@ export function OrganizationSummaryHeader({ organization }) {
       <div className="org-summary-header__identity">
         <span className="org-summary-header__avatar">{initialsFor(company.legalName)}</span>
         <div>
-          <span className="eyebrow">Institutional KYB Verified</span>
+          <span className="eyebrow">Organization Verified (KYB)</span>
           <h1>{company.legalName || 'Verified Organization'}</h1>
           <p>
             <Building2 size={15} /> {company.entityTypeName || company.entityType || 'Registered entity'}

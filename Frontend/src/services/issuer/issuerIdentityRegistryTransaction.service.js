@@ -76,7 +76,7 @@ export async function getIssuerRegistryTransactionConfirmationProgress({
 }) {
   const normalizedHash = String(txHash || '').trim();
   if (!isTransactionHash(normalizedHash)) {
-    throw new Error('The registration transaction hash is unavailable. Refresh and try again.');
+    throw new Error('The transaction ID is unavailable. Refresh and try again.');
   }
 
   const required = Number(requiredConfirmations);
@@ -145,13 +145,24 @@ const requiredCountry = (value) => {
 export async function submitIssuerRegistryRegistrationTransaction({
   connector,
   connectedAddress,
+  organizationWalletAddress,
   preparedRegistration,
 }) {
   if (!connector?.getProvider) {
-    throw new Error('Connect your issuer wallet before adding this investor to the registry.');
+    throw new Error('Connect your Organization Wallet before approving this investor.');
   }
   if (!isAddress(connectedAddress || '')) {
-    throw new Error('Connect your issuer wallet before adding this investor to the registry.');
+    throw new Error('Connect your Organization Wallet before approving this investor.');
+  }
+
+  const approvedOrganizationWallet = requiredAddress(
+    organizationWalletAddress,
+    'Approved organization wallet',
+  );
+  if (getAddress(connectedAddress) !== getAddress(approvedOrganizationWallet)) {
+    const error = new Error('The connected wallet is not your approved organization wallet. Change wallets before continuing.');
+    error.code = 'ORGANIZATION_WALLET_MISMATCH';
+    throw error;
   }
 
   const chainId = parseChainId(preparedRegistration?.chainId);
@@ -164,7 +175,7 @@ export async function submitIssuerRegistryRegistrationTransaction({
   // Never rebuild these values from subscription, token, investor, or browser state.
   const identityRegistryAddress = requiredAddress(
     preparedRegistration?.identityRegistryAddress,
-    'Identity Registry address',
+    'Approved investor registry address',
   );
   const investorWalletAddress = requiredAddress(
     preparedRegistration?.investorWalletAddress,
@@ -172,7 +183,7 @@ export async function submitIssuerRegistryRegistrationTransaction({
   );
   const onchainIdentityAddress = requiredAddress(
     preparedRegistration?.onchainIdentityAddress,
-    'Investor identity address',
+    'Investor on-chain identity address',
   );
   const country = requiredCountry(preparedRegistration?.country);
 
@@ -186,12 +197,17 @@ export async function submitIssuerRegistryRegistrationTransaction({
   const accounts = await provider.request({ method: 'eth_accounts' });
   const activeProviderAddress = Array.isArray(accounts) ? accounts[0] : '';
   if (!isAddress(activeProviderAddress || '')) {
-    throw new Error('Reconnect your issuer wallet before adding this investor to the registry.');
+    throw new Error('Reconnect your Organization Wallet before approving this investor.');
   }
 
   if (getAddress(activeProviderAddress) !== getAddress(connectedAddress)) {
-    const error = new Error('Your active wallet account changed. Reconnect your issuer wallet and try again.');
+    const error = new Error('Your active wallet account changed. Reconnect your organization wallet and try again.');
     error.code = 'WALLET_ACCOUNT_CHANGED';
+    throw error;
+  }
+  if (getAddress(activeProviderAddress) !== getAddress(approvedOrganizationWallet)) {
+    const error = new Error('The active wallet is not your approved organization wallet. Change wallets before continuing.');
+    error.code = 'ORGANIZATION_WALLET_MISMATCH';
     throw error;
   }
 
@@ -210,6 +226,9 @@ export async function submitIssuerRegistryRegistrationTransaction({
     transport: custom(provider),
   });
 
+  // Return the wallet-provided hash exactly as submitted. MetaMask may internally use
+  // delegated execution, so the resulting transaction.to is intentionally not inspected
+  // or required to equal the Identity Registry address in the frontend.
   return walletClient.writeContract({
     account,
     chain,

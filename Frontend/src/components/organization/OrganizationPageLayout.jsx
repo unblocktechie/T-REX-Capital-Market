@@ -4,7 +4,7 @@ import { OrganizationStepper } from './OrganizationStepper';
 
 export function OrganizationPageLayout({
   step,
-  eyebrow = 'Organization KYB',
+  eyebrow = 'Organization Verification (KYB)',
   title,
   description,
   children,

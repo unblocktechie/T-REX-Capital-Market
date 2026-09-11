@@ -249,7 +249,7 @@ const restrictedCountryCodes = (countries) => {
 
   if (codes.length !== rows.length) {
     throw new Error(
-      'Every restricted country must include a valid ISO 3166 numeric code before deployment.',
+      'Every restricted country must be configured correctly before the token can be created.',
     );
   }
 
@@ -271,7 +271,7 @@ const resolveClaimTopicValue = (topic) => {
   if (fallback !== undefined) return fallback;
 
   throw new Error(
-    `Claim topic “${topic?.shortName || topic?.name || topic?.id || 'unknown'}” has no numeric on-chain value.`,
+    `Verification requirement “${topic?.shortName || topic?.name || topic?.id || 'unknown'}” is not fully configured.`,
   );
 };
 
@@ -372,25 +372,25 @@ const deploymentErrorMessage = (error) => {
     return 'The connected MetaMask provider is unavailable in this browser tab. Reconnect the wallet and try again.';
   }
   if (/user rejected|user denied|request rejected/i.test(message)) {
-    return 'The deployment signature was cancelled in the connected wallet.';
+    return 'Token creation was cancelled in the connected wallet.';
   }
   if (/PublicDeploymentsNotAllowed/i.test(message)) {
-    return 'Public deployments are disabled and this issuer wallet is not an approved Gateway deployer.';
+    return 'This organization wallet is not authorized to create a token. Connect the approved organization wallet and try again.';
   }
   if (/PublicCannotDeployOnBehalf/i.test(message)) {
-    return 'The connected wallet cannot deploy this token on behalf of another owner.';
+    return 'The connected wallet cannot create this token for a different owner. Connect the approved organization wallet.';
   }
   if (/insufficient funds/i.test(message)) {
-    return 'The issuer wallet does not have enough Sepolia ETH to pay the deployment gas.';
+    return 'The organization wallet does not have enough Sepolia ETH to cover the network fee for token creation.';
   }
   if (/transfer amount exceeds allowance|insufficient allowance/i.test(message)) {
-    return 'The Gateway deployment fee token allowance is insufficient.';
+    return 'The wallet does not have enough approved fee allowance to create the token.';
   }
   if (/already deployed|create2|salt/i.test(message)) {
-    return 'A T-REX suite with this owner and token name may already be deployed.';
+    return 'A token with this owner and name may already have been created. Refresh the token status before trying again.';
   }
 
-  return error?.shortMessage || error?.details || error?.message || 'T-REX deployment failed.';
+  return error?.shortMessage || error?.details || error?.message || 'Token creation could not be completed.';
 };
 
 export async function deployTrexSuite({

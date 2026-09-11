@@ -39,7 +39,7 @@ export default function IdentityClaimsPage() {
   const [serverErrors, setServerErrors] = useState({});
   const errors = validateIdentityClaims(data);
   const visibleTopics = useMemo(() => data.claimTopics || [], [data.claimTopics]);
-  useDocumentTitle('Identity & Claims');
+  useDocumentTitle('Investor Verification');
 
   useEffect(() => {
     hydrateWalletDefaults(organization?.walletAddress || '');
@@ -89,14 +89,14 @@ export default function IdentityClaimsPage() {
       const response = await tokenApi.saveClaims(toClaimsPayload(data, false));
       recordBackendSave('identity-claims', response);
       markStepCompleted('identity-claims');
-      toast.success('Identity claims saved securely.');
+      toast.success('Investor verification requirements saved.');
       navigate(ROUTES.tokenIssuanceStep('compliance'));
     } catch (error) {
       setServerErrors(mapTokenApiFieldErrors(error, CLAIM_FIELD_MAP));
-      toast.error('Identity claims were not saved.', {
+      toast.error('Investor verification settings were not saved.', {
         description: getTokenApiErrorMessage(
           error,
-          'Review the selected claim topics and trusted issuer setting.',
+          'Review the selected verification requirements and verification provider.',
         ),
       });
     } finally {
@@ -120,8 +120,8 @@ export default function IdentityClaimsPage() {
   return (
     <IssuanceLayout
       stepKey="identity-claims"
-      title="Identity and Claims"
-      description="Configure the investor claims checked before a token transfer is allowed."
+      title="Investor Verification"
+      description="Choose the identity and eligibility checks an investor must complete before they can hold or receive this token."
       onBack={() => navigate(ROUTES.tokenIssuanceStep('token-information'))}
       onContinue={continueStep}
       continueLabel="Save and Continue"
@@ -134,8 +134,8 @@ export default function IdentityClaimsPage() {
     >
       <div className="identity-claims-simple-grid">
         <SectionCard
-          title="Claim Topics"
-          description="Enable at least one identity requirement available for this token."
+          title="Verification Requirements"
+          description="Choose at least one check investors must complete before they can use this token."
           action={<StatusBadge status="pending">At least one required</StatusBadge>}
         >
           {visibleTopics.length ? (
@@ -156,7 +156,7 @@ export default function IdentityClaimsPage() {
                         <p>{topic.description}</p>
                         {unavailable ? (
                           <small className="claim-topic-card__unavailable">
-                            This claim topic is missing required configuration. Reload the page or
+                            This verification requirement is not fully configured. Reload the page or
                             contact an administrator.
                           </small>
                         ) : null}
@@ -176,8 +176,8 @@ export default function IdentityClaimsPage() {
             <div className="issuance-empty-inline" role="status">
               <BadgeCheck size={18} />
               <span>
-                No claim topics are available for this token. Reload the page or ask an
-                administrator to configure token claim topics.
+                No verification requirements are available for this token. Reload the page or ask an
+                administrator to configure them.
               </span>
             </div>
           )}
@@ -191,8 +191,8 @@ export default function IdentityClaimsPage() {
         <div className="trusted-issuer-column">
           <SectionCard
             className="trusted-issuer-card"
-            title="Trusted Claim Issuer"
-            description="The organization creating this token will verify investor identities and issue the claims used to determine transfer eligibility."
+            title="Verification Provider"
+            description="Your organization will approve investor verification credentials used to determine whether a wallet can hold or receive this token."
             action={
               organizationActsAsIssuer ? (
                 <StatusBadge status="valid">Selected</StatusBadge>
@@ -213,10 +213,10 @@ export default function IdentityClaimsPage() {
               />
               <span>
                 <strong>
-                  My organization will act as the Trusted Claim Issuer for this token.
+                  My organization will approve investor verification for this token.
                 </strong>
                 <small>
-                  The approved organization wallet will sign the enabled investor claims.
+                  Your approved Organization Wallet will confirm the selected verification requirements when an investor is reviewed.
                 </small>
               </span>
             </label>
@@ -227,19 +227,17 @@ export default function IdentityClaimsPage() {
             ) : null}
           </SectionCard>
 
-          <aside className="claims-work-card" aria-label="How claims work">
+          <aside className="claims-work-card" aria-label="How investor verification works">
             <span className="claims-work-card__icon">
               <Fingerprint size={20} />
             </span>
             <div>
-              <strong>How Claims Work</strong>
+              <strong>How Investor Verification Works</strong>
               <p>
-                Under ERC-3643, each investor wallet is linked to an ONCHAINID. Your trusted
-                issuer signs the enabled claims, and the identity registry verifies them before
-                every eligible transfer.
+                Each approved wallet is linked to a verified on-chain identity. Your organization confirms the selected verification requirements, and the token checks them automatically before a transfer. Technical standard: ERC-3643.
               </p>
               <span className="claims-work-card__note">
-                <ShieldCheck size={15} /> Transfers proceed only when the required claims are valid.
+                <ShieldCheck size={15} /> Transfers proceed only when the required verification is valid.
               </span>
             </div>
           </aside>

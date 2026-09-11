@@ -48,9 +48,9 @@ export default function OrganizationVerifiedPage() {
           <span><Check size={44} strokeWidth={2.5} /></span>
           <i /><b />
         </div>
-        <span className="eyebrow">KYB approval complete</span>
+        <span className="eyebrow">Organization verification complete</span>
         <h1>Organization Verified</h1>
-        <p>{organization.company.legalName || 'Your organization'} has passed institutional KYB review. Identity, compliance, and token issuance capabilities are now available.</p>
+        <p>{organization.company.legalName || 'Your organization'} has completed organization verification. You can now create tokens and manage investor access.</p>
         <Button
           size="lg"
           icon={LayoutDashboard}

@@ -23,32 +23,32 @@ const roadmap = [
     icon: BadgeCheck,
   },
   {
-    title: 'Claims',
-    description: 'Configure required identity claims and the trusted claim issuer.',
+    title: 'Investor Verification',
+    description: 'Choose the identity and eligibility checks investors must complete.',
     icon: Fingerprint,
   },
   {
-    title: 'Compliance',
+    title: 'Transfer Rules',
     description: 'Configure investor limits, balance limits and geographic restrictions.',
     icon: ShieldCheck,
   },
   {
-    title: 'Governance Agents',
-    description: 'Assign the Token Agent and Identity Manager.',
+    title: 'Platform Permissions',
+    description: 'Review the authorized wallets used for token operations and investor approval.',
     icon: LockKeyhole,
   },
   {
     title: 'Review',
-    description: 'Validate all configurations before deployment.',
+    description: 'Review all settings before creating the token.',
     icon: Rocket,
   },
 ];
 
 const standardBenefits = [
-  ['Automated KYC enforcement', Fingerprint],
-  ['On-chain identity verification', ShieldCheck],
-  ['Regulatory reporting readiness', BadgeCheck],
-  ['Compliance checks before token transfers', LockKeyhole],
+  ['Investor verification before transfers', Fingerprint],
+  ['Verified investor access', ShieldCheck],
+  ['Clear verification and transaction records', BadgeCheck],
+  ['Transfer rules checked before every transfer', LockKeyhole],
 ];
 
 export default function TokenIssuanceOverviewPage() {
@@ -95,11 +95,11 @@ export default function TokenIssuanceOverviewPage() {
     <div className="issuance-overview-page">
       <header className="issuance-overview-hero">
         <div>
-          <span className="eyebrow">ERC-3643 guided deployment</span>
+          <span className="eyebrow">Guided token setup</span>
           <h1>Asset Issuance Wizard</h1>
           <p>
-            Configure and deploy an ERC-3643 compliant security token through a focused,
-            institutional issuance workflow.
+            Create a compliant security token through a guided setup designed for institutional
+            issuers.
           </p>
         </div>
         <Button
@@ -118,8 +118,8 @@ export default function TokenIssuanceOverviewPage() {
               <Rocket size={20} />
             </span>
             <div>
-              <span className="eyebrow">Deployment Roadmap</span>
-              <h2>Five focused stages from setup to deployment</h2>
+              <span className="eyebrow">Setup Roadmap</span>
+              <h2>Five focused stages from setup to launch</h2>
               <p>
                 Each completed step is saved securely to your account, so your token configuration stays
                 consistent as you move through the wizard.
@@ -153,13 +153,13 @@ export default function TokenIssuanceOverviewPage() {
                 <ShieldCheck size={20} />
               </span>
               <div>
-                <span className="eyebrow">ERC-3643 Standard</span>
-                <h2>Compliance built into every transfer</h2>
+                <span className="eyebrow">Technical standard · ERC-3643</span>
+                <h2>Investor eligibility built into every transfer</h2>
               </div>
             </div>
             <p>
-              ERC-3643 combines token contracts, ONCHAINID identities, trusted claims and
-              compliance checks in one regulated-token framework.
+              ERC-3643 helps enforce investor verification and transfer rules automatically.
+              Technical blockchain details remain available when you need them.
             </p>
             <div className="issuance-benefit-list">
               {standardBenefits.map(([label, Icon]) => (
@@ -177,8 +177,8 @@ export default function TokenIssuanceOverviewPage() {
             <div>
               <h3>Instant Settlement</h3>
               <p>
-                Approved token transfers settle on-chain after identity and compliance checks
-                pass.
+                Approved token transfers settle on-chain after the investor and transfer requirements
+                are satisfied.
               </p>
             </div>
           </section>

@@ -515,7 +515,7 @@ export default function RedeemTokenPage({
   }, [openHistoryActionUid]);
 
   useDocumentTitle(
-    embedded ? 'Asset Management' : token ? `${token.name} · Redeem Tokens` : 'Redeem Tokens',
+    embedded ? 'Manage Tokens' : token ? `${token.name} · Redeem Tokens` : 'Redeem Tokens',
   );
 
   const context = useMemo(() => getInvestmentActionContext(token || application), [application, token]);
@@ -1058,7 +1058,7 @@ export default function RedeemTokenPage({
 
       <div className="investor-token-action-layout">
         <main className="investor-token-action-main">
-          <InvestorTokenIdentityCard token={token} readyLabel="Registered investor" />
+          <InvestorTokenIdentityCard token={token} readyLabel="Approved investor" />
 
           <Card className="investor-token-action-card">
             <div className="investor-token-action-card__heading"><div><span>Selected token</span><h2>Redeem from your registered wallet</h2></div><WalletCards size={19} /></div>
@@ -1213,7 +1213,7 @@ export default function RedeemTokenPage({
               value={redemptionHistorySearch}
               onChange={(event) => setRedemptionHistorySearch(event.target.value)}
               maxLength={100}
-              placeholder="Search redemption ID, amount or hash"
+              placeholder="Search redemption ID, amount or transaction ID"
             />
           </label>
           <div className="investor-token-purchase-history__filter">
@@ -1260,7 +1260,7 @@ export default function RedeemTokenPage({
               <span role="columnheader">Redemption Date</span>
               <span role="columnheader">Redemption Amount</span>
               <span role="columnheader">Redemption Status</span>
-              <span role="columnheader">Payment Tx Hash</span>
+              <span role="columnheader">Payment Transaction ID</span>
               <span role="columnheader">Redemption ID</span>
               <span role="columnheader" className="investor-token-redemption-history__action-heading">Action</span>
             </div>
@@ -1305,7 +1305,7 @@ export default function RedeemTokenPage({
                       <InvestorRedemptionProgress progress={rowConfirmationProgress} compact />
                     </span>
                   </span>
-                  <span className="investor-token-purchase-history__cell" data-label="Payment Tx Hash" role="cell">
+                  <span className="investor-token-purchase-history__cell" data-label="Payment Transaction ID" role="cell">
                     {rowPaymentHashUrl ? (
                       <a
                         href={rowPaymentHashUrl}

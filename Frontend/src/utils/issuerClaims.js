@@ -60,7 +60,7 @@ export const getClaimTopicLabel = (topic, index = 0) =>
       topic?.name ||
       topic?.claimTopicCode ||
       topic?.code ||
-      `Claim Topic ${getClaimTopicValue(topic) ?? index + 1}`,
+      `Verification Requirement ${getClaimTopicValue(topic) ?? index + 1}`,
   ).replaceAll('_', ' ');
 
 /**
@@ -74,7 +74,7 @@ export const buildClaimDigest = (investorIdentityAddress, claimTopic, data) => {
 
   const normalizedTopic = getClaimTopicValue({ claimTopic });
   if (normalizedTopic === null) {
-    throw new Error('A valid numeric claim topic is required before signing.');
+    throw new Error('A valid verification requirement is needed before approval.');
   }
 
   if (typeof data !== 'string' || !/^0x(?:[0-9a-fA-F]{2})*$/.test(data)) {

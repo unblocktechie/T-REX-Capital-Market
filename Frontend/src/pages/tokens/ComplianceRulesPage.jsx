@@ -52,7 +52,7 @@ export default function ComplianceRulesPage() {
   const [saving, setSaving] = useState(false);
   const [serverErrors, setServerErrors] = useState({});
   const errors = validateCompliance(data);
-  useDocumentTitle('Compliance Rules');
+  useDocumentTitle('Transfer Rules');
 
   const countryOptions = useMemo(
     () =>
@@ -127,11 +127,11 @@ export default function ComplianceRulesPage() {
       const response = await tokenApi.saveCompliance(toCompliancePayload(data, false));
       recordBackendSave('compliance', response);
       markStepCompleted('compliance');
-      toast.success('Compliance rules saved securely.');
+      toast.success('Transfer rules saved.');
       navigate(ROUTES.tokenIssuanceStep('agents'));
     } catch (error) {
       setServerErrors(mapTokenApiFieldErrors(error, COMPLIANCE_FIELD_MAP));
-      toast.error('Compliance rules were not saved.', {
+      toast.error('Transfer rules were not saved.', {
         description: getTokenApiErrorMessage(
           error,
           'Review the investor limits and restricted countries before retrying.',
@@ -146,21 +146,21 @@ export default function ComplianceRulesPage() {
     <div className="issuance-sidebar-stack compliance-sidebar-stack">
       <section className="compliance-explainer-card" aria-labelledby="compliance-explainer-title">
         <span className="compliance-explainer-card__eyebrow">
-          <ShieldCheck size={15} aria-hidden="true" /> T-REX enforcement
+          <ShieldCheck size={15} aria-hidden="true" /> Automatic transfer checks
         </span>
-        <h3 id="compliance-explainer-title">How on-chain rules work</h3>
+        <h3 id="compliance-explainer-title">What happens when tokens move</h3>
         <ol>
           <li>
             <span>1</span>
-            <p>When a transfer starts, the smart contract checks the investor identity.</p>
+            <p>Before a transfer, the token checks whether the sender and recipient are approved investors.</p>
           </li>
           <li>
             <span>2</span>
-            <p>Both wallets must hold valid ONCHAINID credentials for the enabled claims.</p>
+            <p>It checks the required verification, country rules and holding limits for both wallets.</p>
           </li>
           <li>
             <span>3</span>
-            <p>The transfer succeeds only after every configured compliance rule passes.</p>
+            <p>The transfer proceeds only when all of your configured rules are satisfied.</p>
           </li>
         </ol>
       </section>
@@ -180,8 +180,8 @@ export default function ComplianceRulesPage() {
             <dd>{data.maximumBalance ? formatNumber(data.maximumBalance) : 'Not set'}</dd>
           </div>
           <div>
-            <dt>Restriction type</dt>
-            <dd className="compliance-summary-status">Blocklist</dd>
+            <dt>Country rule</dt>
+            <dd className="compliance-summary-status">Block selected countries</dd>
           </div>
           <div>
             <dt>Restricted countries</dt>
@@ -190,7 +190,7 @@ export default function ComplianceRulesPage() {
         </dl>
         <div className="compliance-immutability-note">
           <AlertTriangle size={17} aria-hidden="true" />
-          <p>Compliance rules may require a protocol upgrade to relax after deployment. Review them carefully.</p>
+          <p>Some transfer rules can be difficult to relax after token creation. Review them carefully before launch.</p>
         </div>
       </section>
     </div>
@@ -199,8 +199,8 @@ export default function ComplianceRulesPage() {
   return (
     <IssuanceLayout
       stepKey="compliance"
-      title="Compliance Rules"
-      description="Set the investor limits and geographic restrictions enforced by the token."
+      title="Transfer Rules"
+      description="Set holding limits and country restrictions that automatically apply when tokens are transferred."
       sidebar={summary}
       onBack={() => navigate(ROUTES.tokenIssuanceStep('identity-claims'))}
       onContinue={continueStep}
@@ -215,14 +215,14 @@ export default function ComplianceRulesPage() {
         title={(
           <span className="compliance-section-title">
             <SlidersHorizontal size={19} aria-hidden="true" />
-            Global Holding Limits
+            Holding Limits
           </span>
         )}
         description="Define the maximum number of investors and the balance allowed per investor."
       >
         <div className="issuance-form-grid compliance-limit-grid">
           <FieldWrapper
-            label="Max Investors"
+            label="Maximum Investors"
             required
             error={fieldError('maximumInvestors')}
             hint="Enter a positive whole number only. Decimals are not allowed."
@@ -246,7 +246,7 @@ export default function ComplianceRulesPage() {
           </FieldWrapper>
 
           <FieldWrapper
-            label="Max Balance per Investor"
+            label="Maximum Holding per Investor"
             required
             error={fieldError('maximumBalance')}
             hint="Enter a positive whole number only. Decimals are not allowed."
@@ -276,7 +276,7 @@ export default function ComplianceRulesPage() {
         title={(
           <span className="compliance-section-title">
             <Globe2 size={19} aria-hidden="true" />
-            Restricted Jurisdictions
+            Restricted Countries
           </span>
         )}
         description="Select the countries whose residents are not eligible to invest in this offering."
@@ -286,12 +286,12 @@ export default function ComplianceRulesPage() {
             <Globe2 size={42} />
           </div>
           <div>
-            <span>Restricted jurisdictions</span>
-            <strong>{data.countries.length ? `${data.countries.length} restricted` : 'No restricted jurisdictions'}</strong>
+            <span>Restricted countries</span>
+            <strong>{data.countries.length ? `${data.countries.length} restricted` : 'No restricted countries'}</strong>
             <p>
               {data.countries.length
-                ? 'Residents of the selected countries will be blocked by the compliance rules.'
-                : 'Residents from all countries are currently allowed, subject to identity and compliance checks.'}
+                ? 'Investors who reside in the selected countries will not be able to receive this token.'
+                : 'Investors from all countries are currently allowed, as long as they meet the verification and holding rules above.'}
             </p>
           </div>
         </div>
@@ -305,7 +305,7 @@ export default function ComplianceRulesPage() {
               value={selectedCountry}
               options={availableCountries}
               placeholder={backend.countryOptions.length ? 'Select a country…' : 'Loading countries…'}
-              hint="Countries are loaded from the supported country list and saved securely."
+              hint="Choose a country to prevent residents there from receiving this token."
               searchable
               showEmptyOption
               disabled={!backend.countryOptions.length || backend.isLocked}
@@ -347,7 +347,7 @@ export default function ComplianceRulesPage() {
           ) : (
             <div className="issuance-empty-inline compliance-country-empty">
               <Globe2 size={18} />
-              <span>No restricted jurisdictions configured.</span>
+              <span>No restricted countries configured.</span>
             </div>
           )}
         </div>

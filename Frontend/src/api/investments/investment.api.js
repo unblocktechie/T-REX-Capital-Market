@@ -99,6 +99,23 @@ const unwrapRedemptionResponse = (response) => {
   };
 };
 
+const unwrapRegistryRegistrationResponse = (response) => {
+  const data = unwrap(response);
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return data;
+  const registration = data.registration && typeof data.registration === 'object' && !Array.isArray(data.registration)
+    ? data.registration
+    : data.registryRegistration && typeof data.registryRegistration === 'object' && !Array.isArray(data.registryRegistration)
+      ? data.registryRegistration
+      : null;
+  return {
+    ...(registration || {}),
+    ...data,
+    message: response?.data?.message || data.message || registration?.message || '',
+    requestId: response?.data?.requestId || data.requestId || registration?.requestId || '',
+    httpStatus: response?.status,
+  };
+};
+
 const requiredDecimalString = (value, label) => {
   const normalized = String(value ?? '').trim();
   if (!/^\d+(?:\.\d+)?$/.test(normalized) || !/[1-9]/.test(normalized)) {
@@ -694,7 +711,7 @@ export const investmentApi = Object.freeze({
         {},
         { skipGlobalLoader: true },
       )
-      .then(unwrap),
+      .then(unwrapRegistryRegistrationResponse),
 
   getIssuerRegistryRegistration: (interestUid) =>
     apiClient
@@ -716,7 +733,7 @@ export const investmentApi = Object.freeze({
         { txHash: requiredUid(txHash, 'Transaction hash') },
         { skipGlobalLoader: true },
       )
-      .then(unwrap),
+      .then(unwrapRegistryRegistrationResponse),
 
   downloadIssuerDocument: (interestUid, documentUid) =>
     apiClient.get(

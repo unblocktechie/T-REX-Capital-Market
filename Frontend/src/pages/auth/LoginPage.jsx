@@ -45,7 +45,7 @@ export default function LoginPage() {
           : null;
 
       if (recoverableDeployment) {
-        toast.success('Welcome back — resuming your deployment', {
+        toast.success('Welcome back — resuming token creation', {
           description:
             'Your blockchain transaction was recovered. Secure Sepolia verification will resume automatically; MetaMask will not open again.',
         });
@@ -54,7 +54,7 @@ export default function LoginPage() {
       }
 
       if (pendingDeploymentService.belongsToAnotherUser(session?.user)) {
-        toast.warning('A pending deployment belongs to a different account', {
+        toast.warning('A pending token-creation attempt belongs to a different account', {
           description:
             'Sign in with the issuer account that created the blockchain transaction to complete synchronization.',
         });

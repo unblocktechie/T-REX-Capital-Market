@@ -51,7 +51,7 @@ export default function SupplyPricingPage() {
         <div><dt>Maximum investment</dt><dd>{data.maximumInvestment ? formatMoney(data.maximumInvestment, data.currency) : '—'}</dd></div>
       </dl>
       <InfoCallout title="Pricing context" icon={Coins}>
-        This summary is calculated from current form values and does not include deployment fees.
+        This summary is calculated from current form values and does not include blockchain network fees.
       </InfoCallout>
     </section>
   );
@@ -64,14 +64,14 @@ export default function SupplyPricingPage() {
       sidebar={summary}
       onBack={() => navigate(ROUTES.tokenIssuanceStep('token-information'))}
       onContinue={continueStep}
-      continueLabel="Continue to Identity & Claims"
+      continueLabel="Continue to Investor Verification"
       continueIcon={ArrowRight}
     >
-      <SectionCard title="Supply model" description="Choose how supply is created and managed after deployment.">
+      <SectionCard title="Supply model" description="Choose how token supply can be issued after the token is created.">
         <div className="issuance-radio-grid">
           {[
-            ['fixed', 'Fixed supply', 'The deployed maximum supply cannot be increased.'],
-            ['mintable', 'Mintable supply', 'Authorized token agents can mint additional supply.'],
+            ['fixed', 'Fixed supply', 'The maximum supply cannot be increased after the token is created.'],
+            ['mintable', 'Flexible supply', 'Authorized token operations can issue additional supply when needed.'],
           ].map(([value, title, description]) => (
             <label key={value} className={data.mintingModel === value ? 'issuance-radio-card is-selected' : 'issuance-radio-card'}>
               <input type="radio" name="minting-model" value={value} checked={data.mintingModel === value} onChange={() => update('mintingModel', value)} />

@@ -121,7 +121,7 @@ export default function OrganizationOverviewPage() {
     if (!contractAddress) return;
     try {
       await navigator.clipboard.writeText(contractAddress);
-      toast.success('On-chain ID copied');
+      toast.success('On-chain identity copied');
     } catch {
       toast.error('Unable to copy on-chain ID');
     }
@@ -250,15 +250,15 @@ export default function OrganizationOverviewPage() {
                 <Wallet size={20} />
               </span>
               <div className="org-wallet-card__address-copy">
-                <small>Primary issuer wallet</small>
+                <small>Organization Wallet</small>
                 <strong title={organizationWallet || undefined}>
                   {organizationWallet
                     ? shortenWalletAddress(organizationWallet, 9, 9)
                     : 'Wallet address unavailable'}
                 </strong>
                 <p>
-                  This verified wallet is used for token creation, contract deployment, and
-                  organization issuer actions.
+                  This verified wallet is used to create and manage tokens, approve investors, and
+                  authorize future issuer actions.
                 </p>
               </div>
               {organizationWallet ? (
@@ -294,20 +294,20 @@ export default function OrganizationOverviewPage() {
             <article className="org-wallet-card__contract">
               <div className="org-wallet-card__contract-copy">
                 <span className="org-wallet-card__contract-label">
-                  <Fingerprint size={15} /> On-chain ID
+                  <Fingerprint size={15} /> Organization On-chain Identity
                 </span>
                 <strong title={contractAddress || undefined}>
                   {contractAddress || 'Not assigned yet'}
                 </strong>
-                <p>Smart-contract address assigned to this organization after approval.</p>
+                <p>A technical on-chain identity created for your verified organization.</p>
               </div>
               {contractAddress ? (
                 <button
                   type="button"
                   className="org-wallet-card__copy-button org-wallet-card__copy-button--contract"
                   onClick={copyContractAddress}
-                  aria-label="Copy organization on-chain ID"
-                  title="Copy on-chain ID"
+                  aria-label="Copy organization on-chain identity"
+                  title="Copy on-chain identity"
                 >
                   <Copy size={16} />
                 </button>

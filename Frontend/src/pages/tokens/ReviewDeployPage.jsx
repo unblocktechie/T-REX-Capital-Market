@@ -126,7 +126,7 @@ export default function ReviewDeployPage() {
     ? wallet.chain?.name ||
       `Unsupported network${wallet.chainId ? ` (Chain ID ${wallet.chainId})` : ''}`
     : 'No network connected';
-  useDocumentTitle('Review & Deploy');
+  useDocumentTitle('Review & Launch');
 
   const switchToRequiredNetwork = async () => {
     if (!wallet.isConnected || wallet.isCorrectNetwork || wallet.isBusy) return;
@@ -134,13 +134,13 @@ export default function ReviewDeployPage() {
     try {
       await wallet.switchChain(wallet.requiredChain.id);
       toast.success(`Switched to ${wallet.requiredChain.name}`, {
-        description: 'The deployment wallet is now on the required network.',
+        description: 'Your organization wallet is now on the required network.',
       });
     } catch (error) {
       toast.error('Unable to switch network', {
         description: `${getWalletErrorMessage(
           error,
-        )} Open the deployment wallet menu to reconnect if needed.`,
+        )} Open the organization wallet menu to reconnect if needed.`,
       });
     }
   };
@@ -158,9 +158,9 @@ export default function ReviewDeployPage() {
         walletAction: {
           key: 'backend-resume',
           status: 'syncing',
-          title: 'Checking the active deployment',
+          title: 'Checking token creation status',
           description:
-            'The existing deployment attempt will be resumed safely. MetaMask will only open when no transaction has already been broadcast.',
+            'An existing token-creation attempt will be resumed safely. MetaMask will open only if no transaction has already been submitted.',
         },
       });
       navigate(ROUTES.tokenDeploying);
@@ -191,12 +191,12 @@ export default function ReviewDeployPage() {
           status: 'syncing',
           title: 'Existing blockchain transaction found',
           description:
-            'The saved hash will be reconciled with the existing deployment attempt. The Sepolia transaction will be independently verified, and MetaMask will not open again.',
+            'The saved transaction ID will be checked against the existing token-creation attempt. MetaMask will not open again.',
         },
       });
-      toast.info('Continuing the existing deployment', {
+      toast.info('Continuing token creation', {
         description:
-          'A transaction hash is already saved for this token. Secure verification will resume, and no duplicate blockchain transaction will be sent.',
+          'A transaction ID is already saved for this token. Verification will resume without sending another wallet transaction.',
       });
       navigate(ROUTES.tokenDeploying);
       return;
@@ -209,22 +209,22 @@ export default function ReviewDeployPage() {
     ) {
       toast.error('A blockchain transaction has already been submitted.', {
         description:
-          'Complete the pending deployment synchronization instead of sending another deployment transaction.',
+          'Finish checking the existing token-creation transaction instead of sending another one.',
       });
       navigate(ROUTES.tokenDeploying);
       return;
     }
 
     if (isDeployed) {
-      toast.info('This token is already deployed.');
+      toast.info('This token has already been created.');
       navigate(ROUTES.tokenDetails(backend.tokenUid || 'token'));
       return;
     }
 
     if (deployment.requestStartedAt && !deployment.canRetry && !isDeploymentFailed) {
-      toast.error('A previous deployment request still needs status reconciliation.', {
+      toast.error('A previous token-creation request is still being checked.', {
         description:
-          'Check the submitted transaction status before starting another deployment.',
+          'Check the submitted transaction before starting token creation again.',
       });
       return;
     }
@@ -234,7 +234,7 @@ export default function ReviewDeployPage() {
     ).find((step) => !completedSteps.includes(step.key));
 
     if (incompleteStep) {
-      toast.error('Complete all required steps before deployment.', {
+      toast.error('Complete all required steps before creating the token.', {
         description: `${incompleteStep.label} still needs review.`,
       });
       navigate(ROUTES.tokenIssuanceStep(incompleteStep.key));
@@ -242,7 +242,7 @@ export default function ReviewDeployPage() {
     }
 
     if (blocking) {
-      toast.error('Resolve the blocking validation items before deployment.');
+      toast.error('Resolve the highlighted items before creating the token.');
       return;
     }
     setConfirmationOpen(true);
@@ -275,11 +275,11 @@ export default function ReviewDeployPage() {
     <>
       <IssuanceLayout
         stepKey="review"
-        title="Final Review & Validation"
-        description={`Verify every parameter before signing the T-REX Gateway deployment on ${networkLabel}.`}
+        title="Review & Create Token"
+        description={`Review the setup below before your Organization Wallet creates the token on ${networkLabel}. Technical transaction details remain available during confirmation.`}
         onBack={() => navigate(ROUTES.tokenIssuanceStep('agents'))}
         onContinue={openDeployment}
-        continueLabel="Deploy Token"
+        continueLabel="Create Token"
         continueIcon={Rocket}
         continueDisabled={blocking}
         hideFooter
@@ -332,7 +332,7 @@ export default function ReviewDeployPage() {
             </ReviewCard>
 
             <ReviewCard
-              title="Identity & Claims"
+              title="Investor Verification"
               stepKey="identity-claims"
               icon={BadgeCheck}
               className="review-identity-card"
@@ -342,21 +342,21 @@ export default function ReviewDeployPage() {
                   <BadgeCheck size={19} />
                 </span>
                 <div>
-                  <strong>ONCHAINID Integrated</strong>
-                  <small>Identity Registry ready</small>
+                  <strong>On-chain identity ready</strong>
+                  <small>Approved investor list ready</small>
                 </div>
                 <StatusBadge status="valid">Verified</StatusBadge>
               </div>
 
               <div className="review-claims-block">
-                <span>Required Claims</span>
+                <span>Required Verification</span>
                 <div className="review-claim-tags">
                   {enabledClaims.length ? (
                     enabledClaims.map((topic) => (
                       <span key={topic.id}>{topic.shortName || topic.name}</span>
                     ))
                   ) : (
-                    <small>No claim topics enabled</small>
+                    <small>No verification requirements enabled</small>
                   )}
                 </div>
               </div>
@@ -379,7 +379,7 @@ export default function ReviewDeployPage() {
                   </dd>
                 </div>
                 <div>
-                  <dt>Trusted claim issuer</dt>
+                  <dt>Verification provider</dt>
                   <dd>
                     {identityClaims.trustedIssuer.mode === 'organization'
                       ? 'My organization'
@@ -413,18 +413,18 @@ export default function ReviewDeployPage() {
               </div>
             </ReviewCard>
 
-            <ReviewCard title="Execution Agents & Transfer Rules" icon={Gavel} className="review-execution-card">
+            <ReviewCard title="Platform Permissions & Transfer Rules" icon={Gavel} className="review-execution-card">
               <div className="review-execution-grid">
                 <section className="review-rule-panel">
                   <header>
                     <div>
                       <UsersRound size={18} />
-                      <h3>Primary Agents</h3>
+                      <h3>Authorized Roles</h3>
                     </div>
                     <button
                       type="button"
                       onClick={() => navigate(ROUTES.tokenIssuanceStep('agents'))}
-                      aria-label="Edit governance agents"
+                      aria-label="Edit platform permissions"
                     >
                       <Edit3 size={14} /> Edit
                     </button>
@@ -445,19 +445,19 @@ export default function ReviewDeployPage() {
                   <header>
                     <div>
                       <Landmark size={18} />
-                      <h3>Transfer Constraints</h3>
+                      <h3>Transfer Rules</h3>
                     </div>
                     <button
                       type="button"
                       onClick={() => navigate(ROUTES.tokenIssuanceStep('compliance'))}
-                      aria-label="Edit compliance rules"
+                      aria-label="Edit transfer rules"
                     >
                       <Edit3 size={14} /> Edit
                     </button>
                   </header>
                   <dl className="review-transfer-list">
                     <div>
-                      <dt>Max Investors</dt>
+                      <dt>Maximum Investors</dt>
                       <dd>
                         {compliance.maximumInvestors
                           ? formatNumber(compliance.maximumInvestors)
@@ -465,7 +465,7 @@ export default function ReviewDeployPage() {
                       </dd>
                     </div>
                     <div>
-                      <dt>Max Balance per Holder</dt>
+                      <dt>Maximum Holding per Investor</dt>
                       <dd>
                         {compliance.maximumBalance
                           ? formatNumber(compliance.maximumBalance)
@@ -473,7 +473,7 @@ export default function ReviewDeployPage() {
                       </dd>
                     </div>
                     <div className="review-transfer-jurisdictions">
-                      <dt>Restricted Jurisdictions</dt>
+                      <dt>Restricted Countries</dt>
                       <dd className="review-transfer-jurisdictions__count">
                         <StatusBadge status={compliance.countries.length ? 'warning' : 'valid'}>
                           {compliance.countries.length
@@ -485,7 +485,7 @@ export default function ReviewDeployPage() {
                         {compliance.countries.length ? (
                           <div
                             className="review-jurisdiction-list"
-                            aria-label={`${compliance.countries.length} restricted jurisdictions`}
+                            aria-label={`${compliance.countries.length} restricted countries`}
                           >
                             {compliance.countries.map((country) => (
                               <span
@@ -499,7 +499,7 @@ export default function ReviewDeployPage() {
                         ) : (
                           <p className="review-jurisdiction-empty">
                             No country restrictions are configured. Eligible investors may proceed
-                            from any jurisdiction, subject to identity and compliance checks.
+                            from any country, as long as they meet the verification and transfer requirements.
                           </p>
                         )}
                       </dd>
@@ -517,28 +517,28 @@ export default function ReviewDeployPage() {
             <div className="review-deployment-panel__heading">
               <span>
                 {isDeploymentPending
-                  ? 'Deployment in progress'
+                  ? 'Token creation in progress'
                   : isDeploymentFailed
-                    ? 'Deployment retry available'
+                    ? 'Token creation retry available'
                     : isReadyToDeploy
                       ? 'Proposal validated'
-                      : 'Ready for deployment'}
+                      : 'Ready to create'}
               </span>
-              <h2>{`Deploy on ${networkLabel} through the T-REX Gateway`}</h2>
+              <h2>{`Create your token on ${networkLabel}`}</h2>
               <p>
                 {isDeploymentPending
-                  ? 'A deployment attempt already exists. Continue to resume the submitted transaction or the pending wallet approval safely.'
+                  ? 'A token-creation attempt already exists. Continue to resume the submitted transaction or pending wallet approval safely.'
                   : isDeploymentFailed
-                    ? 'The previous on-chain attempt did not finalize. Continue to check the deployment status and start a new authorized attempt when allowed.'
+                    ? 'The previous blockchain transaction did not finish. Continue to check its status and start a new authorized attempt only when allowed.'
                     : isReadyToDeploy
-                      ? 'Secure validation is complete. Confirm the issuer wallet to sign the on-chain deployment.'
-                      : 'The proposal will be validated securely, then the connected issuer wallet will sign the Gateway transaction.'}
+                      ? 'Your setup is ready. Confirm with your Organization Wallet to create the token on-chain.'
+                      : 'We will check the setup first, then your Organization Wallet will ask you to approve the blockchain transaction.'}
               </p>
             </div>
 
             <div className="review-deployment-wallet">
               <div className="review-deployment-wallet__control">
-                <span className="review-deployment-wallet__label">Deployment wallet</span>
+                <span className="review-deployment-wallet__label">Organization Wallet</span>
                 <WalletControl expanded />
               </div>
 
@@ -561,8 +561,8 @@ export default function ReviewDeployPage() {
                   <span>
                     {wallet.isConnected
                       ? wallet.isCorrectNetwork
-                        ? `Ready to deploy on ${networkLabel}`
-                        : `${networkLabel} is required for deployment`
+                        ? `Ready to create on ${networkLabel}`
+                        : `${networkLabel} is required to create the token`
                       : `Connect your wallet to ${networkLabel}`}
                   </span>
                 </div>
@@ -592,15 +592,15 @@ export default function ReviewDeployPage() {
             tokenInformation.treasuryWallet &&
             wallet.address?.toLowerCase() !== tokenInformation.treasuryWallet.toLowerCase() ? (
               <InfoCallout title="Authorized wallet required" tone="warning" icon={ShieldCheck}>
-                Reconnect with the approved organization wallet shown in Token Information before
-                deploying this token.
+                Reconnect with the approved Organization Wallet shown in Token Information before
+                creating this token.
               </InfoCallout>
             ) : null}
 
             {wallet.isConnected && !wallet.isCorrectNetwork ? (
               <InfoCallout title="Network required" tone="warning" icon={Network}>
                 Use the Switch to {wallet.requiredChain?.name || 'required network'} button
-                above. If the wallet does not open, use the deployment wallet menu to reconnect and
+                above. If the wallet does not open, use the Organization Wallet menu to reconnect and
                 try again.
               </InfoCallout>
             ) : null}
@@ -608,10 +608,10 @@ export default function ReviewDeployPage() {
             <div className="review-deployment-warning">
               <AlertTriangle size={19} />
               <div>
-                <strong>Immutability Notice</strong>
+                <strong>Review before creating</strong>
                 <p>
-                  Deployment creates the ERC-3643 suite on Sepolia. Token name, symbol, decimals
-                  and core contract settings cannot be changed after confirmation.
+                  Creating the token publishes its core settings to Sepolia. Token name, symbol, decimals
+                  and some technical settings cannot be changed after confirmation.
                 </p>
               </div>
             </div>
@@ -622,7 +622,7 @@ export default function ReviewDeployPage() {
                 icon={ArrowLeft}
                 onClick={() => navigate(ROUTES.tokenIssuanceStep('agents'))}
               >
-                Back to Agents
+                Back to Permissions
               </Button>
               <Button
                 icon={Rocket}
@@ -631,16 +631,16 @@ export default function ReviewDeployPage() {
                 loading={startingDeployment}
               >
                 {isDeploymentPending
-                  ? 'Continue Deployment'
+                  ? 'Continue Creation'
                   : isDeploymentFailed
-                    ? 'Retry Token Deployment'
+                    ? 'Retry Token Creation'
                     : isReadyToDeploy
-                      ? 'Sign and Deploy Token'
-                      : 'Validate and Deploy Token'}
+                      ? 'Sign and Create Token'
+                      : 'Review and Create Token'}
               </Button>
             </div>
             <small className="review-deployment-panel__note">
-              Your connected issuer wallet signs the deployment and pays the Sepolia gas fee.
+              Your Organization Wallet will approve the blockchain transaction. MetaMask will show any Sepolia network fee before you confirm.
             </small>
           </section>
         </div>

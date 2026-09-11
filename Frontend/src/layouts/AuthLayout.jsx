@@ -6,8 +6,8 @@ import { appConfig } from '@/config/app.config';
 
 const points = [
   ['Issuer ready', 'Build and manage compliant digital-security offerings.', FileCheck2],
-  ['Investor friendly', 'Guide users through identity and eligibility checks.', UserRoundCheck],
-  ['Compliance first', 'Apply transfer controls and verification rules on-chain.', ShieldCheck],
+  ['Investor friendly', 'Guide investors through clear identity and eligibility checks.', UserRoundCheck],
+  ['Built-in safeguards', 'Apply investor eligibility and transfer rules automatically.', ShieldCheck],
 ];
 
 export function AuthLayout() {
@@ -77,7 +77,7 @@ export function AuthLayout() {
 
         <div className="relative z-10 self-end border-t border-[var(--brand-panel-border)] pt-3 text-[11px] leading-4 text-[var(--brand-panel-muted)]">
           <p className="m-0">
-            © 2026 {appConfig.companyName}. Identity-first tokenization infrastructure.
+            © 2026 {appConfig.companyName}. Secure digital-securities infrastructure.
           </p>
         </div>
       </section>

@@ -31,7 +31,7 @@ export default function VerificationPendingPage() {
           <span className="org-status-pill"><FileCheck2 size={15} /> Application Received</span>
           <span className="org-status-hero__icon"><ShieldCheck size={34} /></span>
           <h1>Verification in Progress</h1>
-          <p>The compliance team is reviewing your KYB documentation, legal entity details, and beneficial ownership disclosures.</p>
+          <p>Your organization details, legal documents and beneficial ownership information are being reviewed.</p>
           <div className="org-wait-card">
             <Clock3 size={22} />
             <div><small>Estimated Wait Time</small><strong>2–3 Business Days</strong></div>
@@ -41,7 +41,7 @@ export default function VerificationPendingPage() {
         <div className="org-status-hero__support">
           <LifeBuoy size={21} />
           <div>
-            <strong>Compliance support</strong>
+            <strong>Verification support</strong>
             <p>Keep your application reference available if the review team requests clarification.</p>
           </div>
         </div>

@@ -51,13 +51,13 @@ export function CreateInvestorProfileModal({
         <div className="investor-profile-modal__intro investor-profile-modal__intro--stacked">
           <span><ShieldCheck size={22} /></span>
           <div>
-            <p>You're about to create your investor profile and your on-chain identity (ONCHAINID).</p>
+            <p>You're about to create your investor profile and link your investment wallet.</p>
             <p>Your primary wallet will be linked to your investor profile and used whenever you participate in token offerings.</p>
 
             <h3>What happens after creation?</h3>
             <ul>
-              <li>Your investor profile and ONCHAINID will be created.</li>
-              <li>Your primary wallet will be permanently linked to this investor profile.</li>
+              <li>A secure on-chain identity will be created in the background to support verified token access.</li>
+              <li>Your primary wallet will be linked to this investor profile for token investments.</li>
               <li>Your basic profile information will be locked to maintain a consistent investor identity.</li>
               <li>You can upload or update your verification documents at any time.</li>
               <li>Each issuer reviews and approves verification documents independently before allowing you to invest.</li>
@@ -82,7 +82,7 @@ export function CreateInvestorProfileModal({
               <div><dt><Network size={14} /> Network</dt><dd>{wallet.network || 'Unavailable'}</dd></div>
             </dl>
             <p className="investor-profile-wallet__notice">
-              Make sure you control this wallet. It will represent your investor identity and be used for future token subscriptions.
+              Make sure you control this wallet. It will represent your investor identity and be used for future token investments.
             </p>
           </div>
         </section>
@@ -98,7 +98,7 @@ export function CreateInvestorProfileModal({
             />
             <span>
               <strong>I confirm that I own and control this wallet.</strong>{' '}
-              I understand it will be permanently linked to my investor profile and ONCHAINID.
+              I understand this wallet will be permanently linked to my investor profile. A secure on-chain identity will be created for verification.
             </span>
           </label>
         </section>

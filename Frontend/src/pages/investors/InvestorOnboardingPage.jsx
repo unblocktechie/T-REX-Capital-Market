@@ -34,7 +34,7 @@ function InvestorOnboardingFlow() {
         compact
         eyebrow="Secure investor profile"
         title="Loading investor onboarding"
-        message="Synchronizing your latest KYC and accreditation progress…"
+        message="Loading your latest identity verification and eligibility progress…"
       />
     );
   }

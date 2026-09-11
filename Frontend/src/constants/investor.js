@@ -4,9 +4,9 @@ export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 export const INVESTOR_FLOW_VERSION = 2;
 
 export const INVESTOR_STEPS = Object.freeze([
-  { number: 1, title: 'Identity Details', mobileTitle: 'Identity' },
-  { number: 2, title: 'Identity Documents', mobileTitle: 'Docs' },
-  { number: 3, title: 'Compliance Questionnaire', mobileTitle: 'Compliance' },
+  { number: 1, title: 'Personal Details', mobileTitle: 'Details' },
+  { number: 2, title: 'Identity Verification', mobileTitle: 'Verify' },
+  { number: 3, title: 'Investor Eligibility', mobileTitle: 'Eligibility' },
   { number: 4, title: 'Review and Submit', mobileTitle: 'Review' },
   { number: 5, title: 'Create Investor Profile', mobileTitle: 'Profile' },
   { number: 6, title: 'Request Submitted', mobileTitle: 'Submitted' },

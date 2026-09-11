@@ -32,7 +32,7 @@ const FINALIZATION_POLL_INTERVAL_MS = 4_000;
 const FINALIZATION_MAX_POLLS = 30;
 const EXISTING_DEPLOYMENT_SYNC_RETRY_MODE = 'existing-deployment-sync';
 const EXISTING_DEPLOYMENT_SYNC_MESSAGE =
-  "Please wait while we sync your token. We've detected an existing blockchain deployment and are syncing it with your account. There's no need to deploy again. This should only take a few moments.";
+  "Please wait while we finish setting up your token. We found an existing token-creation transaction and are linking it to your account. You do not need to create the token again.";
 
 const wait = (milliseconds) =>
   new Promise((resolve) => {
@@ -101,7 +101,7 @@ const createBackendSyncError = (cause, transactionHash, message) => {
     message ||
       getTokenApiErrorMessage(
         cause,
-        'The blockchain transaction was submitted, but secure deployment verification could not continue.',
+        'The blockchain transaction was submitted, but token verification could not continue.',
       ),
   );
   error.code = 'BACKEND_DEPLOYMENT_SYNC_FAILED';
@@ -133,10 +133,10 @@ const deploymentErrorPresentation = (error, transactionSubmitted) => {
 
   if (backendCode === 'TOKEN_DEPLOYMENT_VERIFICATION_FAILED') {
     return {
-      title: 'Deployment transaction could not be verified',
+      title: 'Token creation could not be verified',
       message: getTokenApiErrorMessage(
         error,
-        'Secure verification found that the deployment transaction reverted or did not emit the required T-REX deployment event.',
+        'The token-creation transaction did not complete as expected. No additional wallet transaction will be requested automatically.',
       ),
       canRetry: false,
     };
@@ -144,10 +144,10 @@ const deploymentErrorPresentation = (error, transactionSubmitted) => {
 
   if (['TRANSACTION_HASH_CONFLICT', 'CONTRACT_ADDRESS_CONFLICT'].includes(backendCode)) {
     return {
-      title: 'Deployment verification conflict',
+      title: 'Token creation needs review',
       message: getTokenApiErrorMessage(
         error,
-        'The transaction hash or deployed contract is already linked to another token record.',
+        'This transaction ID or token address is already linked to another token. Contact support before trying again.',
       ),
       canRetry: false,
     };
@@ -157,7 +157,7 @@ const deploymentErrorPresentation = (error, transactionSubmitted) => {
     return {
       title: 'Blockchain verification is temporarily unavailable',
       message:
-        'The Sepolia network connection is temporarily unavailable. Retry deployment verification only; do not send another wallet transaction.',
+        'The Sepolia network is temporarily unavailable. Retry the status check only; do not send another wallet transaction.',
       canRetry: true,
       retryMode: 'backend-sync',
     };
@@ -166,7 +166,7 @@ const deploymentErrorPresentation = (error, transactionSubmitted) => {
     return {
       title: 'MetaMask did not respond',
       message:
-        'Open and unlock the MetaMask browser extension, confirm this site is connected to the approved issuer account, then retry deployment. No blockchain transaction was sent.',
+        'Open and unlock MetaMask, confirm this site is connected to the approved organization wallet, then try creating the token again. No blockchain transaction was sent.',
       canRetry: true,
       retryMode: 'deployment',
     };
@@ -176,7 +176,7 @@ const deploymentErrorPresentation = (error, transactionSubmitted) => {
     return {
       title: 'Wallet connection expired',
       message:
-        'The approved issuer wallet is no longer connected to this browser tab. Return to review, reconnect MetaMask, and retry deployment.',
+        'The approved organization wallet is no longer connected to this browser tab. Return to review, reconnect MetaMask, and try again.',
       canRetry: true,
       retryMode: 'deployment',
     };
@@ -200,7 +200,7 @@ const deploymentErrorPresentation = (error, transactionSubmitted) => {
     return {
       title: 'Transaction verification failed',
       message:
-        'The recorded transaction hash does not match the confirmed wallet transaction. Deployment display was blocked for security.',
+        'The recorded transaction ID does not match the confirmed wallet transaction. The token status was not updated for your protection.',
       canRetry: false,
     };
   }
@@ -210,7 +210,7 @@ const deploymentErrorPresentation = (error, transactionSubmitted) => {
       title: 'Transaction submitted — verification pending',
       message:
         error?.message ||
-        'Your token transaction has already been submitted. Retry only deployment verification; do not submit another blockchain transaction.',
+        'Your token-creation transaction has already been submitted. Retry only the status check; do not submit another blockchain transaction.',
       canRetry: true,
       retryMode: 'backend-sync',
     };
@@ -218,7 +218,7 @@ const deploymentErrorPresentation = (error, transactionSubmitted) => {
 
   if (isDuplicateTokenError(error)) {
     return {
-      title: 'Existing blockchain deployment detected',
+      title: 'Existing token creation found',
       message: EXISTING_DEPLOYMENT_SYNC_MESSAGE,
       canRetry: false,
       retryMode: EXISTING_DEPLOYMENT_SYNC_RETRY_MODE,
@@ -236,35 +236,35 @@ const deploymentErrorPresentation = (error, transactionSubmitted) => {
   }
   if (error?.response?.status === 403) {
     return {
-      title: 'Deployment not authorized',
-      message: 'Only a verified issuer with an approved organization can deploy a token.',
+      title: 'Token creation not authorized',
+      message: 'Only a verified issuer with an approved organization can create a token.',
       canRetry: false,
     };
   }
   if (error?.response?.status === 409) {
     return {
-      title: 'Deployment request already in progress',
+      title: 'Token creation already in progress',
       message:
-        'This token proposal is already locked or being processed. Refresh its status before attempting another deployment.',
+        'This token is already being created or verified. Refresh its status before trying again.',
       canRetry: false,
     };
   }
   if (error?.code === 'ECONNABORTED') {
     return {
-      title: transactionSubmitted ? 'Synchronization timed out' : 'Deployment verification timed out',
+      title: transactionSubmitted ? 'Status check timed out' : 'Token verification timed out',
       message: transactionSubmitted
-        ? 'The blockchain transaction is confirmed, but synchronization timed out. Retry synchronization only.'
-        : 'Deployment validation timed out. Refresh the token status before retrying.',
+        ? 'The blockchain transaction is confirmed, but the final status check timed out. Retry the status check only.'
+        : 'Token validation timed out. Refresh the token status before trying again.',
       canRetry: true,
       retryMode: transactionSubmitted ? 'backend-sync' : 'deployment',
     };
   }
 
   return {
-    title: transactionSubmitted ? 'Deployment could not be confirmed' : 'Deployment not completed',
+    title: transactionSubmitted ? 'Token creation could not be confirmed' : 'Token creation not completed',
     message: getTokenApiErrorMessage(
       error,
-      error?.message || 'The T-REX deployment could not be completed.',
+      error?.message || 'The token could not be created.',
     ),
   };
 };
@@ -296,7 +296,7 @@ const persistConfirmedTransactionHash = async ({
       });
 
       if (!submission?.ok) {
-        throw new Error('The deployment verification request could not be confirmed. Please retry.');
+        throw new Error('The token status could not be confirmed. Please try again.');
       }
     } finally {
       console.groupEnd();
@@ -339,7 +339,7 @@ const persistConfirmedTransactionHash = async ({
     const error = createBackendSyncError(
       null,
       confirmedHash,
-      'The recorded transaction hash differs from the confirmed wallet transaction.',
+      'The recorded transaction ID differs from the confirmed wallet transaction.',
     );
     error.code = 'BACKEND_TRANSACTION_HASH_MISMATCH';
     error.canRetry = false;
@@ -380,7 +380,7 @@ export default function DeploymentProcessingPage() {
   const idempotencyKeyRef = useRef(
     normalizeDeploymentIdempotencyKey(deployment.idempotencyKey),
   );
-  useDocumentTitle('Deploying Token');
+  useDocumentTitle('Creating Token');
 
   const completeBackendDeployment = useCallback(
     async ({ transactionHash, deploymentAttemptUid, metadata = {} }) => {
@@ -420,9 +420,9 @@ export default function DeploymentProcessingPage() {
           walletAction: {
             key: 'backend-verification',
             status: 'syncing',
-            title: 'Deployment verification is in progress',
+            title: 'Token verification is in progress',
             description:
-              'The transaction is already on Sepolia. Its receipt and deployment event are being independently verified; MetaMask will not open again.',
+              'The transaction is already on Sepolia. We are checking its confirmation and token-creation result; MetaMask will not open again.',
           },
         });
 
@@ -430,7 +430,7 @@ export default function DeploymentProcessingPage() {
           const pendingError = createBackendSyncError(
             null,
             confirmedHash,
-            'The deployment transaction is still awaiting secure confirmation. Retry the verification check in a moment; do not send another wallet transaction.',
+            'The token-creation transaction is still awaiting confirmation. Check the status again in a moment; do not send another wallet transaction.',
           );
           pendingError.code = 'BACKEND_CONFIRMATION_PENDING';
           throw pendingError;
@@ -518,7 +518,7 @@ export default function DeploymentProcessingPage() {
         updatedAt: deployedAt,
       }));
 
-      toast.success('Deployment recorded successfully', {
+      toast.success('Token created successfully', {
         id: 'token-deployment-recorded',
         description:
           'The Sepolia transaction was independently verified and the token was finalized.',
@@ -562,9 +562,9 @@ export default function DeploymentProcessingPage() {
       walletAction: {
         key: 'deployment-resume-check',
         status: 'syncing',
-        title: 'Checking deployment status',
+        title: 'Checking token status',
         description:
-          'Checking for an existing deployment attempt before any wallet request is opened.',
+          'Checking for an existing token-creation attempt before any wallet request is opened.',
       },
     });
   }, [deployment.status, setDeployment]);
@@ -622,9 +622,9 @@ export default function DeploymentProcessingPage() {
           walletAction: {
             key: 'deployment-authorization',
             status: 'syncing',
-            title: 'Authorizing the deployment attempt',
+            title: 'Preparing token creation',
             description:
-              'Validating the token, issuer permissions, network, wallet, and existing deployment status before MetaMask can open.',
+              'Checking your token settings, organization permissions, network and wallet before MetaMask opens.',
           },
         });
 
@@ -675,10 +675,10 @@ export default function DeploymentProcessingPage() {
           const activeWallet = String(activeAttempt.walletAddress || '').toLowerCase();
 
           if (activeChainId && activeChainId !== Number(wallet.requiredChain.id)) {
-            throw new Error('The active deployment attempt belongs to a different network.');
+            throw new Error('The active token-creation attempt belongs to a different network.');
           }
           if (activeWallet && activeWallet !== approvedWallet.toLowerCase()) {
-            throw new Error('The active deployment attempt belongs to a different issuer wallet.');
+            throw new Error('The active token-creation attempt belongs to a different organization wallet.');
           }
 
           setBackendState({
@@ -705,7 +705,7 @@ export default function DeploymentProcessingPage() {
           if (['submitted', 'confirming', 'confirmed'].includes(attemptStatus)) {
             if (!activeHash) {
               throw new Error(
-                'An active broadcast transaction was found, but no transaction hash is available for recovery.',
+                'A submitted wallet transaction was found, but its transaction ID is not available for recovery.',
               );
             }
 
@@ -737,9 +737,9 @@ export default function DeploymentProcessingPage() {
               walletAction: {
                 key: 'backend-resume',
                 status: 'syncing',
-                title: 'Resuming the submitted deployment',
+                title: 'Resuming token creation',
                 description:
-                  'The transaction hash is already recorded. It will be independently verified without opening MetaMask again.',
+                  'The transaction ID is already recorded. We will verify it without opening MetaMask again.',
               },
             });
 
@@ -778,7 +778,7 @@ export default function DeploymentProcessingPage() {
             !['expired', 'failed', 'wallet_rejected', 'cancelled'].includes(attemptStatus)
           ) {
             const conflict = new Error(
-              'An existing deployment attempt cannot initiate another wallet transaction.',
+              'An existing token-creation attempt cannot start another wallet transaction.',
             );
             conflict.code = 'DEPLOYMENT_ALREADY_IN_PROGRESS';
             throw conflict;
@@ -822,9 +822,9 @@ export default function DeploymentProcessingPage() {
             walletAction: {
               key: 'browser-recovery',
               status: 'syncing',
-              title: 'Recovering the submitted deployment',
+              title: 'Recovering token creation',
               description:
-                'A transaction hash is stored in this browser. It will be reconciled and independently verified before any new wallet transaction is allowed.',
+                'A transaction ID is already stored in this browser. We will verify it before allowing any new wallet transaction.',
             },
           });
 
@@ -839,13 +839,13 @@ export default function DeploymentProcessingPage() {
         // Wallet validation is required only when a new transaction may be sent. Submitted
         // attempts above resume through the backend without reopening MetaMask.
         if (!wallet.isConnected || !wallet.connector) {
-          throw new Error('Connect the approved organization wallet before deployment.');
+          throw new Error('Connect the approved organization wallet before creating the token.');
         }
         if (!wallet.isCorrectNetwork) {
           throw new Error(`Switch the connected wallet to ${wallet.requiredChain.name}.`);
         }
         if (wallet.address?.toLowerCase() !== approvedWallet.toLowerCase()) {
-          throw new Error('Reconnect with the approved organization wallet before deployment.');
+          throw new Error('Reconnect the approved organization wallet before creating the token.');
         }
 
         if (!deploymentAttemptUid) {
@@ -876,7 +876,7 @@ export default function DeploymentProcessingPage() {
             createdAttempt?.canInitiateTransaction !== true
           ) {
             const invalidAttempt = new Error(
-              'The wallet transaction is not authorized for this deployment attempt.',
+              'The wallet transaction is not authorized for this token-creation attempt.',
             );
             invalidAttempt.code = 'DEPLOYMENT_ATTEMPT_NOT_AUTHORIZED';
             throw invalidAttempt;
@@ -970,7 +970,7 @@ export default function DeploymentProcessingPage() {
               throw createBackendSyncError(
                 submissionError,
                 transactionHash,
-                "We've detected an existing blockchain deployment and are syncing it with your account. There's no need to deploy again. This should only take a few moments.",
+                "We found an existing token-creation transaction and are linking it to your account. You do not need to create the token again.",
               );
             }
 
@@ -1065,8 +1065,8 @@ export default function DeploymentProcessingPage() {
               ? 'Both wallet confirmations are complete'
               : 'Token created — transfer activation is still pending',
             description: transfersActivated
-              ? 'The confirmed deployment transaction is being independently verified before your token is finalized.'
-              : 'The token creation transaction is confirmed, but transfers remain paused while the deployment is securely verified and finalized.',
+              ? 'The confirmed token-creation transaction is being verified before your token is finalized.'
+              : 'The token-creation transaction is confirmed, but transfers remain paused while the final checks are completed.',
           },
         });
 
@@ -1074,7 +1074,7 @@ export default function DeploymentProcessingPage() {
           toast.warning('Token created, but transfers are still paused', {
             id: 'token-transfer-activation-pending',
             description:
-              'The deployment will be finalized, but an authorized Token Agent must unpause the token before investors can transfer it.',
+              'The token will be finalized, but an authorized Token Operations Wallet must enable transfers before investors can send it.',
             duration: 10_000,
           });
         }
@@ -1376,9 +1376,9 @@ export default function DeploymentProcessingPage() {
         walletAction: {
           key: 'deployment-bootstrap',
           status: 'syncing',
-          title: 'Reloading token deployment data',
+          title: 'Reloading token setup',
           description:
-            'The token, organization, and deployment status are being restored before any wallet request can open.',
+            'Your token, organization and creation status are being restored before any wallet request can open.',
         },
       });
 
@@ -1389,7 +1389,7 @@ export default function DeploymentProcessingPage() {
           activeStage: 0,
           error: getTokenApiErrorMessage(
             result.error,
-            'The token deployment data could not be restored. Please refresh and try again.',
+            'The token-creation status could not be restored. Please refresh and try again.',
           ),
           canRetry: true,
           retryMode: 'bootstrap',
@@ -1423,9 +1423,9 @@ export default function DeploymentProcessingPage() {
           walletAction: {
             key: 'backend-sync',
             status: 'syncing',
-            title: 'Retrying deployment verification',
+            title: 'Checking token status again',
             description:
-              'Verification will resume from the existing transaction hash. MetaMask will not open and no additional gas will be charged.',
+              'Verification will resume from the existing transaction ID. MetaMask will not open and no additional network fee will be charged.',
           },
         });
 
@@ -1553,27 +1553,27 @@ export default function DeploymentProcessingPage() {
               <ShieldCheck size={28} />
             )}
           </span>
-          <span className="eyebrow">Issuer-signed Sepolia deployment</span>
+          <span className="eyebrow">Creating on Sepolia</span>
           <h1>
             {existingDeploymentSyncPending
               ? 'Syncing your existing token'
               : deployment.status === 'error'
                 ? backendSyncPending
                   ? 'Transaction submitted — verification pending'
-                  : 'Deployment needs attention'
+                  : 'Token creation needs attention'
                 : backendSyncPending
-                  ? 'Verifying the deployment transaction'
-                  : 'Deploying your T-REX token suite'}
+                  ? 'Verifying token creation'
+                  : 'Creating your security token'}
           </h1>
           <p>
             {existingDeploymentSyncPending
-              ? "We've detected an existing blockchain deployment and are securely linking it with your account. No additional wallet transaction is required."
+              ? "We found an existing token-creation transaction and are linking it to your account. No additional wallet transaction is required."
               : deployment.status === 'error'
                 ? backendSyncPending
-                  ? 'The on-chain transaction already exists. Retry only secure deployment verification; another wallet transaction will not be sent.'
+                  ? 'The blockchain transaction already exists. Retry only the status check; another wallet transaction will not be sent.'
                   : 'Review the message below before retrying. Never send a duplicate transaction when a hash is already pending.'
                 : backendSyncPending
-                  ? 'The submitted transaction receipt and T-REX deployment event are being independently checked before the success page is opened.'
+                  ? 'The submitted transaction and token-creation result are being checked before your token is marked ready.'
                   : 'MetaMask will request two approvals: first to create your token, then to activate token transfers. Keep this page open until Sepolia confirms both actions.'}
           </p>
         </div>
@@ -1591,7 +1591,7 @@ export default function DeploymentProcessingPage() {
             </div>
             <p>{deployment.walletAction.description}</p>
             {deployment.walletAction.gasRequired ? (
-              <small>MetaMask will show the network gas fee before you approve this transaction.</small>
+              <small>MetaMask will show the network fee before you approve this transaction.</small>
             ) : null}
           </div>
         ) : null}
@@ -1600,10 +1600,10 @@ export default function DeploymentProcessingPage() {
           <InfoCallout
             title={
               existingDeploymentSyncPending
-                ? 'Existing blockchain deployment detected'
+                ? 'Existing token creation found'
                 : backendSyncPending
                   ? 'Please wait while we sync your token.'
-                  : 'Deployment not completed'
+                  : 'Token creation not completed'
             }
             tone={existingDeploymentSyncPending ? 'info' : 'warning'}
             icon={existingDeploymentSyncPending ? ShieldCheck : AlertTriangle}
@@ -1614,7 +1614,7 @@ export default function DeploymentProcessingPage() {
 
         {deployment.transactionHash ? (
           <AddressDisplay
-            label="Deployment transaction hash"
+            label="Token creation transaction ID"
             address={deployment.transactionHash}
             explorerUrl={transactionExplorer}
             showFullAddress
@@ -1641,13 +1641,13 @@ export default function DeploymentProcessingPage() {
               </Button>
               {deployment.canRetry ? (
                 <Button icon={RefreshCcw} onClick={retry}>
-                  {backendSyncPending ? 'Retry deployment verification' : 'Retry deployment'}
+                  {backendSyncPending ? 'Check token status' : 'Try token creation again'}
                 </Button>
               ) : null}
             </>
           ) : (
             <span>
-              The issuer wallet pays gas; no platform private key is used in the browser.
+              MetaMask will show any required network fee before you approve a transaction.
             </span>
           )}
         </div>

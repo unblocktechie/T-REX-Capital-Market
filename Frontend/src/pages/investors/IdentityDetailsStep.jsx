@@ -235,12 +235,12 @@ export default function IdentityDetailsStep() {
 
   return (
     <InvestorLayout
-      title="Identity Details"
-      description="Enter your personal and residential information exactly as it appears on your official documents."
-      side={<InvestorSecurityCard title="Secure investor onboarding" description="Identity details are validated in the browser and saved to the authenticated T-REX investor onboarding API." />}
+      title="Personal Details"
+      description="Enter your personal and address details exactly as they appear on your official documents."
+      side={<InvestorSecurityCard title="Why we need this" description="These details help verify your identity and determine which investments you are eligible to access." />}
     >
       <form id="investor-identity-form" onSubmit={continueFlow} noValidate>
-        <InvestorFormCard title="Personal Information" description="These details establish the legal identity connected to your investor profile.">
+        <InvestorFormCard title="Personal Information" description="Use the same legal information shown on your identity documents.">
           <div className="org-form-grid">
             <Input label="First Name" required autoComplete="given-name" maxLength={50} placeholder="Enter first name" error={errors.firstName?.message} {...form.register('firstName')} />
             <Input label="Last Name" required autoComplete="family-name" maxLength={50} placeholder="Enter last name" error={errors.lastName?.message} {...form.register('lastName')} />

@@ -64,7 +64,7 @@ export default function SelfieVerificationStep() {
   return (
     <InvestorLayout
       title="Selfie Verification"
-      description="Capture or upload a clear selfie to simulate identity ownership and liveness verification."
+      description="Capture or upload a clear selfie to confirm that the person creating the profile matches the submitted identity."
       side={
         <Card className="investor-side-card">
           <span className="investor-side-card__icon"><Lightbulb size={22} /></span>
@@ -79,7 +79,7 @@ export default function SelfieVerificationStep() {
         </Card>
       }
     >
-      <InvestorFormCard title="Take a clear selfie" description="No real camera or face-verification service is used. The result is generated with mock asynchronous logic.">
+      <InvestorFormCard title="Take a clear selfie" description="Use a clear, recent photo so the identity check can be completed successfully.">
         <div className="investor-selfie-stage">
           <div className={`investor-selfie-preview${documents.selfie ? ' has-selfie' : ''}`}>
             {documents.selfie?.previewUrl ? (
@@ -123,7 +123,7 @@ export default function SelfieVerificationStep() {
           disabled={documents.selfieVerificationStatus === 'verifying'}
         />
 
-        {selfieReady ? <StatusNotice type="success" title="Selfie verified">The mock verification check completed successfully.</StatusNotice> : null}
+        {selfieReady ? <StatusNotice type="success" title="Selfie verified">Your selfie verification is complete.</StatusNotice> : null}
         {verificationError ? (
           <div className="investor-retry-row">
             <Button variant="secondary" size="sm" icon={RotateCcw} onClick={() => documents.selfie && verifySelfie(documents.selfie)}>Retry Verification</Button>
@@ -135,7 +135,7 @@ export default function SelfieVerificationStep() {
         <Button variant="ghost" icon={ArrowLeft} onClick={() => setStep(2, { markReached: false })}>Back</Button>
         <Button variant="secondary" icon={Save} loading={savingDraft} onClick={() => saveDraft({ documents, currentStep: 3, highestStepReached: state.highestStepReached })}>Save Draft</Button>
         <span className="investor-action-bar__spacer" />
-        <Button icon={ArrowRight} onClick={continueFlow} disabled={!selfieReady}>Continue to Compliance</Button>
+        <Button icon={ArrowRight} onClick={continueFlow} disabled={!selfieReady}>Continue to Eligibility</Button>
       </InvestorActionBar>
     </InvestorLayout>
   );

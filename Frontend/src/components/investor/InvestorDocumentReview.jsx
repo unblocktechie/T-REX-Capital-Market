@@ -124,7 +124,7 @@ function InvestorDocumentPreviewModal({ document, onClose, downloadDocument }) {
           <div className="investor-document-preview-empty" role="status" aria-live="polite">
             <span className="investor-document-preview-loader" aria-hidden="true" />
             <h3>Loading secure document preview</h3>
-            <p>Retrieving the uploaded file from the investor document API.</p>
+            <p>Retrieving your uploaded file securely.</p>
           </div>
         ) : loadError ? (
           <div className="investor-document-preview-empty" role="alert">

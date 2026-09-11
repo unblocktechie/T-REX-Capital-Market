@@ -222,7 +222,7 @@ export default function IssuerInvestorDirectoryPage() {
         <div>
           <span className="issuer-redemptions-eyebrow">Investor &amp; invitation management</span>
           <h1>Investors</h1>
-          <p>Discover completed investor profiles for your created token and send a secure invitation to review the offering.</p>
+          <p>Find verified investors who may be eligible for your token and invite them to review the offering.</p>
         </div>
         <Button
           variant="secondary"

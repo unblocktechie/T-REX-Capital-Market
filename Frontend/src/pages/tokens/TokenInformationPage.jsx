@@ -162,7 +162,7 @@ export default function TokenInformationPage() {
     <IssuanceLayout
       stepKey="token-information"
       title="Token Information"
-      description="Enter the essential token details required for the ERC-3643 deployment."
+      description="Enter the essential details investors will see and the settings used to create your token."
       onBack={() => navigate(ROUTES.createToken)}
       onContinue={continueStep}
       continueLabel="Save and Continue"

@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import { isAddress } from 'viem';
 import { toast } from 'sonner';
 import {
   CalendarDays,
-  Camera,
   CheckCircle2,
   FileCheck2,
   Mail,
@@ -22,9 +21,9 @@ import { InvestorDocumentList } from '@/components/investor/InvestorDocumentRevi
 import { TypedDocumentUploader } from '@/components/investor/TypedDocumentUploader';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { Input } from '@/components/ui/Input';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ROLES } from '@/config/permissions';
+import { ROUTES } from '@/config/routes';
 import { useAuth } from '@/hooks/useAuth';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useInvestorProfileData } from '@/hooks/useInvestorProfileData';
@@ -138,8 +137,8 @@ function MarketplaceEligibilityUploadCard({ tokenUid, options, identityDocuments
       <header>
         <div>
           <span className="eyebrow">Marketplace eligibility</span>
-          <h2>Required Claim-Topic Documents</h2>
-          <p>These requirements are loaded for the marketplace token you opened. Uploading uses the existing authenticated investor document endpoint.</p>
+          <h2>Required Verification Documents</h2>
+          <p>These documents are required for the token you opened. Upload the requested verification so the issuer can review your eligibility.</p>
         </div>
         {eligibility ? (
           <span className={eligibility.eligible ? 'investor-profile-status' : 'investor-profile-status is-warning'}>
@@ -160,7 +159,7 @@ function MarketplaceEligibilityUploadCard({ tokenUid, options, identityDocuments
                 <div className="investor-profile-marketplace-topic__heading">
                   <div>
                     <strong>{topic.label || topic.claimTopicCode}</strong>
-                    <span>{topic.satisfied ? 'A matching active document is already available.' : 'Upload at least one matching document to satisfy this claim topic.'}</span>
+                    <span>{topic.satisfied ? 'A matching active document is already available.' : 'Upload at least one matching document to complete this verification requirement.'}</span>
                   </div>
                   <span className={topic.satisfied ? 'is-satisfied' : 'is-missing'}>{topic.satisfied ? 'Satisfied' : 'Required'}</span>
                 </div>
@@ -175,10 +174,10 @@ function MarketplaceEligibilityUploadCard({ tokenUid, options, identityDocuments
                       onChange={(next) => setTopicDocuments((current) => ({ ...current, [key]: next }))}
                       onUpload={uploadDocument}
                       onDelete={deleteDocument}
-                      selectionHint="Select a supported document type for this required claim topic, then upload a PDF or supported image."
+                      selectionHint="Select a supported document type for this verification requirement, then upload a PDF or supported image."
                     />
                   ) : (
-                    <div className="investor-profile-marketplace-topic__unavailable">No document type mapped to this claim topic was returned by the investor options API.</div>
+                    <div className="investor-profile-marketplace-topic__unavailable">No supported document type is currently available for this verification requirement.</div>
                   )
                 ) : null}
               </section>
@@ -186,7 +185,7 @@ function MarketplaceEligibilityUploadCard({ tokenUid, options, identityDocuments
           })}
         </div>
       ) : (
-        <div className="investor-profile-marketplace-topic__unavailable">This token does not currently require any claim-topic documents.</div>
+        <div className="investor-profile-marketplace-topic__unavailable">This token does not currently require any additional verification documents.</div>
       )}
     </Card>
   );
@@ -307,9 +306,9 @@ function InvestorProfilePage() {
             <strong>{profile.profileId || 'Created'}</strong>
           </div>
           <div>
-            <span><ShieldCheck size={17} /> ONCHAINID</span>
+            <span><ShieldCheck size={17} /> On-chain Identity</span>
             {profile.onchainId && isAddress(profile.onchainId, { strict: false }) ? (
-              <CompactAddress value={profile.onchainId} label="ONCHAINID address" leading={5} trailing={5} />
+              <CompactAddress value={profile.onchainId} label="On-chain identity address" leading={5} trailing={5} />
             ) : (
               <strong>{profile.onchainId || 'Created'}</strong>
             )}
@@ -427,62 +426,14 @@ function InvestorProfilePage() {
   );
 }
 
-function AccountProfilePage() {
-  const { user } = useAuth();
-  return (
-    <div className="page-stack">
-      <header className="page-header">
-        <div>
-          <span className="eyebrow">Personal workspace</span>
-          <h1>Your profile</h1>
-          <p>Manage your identity and account preferences.</p>
-        </div>
-        <Button>Save changes</Button>
-      </header>
-      <div className="settings-grid">
-        <Card className="profile-summary">
-          <div className="profile-avatar">
-            {user?.name
-              ?.split(' ')
-              .map((part) => part[0])
-              .slice(0, 2)
-              .join('')}
-            <button aria-label="Change profile photo">
-              <Camera size={16} />
-            </button>
-          </div>
-          <h2>{user?.name}</h2>
-          <p>{user?.email}</p>
-          <span className="verified-pill">
-            <ShieldCheck size={15} /> Verified account
-          </span>
-          <div className="profile-facts">
-            <span>
-              <Mail size={16} />
-              {user?.email}
-            </span>
-            <span>
-              <MapPin size={16} /> Ahmedabad, India
-            </span>
-          </div>
-        </Card>
-        <Card className="settings-form">
-          <h2>Personal information</h2>
-          <p>Keep your profile details accurate and up to date.</p>
-          <div className="form-grid">
-            <Input label="Full name" defaultValue={user?.name} />
-            <Input label="Work email" type="email" defaultValue={user?.email} />
-            <Input label="Job title" defaultValue="Product Administrator" />
-            <Input label="Phone number" defaultValue="+91 98765 43210" />
-          </div>
-        </Card>
-      </div>
-    </div>
-  );
-}
 
 export default function ProfilePage() {
   useDocumentTitle('Profile');
   const { user } = useAuth();
-  return user?.role === ROLES.investor ? <InvestorProfilePage /> : <AccountProfilePage />;
+
+  if (user?.role === ROLES.issuer) {
+    return <Navigate to={ROUTES.organization} replace />;
+  }
+
+  return <InvestorProfilePage />;
 }

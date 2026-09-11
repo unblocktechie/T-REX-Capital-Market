@@ -14,7 +14,7 @@ export function UploadedDocumentList({ documents, onPreview, onDownload, onRemov
       <div className="org-documents-empty">
         <EmptyState
           title="No documents uploaded yet"
-          description="Add legal filings to prepare the organization for institutional KYB verification."
+          description="Add the legal documents required to verify your organization."
         />
       </div>
     );

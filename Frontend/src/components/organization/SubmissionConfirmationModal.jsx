@@ -86,7 +86,7 @@ export function SubmissionConfirmationModal({
             onChange={(event) => setAcknowledged(event.target.checked)}
           />
           <span className="text-sm leading-6 text-slate-700">
-            I confirm that this wallet is controlled by the organization and understand that it will be used for token creation, smart-contract deployment, and future issuer operations.
+            I confirm that this wallet is controlled by the organization and understand that it will be used to create and manage tokens, approve investors, and authorize future issuer actions.
           </span>
         </label>
       </div>

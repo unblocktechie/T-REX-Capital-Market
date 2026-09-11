@@ -15,9 +15,9 @@ import { useMarketplaceTokenImageUrl } from './MarketplaceTokenImage';
 import { MARKETPLACE_STATUS } from '@/services/investor/investorMarketplaceLocalService';
 
 const STATUS_ACTION = Object.freeze({
-  [MARKETPLACE_STATUS.NOT_APPLIED]: 'Submit Interest',
+  [MARKETPLACE_STATUS.NOT_APPLIED]: 'Request to Invest',
   [MARKETPLACE_STATUS.ACTION_REQUIRED]: 'Complete Documents',
-  [MARKETPLACE_STATUS.CLAIM_REQUIRED]: 'Submit Claim',
+  [MARKETPLACE_STATUS.CLAIM_REQUIRED]: 'Complete Verification',
   [MARKETPLACE_STATUS.CLAIMS_SUBMITTED]: 'View Application',
   [MARKETPLACE_STATUS.PENDING_REVIEW]: 'Review Application',
   [MARKETPLACE_STATUS.APPROVED]: 'View Approval',

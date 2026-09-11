@@ -41,9 +41,9 @@ export function DeploymentConfirmationModal({ open, onClose, onConfirm, data, wa
       }
     >
       <div className="issuance-modal-stack">
-        <InfoCallout title="Two MetaMask confirmations are required" tone="warning" icon={AlertTriangle}>
+        <InfoCallout title="Two wallet confirmations are required" tone="warning" icon={AlertTriangle}>
           These are two separate blockchain actions. MetaMask will show one confirmation at a time,
-          and each confirmed transaction has its own Sepolia gas fee.
+          and each confirmed transaction may have its own Sepolia network fee.
         </InfoCallout>
         <div className="issuance-wallet-transactions" aria-label="Required wallet transactions">
           <strong>What you will approve</strong>
@@ -53,7 +53,7 @@ export function DeploymentConfirmationModal({ open, onClose, onConfirm, data, wa
               <div>
                 <b>Create your security token</b>
                 <p>
-                  Creates the token and the compliance, identity, and registry contracts needed for
+                  Creates the token and the verification and transfer controls needed for
                   your regulated offering.
                 </p>
               </div>
@@ -63,8 +63,8 @@ export function DeploymentConfirmationModal({ open, onClose, onConfirm, data, wa
               <div>
                 <b>Activate token transfers</b>
                 <p>
-                  Unpauses the new token so eligible investors can receive and transfer it after
-                  deployment.
+                  Enables transfers so approved investors can receive and send the token after
+                  creation.
                 </p>
               </div>
             </li>
@@ -106,7 +106,7 @@ export function DeploymentConfirmationModal({ open, onClose, onConfirm, data, wa
             onChange={(event) => setAcknowledged(event.target.checked)}
           />
           <span>
-            I confirm the connected wallet is the approved issuer wallet and understand that
+            I confirm the connected wallet is the approved Organization Wallet and understand that
             MetaMask will request two separate transaction approvals.
           </span>
         </label>

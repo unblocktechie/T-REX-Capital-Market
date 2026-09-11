@@ -385,7 +385,7 @@ export default function PortfolioPage() {
           <Info size={17} />
           <div>
             <strong>Wallet balance is the source of truth for what you currently hold</strong>
-            <span>Balances are read live from each token contract for your registered wallet. Total invested and purchase counts reflect completed activity recorded on this platform. Direct wallet transfers can change your live balance without changing those historical investment totals, so this page does not calculate performance or cost-basis gain/loss.</span>
+            <span>Wallet balances are read live from the blockchain. Total invested and purchase counts include only completed purchases made through T-REX Capital Market. Direct wallet transfers can change your balance without changing that purchase history, so performance is not estimated when the cost basis cannot be guaranteed.</span>
           </div>
         </div>
       ) : null}

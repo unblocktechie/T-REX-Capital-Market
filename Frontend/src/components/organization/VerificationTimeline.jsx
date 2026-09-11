@@ -9,12 +9,12 @@ const timeline = [
   },
   {
     title: 'Regulatory Audit',
-    description: 'The compliance team is validating jurisdiction, ownership, and legal filings.',
+    description: 'Your organization details, ownership and legal documents are being reviewed.',
     state: 'active',
   },
   {
     title: 'Token Issuance Ready',
-    description: 'Compliant issuance capabilities unlock after the KYB review is approved.',
+    description: 'Token creation becomes available after your organization is approved.',
     state: 'pending',
   },
 ];
@@ -26,7 +26,7 @@ export function VerificationTimeline() {
         <span className="org-timeline-card__icon"><SearchCheck size={21} /></span>
         <div>
           <h2>Verification timeline</h2>
-          <p>Current compliance review progress</p>
+          <p>Current organization review progress</p>
         </div>
       </header>
       <ol>

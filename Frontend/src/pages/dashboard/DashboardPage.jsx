@@ -68,8 +68,8 @@ const requestStatusMeta = (value) => {
   if (status === 'approved') return { label: 'Approved', tone: 'success' };
   if (status === 'rejected') return { label: 'Rejected', tone: 'danger' };
   if (status === 'cancelled') return { label: 'Cancelled', tone: 'neutral' };
-  if (status === 'claimsubmitted') return { label: 'Claims submitted', tone: 'info' };
-  if (status === 'verifiedbyissuer') return { label: 'Claim verified', tone: 'info' };
+  if (status === 'claimsubmitted') return { label: 'Verification submitted', tone: 'info' };
+  if (status === 'verifiedbyissuer') return { label: 'Verification approved', tone: 'info' };
   if (status === 'submitintrest' || status === 'submitted' || status === 'pending') {
     return { label: 'Pending review', tone: 'warning' };
   }
@@ -85,13 +85,13 @@ const tokenStatusMeta = (tokenRecord) => {
     return { label: 'Created', tone: 'success', description: 'Your token has been successfully created and is ready to use.' };
   }
   if (tokenRecord.isDeploymentPending || status === 'deploymentpending') {
-    return { label: 'Deploying', tone: 'info', description: 'The deployment transaction is being finalized.' };
+    return { label: 'Creating', tone: 'info', description: 'Your token-creation transaction is being finalized.' };
   }
   if (tokenRecord.isDeploymentFailed || status === 'deploymentfailed') {
-    return { label: 'Deployment needs attention', tone: 'danger', description: 'Review the last deployment attempt before trying again.' };
+    return { label: 'Creation needs attention', tone: 'danger', description: 'Review the last token-creation attempt before trying again.' };
   }
   if (tokenRecord.isReadyToDeploy || status === 'readytodeploy') {
-    return { label: 'Ready to deploy', tone: 'warning', description: 'Configuration is complete and ready for the deployment review.' };
+    return { label: 'Ready to create', tone: 'warning', description: 'Your setup is complete and ready for final review.' };
   }
   if (tokenRecord.hasToken) {
     return { label: 'Draft', tone: 'neutral', description: 'Continue configuring the token issuance workflow.' };
@@ -172,8 +172,8 @@ const investorApplicationStatusMeta = (value) => {
   const status = compactStatus(value);
   if (status === 'registered' || status === 'readytoinvest') return { label: 'Ready to invest', tone: 'success' };
   if (status === 'approved') return { label: 'Approved', tone: 'success' };
-  if (status === 'verifiedbyissuer' || status === 'verified') return { label: 'Claims required', tone: 'warning' };
-  if (status === 'claimsubmitted') return { label: 'Claims submitted', tone: 'info' };
+  if (status === 'verifiedbyissuer' || status === 'verified') return { label: 'Verification required', tone: 'warning' };
+  if (status === 'claimsubmitted') return { label: 'Verification submitted', tone: 'info' };
   if (status === 'submitintrest' || status === 'submitted') return { label: 'Pending review', tone: 'info' };
   if (status === 'pending') return { label: 'Action required', tone: 'warning' };
   if (status === 'rejected') return { label: 'Rejected', tone: 'danger' };
@@ -278,9 +278,9 @@ function IssuerDashboardPage() {
   const tokenActionLabel = tokenRecord.isDeployed
     ? 'View token'
     : tokenRecord.isDeploymentPending
-      ? 'View deployment'
+      ? 'View creation status'
       : tokenRecord.isReadyToDeploy || tokenRecord.isDeploymentFailed
-        ? 'Review deployment'
+        ? 'Review token setup'
         : tokenRecord.hasToken
           ? 'Continue token setup'
           : 'Create security token';
@@ -371,8 +371,8 @@ function IssuerDashboardPage() {
       items.push({
         id: 'subscription-requests',
         icon: UsersRound,
-        title: `${numberFormatter.format(pendingRequests.length)} subscription request${pendingRequests.length === 1 ? '' : 's'} waiting for review`,
-        description: 'Open Manage Request to review the latest investor submissions.',
+        title: `${numberFormatter.format(pendingRequests.length)} investment request${pendingRequests.length === 1 ? '' : 's'} waiting for review`,
+        description: 'Open Investment Requests to review the latest investor submissions.',
         label: 'Review requests',
         to: ROUTES.investors,
         tone: 'warning',
@@ -423,13 +423,13 @@ function IssuerDashboardPage() {
     {
       id: 'requests',
       icon: UsersRound,
-      label: 'Subscription requests',
+      label: 'Investment requests',
       value: numberFormatter.format(requests.length),
       helper: pendingRequests.length
         ? `${numberFormatter.format(pendingRequests.length)} waiting for review`
         : requests.length
           ? 'No new requests need review'
-          : 'No subscription requests yet',
+          : 'No investment requests yet',
       to: ROUTES.investors,
     },
     {
@@ -683,9 +683,9 @@ function IssuerDashboardPage() {
         <Card className="issuer-dashboard-list-card">
           <header className="issuer-dashboard-card-header">
             <div>
-              <span className="eyebrow">Manage Request</span>
-              <h2>Recent subscription requests</h2>
-              <p>Latest investment interests returned by the issuer API.</p>
+              <span className="eyebrow">Investment Requests</span>
+              <h2>Recent investment requests</h2>
+              <p>Latest investor requests for your token.</p>
             </div>
             <button className="link-button" type="button" onClick={() => navigate(ROUTES.investors)}>
               View all
@@ -719,7 +719,7 @@ function IssuerDashboardPage() {
           ) : (
             <div className="issuer-dashboard-list-empty">
               <UsersRound size={24} />
-              <strong>No subscription requests yet</strong>
+              <strong>No investment requests yet</strong>
               <span>Investor requests will appear here when they are submitted.</span>
             </div>
           )}
@@ -866,8 +866,8 @@ function InvestorDashboardPage() {
       items.push({
         id: 'claims-required',
         icon: ShieldCheck,
-        title: `${numberFormatter.format(claimsRequired.length)} application${claimsRequired.length === 1 ? '' : 's'} require claims`,
-        description: 'An issuer has reviewed your request and additional claim documents are required.',
+        title: `${numberFormatter.format(claimsRequired.length)} application${claimsRequired.length === 1 ? '' : 's'} need verification`,
+        description: 'The issuer reviewed your request and needs additional verification documents before you can continue.',
         label: 'Review applications',
         to: ROUTES.applications,
         tone: 'warning',
@@ -878,8 +878,8 @@ function InvestorDashboardPage() {
       items.push({
         id: 'resubmit-claims',
         icon: RefreshCcw,
-        title: `${numberFormatter.format(resubmissionsAvailable.length)} claim resubmission${resubmissionsAvailable.length === 1 ? '' : 's'} available`,
-        description: 'Open the affected application to review issuer feedback and resubmit eligible claims.',
+        title: `${numberFormatter.format(resubmissionsAvailable.length)} verification update${resubmissionsAvailable.length === 1 ? '' : 's'} available`,
+        description: 'Open the affected application to review issuer feedback and update the requested verification documents.',
         label: 'Review feedback',
         to: ROUTES.applications,
         tone: 'danger',
@@ -1021,7 +1021,7 @@ function InvestorDashboardPage() {
             </div>
           </div>
           <dl>
-            <div><dt>ONCHAINID</dt><dd title={profile.onchainId || undefined}>{profile.onchainId ? `${profile.onchainId.slice(0, 8)}…${profile.onchainId.slice(-6)}` : '—'}</dd></div>
+            <div><dt>On-chain identity</dt><dd title={profile.onchainId || undefined}>{profile.onchainId ? `${profile.onchainId.slice(0, 8)}…${profile.onchainId.slice(-6)}` : '—'}</dd></div>
             <div><dt>Documents</dt><dd>{numberFormatter.format(documentCount)}</dd></div>
             <div><dt>Submitted</dt><dd>{formatDashboardDate(submittedAt)}</dd></div>
           </dl>
@@ -1066,7 +1066,7 @@ function InvestorDashboardPage() {
               },
               {
                 id: 'assets', icon: Coins, label: 'Registered assets', value: registeredApplications.length,
-                helper: registeredApplications.length ? 'Available in Asset Management' : 'Available after registration',
+                helper: registeredApplications.length ? 'Available in Manage Tokens' : 'Available after investor approval',
                 to: ROUTES.assetManagement,
               },
               {
@@ -1161,7 +1161,7 @@ function InvestorDashboardPage() {
             <div>
               <small>Primary wallet</small>
               <strong title={walletAddress || undefined}>{displayWallet}</strong>
-              <span>{walletAddress ? (connectedMatches ? walletConnection.chain?.name || 'Connected' : 'Linked to investor profile') : 'No wallet address returned by the profile API'}</span>
+              <span>{walletAddress ? (connectedMatches ? walletConnection.chain?.name || 'Connected' : 'Linked to investor profile') : 'No wallet is linked to this investor profile'}</span>
             </div>
           </div>
           <Button className="button--full" variant="secondary" onClick={() => navigate(ROUTES.profile)}>
@@ -1196,7 +1196,7 @@ function InvestorDashboardPage() {
                     <span className="investor-dashboard-live__row-icon">{firstText(application.token?.symbol, application.token?.name, 'T').slice(0, 1).toUpperCase()}</span>
                     <span className="investor-dashboard-live__row-main">
                       <strong>{application.token?.name || 'Token application'}</strong>
-                      <small>{[application.token?.symbol, application.token?.issuer].filter(Boolean).join(' · ') || 'Investment interest'}</small>
+                      <small>{[application.token?.symbol, application.token?.issuer].filter(Boolean).join(' · ') || 'Investment application'}</small>
                     </span>
                     <Badge tone={status.tone}>{status.label}</Badge>
                     <span className="investor-dashboard-live__row-date">{formatDashboardDate(application.updatedAt || application.submittedAt)}</span>
@@ -1209,7 +1209,7 @@ function InvestorDashboardPage() {
             <div className="investor-dashboard-live__empty-list">
               <FileClock size={24} />
               <strong>No applications yet</strong>
-              <span>Applications will appear here after you submit investment interest from the marketplace.</span>
+              <span>Applications will appear here after you request to invest from the marketplace.</span>
               <Button variant="secondary" onClick={() => navigate(ROUTES.marketplace)}>Browse offerings</Button>
             </div>
           )}

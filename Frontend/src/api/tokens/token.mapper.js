@@ -144,7 +144,7 @@ export const mapTokenOptions = (data) => {
       usedIds.add(id);
 
       const defaultTopic = DEFAULT_CLAIM_TOPICS.find((item) => item.id === inferredId);
-      const name = claimLabel(topic, defaultTopic?.name || `Claim topic ${index + 1}`);
+      const name = claimLabel(topic, defaultTopic?.name || `Verification requirement ${index + 1}`);
       const mandatory = flag(
         first(
           topic?.isRequired,

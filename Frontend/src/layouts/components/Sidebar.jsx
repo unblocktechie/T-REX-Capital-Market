@@ -119,7 +119,7 @@ export function Sidebar() {
                     ].includes(organization.status);
                   const tokenStatusBadge = isTokenItem
                     ? tokenRecord.isDeploymentPending
-                      ? 'Deploying'
+                      ? 'Creating'
                       : tokenRecord.isDeploymentFailed
                         ? 'Retry'
                         : tokenRecord.isReadyToDeploy

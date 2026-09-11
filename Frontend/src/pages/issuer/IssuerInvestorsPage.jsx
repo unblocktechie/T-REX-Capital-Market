@@ -20,9 +20,9 @@ const PAGE_SIZE = 5;
 const INTEREST_STATUS_OPTIONS = [
   { value: 'all', label: 'All Requests', description: 'All visible investment request statuses' },
   { value: 'pending', label: 'Pending', description: 'Requests waiting for the next action' },
-  { value: 'submitIntrest', label: 'Submit Interest', description: 'Investment interests submitted for issuer review' },
-  { value: 'verifiedByIssuer', label: 'Verified by Issuer', description: 'Requests whose claims were verified by the issuer' },
-  { value: 'claimSubmitted', label: 'Claim Submitted', description: 'Requests with investor claims submitted on-chain' },
+  { value: 'submitIntrest', label: 'Pending Review', description: 'Investment requests waiting for issuer review' },
+  { value: 'verifiedByIssuer', label: 'Verification Approved', description: 'Requests whose investor verification has been approved' },
+  { value: 'claimSubmitted', label: 'Verification Submitted', description: 'Requests where the investor completed the required verification' },
   { value: 'approved', label: 'Approved', description: 'Requests that have been approved' },
   { value: 'rejected', label: 'Rejected', description: 'Requests that were not approved' },
   { value: 'cancelled', label: 'Cancelled', description: 'Requests that are no longer active' },
@@ -31,8 +31,8 @@ const INTEREST_STATUS_OPTIONS = [
 const requestStatusMeta = (value) => {
   const normalized = String(value || '').trim().toLowerCase();
   const compact = normalized.replace(/[\s_-]+/g, '');
-  if (['verifiedbyissuer', 'verified'].includes(compact)) return { label: 'Claim Verified', tone: 'success' };
-  if (compact === 'claimsubmitted') return { label: 'Claims Submitted', tone: 'success' };
+  if (['verifiedbyissuer', 'verified'].includes(compact)) return { label: 'Verification Approved', tone: 'success' };
+  if (compact === 'claimsubmitted') return { label: 'Verification Submitted', tone: 'success' };
   if (normalized === 'approved') return { label: 'Approved', tone: 'success' };
   if (normalized === 'rejected') return { label: 'Rejected', tone: 'danger' };
   if (normalized === 'cancelled') return { label: 'Cancelled', tone: 'neutral' };
@@ -66,7 +66,7 @@ function exportTextFile(filename, text) {
 const csvEscape = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
 
 export default function IssuerInvestorsPage() {
-  useDocumentTitle('Subscription Requests');
+  useDocumentTitle('Investment Requests');
   const navigate = useNavigate();
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -165,9 +165,9 @@ export default function IssuerInvestorsPage() {
     <div className="page-stack issuer-investors-page issuer-investors-workspace">
       <header className="issuer-page-header issuer-subscriptions-header">
         <div>
-          <span className="issuer-redemptions-eyebrow">Investor subscription requests</span>
-          <h1>Subscription Requests</h1>
-          <p>Review investment interests submitted for your organization&apos;s created tokens. Open a request to inspect the investor identity summary, required claim topics, and submitted documents.</p>
+          <span className="issuer-redemptions-eyebrow">Investor investment requests</span>
+          <h1>Investment Requests</h1>
+          <p>Review investor requests for your organization&apos;s created tokens. Open a request to review the investor profile, required verification and submitted documents.</p>
         </div>
         <Button variant="secondary" icon={Download} disabled={!requests.length} onClick={handleExport}>Export CSV</Button>
       </header>
@@ -175,7 +175,7 @@ export default function IssuerInvestorsPage() {
       <Card className="issuer-subscriptions-toolbar-card">
         <div className="issuer-subscriptions-toolbar">
           <Input
-            aria-label="Search subscription requests"
+            aria-label="Search investment requests"
             placeholder="Search investor, token or request ID"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -186,7 +186,7 @@ export default function IssuerInvestorsPage() {
             options={INTEREST_STATUS_OPTIONS}
             onChange={setStatusFilter}
             icon={Filter}
-            ariaLabel="Filter investment interests by status"
+            ariaLabel="Filter investment requests by status"
             align="end"
             className="issuer-subscriptions-filter"
             menuClassName="issuer-subscriptions-filter-menu"

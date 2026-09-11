@@ -58,7 +58,7 @@ function OperationLoadingState() {
 }
 
 export default function AssetManagementPage() {
-  useDocumentTitle('Asset Management');
+  useDocumentTitle('Manage Tokens');
   const [searchParams] = useSearchParams();
   const requestedInterestUid = String(searchParams.get('interestUid') || '').trim();
   const requestedTokenUid = String(searchParams.get('tokenUid') || '').trim();
@@ -142,8 +142,8 @@ export default function AssetManagementPage() {
       <header className="asset-management-header">
         <div>
           <span className="eyebrow">Registered asset workspace</span>
-          <h1>Asset Management</h1>
-          <p>Select a registered token, then invest, send, or redeem using the same compliant workflows already available in your investor portal.</p>
+          <h1>Manage Tokens</h1>
+          <p>Select a token you are approved to hold, then buy more, send tokens, or request a redemption.</p>
         </div>
         <span className="asset-management-header__status">
           <ShieldCheck size={17} /> Registered assets only
@@ -204,7 +204,7 @@ export default function AssetManagementPage() {
         <Card className="asset-management-state-card">
           <ShieldCheck size={29} />
           <h2>No registered assets yet</h2>
-          <p>Tokens will appear here after your investor identity has reached Registered status for an offering.</p>
+          <p>Tokens will appear here after the issuer approves your verified profile for an offering.</p>
         </Card>
       ) : (
         <section

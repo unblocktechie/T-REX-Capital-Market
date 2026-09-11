@@ -42,6 +42,13 @@ export const getWalletErrorMessage = (error, fallback = 'Wallet request could no
     return 'WalletConnect is not configured. Add VITE_WALLETCONNECT_PROJECT_ID to the environment file.';
   }
   if (
+    /contract function .*reverted|contractfunctionrevertederror|rpc request|transaction gas limit|gas limit too high|exceeds.*gas limit|cannot estimate gas|execution reverted|contract call:|docs:\s*https?:\/\//i.test(
+      message,
+    )
+  ) {
+    return 'Your wallet could not prepare this transaction. Please try again. If the issue continues, reconnect your wallet and try once more.';
+  }
+  if (
     /chain not configured|chainnotconfigurederror|unsupported chain|unsupported network|switch chain not supported/i.test(
       message,
     )

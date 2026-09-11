@@ -161,7 +161,7 @@ export default function IssuerRedemptionsPage() {
         <div>
           <span className="issuer-redemptions-eyebrow">Investor redemption requests</span>
           <h1>Redemptions</h1>
-          <p>Review investor redemption requests, approve or reject them, and complete the required payment when a request is ready.</p>
+          <p>Review requests from investors who want to redeem tokens, then approve, reject or complete payment when appropriate.</p>
         </div>
         <Button variant="secondary" icon={RefreshCw} loading={refreshing} onClick={() => load({ quiet: true })}>Refresh</Button>
       </header>

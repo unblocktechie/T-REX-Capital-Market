@@ -1,12 +1,10 @@
 import {
   Building2,
   ClipboardCheck,
-  LayoutDashboard,
 } from 'lucide-react';
 import { ROUTES } from '@/config/routes';
 
 export const adminNavigation = [
-  { label: 'Dashboard', to: ROUTES.adminDashboard, icon: LayoutDashboard },
   { label: 'Review Queue', to: ROUTES.adminReviewQueue, icon: ClipboardCheck, badge: 'review' },
   { label: 'Organizations', to: ROUTES.adminOrganizations, icon: Building2 },
 ];
@@ -26,6 +24,6 @@ export const adminRouteMeta = {
   },
   [ROUTES.adminProfile]: {
     title: 'Admin Profile',
-    description: 'Manage your administrator identity and security role.',
+    description: 'View your administrator identity and security role.',
   },
 };

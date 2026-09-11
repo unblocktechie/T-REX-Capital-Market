@@ -43,7 +43,7 @@ export default function AgentsPage() {
   const [serverErrors, setServerErrors] = useState({});
   const organizationWallet = organization?.walletAddress || '';
   const errors = validateAgents(agents, organizationWallet);
-  useDocumentTitle('Governance Agents');
+  useDocumentTitle('Platform Permissions');
 
   useEffect(() => {
     hydrateWalletDefaults(organizationWallet);
@@ -70,11 +70,11 @@ export default function AgentsPage() {
       const response = await tokenApi.saveGovernance(toGovernancePayload(agents, false));
       recordBackendSave('agents', response);
       markStepCompleted('agents');
-      toast.success('Governance roles saved securely.');
+      toast.success('Platform permissions saved.');
       navigate(ROUTES.tokenIssuanceStep('review'));
     } catch (error) {
       setServerErrors(mapTokenApiFieldErrors(error, GOVERNANCE_FIELD_MAP));
-      toast.error('Governance roles were not saved.', {
+      toast.error('Platform permissions were not saved.', {
         description: getTokenApiErrorMessage(
           error,
           'Confirm the approved organization wallet and try again.',
@@ -95,8 +95,8 @@ export default function AgentsPage() {
   return (
     <IssuanceLayout
       stepKey="agents"
-      title="Governance Agents"
-      description="Review the operational wallets automatically assigned to manage this token."
+      title="Platform Permissions"
+      description="Review the authorized wallets that can manage token operations and investor access."
       onBack={() => navigate(ROUTES.tokenIssuanceStep('compliance'))}
       onContinue={continueStep}
       continueLabel="Save and Continue to Review"
@@ -110,10 +110,10 @@ export default function AgentsPage() {
           <Lock size={18} />
         </span>
         <div className="agent-readonly-notice__content">
-          <strong>Governance wallets use the approved organization wallet</strong>
+          <strong>Authorized roles use your approved Organization Wallet</strong>
           <p>
             For security, use the same wallet that was registered during organization
-            onboarding. These addresses are read-only during token creation.
+            onboarding. These assignments are read-only while the token is being created.
           </p>
         </div>
         <StatusBadge status="valid">Read only</StatusBadge>
@@ -148,7 +148,7 @@ export default function AgentsPage() {
 
               <div className="agent-readonly-wallet">
                 <div className="agent-readonly-wallet__label-row">
-                  <span>{role.name} Wallet Address</span>
+                  <span>{role.name}</span>
                   <span className="agent-readonly-wallet__locked">
                     <Lock size={12} /> Not editable
                   </span>
@@ -166,7 +166,7 @@ export default function AgentsPage() {
                   </p>
                 ) : (
                   <p className="agent-readonly-wallet__hint">
-                    This wallet will receive the permissions listed below after deployment.
+                    This wallet will receive the permissions listed below when the token is created.
                   </p>
                 )}
               </div>

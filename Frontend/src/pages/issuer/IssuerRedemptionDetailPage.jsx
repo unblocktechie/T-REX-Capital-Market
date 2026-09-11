@@ -306,7 +306,7 @@ export default function IssuerRedemptionDetailPage() {
     }
 
     if (status === 'COMPLETED') {
-      return `Redemption completed. Transaction hashes are shown in the status section and can be opened in ${explorerName}.`;
+      return `Redemption completed. Transaction IDs are shown in the status section and can be opened in ${explorerName}.`;
     }
 
     if (redemptionComplete) {

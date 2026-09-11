@@ -20,7 +20,15 @@ export const sanitizeUserFacingMessage = (message) => {
     .replace(/\bBackend\s+server\b/g, 'Service')
     .replace(/\bbackend\s+server\b/gi, 'service')
     .replace(/\bBackend\b/g, 'Service')
-    .replace(/\bbackend\b/gi, 'service');
+    .replace(/\bbackend\b/gi, 'service')
+    .replace(/\btransaction hash\b/gi, 'transaction ID')
+    .replace(/\bclaim topics?\b/gi, (match) => match.toLowerCase().endsWith('s') ? 'verification requirements' : 'verification requirement')
+    .replace(/\bidentity registry\b/gi, 'approved investor registry')
+    .replace(/\badd(?:ed|ing)? to (?:the )?registry\b/gi, 'approve investor')
+    .replace(/\bONCHAINID\b/g, 'on-chain identity')
+    .replace(/\bdeployment transaction\b/gi, 'token-creation transaction')
+    .replace(/\bdeployment\b/gi, 'token creation')
+    .replace(/\bgas fee\b/gi, 'network fee');
 };
 
 export const getErrorMessage = (error, fallback = 'Something went wrong. Please try again.') => {

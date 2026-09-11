@@ -18,9 +18,9 @@ const SUBJECT_OPTIONS = [
     description: 'Help with identity checks or verification details.',
   },
   {
-    value: 'Claim Submission',
-    label: 'Claim Submission',
-    description: 'Support for claim signing, submission, or verification.',
+    value: 'Investor Verification',
+    label: 'Investor Verification',
+    description: 'Help with required investor verification or wallet signing.',
   },
   {
     value: 'Transaction Issue',
@@ -42,7 +42,7 @@ export function ContactSupportDialog({ open, onClose, context = {} }) {
   const accountEmail = clean(context.email);
   const [name, setName] = useState(accountName);
   const [email, setEmail] = useState(accountEmail);
-  const [subject, setSubject] = useState('Claim Submission');
+  const [subject, setSubject] = useState('Investor Verification');
   const [message, setMessage] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [showContext, setShowContext] = useState(false);
@@ -52,7 +52,7 @@ export function ContactSupportDialog({ open, onClose, context = {} }) {
     if (!open) return;
     setName(accountName);
     setEmail(accountEmail);
-    setSubject('Claim Submission');
+    setSubject('Investor Verification');
     setMessage('');
     setSubmitted(false);
     setShowContext(false);
@@ -62,10 +62,10 @@ export function ContactSupportDialog({ open, onClose, context = {} }) {
   const attachedDetails = useMemo(() => ([
     ['Investor account / user ID', context.userId],
     ['Investor wallet address', context.walletAddress],
-    ['ONCHAINID address', context.onchainIdAddress],
+    ['On-chain identity address', context.onchainIdAddress],
     ['Token address', context.tokenAddress],
     ['Token name', context.tokenName],
-    ['Application / subscription ID', context.applicationId],
+    ['Application ID', context.applicationId],
     ['Current application status', context.applicationStatus],
   ]), [context]);
 
@@ -196,7 +196,7 @@ export function ContactSupportDialog({ open, onClose, context = {} }) {
             <span className="support-contact-context__icon"><Info size={16} /></span>
             <span className="support-contact-context__copy">
               <strong>Application details included automatically</strong>
-              <small>No need to re-enter wallet, token, ONCHAINID, or application information.</small>
+              <small>No need to re-enter your wallet, token, identity, or application information.</small>
             </span>
             <ChevronDown size={17} className="support-contact-context__chevron" aria-hidden="true" />
           </button>

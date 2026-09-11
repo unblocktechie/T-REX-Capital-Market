@@ -11,7 +11,7 @@ const normalizeStatus = (status) => String(status || '')
 const summaryStatusMeta = (status) => {
   const value = normalizeStatus(status);
   if (['verifiedbyissuer', 'verified'].includes(value)) return { label: 'Action Required', tone: 'warning', Icon: Clock3 };
-  if (value === 'claimsubmitted') return { label: 'Claims Submitted', tone: 'pending', Icon: CheckCircle2 };
+  if (value === 'claimsubmitted') return { label: 'Verification Submitted', tone: 'pending', Icon: CheckCircle2 };
   if (value === 'approved') return { label: 'Approved', tone: 'success', Icon: CheckCircle2 };
   if (value === 'rejected') return { label: 'Rejected', tone: 'danger', Icon: XCircle };
   if (value === 'cancelled') return { label: 'Cancelled', tone: 'neutral', Icon: XCircle };
@@ -53,9 +53,9 @@ export function ApplicationSummary({ application, history, purchaseReady = false
         ) : meta.tone === 'danger' ? (
           <p>Your application was rejected. Please review the reason.</p>
         ) : ['verifiedbyissuer', 'verified'].includes(normalizeStatus(status)) ? (
-          <p>Your application has been approved by the issuer. Submit the required claim to complete verification and enable your investment.</p>
+          <p>Your application has been approved. Complete the required verification to unlock investing in this token.</p>
         ) : normalizeStatus(status) === 'claimsubmitted' ? (
-          <p>All required investor claims successfully submitted and verified on-chain. The issuer is now completing the final verification step. This may take 1–2 business days.</p>
+          <p>Your required verification has been submitted successfully. The issuer is completing the final approval step.</p>
         ) : meta.tone === 'success' ? (
           <p>Your application has been approved by the issuer.</p>
         ) : (

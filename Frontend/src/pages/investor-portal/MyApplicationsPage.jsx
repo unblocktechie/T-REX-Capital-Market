@@ -29,7 +29,7 @@ export default function MyApplicationsPage() {
     investorMarketplaceService
       .listApplications()
       .then((items) => active && setApplications(items || []))
-      .catch((error) => active && toast.error(getErrorMessage(error, 'Unable to load your investment interests.')))
+      .catch((error) => active && toast.error(getErrorMessage(error, 'Unable to load your investment applications.')))
       .finally(() => active && setLoading(false));
     return () => { active = false; };
   }, []);
@@ -77,7 +77,7 @@ export default function MyApplicationsPage() {
         <div>
           <span className="eyebrow">Application tracking</span>
           <h1>My Applications</h1>
-          <p>Track every investment interest submitted through the marketplace and follow the issuer&apos;s current decision status.</p>
+          <p>Track every request to invest and follow the issuer&apos;s current decision status.</p>
         </div>
         <Button icon={Store} onClick={() => navigate(ROUTES.marketplace)}>Explore Marketplace <ArrowRight size={17} /></Button>
       </header>
@@ -86,7 +86,7 @@ export default function MyApplicationsPage() {
         <>
           <Card className="marketplace-application-toolbar">
             <label className="marketplace-application-search"><Search size={16} /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search applications" aria-label="Search investment applications" /></label>
-            <span><ShieldCheck size={15} /> {applications.length} investment interest{applications.length === 1 ? '' : 's'}</span>
+            <span><ShieldCheck size={15} /> {applications.length} investment application{applications.length === 1 ? '' : 's'}</span>
           </Card>
 
           <Card className="marketplace-application-table-card common-table-card">
@@ -105,7 +105,7 @@ export default function MyApplicationsPage() {
         <Card className="investor-portal-empty-card">
           <span className="investor-portal-empty-icon"><ClipboardList size={30} /></span>
           <h2>No applications yet</h2>
-          <p>Investment interests you submit for token offerings will appear here with the issuer&apos;s current status.</p>
+          <p>Requests to invest will appear here with the issuer&apos;s current status.</p>
           <Button variant="secondary" icon={Store} onClick={() => navigate(ROUTES.marketplace)}>Browse available offerings</Button>
         </Card>
       )}

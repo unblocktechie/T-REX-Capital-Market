@@ -10,25 +10,25 @@ const labels = {
   new: 'Create token',
   'token-information': 'Token Information',
   'supply-pricing': 'Supply & Pricing',
-  'identity-claims': 'Identity & Claims',
-  agents: 'Agents',
-  deploying: 'Deployment Processing',
+  'identity-claims': 'Investor Verification',
+  agents: 'Platform Permissions',
+  deploying: 'Creating Token',
   success: 'Token Created',
-  identity: 'Identity registry',
-  compliance: 'Compliance rules',
-  investors: 'Manage Request',
+  identity: 'Approved Investors',
+  compliance: 'Transfer Rules',
+  investors: 'Investment Requests',
   'investor-directory': 'Investors',
   invitations: 'Invitations',
   transactions: 'Transactions',
-  redemptions: 'Redemptions',
+  redemptions: 'Redemption Requests',
   'corporate-actions': 'Corporate actions',
   documents: 'Documents',
   reports: 'Reports',
   team: 'Team & access',
   marketplace: 'Marketplace',
   applications: 'My Applications',
-  'asset-management': 'Asset Management',
-  'submit-claim': 'Submit Claim',
+  'asset-management': 'Manage Tokens',
+  'submit-claim': 'Complete Verification',
   profile: 'Profile',
   settings: 'Settings',
   organization: 'Organization',
@@ -52,7 +52,7 @@ export function Breadcrumbs() {
     if (isTokenIdentifier) return tokenSymbol || 'Token details';
     if (parts[index - 1] === 'marketplace') return 'Offering Details';
     if (parts[index - 1] === 'applications') return 'Application Details';
-    if (parts[index - 1] === 'investors') return 'Subscription Details';
+    if (parts[index - 1] === 'investors') return 'Investment Request Details';
     if (parts[index - 1] === 'redemptions') return 'Redemption Details';
     return labels[part] || part;
   };
