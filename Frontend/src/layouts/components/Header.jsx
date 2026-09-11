@@ -28,12 +28,13 @@ export function Header({ onboardingOnly = false }) {
   const profileRef = useRef(null);
 
   const isApplicationRecordPage = location.pathname.startsWith(`${ROUTES.applications}/`);
+  const isIssuerRedemptionPage = location.pathname.startsWith(`${ROUTES.issuerRedemptions}/`);
   const isTokenRecordPage =
     location.pathname.startsWith('/app/tokens/') &&
     !location.pathname.startsWith(ROUTES.createToken);
   const roleAwareMeta =
     user?.role === ROLES.investor && location.pathname === ROUTES.dashboard
-      ? { title: 'Investor Dashboard', description: 'Identity, portfolio and investor activity' }
+      ? { title: 'Investor Dashboard', description: 'Profile, applications, invitations and registered assets' }
       : user?.role === ROLES.investor && location.pathname === ROUTES.profile
         ? { title: 'Investor Profile', description: 'Submitted investor identity and verification details' }
         : user?.role === ROLES.investor && location.pathname === ROUTES.investors
@@ -44,6 +45,7 @@ export function Header({ onboardingOnly = false }) {
     routeMeta[location.pathname] ||
     (location.pathname.startsWith(ROUTES.organization) ? routeMeta[ROUTES.organization] : null) ||
     (isApplicationRecordPage ? routeMeta[ROUTES.applications] : null) ||
+    (isIssuerRedemptionPage ? routeMeta[ROUTES.issuerRedemptions] : null) ||
     (isTokenRecordPage ? routeMeta.tokenDetails : null) ||
     routeMeta[ROUTES.dashboard];
 

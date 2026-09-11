@@ -27,7 +27,7 @@ export function useMarketplaceTokenImageUrl(token) {
     let nextUrl = '';
 
     investorMarketplaceService
-      .getTokenImageBlob(tokenUid, controller.signal)
+      .getTokenImageBlob(tokenUid, controller.signal, directImageUrl)
       .then((blob) => {
         if (!blob || controller.signal.aborted) return;
         nextUrl = URL.createObjectURL(blob);
@@ -45,7 +45,8 @@ export function useMarketplaceTokenImageUrl(token) {
     };
   }, [canLoadImage, tokenUid, storageKey, directImageUrl]);
 
-  return objectUrl || directImageUrl || '';
+  const directUrlCanRenderWithoutAuth = /^(?:https?:|blob:|data:)/i.test(directImageUrl);
+  return objectUrl || (directUrlCanRenderWithoutAuth ? directImageUrl : '');
 }
 
 export function MarketplaceTokenImage({ token, className, size = 'md' }) {

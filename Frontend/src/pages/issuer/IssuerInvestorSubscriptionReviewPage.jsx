@@ -24,7 +24,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useWalletConnection } from '@/hooks/useWalletConnection';
 import { issuerInvestorSubscriptionsService } from '@/services/issuer/issuerInvestorSubscriptionsService';
+import { issuerRegistryRecoveryStore } from '@/services/issuer/issuerRegistryRecoveryStore';
 import {
+  getIssuerRegistryTransactionConfirmationProgress,
   isIssuerRegistryWalletRejection,
   submitIssuerRegistryRegistrationTransaction,
 } from '@/services/issuer/issuerIdentityRegistryTransaction.service';
@@ -58,8 +60,9 @@ const filenameFromDisposition = (value, fallback) => {
 };
 
 const REGISTRY_STATUS_POLL_INTERVAL_MS = 5_000;
-const REGISTRY_STATUS_POLL_TIMEOUT_MS = 90_000;
+const REGISTRY_REQUIRED_CONFIRMATIONS = 12;
 const REGISTRY_SUCCESS_MESSAGE = 'This investor is now eligible to purchase the token.';
+const REGISTRY_PENDING_MESSAGE = 'Transaction is submitted. Finalizing your Registration .';
 const REGISTRY_INVITE_TOOLTIP = 'Send the investor an email letting them know they can now purchase this token.';
 
 const normalizeRegistryStatus = (status) => String(status || '').trim().toUpperCase();
@@ -96,6 +99,10 @@ export default function IssuerInvestorSubscriptionReviewPage() {
   const [registryStatusLoading, setRegistryStatusLoading] = useState(false);
   const [registryActionLoading, setRegistryActionLoading] = useState(false);
   const [registryMessage, setRegistryMessage] = useState('');
+  const [registryConfirmationProgress, setRegistryConfirmationProgress] = useState({
+    txHash: '',
+    current: 0,
+  });
   const registryPollTimeoutRef = useRef(null);
   const registryActionInFlightRef = useRef(false);
   const wallet = useWalletConnection();
@@ -145,6 +152,84 @@ export default function IssuerInvestorSubscriptionReviewPage() {
     || historyHasClaimSubmitted;
   const claimVerified = !claimSubmitted && isClaimVerifiedStatus(request?.status);
   const registryInterestUid = request?.interestUid || requestId;
+  const registryTransactionHash = hasRegistryTransaction(registryRegistration)
+    ? registryRegistration.txHash
+    : '';
+  const registryConfirmationCount = registryConfirmationProgress.txHash === registryTransactionHash
+    ? registryConfirmationProgress.current
+    : 0;
+  const registryConfirmationsComplete = registryConfirmationCount >= REGISTRY_REQUIRED_CONFIRMATIONS;
+  const registryConfirmationPercentage = Math.min(
+    100,
+    Math.round((registryConfirmationCount / REGISTRY_REQUIRED_CONFIRMATIONS) * 100),
+  );
+
+  const getRecoveredRegistryRegistration = useCallback((interestUid, baseRegistration = null) => {
+    const recovery = issuerRegistryRecoveryStore.getForUser(user, interestUid);
+    if (!recovery) return baseRegistration;
+
+    return {
+      ...(baseRegistration || {}),
+      registryOperationId: baseRegistration?.registryOperationId || recovery.registryOperationId,
+      chainId: Number(baseRegistration?.chainId) || recovery.chainId,
+      txHash: recovery.txHash,
+      status: 'PENDING',
+    };
+  }, [user]);
+
+  const reconcileRegistryRecovery = useCallback(async (interestUid, backendRegistration = null) => {
+    const recovery = issuerRegistryRecoveryStore.getForUser(user, interestUid);
+    if (!recovery) return backendRegistration;
+
+    if (isRegistryConfirmed(backendRegistration)) {
+      issuerRegistryRecoveryStore.removeForUser(user, interestUid, recovery.txHash);
+      return backendRegistration;
+    }
+
+    if (hasRegistryTransaction(backendRegistration)) {
+      // Any backend transaction hash means the database synchronization step has already
+      // completed. Never replace a server-side hash with an older browser recovery pointer.
+      issuerRegistryRecoveryStore.removeForUser(user, interestUid, recovery.txHash);
+      return backendRegistration;
+    }
+
+    try {
+      const result = await issuerInvestorSubscriptionsService.confirmRegistryRegistration(
+        interestUid,
+        backendRegistration?.registryOperationId || recovery.registryOperationId,
+        recovery.txHash,
+      );
+      issuerRegistryRecoveryStore.removeForUser(user, interestUid, recovery.txHash);
+      return {
+        ...(backendRegistration || {}),
+        registryOperationId: backendRegistration?.registryOperationId || recovery.registryOperationId,
+        chainId: Number(backendRegistration?.chainId) || recovery.chainId,
+        txHash: recovery.txHash,
+        ...(result || {}),
+      };
+    } catch (error) {
+      if (error?.response?.status === 403) {
+        issuerRegistryRecoveryStore.removeForUser(user, interestUid, recovery.txHash);
+        return backendRegistration;
+      }
+
+      if (error?.response?.status === 422) {
+        issuerRegistryRecoveryStore.removeForUser(user, interestUid, recovery.txHash);
+        return {
+          ...(backendRegistration || {}),
+          registryOperationId: backendRegistration?.registryOperationId || recovery.registryOperationId,
+          chainId: Number(backendRegistration?.chainId) || recovery.chainId,
+          txHash: recovery.txHash,
+          status: 'PENDING',
+          errorCode: error?.response?.data?.error?.code || 'REGISTRATION_VERIFICATION_FAILED',
+        };
+      }
+
+      // Keep the signed transaction locally while the backend is unavailable. This prevents
+      // another MetaMask transaction and allows a later login/online retry to synchronize DB state.
+      return getRecoveredRegistryRegistration(interestUid, backendRegistration);
+    }
+  }, [getRecoveredRegistryRegistration, user]);
 
   const stopRegistryPolling = useCallback(() => {
     if (registryPollTimeoutRef.current) {
@@ -153,21 +238,26 @@ export default function IssuerInvestorSubscriptionReviewPage() {
     }
   }, []);
 
-  const startRegistryPolling = useCallback((interestUid) => {
+  const startRegistryPolling = useCallback((interestUid, initialRegistration = null) => {
     stopRegistryPolling();
-    const startedAt = Date.now();
+    let activeRegistration = initialRegistration;
 
     const poll = async () => {
-      if (Date.now() - startedAt >= REGISTRY_STATUS_POLL_TIMEOUT_MS) {
-        setRegistryMessage('Registration is still processing. You can check the status again at any time.');
-        return;
-      }
-
       try {
-        const latest = await issuerInvestorSubscriptionsService.getRegistryRegistration(interestUid);
-        setRegistryRegistration(latest || null);
+        const backendLatest = await issuerInvestorSubscriptionsService.getRegistryRegistration(interestUid);
+        const latest = await reconcileRegistryRecovery(interestUid, backendLatest);
+        activeRegistration = latest
+          ? { ...(activeRegistration || {}), ...latest }
+          : activeRegistration;
+        setRegistryRegistration(activeRegistration || null);
 
         if (isRegistryConfirmed(latest)) {
+          if (hasRegistryTransaction(latest)) {
+            setRegistryConfirmationProgress({
+              txHash: latest.txHash,
+              current: REGISTRY_REQUIRED_CONFIRMATIONS,
+            });
+          }
           setRegistryMessage(REGISTRY_SUCCESS_MESSAGE);
           toast.success('Investor added to registry.');
           await loadData({ silent: true });
@@ -179,7 +269,34 @@ export default function IssuerInvestorSubscriptionReviewPage() {
           return;
         }
       } catch {
+        const recovered = getRecoveredRegistryRegistration(interestUid, activeRegistration);
+        if (recovered) {
+          activeRegistration = recovered;
+          setRegistryRegistration(recovered);
+        }
         // Keep the current pending state and try again on the next controlled poll.
+      }
+
+      if (hasRegistryTransaction(activeRegistration) && !canReplaceRegistryTransaction(activeRegistration)) {
+        setRegistryMessage(REGISTRY_PENDING_MESSAGE);
+        try {
+          const progress = await getIssuerRegistryTransactionConfirmationProgress({
+            chainId: activeRegistration.chainId,
+            txHash: activeRegistration.txHash,
+            requiredConfirmations: REGISTRY_REQUIRED_CONFIRMATIONS,
+          });
+          setRegistryConfirmationProgress({
+            txHash: activeRegistration.txHash,
+            current: progress.current,
+          });
+
+          if (progress.current >= REGISTRY_REQUIRED_CONFIRMATIONS) {
+            return;
+          }
+        } catch {
+          // Preserve the last known block confirmation count and retry. Block time and RPC
+          // availability are variable, so progress is never estimated from elapsed time.
+        }
       }
 
       registryPollTimeoutRef.current = window.setTimeout(
@@ -188,35 +305,60 @@ export default function IssuerInvestorSubscriptionReviewPage() {
       );
     };
 
-    registryPollTimeoutRef.current = window.setTimeout(
-      poll,
-      REGISTRY_STATUS_POLL_INTERVAL_MS,
-    );
-  }, [loadData, stopRegistryPolling]);
+    void poll();
+  }, [
+    getRecoveredRegistryRegistration,
+    loadData,
+    reconcileRegistryRecovery,
+    stopRegistryPolling,
+  ]);
 
   const loadRegistryRegistration = useCallback(async ({ silent = false } = {}) => {
     if (!claimSubmitted || !registryInterestUid) return null;
     if (!silent) setRegistryStatusLoading(true);
 
+    const recoveredRegistration = getRecoveredRegistryRegistration(registryInterestUid);
+    if (recoveredRegistration) {
+      setRegistryRegistration(recoveredRegistration);
+      setRegistryMessage(REGISTRY_PENDING_MESSAGE);
+    }
+
     try {
-      const latest = await issuerInvestorSubscriptionsService.getRegistryRegistration(
+      const backendLatest = await issuerInvestorSubscriptionsService.getRegistryRegistration(
         registryInterestUid,
       );
+      const latest = await reconcileRegistryRecovery(registryInterestUid, backendLatest);
       setRegistryRegistration(latest || null);
       if (isRegistryConfirmed(latest)) {
         stopRegistryPolling();
+        if (hasRegistryTransaction(latest)) {
+          setRegistryConfirmationProgress({
+            txHash: latest.txHash,
+            current: REGISTRY_REQUIRED_CONFIRMATIONS,
+          });
+        }
         setRegistryMessage(REGISTRY_SUCCESS_MESSAGE);
       } else if (canReplaceRegistryTransaction(latest)) {
         stopRegistryPolling();
         setRegistryMessage('The previous transaction could not be completed. You can try again.');
       } else if (hasRegistryTransaction(latest)) {
-        setRegistryMessage('Registration is processing. This may take a few moments.');
-        startRegistryPolling(registryInterestUid);
+        setRegistryMessage(REGISTRY_PENDING_MESSAGE);
+        startRegistryPolling(registryInterestUid, latest);
+      } else {
+        setRegistryMessage('');
       }
       return latest;
     } catch (error) {
+      if (recoveredRegistration) {
+        setRegistryRegistration(recoveredRegistration);
+        setRegistryMessage(REGISTRY_PENDING_MESSAGE);
+        startRegistryPolling(registryInterestUid, recoveredRegistration);
+        return recoveredRegistration;
+      }
+
       if (error?.response?.status === 404) {
         setRegistryRegistration(null);
+        setRegistryConfirmationProgress({ txHash: '', current: 0 });
         setRegistryMessage('');
         return null;
       }
@@ -225,7 +367,14 @@ export default function IssuerInvestorSubscriptionReviewPage() {
     } finally {
       if (!silent) setRegistryStatusLoading(false);
     }
-  }, [claimSubmitted, registryInterestUid, startRegistryPolling, stopRegistryPolling]);
+  }, [
+    claimSubmitted,
+    getRecoveredRegistryRegistration,
+    reconcileRegistryRecovery,
+    registryInterestUid,
+    startRegistryPolling,
+    stopRegistryPolling,
+  ]);
 
   useEffect(() => {
     if (!claimSubmitted || !registryInterestUid) {
@@ -301,6 +450,9 @@ export default function IssuerInvestorSubscriptionReviewPage() {
       registration.registryOperationId,
       registration.txHash,
     );
+    // A successful confirm response means the backend has accepted the transaction hash,
+    // so the browser recovery pointer is no longer needed even if finalization is still pending.
+    issuerRegistryRecoveryStore.removeForUser(user, registryInterestUid, registration.txHash);
     const nextRegistration = { ...registration, ...(result || {}) };
     if (!isRegistryConfirmed(nextRegistration) && !result?.errorCode) {
       delete nextRegistration.errorCode;
@@ -310,14 +462,18 @@ export default function IssuerInvestorSubscriptionReviewPage() {
 
     if (isRegistryConfirmed(nextRegistration)) {
       stopRegistryPolling();
+      setRegistryConfirmationProgress({
+        txHash: nextRegistration.txHash,
+        current: REGISTRY_REQUIRED_CONFIRMATIONS,
+      });
       setRegistryMessage(REGISTRY_SUCCESS_MESSAGE);
       toast.success('Investor added to registry.');
       await loadData({ silent: true });
       return nextRegistration;
     }
 
-    setRegistryMessage('Registration is processing. This may take a few moments.');
-    startRegistryPolling(registryInterestUid);
+    setRegistryMessage(REGISTRY_PENDING_MESSAGE);
+    startRegistryPolling(registryInterestUid, nextRegistration);
     return nextRegistration;
   };
 
@@ -337,6 +493,7 @@ export default function IssuerInvestorSubscriptionReviewPage() {
     setRegistryActionLoading(true);
     setRegistryMessage('');
     let broadcastHash = '';
+    let recoveryStorageError = null;
     let preparedRegistration = registryRegistration;
     let replacementAllowed = canReplaceRegistryTransaction(preparedRegistration);
 
@@ -346,6 +503,13 @@ export default function IssuerInvestorSubscriptionReviewPage() {
       // A known recoverable hash must be checked again; never create another wallet transaction
       // while it is mining, confirming, or temporarily unverifiable.
       if (hasRegistryTransaction(preparedRegistration) && !replacementAllowed) {
+        const hasRequiredConfirmations = registryConfirmationProgress.txHash === preparedRegistration.txHash
+          && registryConfirmationsComplete;
+        if (!hasRequiredConfirmations) {
+          setRegistryMessage(REGISTRY_PENDING_MESSAGE);
+          startRegistryPolling(registryInterestUid, preparedRegistration);
+          return;
+        }
         await confirmRegistryTransaction(preparedRegistration);
         return;
       }
@@ -370,6 +534,13 @@ export default function IssuerInvestorSubscriptionReviewPage() {
       // If recovery already attached a recoverable transaction hash, verify that hash instead of
       // opening the wallet. A prior definitive 422 is the only case where replacement is allowed.
       if (hasRegistryTransaction(preparedRegistration) && !replacementAllowed) {
+        const hasRequiredConfirmations = registryConfirmationProgress.txHash === preparedRegistration.txHash
+          && registryConfirmationsComplete;
+        if (!hasRequiredConfirmations) {
+          setRegistryMessage(REGISTRY_PENDING_MESSAGE);
+          startRegistryPolling(registryInterestUid, preparedRegistration);
+          return;
+        }
         await confirmRegistryTransaction(preparedRegistration);
         return;
       }
@@ -410,12 +581,30 @@ export default function IssuerInvestorSubscriptionReviewPage() {
         status: 'PENDING',
       };
       setRegistryRegistration(submittedRegistration);
-      setRegistryMessage('Transaction submitted. Registration is being confirmed.');
+      setRegistryMessage(REGISTRY_PENDING_MESSAGE);
+
+      // Persist the signed transaction before the backend synchronization request. If the API is
+      // unavailable after MetaMask confirmation, a later login/reload can safely retry only the
+      // idempotent backend confirm call without asking the issuer to sign another transaction.
+      try {
+        issuerRegistryRecoveryStore.upsert({
+          user,
+          interestUid: registryInterestUid,
+          registryOperationId: submittedRegistration.registryOperationId,
+          txHash: submittedRegistration.txHash,
+          chainId: submittedRegistration.chainId,
+        });
+      } catch (storageError) {
+        recoveryStorageError = storageError;
+      }
 
       // Send the broadcast hash immediately. The backend safely keeps an unmined transaction pending.
       await confirmRegistryTransaction(submittedRegistration);
     } catch (error) {
       if (error?.response?.status === 422) {
+        if (broadcastHash) {
+          issuerRegistryRecoveryStore.removeForUser(user, registryInterestUid, broadcastHash);
+        }
         const errorCode = error?.response?.data?.error?.code || 'REGISTRATION_VERIFICATION_FAILED';
         setRegistryRegistration((current) => current ? { ...current, errorCode } : current);
         stopRegistryPolling();
@@ -426,9 +615,17 @@ export default function IssuerInvestorSubscriptionReviewPage() {
       }
 
       if (broadcastHash) {
-        setRegistryMessage('Transaction submitted. Registration is still processing.');
-        startRegistryPolling(registryInterestUid);
-        toast.info('Transaction submitted. You can check the registration status shortly.');
+        setRegistryMessage(REGISTRY_PENDING_MESSAGE);
+        startRegistryPolling(registryInterestUid, {
+          ...preparedRegistration,
+          txHash: broadcastHash,
+          status: 'PENDING',
+        });
+        if (recoveryStorageError) {
+          toast.warning('Transaction submitted, but browser recovery storage is unavailable. Keep this page open while registration finalizes.');
+        } else {
+          toast.info('Transaction submitted. Account synchronization will retry automatically if needed.');
+        }
         return;
       }
 
@@ -468,6 +665,8 @@ export default function IssuerInvestorSubscriptionReviewPage() {
   const canVerify = requestStatus === 'submitintrest';
   const currentMeta = statusMeta(effectiveStatus);
   const submissionNumber = request.submissionNumber || history?.timeline?.reduce((max, event) => Math.max(max, Number(event?.submissionNumber) || 0), 0) || null;
+  const registryTransactionPending = hasRegistryTransaction(registryRegistration)
+    && !canReplaceRegistryTransaction(registryRegistration);
 
   return (
     <div className="page-stack issuer-investor-review-page issuer-application-activity-page">
@@ -544,12 +743,13 @@ export default function IssuerInvestorSubscriptionReviewPage() {
                 </div>
               </div>
             ) : (
-              <>
+              <div className="issuer-registry-action">
                 <Button
                   type="button"
                   variant="primary"
                   icon={hasRegistryTransaction(registryRegistration) && !canReplaceRegistryTransaction(registryRegistration) ? RefreshCw : UserPlus}
                   loading={registryStatusLoading || registryActionLoading}
+                  disabled={registryTransactionPending && !registryConfirmationsComplete}
                   onClick={() => void handleRegistryAction()}
                 >
                   {canReplaceRegistryTransaction(registryRegistration)
@@ -558,12 +758,30 @@ export default function IssuerInvestorSubscriptionReviewPage() {
                       ? 'Check Status'
                       : 'Add to Registry'}
                 </Button>
+                {registryTransactionPending ? (
+                  <div className="issuer-registry-confirmation-progress">
+                    <div className="issuer-registry-confirmation-progress__label">
+                      <strong>{registryConfirmationPercentage}%</strong>
+                    </div>
+                    <div
+                      className="issuer-registry-confirmation-progress__track"
+                      role="progressbar"
+                      aria-label="Block confirmation progress"
+                      aria-valuemin={0}
+                      aria-valuemax={REGISTRY_REQUIRED_CONFIRMATIONS}
+                      aria-valuenow={registryConfirmationCount}
+                      aria-valuetext={`${registryConfirmationCount} of ${REGISTRY_REQUIRED_CONFIRMATIONS} confirmations, ${registryConfirmationPercentage}%`}
+                    >
+                      <span style={{ width: `${registryConfirmationPercentage}%` }} />
+                    </div>
+                  </div>
+                ) : null}
                 {registryMessage ? (
                   <span className="issuer-registry-action__message" role="status">
                     {registryMessage}
                   </span>
                 ) : null}
-              </>
+              </div>
             )}
           </div>
         ) : claimVerified ? (

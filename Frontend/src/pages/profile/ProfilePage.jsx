@@ -120,7 +120,7 @@ function MarketplaceEligibilityUploadCard({ tokenUid, options, identityDocuments
     const uploaded = await investorApi.uploadDocuments(documentTypeUid, [file], onUploadProgress, signal);
     const rows = Array.isArray(uploaded) ? uploaded : uploaded ? [uploaded] : [];
     const mapped = rows.map((document) => mapInvestorDocument(document, options));
-    if (!mapped.length) throw new Error('The upload completed but the backend returned no document record.');
+    if (!mapped.length) throw new Error('The upload completed, but no document record was returned. Please try again.');
     await onProfileRefresh?.();
     await loadEligibility();
     toast.success('Document uploaded. Marketplace eligibility has been refreshed.');
@@ -175,7 +175,7 @@ function MarketplaceEligibilityUploadCard({ tokenUid, options, identityDocuments
                       onChange={(next) => setTopicDocuments((current) => ({ ...current, [key]: next }))}
                       onUpload={uploadDocument}
                       onDelete={deleteDocument}
-                      selectionHint="Select a backend document type mapped to this required claim topic, then upload a PDF or supported image."
+                      selectionHint="Select a supported document type for this required claim topic, then upload a PDF or supported image."
                     />
                   ) : (
                     <div className="investor-profile-marketplace-topic__unavailable">No document type mapped to this claim topic was returned by the investor options API.</div>

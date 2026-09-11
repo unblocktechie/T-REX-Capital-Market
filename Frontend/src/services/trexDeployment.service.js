@@ -520,7 +520,7 @@ export async function deployTrexSuite({
     );
     if (approvedOnchainId.toLowerCase() !== issuerIdentityAddress.toLowerCase()) {
       throw new Error(
-        'The organization ONCHAINID returned by the backend does not match the Identity Factory record.',
+        'The organization ONCHAINID does not match the Identity Factory record.',
       );
     }
   }
@@ -739,7 +739,7 @@ export async function deployTrexSuite({
         });
       } catch (recoveryError) {
         const durableStorageError = new Error(
-          'Your token was created on Sepolia, but this browser could not save the confirmed transaction for session recovery. Keep this page open and retry the backend update before leaving.',
+          'Your token was created on Sepolia, but this browser could not save the confirmed transaction for session recovery. Keep this page open and retry synchronization before leaving.',
         );
         durableStorageError.code = 'DEPLOYMENT_RECOVERY_SAVE_FAILED';
         durableStorageError.cause = recoveryError;

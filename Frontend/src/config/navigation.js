@@ -1,4 +1,4 @@
-import { Building2, Coins, FileText, LayoutDashboard, Store, UsersRound } from 'lucide-react';
+import { Building2, Briefcase, Coins, FileText, LayoutDashboard, Mail, RefreshCcw, Store, Users, UsersRound, WalletCards } from 'lucide-react';
 import { PERMISSIONS, ROLES } from './permissions';
 import { ROUTES } from './routes';
 
@@ -40,6 +40,22 @@ export const navigationGroups = Object.freeze([
         roles: [ROLES.issuer],
       },
       {
+        label: 'Investors',
+        shortLabel: 'Investors',
+        to: ROUTES.issuerInvestorDirectory,
+        icon: Users,
+        permission: PERMISSIONS.dashboardView,
+        roles: [ROLES.issuer],
+      },
+      {
+        label: 'Redemptions',
+        shortLabel: 'Redemptions',
+        to: ROUTES.issuerRedemptions,
+        icon: RefreshCcw,
+        permission: PERMISSIONS.dashboardView,
+        roles: [ROLES.issuer],
+      },
+      {
         label: 'Market Place',
         shortLabel: 'Market Place',
         to: ROUTES.marketplace,
@@ -55,12 +71,36 @@ export const navigationGroups = Object.freeze([
         permission: PERMISSIONS.dashboardView,
         roles: [ROLES.investor],
       },
+      {
+        label: 'Invitations',
+        shortLabel: 'Invitations',
+        to: ROUTES.invitations,
+        icon: Mail,
+        permission: PERMISSIONS.dashboardView,
+        roles: [ROLES.investor],
+      },
+      {
+        label: 'Portfolio',
+        shortLabel: 'Portfolio',
+        to: ROUTES.portfolio,
+        icon: WalletCards,
+        permission: PERMISSIONS.dashboardView,
+        roles: [ROLES.investor],
+      },
+      {
+        label: 'Asset Management',
+        shortLabel: 'Assets',
+        to: ROUTES.assetManagement,
+        icon: Briefcase,
+        permission: PERMISSIONS.dashboardView,
+        roles: [ROLES.investor],
+      },
     ],
   },
 ]);
 
 export const routeMeta = Object.freeze({
-  [ROUTES.dashboard]: { title: 'Overview', description: 'Issuer launchpad dashboard' },
+  [ROUTES.dashboard]: { title: 'Overview', description: 'Issuer capital market dashboard' },
   [ROUTES.organization]: {
     title: 'Organization',
     description: 'Institutional KYB onboarding and verification',
@@ -77,8 +117,22 @@ export const routeMeta = Object.freeze({
     title: 'Manage Request',
     description: 'Review investor subscription requests',
   },
+  [ROUTES.issuerInvestorDirectory]: {
+    title: 'Investors',
+    description: 'Discover completed investor profiles and manage token invitations',
+  },
+  [ROUTES.invitations]: {
+    title: 'Invitations',
+    description: 'Review token invitations received from issuers',
+  },
+  [ROUTES.issuerRedemptions]: {
+    title: 'Redemptions',
+    description: 'Review investor redemption requests and complete required payments',
+  },
   [ROUTES.marketplace]: { title: 'Marketplace', description: 'Discover tokenized investment opportunities' },
   marketplaceToken: { title: 'Marketplace Asset', description: 'Review a compliant tokenized investment offering' },
   [ROUTES.applications]: { title: 'My Applications', description: 'Track your investment applications' },
+  [ROUTES.portfolio]: { title: 'Portfolio', description: 'View current compliant security token holdings' },
+  [ROUTES.assetManagement]: { title: 'Asset Management', description: 'Invest, send, and redeem registered ERC-3643 assets' },
   [ROUTES.profile]: { title: 'Profile', description: 'Personal account settings' },
 });

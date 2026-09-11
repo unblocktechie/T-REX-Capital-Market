@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { getTokenRecordSymbol, useMyToken } from '@/hooks/useMyToken';
 
 const labels = {
-  app: 'Launchpad',
+  app: 'Capital Market',
   dashboard: 'Overview',
   projects: 'Token projects',
   tokens: 'Tokens',
@@ -17,13 +17,17 @@ const labels = {
   identity: 'Identity registry',
   compliance: 'Compliance rules',
   investors: 'Manage Request',
+  'investor-directory': 'Investors',
+  invitations: 'Invitations',
   transactions: 'Transactions',
+  redemptions: 'Redemptions',
   'corporate-actions': 'Corporate actions',
   documents: 'Documents',
   reports: 'Reports',
   team: 'Team & access',
   marketplace: 'Marketplace',
   applications: 'My Applications',
+  'asset-management': 'Asset Management',
   'submit-claim': 'Submit Claim',
   profile: 'Profile',
   settings: 'Settings',
@@ -49,6 +53,7 @@ export function Breadcrumbs() {
     if (parts[index - 1] === 'marketplace') return 'Offering Details';
     if (parts[index - 1] === 'applications') return 'Application Details';
     if (parts[index - 1] === 'investors') return 'Subscription Details';
+    if (parts[index - 1] === 'redemptions') return 'Redemption Details';
     return labels[part] || part;
   };
   return (

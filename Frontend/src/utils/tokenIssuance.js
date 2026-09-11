@@ -123,7 +123,7 @@ export const validateIdentityClaims = (data) => {
   if (!hasEnabledClaim) {
     errors.claimTopics = 'Enable at least one claim topic before continuing.';
   } else if (enabledClaims.some((topic) => !topic.claimTopicUid)) {
-    errors.claimTopics = 'The selected claim is not available from the backend token options.';
+    errors.claimTopics = 'The selected claim is not available for this token.';
   }
   if (data.trustedIssuer.mode !== 'organization') {
     errors.trustedIssuer = 'Confirm that your organization will act as the trusted claim issuer.';

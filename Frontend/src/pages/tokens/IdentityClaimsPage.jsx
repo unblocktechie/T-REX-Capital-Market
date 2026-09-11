@@ -135,7 +135,7 @@ export default function IdentityClaimsPage() {
       <div className="identity-claims-simple-grid">
         <SectionCard
           title="Claim Topics"
-          description="Enable at least one identity requirement returned by the backend."
+          description="Enable at least one identity requirement available for this token."
           action={<StatusBadge status="pending">At least one required</StatusBadge>}
         >
           {visibleTopics.length ? (
@@ -156,7 +156,7 @@ export default function IdentityClaimsPage() {
                         <p>{topic.description}</p>
                         {unavailable ? (
                           <small className="claim-topic-card__unavailable">
-                            This claim topic is missing its backend identifier. Reload the page or
+                            This claim topic is missing required configuration. Reload the page or
                             contact an administrator.
                           </small>
                         ) : null}
@@ -176,7 +176,7 @@ export default function IdentityClaimsPage() {
             <div className="issuance-empty-inline" role="status">
               <BadgeCheck size={18} />
               <span>
-                No claim topics were returned by the backend. Reload the page or ask an
+                No claim topics are available for this token. Reload the page or ask an
                 administrator to configure token claim topics.
               </span>
             </div>

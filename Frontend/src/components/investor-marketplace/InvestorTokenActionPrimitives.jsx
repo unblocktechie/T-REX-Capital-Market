@@ -72,7 +72,7 @@ export function TokenActionUnavailable({ title, description, onBack, backLabel =
       <ShieldCheck size={30} />
       <h1>{title}</h1>
       <p>{description}</p>
-      <Button variant="secondary" icon={ArrowLeft} onClick={onBack}>{backLabel}</Button>
+      {onBack ? <Button variant="secondary" icon={ArrowLeft} onClick={onBack}>{backLabel}</Button> : null}
     </Card>
   );
 }

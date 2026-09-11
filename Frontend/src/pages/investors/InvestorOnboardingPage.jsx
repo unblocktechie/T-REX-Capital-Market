@@ -21,7 +21,7 @@ function InvestorOnboardingFlow() {
   useEffect(() => {
     if (isLoading) return;
     if (hydration.corrupted) {
-      toast.warning('A corrupted local investor cache was cleared. Backend-saved progress was preserved.');
+      toast.warning('A corrupted local investor cache was cleared. Your saved progress was preserved.');
     } else if (hydration.hasDraft && state.currentStep < 6) {
       toast.info('Saved investor onboarding progress restored and synchronized.');
     }
@@ -34,7 +34,7 @@ function InvestorOnboardingFlow() {
         compact
         eyebrow="Secure investor profile"
         title="Loading investor onboarding"
-        message="Synchronizing your latest KYC and accreditation progress with the T-REX backend…"
+        message="Synchronizing your latest KYC and accreditation progress…"
       />
     );
   }

@@ -349,7 +349,7 @@ export function InvestorOnboardingProvider({ children }) {
     const uploaded = await investorApi.uploadDocuments(documentTypeUid, [file], onUploadProgress, signal);
     const rows = Array.isArray(uploaded) ? uploaded : uploaded ? [uploaded] : [];
     const mapped = rows.map((document) => mapInvestorDocument(document, optionsRef.current));
-    if (!mapped.length) throw new Error('The upload completed but the backend returned no document record.');
+    if (!mapped.length) throw new Error('The upload completed, but no document record was returned. Please try again.');
     return mapped[0];
   }, []);
 
@@ -401,7 +401,7 @@ export function InvestorOnboardingProvider({ children }) {
     setState(fresh);
     setLastSavedSnapshot(serialize(fresh));
     setResetKey((current) => current + 1);
-    toast.success('Local investor form cache cleared. Backend-saved progress was not deleted.');
+    toast.success('Local investor form cache cleared. Your saved progress was not deleted.');
   }, [user]);
 
   const markSubmitted = useCallback((nextState) => {

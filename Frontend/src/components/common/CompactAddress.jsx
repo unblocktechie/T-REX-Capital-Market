@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Check, Copy } from 'lucide-react';
+import { Check, Copy, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/utils/cn';
 import { shortenWalletAddress } from '@/utils/wallet';
@@ -23,6 +23,8 @@ export function CompactAddress({
   leading = 5,
   trailing = 5,
   className,
+  href = '',
+  linkLabel = '',
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -54,14 +56,33 @@ export function CompactAddress({
     }
   };
 
+  const shortenedValue = shortenWalletAddress(value, leading, trailing);
+  const resolvedLinkLabel = linkLabel || `View ${label.toLowerCase()} on block explorer`;
+
   return (
-    <span className={cn('compact-address', className)}>
-      <span
-        className="compact-address__value"
-        aria-label={`${label}: ${value}`}
-      >
-        {shortenWalletAddress(value, leading, trailing)}
-      </span>
+    <span className={cn('compact-address', href && 'compact-address--linked', className)}>
+      {href ? (
+        <a
+          className="compact-address__value compact-address__value--link"
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`${resolvedLinkLabel}: ${value}`}
+          title={resolvedLinkLabel}
+        >
+          <span className="compact-address__text">{shortenedValue}</span>
+          <span className="compact-address__external" aria-hidden="true">
+            <ExternalLink size={14} strokeWidth={2} />
+          </span>
+        </a>
+      ) : (
+        <span
+          className="compact-address__value"
+          aria-label={`${label}: ${value}`}
+        >
+          {shortenedValue}
+        </span>
+      )}
       <button
         type="button"
         className="compact-address__copy"

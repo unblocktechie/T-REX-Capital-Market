@@ -27,9 +27,15 @@ const ResetPasswordPage = lazy(() => import('@/pages/auth/ResetPasswordPage'));
 const DashboardPage = lazy(() => import('@/pages/dashboard/DashboardPage'));
 const InvestorsRoutePage = lazy(() => import('@/pages/investors/InvestorsRoutePage'));
 const IssuerInvestorSubscriptionReviewPage = lazy(() => import('@/pages/issuer/IssuerInvestorSubscriptionReviewPage'));
+const IssuerInvestorDirectoryPage = lazy(() => import('@/pages/issuer/IssuerInvestorDirectoryPage'));
+const IssuerRedemptionsPage = lazy(() => import('@/pages/issuer/IssuerRedemptionsPage'));
+const IssuerRedemptionDetailPage = lazy(() => import('@/pages/issuer/IssuerRedemptionDetailPage'));
 const MarketplacePage = lazy(() => import('@/pages/investor-portal/MarketplacePage'));
+const InvitationsPage = lazy(() => import('@/pages/investor-portal/InvitationsPage'));
 const MarketplaceTokenDetailsPage = lazy(() => import('@/pages/investor-portal/MarketplaceTokenDetailsPage'));
 const MyApplicationsPage = lazy(() => import('@/pages/investor-portal/MyApplicationsPage'));
+const PortfolioPage = lazy(() => import('@/pages/investor-portal/PortfolioPage'));
+const AssetManagementPage = lazy(() => import('@/pages/investor-portal/AssetManagementPage'));
 const ApplicationDetailsPage = lazy(() => import('@/pages/investor-portal/ApplicationDetailsPage'));
 const PurchaseTokenPage = lazy(() => import('@/pages/investor-portal/PurchaseTokenPage'));
 const SendTokenPage = lazy(() => import('@/pages/investor-portal/SendTokenPage'));
@@ -168,6 +174,9 @@ export const router = createBrowserRouter([
                   { path: 'tokens/:tokenAddress/success', element: withSuspense(<DeploymentSuccessPage />) },
                   { path: 'tokens/:tokenAddress', element: withSuspense(<TokenDetailsPage />) },
                   { path: 'investors/:requestId', element: withSuspense(<IssuerInvestorSubscriptionReviewPage />) },
+                  { path: 'investor-directory', element: withSuspense(<IssuerInvestorDirectoryPage />) },
+                  { path: 'redemptions', element: withSuspense(<IssuerRedemptionsPage />) },
+                  { path: 'redemptions/:redemptionUid', element: withSuspense(<IssuerRedemptionDetailPage />) },
                 ],
               },
               {
@@ -175,7 +184,10 @@ export const router = createBrowserRouter([
                 children: [
                   { path: 'marketplace', element: withSuspense(<MarketplacePage />) },
                   { path: 'marketplace/:tokenId', element: withSuspense(<MarketplaceTokenDetailsPage />) },
+                  { path: 'invitations', element: withSuspense(<InvitationsPage />) },
                   { path: 'applications', element: withSuspense(<MyApplicationsPage />) },
+                  { path: 'portfolio', element: withSuspense(<PortfolioPage />) },
+                  { path: 'asset-management', element: withSuspense(<AssetManagementPage />) },
                   { path: 'applications/:interestUid', element: withSuspense(<ApplicationDetailsPage />) },
                   { path: 'applications/:interestUid/submit-claim', element: withSuspense(<SubmitClaimPage />) },
                   { path: 'applications/:interestUid/purchase', element: withSuspense(<PurchaseTokenPage />) },

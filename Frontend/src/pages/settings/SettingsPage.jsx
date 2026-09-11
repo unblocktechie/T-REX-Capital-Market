@@ -41,7 +41,7 @@ export default function SettingsPage() {
           <Setting
             icon={MonitorCheck}
             title="Interface style"
-            text="The launchpad uses a fixed white workspace for consistent readability."
+            text="T-REX Capital Market uses a fixed white workspace for consistent readability."
           >
             <span className="settings-value">Light</span>
           </Setting>

@@ -31,7 +31,7 @@ export default function MockOrganizationAdminPage() {
   return (
     <div className="org-mock-admin-page">
       <header className="org-page-header">
-        <div><span className="eyebrow">Development only</span><h1>Organization Mock Admin</h1><p>Simulate the local compliance workflow without creating backend or admin API dependencies.</p></div>
+        <div><span className="eyebrow">Development only</span><h1>Organization Mock Admin</h1><p>Simulate the local compliance workflow without creating external service or admin API dependencies.</p></div>
       </header>
       <Card className="org-mock-admin-card">
         <div className="org-mock-admin-card__status">

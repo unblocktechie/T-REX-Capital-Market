@@ -83,7 +83,7 @@ export function useTokenIssuanceBootstrap() {
         loading: false,
         error: getTokenApiErrorMessage(
           query.error,
-          'The token form could not be loaded from the backend.',
+          'The token form could not be loaded. Please try again.',
         ),
       });
       return;

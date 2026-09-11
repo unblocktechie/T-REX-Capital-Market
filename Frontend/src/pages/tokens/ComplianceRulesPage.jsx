@@ -305,7 +305,7 @@ export default function ComplianceRulesPage() {
               value={selectedCountry}
               options={availableCountries}
               placeholder={backend.countryOptions.length ? 'Select a country…' : 'Loading countries…'}
-              hint="Countries are loaded from the backend and saved by their unique identifier."
+              hint="Countries are loaded from the supported country list and saved securely."
               searchable
               showEmptyOption
               disabled={!backend.countryOptions.length || backend.isLocked}

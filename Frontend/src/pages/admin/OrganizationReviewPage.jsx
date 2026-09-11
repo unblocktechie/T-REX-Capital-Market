@@ -38,6 +38,7 @@ import { Modal } from '@/components/ui/Modal';
 import { ROUTES } from '@/config/routes';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { formatAdminDate, formatAdminDateTime, formatFileSize } from '@/utils/adminFormat';
+import { sanitizeUserFacingMessage } from '@/utils/error';
 
 export default function OrganizationReviewPage() {
   const { organizationId } = useParams();
@@ -66,23 +67,23 @@ export default function OrganizationReviewPage() {
   const approveMutation = useMutation({
     mutationFn: () => adminApi.approveOrganization(organizationId),
     onSuccess: async () => {
-      toast.success('Organization approved', { description: 'The backend status is now approved.' });
+      toast.success('Organization approved', { description: 'The organization status is now approved.' });
       setApproveOpen(false);
       setDecisionSuccess(true);
       window.setTimeout(() => setDecisionSuccess(false), 1800);
       await refresh();
     },
-    onError: (error) => toast.error('Approval failed', { description: error.message }),
+    onError: (error) => toast.error('Approval failed', { description: sanitizeUserFacingMessage(error.message) }),
   });
 
   const rejectMutation = useMutation({
     mutationFn: (payload) => adminApi.rejectOrganization(organizationId, payload),
     onSuccess: async () => {
-      toast.success('Organization rejected', { description: 'The rejection reason was saved by the backend.' });
+      toast.success('Organization rejected', { description: 'The rejection reason was saved successfully.' });
       setRejectOpen(false);
       await refresh();
     },
-    onError: (error) => toast.error('Rejection failed', { description: error.message }),
+    onError: (error) => toast.error('Rejection failed', { description: sanitizeUserFacingMessage(error.message) }),
   });
 
   if (organizationQuery.isLoading) return <DetailPageSkeleton />;
@@ -92,7 +93,7 @@ export default function OrganizationReviewPage() {
         <div>
           <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-rose-50 text-rose-600"><ShieldAlert className="size-6" /></span>
           <h2 className="mt-4 mb-2 text-xl font-semibold">Organization unavailable</h2>
-          <p className="m-0 text-sm text-slate-500">{organizationQuery.error?.message || 'This organization could not be loaded.'}</p>
+          <p className="m-0 text-sm text-slate-500">{sanitizeUserFacingMessage(organizationQuery.error?.message) || 'This organization could not be loaded.'}</p>
           <button type="button" onClick={() => navigate(ROUTES.adminReviewQueue)} className="mt-5 min-h-11 rounded-xl bg-slate-950 px-5 text-sm font-semibold text-white">Return to review queue</button>
         </div>
       </div>
@@ -162,11 +163,11 @@ export default function OrganizationReviewPage() {
                   <DocumentMetadataCard key={document.id} document={document} onPreview={() => setSelectedDocument(document)} />
                 ))}
               </div>
-            ) : <EmptySection text="No organization documents were returned by the backend." />}
+            ) : <EmptySection text="No organization documents are available for this review." />}
           </AdminPanel>
 
           <AdminPanel title="Beneficial owners" description="Ownership records included in the complete organization response.">
-            {owners.length ? <div className="space-y-3">{owners.map((owner, index) => <OwnerCard key={owner.id || `${owner.name}-${index}`} owner={owner} />)}</div> : <EmptySection text="No beneficial owners were returned by the backend." />}
+            {owners.length ? <div className="space-y-3">{owners.map((owner, index) => <OwnerCard key={owner.id || `${owner.name}-${index}`} owner={owner} />)}</div> : <EmptySection text="No beneficial owners are available for this review." />}
           </AdminPanel>
 
           <AdminPanel title="Organization wallet" description="Wallet address submitted with the organization application.">
@@ -229,7 +230,7 @@ export default function OrganizationReviewPage() {
 
         <aside className="min-w-0">
           <div className="space-y-4 2xl:sticky 2xl:top-[100px]">
-            <AdminPanel title="Admin decision" description="Only supported backend decision actions are shown." bodyClassName="p-4 sm:p-5">
+            <AdminPanel title="Admin decision" description="Only available decision actions are shown." bodyClassName="p-4 sm:p-5">
               <div className="space-y-3">
                 <DecisionDetail label="Current status" value={<AdminStatusBadge status={organization.status} compact />} />
                 <DecisionDetail label="Submitted" value={formatAdminDateTime(organization.submittedAt)} />
@@ -344,7 +345,7 @@ function DocumentPreviewModal({ organizationId, document, onClose }) {
       anchor.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (error) {
-      toast.error('Document download failed', { description: error.message });
+      toast.error('Document download failed', { description: sanitizeUserFacingMessage(error.message) });
     } finally {
       setDownloading(false);
     }
@@ -404,7 +405,7 @@ function DocumentPreviewModal({ organizationId, document, onClose }) {
               <div>
                 <FileText className="mx-auto size-10 text-slate-400" />
                 <h3 className="mt-4 mb-1 text-base font-semibold text-slate-950">Document preview unavailable</h3>
-                <p className="m-0 max-w-md text-sm leading-6 text-slate-500">{previewQuery.error?.message || 'The backend could not return this document for inline review.'}</p>
+                <p className="m-0 max-w-md text-sm leading-6 text-slate-500">{sanitizeUserFacingMessage(previewQuery.error?.message) || 'This document could not be opened for inline review.'}</p>
                 <button type="button" onClick={() => previewQuery.refetch()} className="mt-4 min-h-10 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700">Try again</button>
               </div>
             </div>

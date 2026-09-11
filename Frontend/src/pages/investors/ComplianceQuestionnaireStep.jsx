@@ -112,7 +112,7 @@ export default function ComplianceQuestionnaireStep() {
     <InvestorLayout
       title="Compliance Questionnaire"
       description="Provide investment background and accreditation information required for investor onboarding."
-      side={<InvestorSecurityCard title="Backend-validated compliance" description="The available values come from the investor options endpoint, and completed answers are validated again by the authenticated backend before review." />}
+      side={<InvestorSecurityCard title="Validated compliance" description="The available values come from your investor options, and completed answers are validated again securely before review." />}
     >
       <form id="investor-compliance-form" onSubmit={continueFlow} noValidate>
         <InvestorFormCard title="A. Source of Wealth" description="Tell us about the primary source and estimated scale of your wealth.">
@@ -145,7 +145,7 @@ export default function ComplianceQuestionnaireStep() {
               />
             </div>
             {previousRwaExperience === 'yes' ? (
-              <TextareaField className="org-field--wide" label="Describe your previous RWA experience (optional)" maxLength={600} hint="This optional note is retained in the frontend draft because it is not part of the supplied backend compliance payload." error={errors.rwaExperienceDescription?.message} {...form.register('rwaExperienceDescription')} />
+              <TextareaField className="org-field--wide" label="Describe your previous RWA experience (optional)" maxLength={600} hint="This optional note is retained in your local draft because it is not part of the submitted compliance information." error={errors.rwaExperienceDescription?.message} {...form.register('rwaExperienceDescription')} />
             ) : null}
           </div>
         </InvestorFormCard>
@@ -164,7 +164,7 @@ export default function ComplianceQuestionnaireStep() {
         </InvestorFormCard>
 
         <InvestorFormCard title="D. Accreditation Status" description="Select the accreditation category that applies to this investor profile." className="investor-form-card--spaced">
-          <div className="investor-info-banner"><Info size={19} /><p>The available accreditation categories are loaded from the backend investor options endpoint and validated again when this step is saved.</p></div>
+          <div className="investor-info-banner"><Info size={19} /><p>The available accreditation categories are loaded from your investor options and validated again when this step is saved.</p></div>
           <Controller
             name="accreditationType"
             control={form.control}

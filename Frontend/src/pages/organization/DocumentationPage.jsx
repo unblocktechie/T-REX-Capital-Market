@@ -89,7 +89,7 @@ export default function DocumentationPage() {
         setProgress(Math.max(1, Math.round((event.loaded / event.total) * 100)));
       });
       uploadedDocument = uploaded[0];
-      if (!uploadedDocument) throw new Error('The backend did not return the uploaded document.');
+      if (!uploadedDocument) throw new Error('The upload completed, but the document record was not returned. Please try again.');
 
       if (replacing) {
         try {
@@ -260,7 +260,7 @@ export default function DocumentationPage() {
           </div>
         }
       >
-        <p>The file will be permanently removed from the organization’s backend document vault.</p>
+        <p>The file will be permanently removed from the organization’s secure document storage.</p>
       </Modal>
     </OrganizationPageLayout>
   );

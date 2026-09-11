@@ -33,7 +33,7 @@ export default function AdminDashboardPage() {
         <AdminMetricCard title="Submitted Reviews" value={stats.pending || stats.submitted || 0} subtitle="Waiting for a decision" icon={Clock3} tone="amber" />
         <AdminMetricCard title="Approved" value={stats.approved || stats.approvedToday || 0} subtitle="Approved organizations" icon={CheckCircle2} tone="emerald" delay={0.04} />
         <AdminMetricCard title="Rejected" value={stats.rejected || stats.rejectedToday || 0} subtitle="Rejected applications" icon={XCircle} tone="rose" delay={0.08} />
-        <AdminMetricCard title="Total Organizations" value={stats.total || 0} subtitle="All backend records" icon={Building2} tone="blue" delay={0.12} />
+        <AdminMetricCard title="Total Organizations" value={stats.total || 0} subtitle="All organization records" icon={Building2} tone="blue" delay={0.12} />
       </div>
 
       <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.75fr)]">
@@ -50,7 +50,7 @@ export default function AdminDashboardPage() {
         </AdminPanel>
       </div>
 
-      <AdminPanel title="Recent application activity" description="Events derived from submitted organizations returned by the backend.">
+      <AdminPanel title="Recent application activity" description="Recent events from submitted organizations.">
         {overview.isLoading ? <div className="h-52 animate-pulse rounded-2xl bg-slate-100" /> : data?.activity?.length ? <AdminActivityTimeline items={data.activity} /> : <div className="grid min-h-36 place-items-center text-sm text-slate-500">No recent application activity.</div>}
       </AdminPanel>
     </div>

@@ -47,7 +47,7 @@ export default function LoginPage() {
       if (recoverableDeployment) {
         toast.success('Welcome back — resuming your deployment', {
           description:
-            'Your blockchain transaction was recovered. The backend will resume its independent Sepolia verification; MetaMask will not open again.',
+            'Your blockchain transaction was recovered. Secure Sepolia verification will resume automatically; MetaMask will not open again.',
         });
         navigate(ROUTES.tokenDeploying, { replace: true });
         return;
@@ -56,7 +56,7 @@ export default function LoginPage() {
       if (pendingDeploymentService.belongsToAnotherUser(session?.user)) {
         toast.warning('A pending deployment belongs to a different account', {
           description:
-            'Sign in with the issuer account that created the blockchain transaction to complete the backend update.',
+            'Sign in with the issuer account that created the blockchain transaction to complete synchronization.',
         });
       } else {
         toast.success('Welcome back.');
@@ -99,7 +99,7 @@ export default function LoginPage() {
       {sessionExpired ? (
         <div className="mb-4 rounded-xl border border-[color-mix(in_srgb,var(--warning-500)_30%,transparent)] bg-[color-mix(in_srgb,var(--warning-500)_9%,transparent)] px-3.5 py-3 text-[13px] leading-5 text-[#a5670a]">
           {pendingDeployment
-            ? 'Your session expired after the wallet transaction. Its hash is safely stored in this browser. Sign in with the same issuer account so the backend can resume verification without another wallet transaction.'
+            ? 'Your session expired after the wallet transaction. Its hash is safely stored in this browser. Sign in with the same issuer account so verification can resume without another wallet transaction.'
             : 'Your session expired. Sign in again to continue.'}
         </div>
       ) : null}

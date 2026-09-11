@@ -41,13 +41,14 @@ export function MarketplaceDropdown({
     const viewportHeight = window.innerHeight;
     const edge = 12;
     const gap = 6;
-    const estimatedMenuHeight = Math.min(Math.max(options.length * 54 + 12, 120), 320);
+    const estimatedMenuHeight = Math.min(Math.max(options.length * 54 + 12, 120), 420);
     const spaceBelow = viewportHeight - rect.bottom - edge;
     const spaceAbove = rect.top - edge;
     const openUpward = spaceBelow < Math.min(estimatedMenuHeight, 240) && spaceAbove > spaceBelow;
     const availableHeight = Math.max(120, (openUpward ? spaceAbove : spaceBelow) - gap);
-    const width = Math.min(rect.width, viewportWidth - edge * 2);
-    const left = Math.min(Math.max(rect.left, edge), Math.max(edge, viewportWidth - width - edge));
+    const width = Math.min(Math.max(rect.width, 285), viewportWidth - edge * 2);
+    const preferredLeft = align === 'end' ? rect.right - width : rect.left;
+    const left = Math.min(Math.max(preferredLeft, edge), Math.max(edge, viewportWidth - width - edge));
 
     setPortalStyle({
       position: 'fixed',
@@ -56,11 +57,11 @@ export function MarketplaceDropdown({
       width: `${width}px`,
       minWidth: `${width}px`,
       maxWidth: `${width}px`,
-      maxHeight: `${Math.min(320, availableHeight)}px`,
+      maxHeight: `${Math.min(420, availableHeight)}px`,
       top: openUpward ? 'auto' : `${rect.bottom + gap}px`,
       bottom: openUpward ? `${viewportHeight - rect.top + gap}px` : 'auto',
     });
-  }, [options.length, portal]);
+  }, [align, options.length, portal]);
 
   useEffect(() => {
     if (!open) return undefined;

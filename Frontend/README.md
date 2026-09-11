@@ -103,3 +103,9 @@ Token wizard values are kept only in memory while the current page session is ac
 ## MetaMask deployment transport
 
 Desktop MetaMask deployment uses the injected browser-extension provider. Public Sepolia reads and transaction confirmation use the configured RPC, while only signed writes use the wallet provider. See `docs/METAMASK_TRANSPORT_TIMEOUT_FIX.md`.
+
+## Investor dashboard live API
+
+The Investor Dashboard now uses the authenticated investor profile, investment interests, invitation inbox, and deployed-token catalogue APIs instead of hardcoded dashboard records. Counts, statuses, recent rows, registered-asset state, profile/ONCHAINID details, and marketplace previews all come from current backend responses. Partial API failures preserve successfully loaded sections and expose a retry action.
+
+See [`docs/INVESTOR_DASHBOARD_LIVE_API.md`](docs/INVESTOR_DASHBOARD_LIVE_API.md) for the exact dashboard data sources and state mapping.

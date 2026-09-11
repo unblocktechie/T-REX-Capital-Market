@@ -96,7 +96,7 @@ export default function DeploymentSuccessPage() {
         <h1>Deployment Successful</h1>
         <p>
           <strong>{tokenName} ({symbol})</strong> was deployed through the T-REX Gateway on
-          {` ${network}`}. The confirmed transaction hash has been accepted by the backend.
+          {` ${network}`}. The confirmed transaction hash has been recorded successfully.
         </p>
 
         <div className="deployment-complete-card__records deployment-complete-card__records--single">
@@ -141,8 +141,8 @@ export default function DeploymentSuccessPage() {
         <div>
           <strong>What happens next?</strong>
           <p>
-            Open the token dashboard to review the token and the deployment information stored by
-            the backend from this confirmed transaction.
+            Open the token dashboard to review the token and the deployment information saved from
+            this confirmed transaction.
           </p>
         </div>
       </section>

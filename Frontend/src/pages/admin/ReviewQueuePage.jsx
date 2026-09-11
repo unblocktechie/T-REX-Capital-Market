@@ -93,7 +93,7 @@ export default function ReviewQueuePage() {
 
       <AdminPanel
         title="Organization applications"
-        description={`${organizations.data?.meta?.total || 0} organizations match the selected backend status.`}
+        description={`${organizations.data?.meta?.total || 0} organizations match the selected status.`}
         action={<span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600"><UsersRound className="size-3.5" />Secure review queue</span>}
         bodyClassName="p-3 sm:p-4"
       >

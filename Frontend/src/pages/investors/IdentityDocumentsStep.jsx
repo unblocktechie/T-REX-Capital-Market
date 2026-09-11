@@ -61,7 +61,7 @@ export default function IdentityDocumentsStep() {
     <InvestorLayout
       title="Identity Documents"
       description="Upload one or more clear government-issued identity documents. At least one valid document is required to continue."
-      side={<InvestorSecurityCard title="Document privacy" description="Files are uploaded directly to the authenticated investor document endpoint. Only backend document metadata is kept in the form state, and review downloads are requested securely when needed." />}
+      side={<InvestorSecurityCard title="Document privacy" description="Files are uploaded securely to your investor account. Only document metadata is kept in the form state, and review downloads are requested securely when needed." />}
     >
       <InvestorFormCard className="investor-form-card--spaced">
         <TypedDocumentUploader

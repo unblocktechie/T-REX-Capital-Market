@@ -121,8 +121,8 @@ export default function TokenIssuanceOverviewPage() {
               <span className="eyebrow">Deployment Roadmap</span>
               <h2>Five focused stages from setup to deployment</h2>
               <p>
-                Each completed step is saved to the backend, so the server remains the only source
-                of truth as you move through the wizard.
+                Each completed step is saved securely to your account, so your token configuration stays
+                consistent as you move through the wizard.
               </p>
             </div>
           </div>

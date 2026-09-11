@@ -1,9 +1,12 @@
 import {
+  createPublicClient,
   createWalletClient,
   custom,
   getAddress,
+  http,
   isAddress,
 } from 'viem';
+import { env } from '@/config/env';
 import { web3Config } from '@/config/web3';
 
 const IDENTITY_REGISTRY_ABI = [
@@ -41,6 +44,84 @@ const parseChainId = (value) => {
   }
   return Number(value);
 };
+
+const publicClients = new Map();
+
+const publicClientFor = (chainIdValue) => {
+  const chainId = parseChainId(chainIdValue);
+  const chain = web3Config.supportedChains.find((item) => item.id === chainId);
+  if (!chain) {
+    throw new Error('This registration uses a network that is not available in the application.');
+  }
+
+  if (!publicClients.has(chain.id)) {
+    publicClients.set(
+      chain.id,
+      createPublicClient({
+        chain,
+        transport: http(env.web3.rpcUrl),
+      }),
+    );
+  }
+
+  return publicClients.get(chain.id);
+};
+
+const isTransactionHash = (value) => /^0x[0-9a-f]{64}$/i.test(String(value || '').trim());
+
+export async function getIssuerRegistryTransactionConfirmationProgress({
+  chainId,
+  txHash,
+  requiredConfirmations = 12,
+}) {
+  const normalizedHash = String(txHash || '').trim();
+  if (!isTransactionHash(normalizedHash)) {
+    throw new Error('The registration transaction hash is unavailable. Refresh and try again.');
+  }
+
+  const required = Number(requiredConfirmations);
+  if (!Number.isSafeInteger(required) || required <= 0) {
+    throw new Error('The required confirmation count is invalid.');
+  }
+
+  const publicClient = publicClientFor(chainId);
+
+  let receipt;
+  try {
+    receipt = await publicClient.getTransactionReceipt({ hash: normalizedHash });
+  } catch (error) {
+    // A transaction that has not been mined yet has zero confirmations. Keep RPC/network
+    // failures retryable so the caller can preserve the last known progress instead.
+    if (error?.name === 'TransactionReceiptNotFoundError') {
+      return { current: 0, required, percentage: 0, receiptFound: false };
+    }
+    throw error;
+  }
+
+  const latestBlockNumber = await publicClient.getBlockNumber();
+  const receiptBlockNumber = receipt?.blockNumber;
+  if (typeof receiptBlockNumber !== 'bigint') {
+    return { current: 0, required, percentage: 0, receiptFound: false };
+  }
+
+  const observedConfirmations = latestBlockNumber >= receiptBlockNumber
+    ? latestBlockNumber - receiptBlockNumber + 1n
+    : 0n;
+  const cappedConfirmations = observedConfirmations > BigInt(required)
+    ? BigInt(required)
+    : observedConfirmations;
+  const current = Number(cappedConfirmations);
+
+  return {
+    current,
+    required,
+    percentage: Math.round((current / required) * 100),
+    receiptFound: true,
+    receiptStatus: receipt?.status,
+    receiptBlockNumber,
+    latestBlockNumber,
+  };
+}
 
 const requiredAddress = (value, label) => {
   const normalized = String(value || '').trim();

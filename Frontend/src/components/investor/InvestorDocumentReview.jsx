@@ -41,7 +41,7 @@ function InvestorDocumentPreviewModal({ document, onClose, downloadDocument }) {
     const documentUid = document?.documentUid || document?.id;
     if (!documentUid || !downloadDocument) {
       setLoadingSource(false);
-      setLoadError('This document does not have a backend preview reference.');
+      setLoadError('A secure preview is not available for this document.');
       return () => { active = false; };
     }
 

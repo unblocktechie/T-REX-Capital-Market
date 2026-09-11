@@ -295,7 +295,7 @@ export function ApplicationHistory({
   currentStatus = '',
   supportContext = {},
   emptyTitle = 'No application history yet',
-  emptyDescription = 'Activity for this application will appear here when it is recorded by the backend.',
+  emptyDescription = 'Activity for this application will appear here as it is recorded.',
 }) {
   const events = useMemo(
     () => [...(timeline || [])].sort((a, b) => {

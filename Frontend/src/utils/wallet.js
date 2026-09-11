@@ -1,4 +1,5 @@
 import { formatUnits } from 'viem';
+import { sanitizeUserFacingMessage } from '@/utils/error';
 
 export const shortenWalletAddress = (address, leading = 5, trailing = 5) => {
   if (!address) return '';
@@ -48,5 +49,5 @@ export const getWalletErrorMessage = (error, fallback = 'Wallet request could no
     return 'This wallet network is not supported. Please switch the network and try again.';
   }
 
-  return message.replace(/\s*Version:\s*@?wagmi\/core@[^\s]+.*$/i, '').trim() || fallback;
+  return sanitizeUserFacingMessage(message.replace(/\s*Version:\s*@?wagmi\/core@[^\s]+.*$/i, '').trim() || fallback);
 };

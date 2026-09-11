@@ -173,7 +173,7 @@ export default function ReviewSubmitStep() {
         <div><strong>Need compliance assistance?</strong><p>Contact the compliance desk for help understanding an onboarding field.</p><Button variant="ghost" size="sm" onClick={() => toast.info('Please contact your configured compliance support channel.')}>Contact Compliance Desk</Button></div>
       </Card>
 
-      <div className="investor-encryption-note"><LockKeyhole size={18} /><p><strong>Protected API access</strong><span>Investor records and documents are accessed through authenticated backend requests.</span></p></div>
+      <div className="investor-encryption-note"><LockKeyhole size={18} /><p><strong>Protected API access</strong><span>Investor records and documents are accessed through secure authenticated requests.</span></p></div>
     </aside>
   );
 

@@ -1,133 +1,164 @@
-import { apiClient } from '@/api/axios';
-import { env } from '@/config/env';
+import { investmentApi } from '@/api/investments';
+import {
+  extractInvitationList,
+  mapInvestorInvitation,
+  mapIssuerInvestor,
+  normalizeInvitationMeta,
+} from '@/api/investments/invitation.mapper';
+import {
+  extractList,
+  mapInterest,
+  mapIssuerInterest,
+  mapMarketplaceToken,
+} from '@/api/investments/investment.mapper';
 
-const wait = (ms = 500) => new Promise((resolve) => setTimeout(resolve, ms));
+const settledValue = (result, fallback) =>
+  result?.status === 'fulfilled' ? result.value : fallback;
 
-const mockDashboard = {
-  metrics: [
-    {
-      label: 'Token projects',
-      value: 6,
-      change: 2,
-      format: 'number',
-      helper: '3 active · 2 draft',
-    },
-    {
-      label: 'Deployed tokens',
-      value: 3,
-      change: 1,
-      format: 'number',
-      helper: 'Across 2 networks',
-    },
-    {
-      label: 'Verified investors',
-      value: 248,
-      change: 18,
-      format: 'number',
-      helper: '92% approval rate',
-    },
-    {
-      label: 'Assets tokenized',
-      value: 42800000,
-      change: 12.4,
-      format: 'currency',
-      helper: 'Total issued value',
-    },
-  ],
-  projects: [
-    {
-      id: 'prj-1',
-      name: 'Greenfield Income Fund I',
-      symbol: 'GIF1',
-      asset: 'Private fund',
-      stage: 'Compliance setup',
-      progress: 72,
-      status: 'In progress',
-    },
-    {
-      id: 'prj-2',
-      name: 'Riverside Commercial SPV',
-      symbol: 'RCS',
-      asset: 'Real estate',
-      stage: 'Ready to deploy',
-      progress: 100,
-      status: 'Ready',
-    },
-    {
-      id: 'prj-3',
-      name: 'Atlas Growth Shares',
-      symbol: 'AGS',
-      asset: 'Startup equity',
-      stage: 'Asset details',
-      progress: 38,
-      status: 'Draft',
-    },
-  ],
-  activity: [
-    {
-      id: 1,
-      title: 'Investor identity verified',
-      meta: '0x7a42…2F91 · 8 minutes ago',
-      type: 'success',
-    },
-    {
-      id: 2,
-      title: 'Compliance rule updated',
-      meta: 'Greenfield Income Fund I · 34 minutes ago',
-      type: 'info',
-    },
-    {
-      id: 3,
-      title: 'Claim requires review',
-      meta: 'Accreditation claim · 1 hour ago',
-      type: 'warning',
-    },
-    {
-      id: 4,
-      title: 'Token transfer completed',
-      meta: 'RCS · 1,250 tokens · 3 hours ago',
-      type: 'neutral',
-    },
-  ],
-};
-
-
-const emptyDashboard = {
-  metrics: mockDashboard.metrics.map((metric) => ({
-    ...metric,
-    value: 0,
-    change: 0,
-    helper: 'No dashboard data available yet',
-  })),
-  projects: [],
-  activity: [],
-};
-
-const normalizeDashboard = (payload) => ({
-  metrics: Array.isArray(payload?.metrics) ? payload.metrics : emptyDashboard.metrics,
-  projects: Array.isArray(payload?.projects) ? payload.projects : [],
-  activity: Array.isArray(payload?.activity) ? payload.activity : [],
-});
-
-export const dashboardApi = {
-  async getOverview() {
-    if (env.features.mockApi) {
-      await wait();
-      return mockDashboard;
-    }
-
-    try {
-      const response = await apiClient.get('/dashboard/overview', {
-        skipGlobalLoader: true,
-      });
-      return normalizeDashboard(response.data?.data ?? response.data);
-    } catch (error) {
-      if (error?.response?.status === 404) {
-        // The current backend does not expose this optional aggregate endpoint yet. Resolve with
-        // a safe empty dashboard so login does not surface a technical route-not-found toast.
-        return emptyDashboard;
+const sectionError = (section, result) =>
+  result?.status === 'rejected'
+    ? {
+        section,
+        status: result.reason?.response?.status || null,
+        message: result.reason?.message || `Unable to load ${section}.`,
       }
-      throw error;
-    }
-  },
+    : null;
+
+const normalizeMeta = (meta = {}, { page = 1, limit = 4, itemCount = 0 } = {}) => {
+  const source = meta?.pagination && typeof meta.pagination === 'object' ? meta.pagination : meta;
+  const safePage = Math.max(1, Number(source?.page ?? source?.currentPage ?? page) || 1);
+  const safeLimit = Math.max(1, Number(source?.limit ?? source?.pageSize ?? source?.perPage ?? limit) || limit);
+  const total = Math.max(0, Number(source?.total ?? source?.totalItems ?? source?.count ?? itemCount) || 0);
+  const totalPages = Math.max(1, Number(source?.totalPages ?? source?.pages ?? Math.ceil(total / safeLimit)) || 1);
+  return { page: Math.min(safePage, totalPages), limit: safeLimit, total, totalPages };
 };
+
+/**
+ * Builds role dashboards from the backend APIs that already exist in the app.
+ * No dashboard figures are fabricated: totals, rows, statuses and timestamps
+ * come from the authenticated investment/invitation/catalogue endpoints.
+ */
+export const dashboardApi = Object.freeze({
+  async getIssuerOverview({ tokenUid = '', includeInvestors = false, signal } = {}) {
+    const requestsPromise = investmentApi.listIssuerInterests({ status: 'all' });
+    const redemptionsPromise = investmentApi.listIssuerRedemptions({ signal });
+    const investorsPromise = includeInvestors && tokenUid
+      ? investmentApi.listIssuerInvestors({
+          tokenUid,
+          page: 1,
+          limit: 5,
+          search: '',
+          invitationStatus: 'all',
+          signal,
+        })
+      : Promise.resolve({ data: [], meta: { page: 1, limit: 5, total: 0, totalPages: 1 } });
+
+    const [requestsResult, redemptionsResult, investorsResult] = await Promise.allSettled([
+      requestsPromise,
+      redemptionsPromise,
+      investorsPromise,
+    ]);
+
+    const rawRequests = settledValue(requestsResult, []);
+    const requests = extractList(rawRequests).map(mapIssuerInterest);
+
+    const redemptionsResponse = settledValue(redemptionsResult, { data: [], meta: {} });
+    const redemptions = Array.isArray(redemptionsResponse?.data) ? redemptionsResponse.data : [];
+
+    const investorsResponse = settledValue(investorsResult, { data: [], meta: {} });
+    const investors = extractInvitationList(investorsResponse?.data).map(mapIssuerInvestor);
+    const investorMeta = normalizeInvitationMeta(investorsResponse?.meta, {
+      page: 1,
+      limit: 5,
+      itemCount: investors.length,
+    });
+
+    return {
+      requests,
+      redemptions,
+      investors,
+      investorMeta,
+      errors: [
+        sectionError('subscription requests', requestsResult),
+        sectionError('redemptions', redemptionsResult),
+        includeInvestors ? sectionError('investors', investorsResult) : null,
+      ].filter(Boolean),
+    };
+  },
+
+  async getInvestorOverview({ signal } = {}) {
+    const applicationsPromise = investmentApi.listMyInterests();
+    const invitationsPromise = investmentApi.listMyInvitations({
+      page: 1,
+      limit: 4,
+      search: '',
+      status: 'all',
+      signal,
+    });
+    const newInvitationsPromise = investmentApi.listMyInvitations({
+      page: 1,
+      limit: 1,
+      search: '',
+      status: 'SENT',
+      signal,
+    });
+    const offeringsPromise = investmentApi.listTokens({
+      page: 1,
+      limit: 4,
+      search: '',
+      status: 'deployed',
+    });
+
+    const [applicationsResult, invitationsResult, newInvitationsResult, offeringsResult] = await Promise.allSettled([
+      applicationsPromise,
+      invitationsPromise,
+      newInvitationsPromise,
+      offeringsPromise,
+    ]);
+
+    const rawApplications = settledValue(applicationsResult, []);
+    const applications = extractList(rawApplications).map(mapInterest);
+
+    const invitationsResponse = settledValue(invitationsResult, { data: [], meta: {} });
+    const invitations = extractInvitationList(invitationsResponse?.data).map(mapInvestorInvitation);
+    const invitationMeta = normalizeInvitationMeta(invitationsResponse?.meta, {
+      page: 1,
+      limit: 4,
+      itemCount: invitations.length,
+    });
+
+    const newInvitationsResponse = settledValue(newInvitationsResult, { data: [], meta: {} });
+    const newInvitationItems = extractInvitationList(newInvitationsResponse?.data).map(mapInvestorInvitation);
+    const newInvitationMeta = normalizeInvitationMeta(newInvitationsResponse?.meta, {
+      page: 1,
+      limit: 1,
+      itemCount: newInvitationItems.length,
+    });
+
+    const offeringsResponse = settledValue(offeringsResult, { data: [], meta: {} });
+    const offerings = extractList(offeringsResponse?.data).map((raw) => mapMarketplaceToken(raw));
+    const offeringMetaSource = offeringsResponse?.meta && Object.keys(offeringsResponse.meta).length
+      ? offeringsResponse.meta
+      : offeringsResponse?.data?.pagination || {};
+    const offeringMeta = normalizeMeta(offeringMetaSource, {
+      page: 1,
+      limit: 4,
+      itemCount: offerings.length,
+    });
+
+    return {
+      applications,
+      invitations,
+      invitationMeta,
+      newInvitationTotal: newInvitationMeta.total,
+      offerings,
+      offeringMeta,
+      errors: [
+        sectionError('applications', applicationsResult),
+        sectionError('invitations', invitationsResult),
+        sectionError('new invitations', newInvitationsResult),
+        sectionError('marketplace offerings', offeringsResult),
+      ].filter(Boolean),
+    };
+  },
+});

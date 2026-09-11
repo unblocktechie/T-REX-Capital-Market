@@ -1,17 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Download, Eye, Filter } from 'lucide-react';
+import { Download, Eye, Filter, Search } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { AppStatusBadge } from '@/components/common/AppStatusBadge';
+import { InvestorHistoryPagination } from '@/components/investor-marketplace/InvestorHistoryPagination';
 import { MarketplaceDropdown } from '@/components/investor-marketplace/MarketplaceDropdown';
 import { DataTable } from '@/components/tables/DataTable';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { Input } from '@/components/ui/Input';
 import { ROUTES } from '@/config/routes';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { issuerInvestorSubscriptionsService } from '@/services/issuer/issuerInvestorSubscriptionsService';
 import { formatDate } from '@/utils/date';
 import { getErrorMessage } from '@/utils/error';
+
+const PAGE_SIZE = 5;
 
 const INTEREST_STATUS_OPTIONS = [
   { value: 'all', label: 'All Requests', description: 'All visible investment request statuses' },
@@ -67,6 +71,8 @@ export default function IssuerInvestorsPage() {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     let active = true;
@@ -82,6 +88,38 @@ export default function IssuerInvestorsPage() {
       .finally(() => active && setLoading(false));
     return () => { active = false; };
   }, [statusFilter]);
+
+  const visibleRequests = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return requests;
+
+    return requests.filter((request) => [
+      request.investorName,
+      request.investorCode,
+      request.email,
+      request.tokenName,
+      request.tokenSymbol,
+      request.interestUid,
+      request.requestReference,
+    ].some((value) => String(value || '').toLowerCase().includes(query)));
+  }, [requests, search]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(visibleRequests.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageRows = useMemo(() => {
+    const startIndex = (currentPage - 1) * PAGE_SIZE;
+    return visibleRequests.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [currentPage, visibleRequests]);
+  const pageStart = visibleRequests.length ? ((currentPage - 1) * PAGE_SIZE) + 1 : 0;
+  const pageEnd = visibleRequests.length ? Math.min(currentPage * PAGE_SIZE, visibleRequests.length) : 0;
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   const columns = useMemo(() => [
     {
@@ -122,16 +160,27 @@ export default function IssuerInvestorsPage() {
   };
 
   const selectedStatusLabel = INTEREST_STATUS_OPTIONS.find((item) => item.value === statusFilter)?.label.toLowerCase() || 'selected';
-  const requestLabel = statusFilter === 'all' ? 'request' : `${selectedStatusLabel} request`;
 
   return (
     <div className="page-stack issuer-investors-page issuer-investors-workspace">
-      <header className="issuer-page-header">
+      <header className="issuer-page-header issuer-subscriptions-header">
         <div>
+          <span className="issuer-redemptions-eyebrow">Investor subscription requests</span>
           <h1>Subscription Requests</h1>
           <p>Review investment interests submitted for your organization&apos;s deployed tokens. Open a request to inspect the investor identity summary, required claim topics, and submitted documents.</p>
         </div>
-        <div className="issuer-page-header__actions">
+        <Button variant="secondary" icon={Download} disabled={!requests.length} onClick={handleExport}>Export CSV</Button>
+      </header>
+
+      <Card className="issuer-subscriptions-toolbar-card">
+        <div className="issuer-subscriptions-toolbar">
+          <Input
+            aria-label="Search subscription requests"
+            placeholder="Search investor, token or request ID"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            leading={Search}
+          />
           <MarketplaceDropdown
             value={statusFilter}
             options={INTEREST_STATUS_OPTIONS}
@@ -139,26 +188,41 @@ export default function IssuerInvestorsPage() {
             icon={Filter}
             ariaLabel="Filter investment interests by status"
             align="end"
-            className="issuer-status-dropdown"
+            className="issuer-subscriptions-filter"
+            menuClassName="issuer-subscriptions-filter-menu"
+            portal
           />
-          <Button variant="secondary" icon={Download} disabled={!requests.length} onClick={handleExport}>Export CSV</Button>
         </div>
-      </header>
+        <div className="issuer-subscriptions-toolbar__summary">
+          <span>
+            Showing <strong>{pageStart}{pageEnd > pageStart ? `–${pageEnd}` : ''}</strong> of {visibleRequests.length} request{visibleRequests.length === 1 ? '' : 's'}
+            {visibleRequests.length !== requests.length ? ` (${requests.length} total)` : ''}
+          </span>
+          <span>Statuses reflect the latest request state.</span>
+        </div>
+      </Card>
 
-      <Card className="issuer-table-card common-table-card">
+      <Card className="issuer-table-card common-table-card issuer-subscriptions-table-card">
         <DataTable
           columns={columns}
-          rows={requests}
+          rows={pageRows}
           loading={loading}
           rowKey="interestUid"
-          loadingRows={4}
-          emptyTitle={statusFilter === 'all' ? 'No requests found' : `No ${selectedStatusLabel} requests`}
-          emptyDescription="Choose another request status to review other submissions."
+          loadingRows={PAGE_SIZE}
+          emptyTitle={search.trim() ? 'No matching requests' : statusFilter === 'all' ? 'No requests found' : `No ${selectedStatusLabel} requests`}
+          emptyDescription={search.trim() ? 'Try changing your search text or request status filter.' : 'Choose another request status to review other submissions.'}
         />
-        <div className="issuer-table-footer">
-          <span>Showing <strong>{requests.length}</strong> {requestLabel}{requests.length === 1 ? '' : 's'}</span>
-          <span className="issuer-table-footer__status">Statuses reflect the latest request state.</span>
-        </div>
+        {!loading && totalPages > 1 ? (
+          <div className="issuer-subscriptions-pagination">
+            <InvestorHistoryPagination
+              page={currentPage}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              disabled={loading}
+              itemLabel="requests"
+            />
+          </div>
+        ) : null}
       </Card>
     </div>
   );

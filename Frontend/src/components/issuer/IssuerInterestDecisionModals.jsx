@@ -27,7 +27,7 @@ import {
   isWalletSignatureRejected,
 } from '@/utils/issuerClaims';
 import { shortenWalletAddress } from '@/utils/wallet';
-import { getErrorMessage } from '@/utils/error';
+import { getErrorMessage, sanitizeUserFacingMessage } from '@/utils/error';
 import { issuerInvestorSubscriptionsService } from '@/services/issuer/issuerInvestorSubscriptionsService';
 
 const claimLabel = (topic) => topic?.label || String(topic?.claimTopicCode || 'Claim Topic').replaceAll('_', ' ');
@@ -217,24 +217,24 @@ const signingErrorCopy = (error) => {
   if (error?.kind === 'verification') {
     return {
       title: 'Signature verification failed',
-      description: error.message || 'One or more claim signatures could not be verified by the server. Please retry the signing process.',
+      description: sanitizeUserFacingMessage(error.message) || 'One or more claim signatures could not be verified by the service. Please retry the signing process.',
     };
   }
   if (error?.kind === 'network') {
     return {
       title: 'Verification could not be completed',
-      description: error.message || 'The signatures were collected, but the server could not complete verification. Please retry.',
+      description: sanitizeUserFacingMessage(error.message) || 'The signatures were collected, but verification could not be completed. Please retry.',
     };
   }
   if (error?.kind === 'configuration') {
     return {
       title: 'Claim signing is not ready',
-      description: error.message,
+      description: sanitizeUserFacingMessage(error.message),
     };
   }
   return {
     title: 'Claim signing failed',
-    description: error?.message || 'The wallet could not complete the signature request. Check the connection and try again.',
+    description: sanitizeUserFacingMessage(error?.message) || 'The wallet could not complete the signature request. Check the connection and try again.',
   };
 };
 

@@ -11,21 +11,25 @@ After investor onboarding is unlocked, the Investor sidebar contains:
 - Dashboard
 - Market Place
 - My Application
+- Invitations
+- Asset Management
 
 The submitted Investor Profile remains available from the account/profile menu in the application header.
 
 ## Investor dashboard
 
-The Investor dashboard now uses the authenticated investor profile API for identity/profile information and presents:
+The Investor dashboard now uses the authenticated investor profile and existing investment APIs and presents:
 
 - Welcome/action header with Marketplace navigation
-- Account Identity / ONCHAINID summary
-- Linked primary wallet summary
-- Recent profile activity derived from saved onboarding timestamps and documents
-- My Investments empty state until investment data is available
+- Account Identity / ONCHAINID and linked-wallet summary
+- Live application totals and recent application states
+- Live invitation totals, unread invitation count, and recent invitations
+- Registered-asset count derived from backend interest status
+- Current deployed marketplace offering count and offering previews
+- An action center derived from current invitation/application state
 - Profile/document summary with navigation to the full profile
 
-No fake investment records are created.
+No fake investment records, portfolio balances, activities, counts, or fixed dashboard values are created.
 
 ## Investor profile
 

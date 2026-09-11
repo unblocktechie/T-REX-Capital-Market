@@ -15,7 +15,7 @@ export function OrganizationDataGuard() {
         compact
         eyebrow="Secure organization profile"
         title="Loading organization"
-        message="Synchronizing your latest KYB progress with the T-REX backend…"
+        message="Synchronizing your latest KYB progress…"
       />
     );
   }

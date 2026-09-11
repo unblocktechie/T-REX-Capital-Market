@@ -205,7 +205,7 @@ export const mapAdminOrganizationDetail = (data = {}) => {
       ? {
           id: 'approved',
           title: 'Organization approved',
-          description: 'The organization was approved for the next launchpad steps.',
+          description: 'The organization was approved for the next capital market steps.',
           at: first(data.approvedAt, summary.updatedAt, new Date().toISOString()),
           tone: 'success',
         }

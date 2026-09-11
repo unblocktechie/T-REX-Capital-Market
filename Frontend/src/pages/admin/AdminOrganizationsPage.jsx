@@ -70,7 +70,7 @@ export default function AdminOrganizationsPage() {
 
       <AdminPanel
         title="Organization directory"
-        description={`${query.data?.meta?.total || 0} organizations returned by the backend.`}
+        description={`${query.data?.meta?.total || 0} organizations available for review.`}
         action={<span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700"><Building2 className="size-3.5" />Issuer entities</span>}
         bodyClassName="p-3 sm:p-4"
       >

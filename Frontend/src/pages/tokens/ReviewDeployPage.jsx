@@ -160,7 +160,7 @@ export default function ReviewDeployPage() {
           status: 'syncing',
           title: 'Checking the active deployment',
           description:
-            'The backend deployment attempt will be resumed safely. MetaMask will only open when no transaction has already been broadcast.',
+            'The existing deployment attempt will be resumed safely. MetaMask will only open when no transaction has already been broadcast.',
         },
       });
       navigate(ROUTES.tokenDeploying);
@@ -191,12 +191,12 @@ export default function ReviewDeployPage() {
           status: 'syncing',
           title: 'Existing blockchain transaction found',
           description:
-            'The saved hash will be reconciled with the backend deployment attempt. The backend will independently verify the Sepolia transaction, and MetaMask will not open again.',
+            'The saved hash will be reconciled with the existing deployment attempt. The Sepolia transaction will be independently verified, and MetaMask will not open again.',
         },
       });
       toast.info('Continuing the existing deployment', {
         description:
-          'A transaction hash is already saved for this token. The backend will resume its independent verification, and no duplicate blockchain transaction will be sent.',
+          'A transaction hash is already saved for this token. Secure verification will resume, and no duplicate blockchain transaction will be sent.',
       });
       navigate(ROUTES.tokenDeploying);
       return;
@@ -209,7 +209,7 @@ export default function ReviewDeployPage() {
     ) {
       toast.error('A blockchain transaction has already been submitted.', {
         description:
-          'Complete the pending backend synchronization instead of sending another deployment transaction.',
+          'Complete the pending deployment synchronization instead of sending another deployment transaction.',
       });
       navigate(ROUTES.tokenDeploying);
       return;
@@ -527,12 +527,12 @@ export default function ReviewDeployPage() {
               <h2>{`Deploy on ${networkLabel} through the T-REX Gateway`}</h2>
               <p>
                 {isDeploymentPending
-                  ? 'A backend-controlled deployment attempt already exists. Continue to resume the submitted transaction or the pending wallet approval safely.'
+                  ? 'A deployment attempt already exists. Continue to resume the submitted transaction or the pending wallet approval safely.'
                   : isDeploymentFailed
-                    ? 'The previous on-chain attempt did not finalize. Continue to check the backend state and start a new authorized attempt when allowed.'
+                    ? 'The previous on-chain attempt did not finalize. Continue to check the deployment status and start a new authorized attempt when allowed.'
                     : isReadyToDeploy
-                      ? 'The backend validation is complete. Confirm the issuer wallet to sign the on-chain deployment.'
-                      : 'The backend will validate the proposal, then the connected issuer wallet will sign the Gateway transaction.'}
+                      ? 'Secure validation is complete. Confirm the issuer wallet to sign the on-chain deployment.'
+                      : 'The proposal will be validated securely, then the connected issuer wallet will sign the Gateway transaction.'}
               </p>
             </div>
 

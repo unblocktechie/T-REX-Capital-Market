@@ -112,7 +112,7 @@ export default function AgentsPage() {
         <div className="agent-readonly-notice__content">
           <strong>Governance wallets use the approved organization wallet</strong>
           <p>
-            The backend requires the same wallet that was registered during organization
+            For security, use the same wallet that was registered during organization
             onboarding. These addresses are read-only during token creation.
           </p>
         </div>

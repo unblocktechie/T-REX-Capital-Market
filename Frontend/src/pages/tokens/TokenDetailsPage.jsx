@@ -318,7 +318,7 @@ export default function TokenDetailsPage() {
                 ))}
               </div>
             ) : (
-              <p className="token-dashboard-empty">No claim topics were returned by the backend.</p>
+              <p className="token-dashboard-empty">No claim topics are available for this token.</p>
             )}
             <AddressDisplay
               label="Primary Trusted Claim Issuer"

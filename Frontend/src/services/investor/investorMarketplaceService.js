@@ -276,7 +276,14 @@ const apiService = {
     return this.getOffering(tokenUid);
   },
 
-  async getTokenImageBlob(tokenUid, signal) {
+  async getTokenImageBlob(tokenUid, signal, imageUrl = '') {
+    if (String(imageUrl || '').trim()) {
+      try {
+        return await investmentApi.getAuthenticatedImage(imageUrl, signal);
+      } catch (error) {
+        if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED') throw error;
+      }
+    }
     return investmentApi.getTokenImage(tokenUid, signal);
   },
 };

@@ -154,7 +154,7 @@ export default function ModulePage({ moduleKey }) {
           <span className="eyebrow">Built for T-REX</span>
           <h2>Compliance-first workflows</h2>
           <p>
-            This module is prepared for your backend integration. Add future screens and menu items
+            This module is ready for service integration. Add future screens and menu items
             through the centralized navigation configuration without changing the layout.
           </p>
           <div className="module-feature-row">

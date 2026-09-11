@@ -230,7 +230,7 @@ export default function BeneficialOwnersPage() {
           </div>
         }
       >
-        <p>This removes the entered UBO record from the form. Continue to update the backend.</p>
+        <p>This removes the entered UBO record from the form. Continue to save your changes.</p>
       </Modal>
     </OrganizationPageLayout>
   );

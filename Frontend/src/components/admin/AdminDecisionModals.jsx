@@ -33,7 +33,7 @@ export function ApproveOrganizationModal({ open, onClose, organization, onConfir
           <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-emerald-600 text-white"><ShieldCheck className="size-5" /></span>
           <div>
             <strong className="block text-base text-emerald-950">Final compliance authorization</strong>
-            <p className="mt-1 mb-0 text-sm leading-6 text-emerald-800">Approval changes the backend organization status to approved and allows the issuer to continue with the launchpad workflow.</p>
+            <p className="mt-1 mb-0 text-sm leading-6 text-emerald-800">Approval updates the organization status to approved and allows the issuer to continue with the capital market workflow.</p>
           </div>
         </div>
       </div>
@@ -42,7 +42,7 @@ export function ApproveOrganizationModal({ open, onClose, organization, onConfir
         <div><dt className="text-xs font-bold text-slate-500">Organization</dt><dd className="mt-1 text-sm font-semibold text-slate-950">{organization?.name}</dd></div>
         <div><dt className="text-xs font-bold text-slate-500">Wallet address</dt><dd className="mt-1 break-all font-mono text-sm font-bold text-slate-950">{shortWallet(organization?.wallet?.address, 8, 7)}</dd></div>
         <div><dt className="text-xs font-bold text-slate-500">Current status</dt><dd className="mt-1 text-sm font-semibold text-slate-950">{organization?.status || 'submitted'}</dd></div>
-        <div><dt className="text-xs font-bold text-slate-500">Backend decision</dt><dd className="mt-1 text-sm font-semibold text-emerald-700">Approved</dd></div>
+        <div><dt className="text-xs font-bold text-slate-500">Decision result</dt><dd className="mt-1 text-sm font-semibold text-emerald-700">Approved</dd></div>
       </dl>
 
       <DecisionCheckbox
@@ -259,7 +259,7 @@ export function RejectOrganizationModal({ open, onClose, organization, onConfirm
       <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
         <div className="flex items-start gap-3">
           <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-rose-600 text-white"><TriangleAlert className="size-5" /></span>
-          <div><strong className="block text-base text-rose-950">This decision blocks organization approval</strong><p className="mt-1 mb-0 text-sm leading-6 text-rose-800">The selected reason and detailed comment are combined into the backend rejectionReason value.</p></div>
+          <div><strong className="block text-base text-rose-950">This decision blocks organization approval</strong><p className="mt-1 mb-0 text-sm leading-6 text-rose-800">The selected reason and detailed comment are saved together as the organization rejection reason.</p></div>
         </div>
       </div>
 
@@ -270,7 +270,7 @@ export function RejectOrganizationModal({ open, onClose, organization, onConfirm
         </div>
         <label className="grid gap-2 text-sm font-bold text-slate-800">Detailed comment
           <textarea value={comment} onChange={(event) => setComment(event.target.value)} rows={4} className="resize-none rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm font-medium text-slate-950 outline-none focus:border-rose-400 focus:ring-4 focus:ring-rose-500/10" placeholder="Explain the issue and what must be corrected…" />
-          <small className="text-xs font-medium text-slate-400">Minimum 10 characters. This becomes part of the rejection reason stored by the backend.</small>
+          <small className="text-xs font-medium text-slate-400">Minimum 10 characters. This becomes part of the saved rejection reason.</small>
         </label>
 
         <DecisionCheckbox

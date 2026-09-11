@@ -2,8 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Banknote,
   CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
   Clock3,
   ExternalLink,
   History,
@@ -29,6 +27,7 @@ import {
   TokenActionUnavailable,
 } from '@/components/investor-marketplace/InvestorTokenActionPrimitives';
 import { MarketplaceDropdown } from '@/components/investor-marketplace/MarketplaceDropdown';
+import { InvestorHistoryPagination } from '@/components/investor-marketplace/InvestorHistoryPagination';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ROUTES } from '@/config/routes';
@@ -36,6 +35,7 @@ import { web3Config } from '@/config/web3';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useRegisteredInvestmentAction } from '@/hooks/useRegisteredInvestmentAction';
 import { useRegisteredInvestorWalletGuard } from '@/hooks/useRegisteredInvestorWalletGuard';
+import { investorPortfolioService } from '@/services/investor/investorPortfolioService';
 import {
   clearInvestorTokenPurchaseRecovery,
   loadInvestorTokenPurchaseRecovery,
@@ -48,7 +48,7 @@ import {
   submitInvestorPurchasePayment,
   waitForInvestorPurchasePaymentReceipt,
 } from '@/services/investor/investorTokenPurchaseTransaction.service';
-import { getErrorMessage } from '@/utils/error';
+import { getErrorMessage, sanitizeUserFacingMessage } from '@/utils/error';
 import { getInvestmentActionContext } from '@/utils/investmentPurchase';
 
 const money = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
@@ -65,7 +65,7 @@ const POLL_INTERVAL_MS = 5_000;
 const POLL_LONG_RUNNING_MS = 180_000;
 const HISTORY_POLL_INTERVAL_MS = 7_000;
 const HISTORY_SEARCH_DEBOUNCE_MS = 400;
-const HISTORY_LIMIT = 20;
+const HISTORY_LIMIT = 5;
 
 const PURCHASE_HISTORY_FILTERS = Object.freeze([
   { value: 'all', label: 'All statuses', description: 'Show every purchase' },
@@ -253,12 +253,12 @@ const shortHash = (value) => {
   return hash.length > 14 ? `${hash.slice(0, 8)}…${hash.slice(-5)}` : hash;
 };
 
-const historyExpirationReason = (row) => clean(
+const historyExpirationReason = (row) => sanitizeUserFacingMessage(clean(
   row?.expiration?.reason
   || row?.expirationReason
   || row?.error?.message
   || row?.errorMessage,
-);
+));
 
 const historyExpirationReasonLabel = (row) => {
   const reason = historyExpirationReason(row);
@@ -272,8 +272,12 @@ const historyHasActiveRows = (rows) => (
   && rows.some((row) => PROCESSING_PURCHASE_STATUSES.has(normalizeStatus(row?.status)))
 );
 
-export default function PurchaseTokenPage() {
-  const { interestUid } = useParams();
+export default function PurchaseTokenPage({
+  interestUid: interestUidOverride,
+  embedded = false,
+}) {
+  const { interestUid: routeInterestUid } = useParams();
+  const interestUid = interestUidOverride || routeInterestUid;
   const navigate = useNavigate();
   const { application, token, loading, error, ready } = useRegisteredInvestmentAction(interestUid);
   const [tokenAmountInput, setTokenAmountInput] = useState('');
@@ -310,7 +314,9 @@ export default function PurchaseTokenPage() {
   const purchaseHistoryRequestRef = useRef({ controller: null, inFlight: false });
   const purchaseHistoryLoadedVersionRef = useRef(0);
 
-  useDocumentTitle(token ? `${token.name} · Purchase Token` : 'Purchase Token');
+  useDocumentTitle(
+    embedded ? 'Asset Management' : token ? `${token.name} · Purchase Token` : 'Purchase Token',
+  );
 
   const applicationRoute = ROUTES.applicationDetail(interestUid);
   const context = useMemo(() => getInvestmentActionContext(token || application), [application, token]);
@@ -571,7 +577,8 @@ export default function PurchaseTokenPage() {
       setPurchaseErrorCode('');
       if (nextUid && completedToastRef.current !== nextUid) {
         completedToastRef.current = nextUid;
-        toast.success('Purchase complete. Your tokens are now in your registered wallet.');
+        investorPortfolioService.refreshAfterCompletedActivity().catch(() => {});
+        toast.success('Purchase complete. Your portfolio has been updated.');
       }
       return;
     }
@@ -1158,7 +1165,7 @@ export default function PurchaseTokenPage() {
       <TokenActionUnavailable
         title="Purchase Token"
         description="This investment could not be loaded right now."
-        onBack={() => navigate(ROUTES.applications)}
+        onBack={embedded ? undefined : () => navigate(ROUTES.applications)}
       />
     );
   }
@@ -1168,7 +1175,7 @@ export default function PurchaseTokenPage() {
       <TokenActionUnavailable
         title="Purchase Token"
         description="Purchase is not available for this application yet."
-        onBack={() => navigate(applicationRoute)}
+        onBack={embedded ? undefined : () => navigate(applicationRoute)}
         backLabel="Back to Application"
       />
     );
@@ -1179,18 +1186,38 @@ export default function PurchaseTokenPage() {
   const paymentContract = clean(purchase?.usdtContractAddress);
   const actionLabel = 'Purchase';
   const actionDisabled = Boolean(busyAction) || !walletGuard.ready;
-  const historyCurrentPage = Number(purchaseHistoryMeta?.page || purchaseHistoryPage || 1);
-  const historyTotalPages = Math.max(1, Number(purchaseHistoryMeta?.totalPages || 1));
-  const historyTotal = Number(purchaseHistoryMeta?.total || purchaseHistory.length || 0);
+  const historyTotal = Number(
+    purchaseHistoryMeta?.total
+    ?? purchaseHistoryMeta?.totalCount
+    ?? purchaseHistoryMeta?.totalRecords
+    ?? purchaseHistoryMeta?.pagination?.total
+    ?? purchaseHistory.length,
+  ) || 0;
+  const historyCurrentPage = Number(
+    purchaseHistoryMeta?.page
+    ?? purchaseHistoryMeta?.currentPage
+    ?? purchaseHistoryMeta?.pagination?.page
+    ?? purchaseHistoryPage,
+  ) || purchaseHistoryPage;
+  const historyTotalPages = Math.max(1, Number(
+    purchaseHistoryMeta?.totalPages
+    ?? purchaseHistoryMeta?.pages
+    ?? purchaseHistoryMeta?.lastPage
+    ?? purchaseHistoryMeta?.pagination?.totalPages
+    ?? purchaseHistoryMeta?.pagination?.pages
+    ?? (historyTotal ? Math.ceil(historyTotal / HISTORY_LIMIT) : 1),
+  ) || 1);
   const historyIsActive = historyHasActiveRows(purchaseHistory);
 
   return (
     <div className="page-stack investor-token-action-page investor-token-purchase-page">
-      <InvestorTokenActionHeader
-        eyebrow="Investment action"
-        title="Purchase Token"
-        description="Choose how many tokens you want to purchase. Your exact payment is calculated securely before your wallet is asked to confirm anything."
-      />
+      {!embedded ? (
+        <InvestorTokenActionHeader
+          eyebrow="Investment action"
+          title="Purchase Token"
+          description="Choose how many tokens you want to purchase. Your exact payment is calculated securely before your wallet is asked to confirm anything."
+        />
+      ) : null}
 
       <div className="investor-token-action-layout">
         <main className="investor-token-action-main">
@@ -1529,30 +1556,13 @@ export default function PurchaseTokenPage() {
           </div>
         )}
 
-        {historyTotalPages > 1 ? (
-          <div className="investor-token-purchase-history__pagination">
-            <span>Page <strong>{historyCurrentPage}</strong> of {historyTotalPages}</span>
-            <div>
-              <Button
-                variant="secondary"
-                size="sm"
-                icon={ChevronLeft}
-                onClick={() => setPurchaseHistoryPage((current) => Math.max(1, current - 1))}
-                disabled={historyCurrentPage <= 1 || purchaseHistoryLoading}
-              >
-                Previous
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setPurchaseHistoryPage((current) => Math.min(historyTotalPages, current + 1))}
-                disabled={historyCurrentPage >= historyTotalPages || purchaseHistoryLoading}
-              >
-                Next <ChevronRight size={14} />
-              </Button>
-            </div>
-          </div>
-        ) : null}
+        <InvestorHistoryPagination
+          page={historyCurrentPage}
+          totalPages={historyTotalPages}
+          onPageChange={setPurchaseHistoryPage}
+          disabled={purchaseHistoryLoading}
+          itemLabel="Purchase history"
+        />
       </Card>
     </div>
   );

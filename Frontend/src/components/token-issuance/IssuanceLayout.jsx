@@ -94,7 +94,7 @@ export function IssuanceLayout({
 
       {bootstrap.error ? (
         <div className="issuance-backend-error">
-          <InfoCallout title="Backend connection required" tone="warning" icon={AlertTriangle}>
+          <InfoCallout title="Connection required" tone="warning" icon={AlertTriangle}>
             {bootstrap.error}
           </InfoCallout>
           <Button

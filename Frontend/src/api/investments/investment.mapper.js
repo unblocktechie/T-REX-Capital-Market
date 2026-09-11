@@ -400,6 +400,86 @@ export const mapMarketplaceToken = (raw = {}, { interest = null, eligibility = n
   };
 };
 
+
+export const mapInvestorPortfolioItem = (raw = {}) => {
+  const token = mapMarketplaceToken(raw);
+  const portfolio = raw?.portfolio && typeof raw.portfolio === 'object' ? raw.portfolio : {};
+  const restrictions = first(raw?.restrictions, raw?.compliance) || null;
+
+  return {
+    ...token,
+    chainName: text(
+      raw?.chainName,
+      raw?.networkName,
+      raw?.network?.name,
+      raw?.chain?.name,
+    ),
+    imageUrl: text(raw?.imageUrl, raw?.tokenImageUrl, token.imageUrl),
+    hasImage: flag(raw?.hasImage) || Boolean(text(raw?.imageUrl, raw?.tokenImageUrl, token.imageUrl, token.imageStorageKey)),
+    restrictions,
+    requiredClaimTopics: array(raw?.requiredClaimTopics, raw?.requiredClaims, raw?.claimTopics).map((topic, index) => mapClaimTopic(topic, index)),
+    portfolio: {
+      totalPurchasedTokenAmount: text(
+        portfolio?.totalPurchasedTokenAmount,
+        portfolio?.totalPurchasedAmount,
+        portfolio?.purchasedTokenAmount,
+      ),
+      totalInvestedUsdtAmount: text(
+        portfolio?.totalInvestedUsdtAmount,
+        portfolio?.totalInvestedAmount,
+        portfolio?.investedUsdtAmount,
+      ),
+      totalRedeemedTokenAmount: text(
+        portfolio?.totalRedeemedTokenAmount,
+        portfolio?.totalRedeemedAmount,
+        portfolio?.redeemedTokenAmount,
+      ),
+      netTokenAmount: text(
+        portfolio?.netTokenAmount,
+        portfolio?.currentTokenAmount,
+        portfolio?.tokenBalance,
+      ),
+      averagePurchasePrice: text(
+        portfolio?.averagePurchasePrice,
+        portfolio?.avgPurchasePrice,
+      ),
+      purchaseCount: numberOrNull(
+        portfolio?.purchaseCount,
+        portfolio?.completedPurchaseCount,
+        portfolio?.purchasesCount,
+      ) ?? 0,
+      redemptionCount: numberOrNull(
+        portfolio?.redemptionCount,
+        portfolio?.completedRedemptionCount,
+        portfolio?.redemptionsCount,
+      ) ?? 0,
+      firstPurchaseAt: text(
+        portfolio?.firstPurchaseAt,
+        portfolio?.firstPurchasedAt,
+        portfolio?.firstActivityAt,
+      ),
+      lastPurchaseAt: text(
+        portfolio?.lastPurchaseAt,
+        portfolio?.latestPurchaseAt,
+        portfolio?.lastPurchasedAt,
+      ),
+      lastRedemptionAt: text(
+        portfolio?.lastRedemptionAt,
+        portfolio?.latestRedemptionAt,
+        portfolio?.lastRedeemedAt,
+      ),
+      lastActivityAt: text(
+        portfolio?.lastActivityAt,
+        portfolio?.latestActivityAt,
+        portfolio?.updatedAt,
+        portfolio?.lastRedemptionAt,
+        portfolio?.lastPurchaseAt,
+      ),
+    },
+    raw,
+  };
+};
+
 export const mapInterest = (raw = {}) => {
   const tokenRaw = raw?.token || raw?.tokenSummary || raw?.tokenInvestment || {};
   const tokenUid = text(raw?.tokenUid, raw?.tokenId, tokenRaw?.tokenUid, tokenRaw?.tokenId, tokenRaw?.uid, tokenRaw?.id);

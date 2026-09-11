@@ -12,6 +12,8 @@ const INTEREST_STATUS_MAP = new Map([
   ['all', 'all'],
 ]);
 const TOKEN_STATUSES = new Set(['deployed', 'all']);
+const ISSUER_INVITATION_STATUSES = new Set(['all', 'notInvited', 'PENDING', 'SENT', 'VIEWED']);
+const INVESTOR_INVITATION_STATUSES = new Set(['all', 'SENT', 'VIEWED']);
 const PURCHASE_HISTORY_STATUSES = new Set([
   'all',
   'PENDING_PAYMENT',
@@ -19,6 +21,20 @@ const PURCHASE_HISTORY_STATUSES = new Set([
   'MINT_SUBMITTED',
   'COMPLETED',
   'EXPIRED',
+]);
+const REDEMPTION_HISTORY_STATUSES = new Set([
+  'all',
+  'PENDING_INVESTOR_AUTHORIZATION',
+  'PENDING_ISSUER_APPROVAL',
+  'TOKENS_LOCKED',
+  'PAYMENT_SUBMITTED',
+  'BURN_SUBMITTED',
+  'COMPLETED',
+  'ISSUER_REJECTED',
+  'CANCELLATION_PENDING',
+  'CANCELLED',
+  'EXPIRED',
+  'MANUAL_REVIEW',
 ]);
 
 const unwrap = (response) =>
@@ -45,6 +61,21 @@ const unwrapPurchaseResponse = (response) => {
   };
 };
 
+const unwrapRedemptionResponse = (response) => {
+  const data = unwrap(response);
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return data;
+  const redemption = data.redemption && typeof data.redemption === 'object' && !Array.isArray(data.redemption)
+    ? data.redemption
+    : null;
+  return {
+    ...(redemption || {}),
+    ...data,
+    message: response?.data?.message || data.message || redemption?.message || '',
+    requestId: response?.data?.requestId || data.requestId || redemption?.requestId || '',
+    httpStatus: response?.status,
+  };
+};
+
 const requiredDecimalString = (value, label) => {
   const normalized = String(value ?? '').trim();
   if (!/^\d+(?:\.\d+)?$/.test(normalized) || !/[1-9]/.test(normalized)) {
@@ -59,6 +90,14 @@ const requiredUid = (value, label) => {
   return normalized;
 };
 
+const requiredSignature = (value) => {
+  const normalized = String(value || '').trim();
+  if (!/^0x[0-9a-fA-F]+$/.test(normalized) || normalized.length < 132) {
+    throw new Error('Wallet signature is invalid.');
+  }
+  return normalized;
+};
+
 const normalizePage = (value, fallback = 1) => {
   const number = Number(value);
   return Number.isSafeInteger(number) && number > 0 ? number : fallback;
@@ -70,6 +109,19 @@ const normalizeLimit = (value, fallback = 12) => {
   return Math.min(number, 100);
 };
 
+const normalizeAuthenticatedApiPath = (value) => {
+  const normalized = String(value || '').trim();
+  if (!normalized) throw new Error('Image path is required.');
+  if (/^https?:\/\//i.test(normalized)) {
+    throw new Error('Only relative image paths are supported.');
+  }
+
+  const withoutQueryOrigin = normalized.startsWith('/') ? normalized : `/${normalized}`;
+  return withoutQueryOrigin
+    .replace(/^\/api\/v\d+(?=\/)/i, '')
+    .replace(/^\/v\d+(?=\/)/i, '');
+};
+
 const normalizeInterestStatus = (value, { optional = true } = {}) => {
   const normalized = String(value || '').trim().toLowerCase();
   if (!normalized && optional) return '';
@@ -78,11 +130,38 @@ const normalizeInterestStatus = (value, { optional = true } = {}) => {
   return canonical;
 };
 
+const cleanIssuerInvitationStatus = (value) => {
+  const normalized = String(value || 'all').trim();
+  const canonical = normalized.toLowerCase() === 'notinvited'
+    ? 'notInvited'
+    : normalized.toLowerCase() === 'all'
+      ? 'all'
+      : normalized.toUpperCase();
+  if (!ISSUER_INVITATION_STATUSES.has(canonical)) throw new Error('Invalid invitation status.');
+  return canonical;
+};
+
+const cleanInvestorInvitationStatus = (value) => {
+  const normalized = String(value || 'all').trim();
+  const canonical = normalized.toLowerCase() === 'all' ? 'all' : normalized.toUpperCase();
+  if (!INVESTOR_INVITATION_STATUSES.has(canonical)) throw new Error('Invalid invitation status.');
+  return canonical;
+};
+
 const cleanPurchaseHistoryStatus = (value) => {
   const normalized = String(value || 'all').trim();
   const canonical = normalized.toLowerCase() === 'all' ? 'all' : normalized.toUpperCase();
   if (!PURCHASE_HISTORY_STATUSES.has(canonical)) {
     throw new Error('Invalid purchase history status.');
+  }
+  return canonical;
+};
+
+const cleanRedemptionHistoryStatus = (value) => {
+  const normalized = String(value || 'all').trim();
+  const canonical = normalized.toLowerCase() === 'all' ? 'all' : normalized.toUpperCase();
+  if (!REDEMPTION_HISTORY_STATUSES.has(canonical)) {
+    throw new Error('Invalid redemption history status.');
   }
   return canonical;
 };
@@ -116,6 +195,16 @@ export const investmentApi = Object.freeze({
   getTokenImage: (tokenUid, signal) =>
     apiClient
       .get(INVESTMENT_ENDPOINTS.tokenImage(requiredUid(tokenUid, 'Token identifier')), {
+        responseType: 'blob',
+        timeout: 60_000,
+        signal,
+        skipGlobalLoader: true,
+      })
+      .then((response) => response.data),
+
+  getAuthenticatedImage: (imageUrl, signal) =>
+    apiClient
+      .get(normalizeAuthenticatedApiPath(imageUrl), {
         responseType: 'blob',
         timeout: 60_000,
         signal,
@@ -197,6 +286,215 @@ export const investmentApi = Object.freeze({
         { skipGlobalLoader: true, validateStatus: accept2xx },
       )
       .then(unwrapPurchaseResponse),
+
+  createTokenRedemption: (tokenUid, { tokenAmount, idempotencyKey }) =>
+    apiClient
+      .post(
+        INVESTMENT_ENDPOINTS.tokenRedemptions(requiredUid(tokenUid, 'Token identifier')),
+        {
+          tokenAmount: requiredDecimalString(tokenAmount, 'Redeem amount'),
+          idempotencyKey: requiredUid(idempotencyKey, 'Redemption idempotency key'),
+        },
+        { skipGlobalLoader: true, validateStatus: accept2xx },
+      )
+      .then(unwrapRedemptionResponse),
+
+  getTokenRedemption: (redemptionUid, { signal } = {}) =>
+    apiClient
+      .get(INVESTMENT_ENDPOINTS.redemption(requiredUid(redemptionUid, 'Redemption identifier')), {
+        signal,
+        skipGlobalLoader: true,
+        validateStatus: accept2xx,
+      })
+      .then(unwrapRedemptionResponse),
+
+  authorizeTokenRedemption: (redemptionUid, signature) =>
+    apiClient
+      .post(
+        INVESTMENT_ENDPOINTS.authorizeRedemption(requiredUid(redemptionUid, 'Redemption identifier')),
+        { signature: requiredSignature(signature) },
+        { skipGlobalLoader: true, validateStatus: accept2xx },
+      )
+      .then(unwrapRedemptionResponse),
+
+  cancelTokenRedemption: (redemptionUid) =>
+    apiClient
+      .post(
+        INVESTMENT_ENDPOINTS.cancelRedemption(requiredUid(redemptionUid, 'Redemption identifier')),
+        undefined,
+        { skipGlobalLoader: true, validateStatus: accept2xx },
+      )
+      .then(unwrapRedemptionResponse),
+
+  async listTokenRedemptions(tokenUid, { page = 1, limit = 20, search = '', status = 'all', signal } = {}) {
+    const normalizedStatus = cleanRedemptionHistoryStatus(status);
+    const normalizedSearch = String(search || '').trim().slice(0, 100);
+    const response = await apiClient.get(
+      INVESTMENT_ENDPOINTS.tokenRedemptions(requiredUid(tokenUid, 'Token identifier')),
+      {
+        params: {
+          page: normalizePage(page),
+          limit: normalizeLimit(limit, 20),
+          search: normalizedSearch,
+          status: normalizedStatus,
+        },
+        signal,
+        skipGlobalLoader: true,
+        validateStatus: accept2xx,
+      },
+    );
+    const data = unwrap(response);
+    return { data: Array.isArray(data) ? data : [], meta: responseMeta(response, data) };
+  },
+
+
+  async listIssuerRedemptions({ signal } = {}) {
+    const response = await apiClient.get(INVESTMENT_ENDPOINTS.issuerRedemptions, {
+      signal,
+      skipGlobalLoader: true,
+      validateStatus: accept2xx,
+    });
+    const data = unwrap(response);
+    const items = Array.isArray(data)
+      ? data
+      : data?.items || data?.rows || data?.redemptions || data?.results || [];
+    return { data: Array.isArray(items) ? items : [], meta: responseMeta(response, data) };
+  },
+
+  getIssuerRedemption: (redemptionUid, { signal } = {}) =>
+    apiClient
+      .get(INVESTMENT_ENDPOINTS.issuerRedemption(requiredUid(redemptionUid, 'Redemption identifier')), {
+        signal,
+        skipGlobalLoader: true,
+        validateStatus: accept2xx,
+      })
+      .then(unwrapRedemptionResponse),
+
+  approveIssuerRedemption: (redemptionUid) =>
+    apiClient
+      .post(
+        INVESTMENT_ENDPOINTS.approveIssuerRedemption(requiredUid(redemptionUid, 'Redemption identifier')),
+        {},
+        { skipGlobalLoader: true, validateStatus: accept2xx },
+      )
+      .then(unwrapRedemptionResponse),
+
+  rejectIssuerRedemption: (redemptionUid, reason) => {
+    const normalizedReason = String(reason || '').trim();
+    if (!normalizedReason) throw new Error('A rejection reason is required.');
+
+    return apiClient
+      .post(
+        INVESTMENT_ENDPOINTS.rejectIssuerRedemption(requiredUid(redemptionUid, 'Redemption identifier')),
+        { reason: normalizedReason },
+        { skipGlobalLoader: true, validateStatus: accept2xx },
+      )
+      .then(unwrapRedemptionResponse);
+  },
+
+  confirmIssuerRedemptionPayment: (redemptionUid, txHash) =>
+    apiClient
+      .post(
+        INVESTMENT_ENDPOINTS.confirmIssuerRedemptionPayment(requiredUid(redemptionUid, 'Redemption identifier')),
+        { txHash: requiredUid(txHash, 'Payment transaction hash') },
+        { skipGlobalLoader: true, validateStatus: accept2xx },
+      )
+      .then(unwrapRedemptionResponse),
+
+  async listIssuerInvestors({ tokenUid, page = 1, limit = 20, search = '', invitationStatus = 'all', signal } = {}) {
+    const normalizedSearch = String(search || '').trim().slice(0, 100);
+    const normalizedStatus = cleanIssuerInvitationStatus(invitationStatus);
+    const response = await apiClient.get(INVESTMENT_ENDPOINTS.issuerInvestors, {
+      params: {
+        tokenUid: requiredUid(tokenUid, 'Token identifier'),
+        page: normalizePage(page),
+        limit: normalizeLimit(limit, 20),
+        search: normalizedSearch,
+        invitationStatus: normalizedStatus,
+      },
+      signal,
+      skipGlobalLoader: true,
+      validateStatus: accept2xx,
+    });
+    const data = unwrap(response);
+    const meta = responseMeta(response, data);
+    return { data, meta: Object.keys(meta || {}).length ? meta : data?.pagination || response.data?.pagination || {} };
+  },
+
+  sendIssuerInvestorInvitation: (investorUid, tokenUid) =>
+    apiClient
+      .post(
+        INVESTMENT_ENDPOINTS.issuerInvestorInvitations(requiredUid(investorUid, 'Investor identifier')),
+        { tokenUid: requiredUid(tokenUid, 'Token identifier') },
+        { skipGlobalLoader: true, validateStatus: accept2xx },
+      )
+      .then((response) => {
+        const data = unwrap(response);
+        const invitation = data?.invitation && typeof data.invitation === 'object' ? data.invitation : null;
+        return {
+          ...(invitation || {}),
+          ...(data && typeof data === 'object' && !Array.isArray(data) ? data : {}),
+          httpStatus: response.status,
+        };
+      }),
+
+  async listMyInvitations({ page = 1, limit = 20, search = '', status = 'all', signal } = {}) {
+    const normalizedSearch = String(search || '').trim().slice(0, 100);
+    const normalizedStatus = cleanInvestorInvitationStatus(status);
+    const response = await apiClient.get(INVESTMENT_ENDPOINTS.myInvitations, {
+      params: {
+        page: normalizePage(page),
+        limit: normalizeLimit(limit, 20),
+        search: normalizedSearch,
+        status: normalizedStatus,
+      },
+      signal,
+      skipGlobalLoader: true,
+      validateStatus: accept2xx,
+    });
+    const data = unwrap(response);
+    const meta = responseMeta(response, data);
+    return { data, meta: Object.keys(meta || {}).length ? meta : data?.pagination || response.data?.pagination || {} };
+  },
+
+  getMyInvitation: (invitationUid) =>
+    apiClient
+      .get(INVESTMENT_ENDPOINTS.myInvitation(requiredUid(invitationUid, 'Invitation identifier')), {
+        skipGlobalLoader: true,
+        validateStatus: accept2xx,
+      })
+      .then(unwrap),
+
+  markMyInvitationViewed: (invitationUid) =>
+    apiClient
+      .patch(
+        INVESTMENT_ENDPOINTS.markMyInvitationViewed(requiredUid(invitationUid, 'Invitation identifier')),
+        {},
+        { skipGlobalLoader: true, validateStatus: accept2xx },
+      )
+      .then(unwrap),
+
+  async listMyPortfolio({ page = 1, limit = 20, search = '', signal } = {}) {
+    const normalizedSearch = String(search || '').trim().slice(0, 100);
+    const response = await apiClient.get(INVESTMENT_ENDPOINTS.myPortfolio, {
+      params: {
+        page: normalizePage(page),
+        limit: normalizeLimit(limit, 20),
+        search: normalizedSearch,
+      },
+      signal,
+      skipGlobalLoader: true,
+      validateStatus: accept2xx,
+    });
+    const data = unwrap(response);
+    const meta = responseMeta(response, data);
+    return {
+      data,
+      meta: Object.keys(meta || {}).length
+        ? meta
+        : data?.pagination || response.data?.pagination || {},
+    };
+  },
 
   listMyInterests: ({ status } = {}) => {
     const normalizedStatus = normalizeInterestStatus(status);

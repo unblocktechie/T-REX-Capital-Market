@@ -181,17 +181,17 @@ export const adminApi = Object.freeze({
   requestInformation: (organizationUid, payload) =>
     env.features.mockApi
       ? adminMockApi.requestInformation(organizationUid, payload)
-      : Promise.reject(new Error('Request-more-information is not available in the current backend API.')),
+      : Promise.reject(new Error('Request-more-information is not available in the current service.')),
 
   assignReviewer: (organizationUid, reviewerUid) =>
     env.features.mockApi
       ? adminMockApi.assignReviewer(organizationUid, reviewerUid)
-      : Promise.reject(new Error('Reviewer assignment is not available in the current backend API.')),
+      : Promise.reject(new Error('Reviewer assignment is not available in the current service.')),
 
   updateDocumentStatus: (organizationUid, documentUid, status, note = '') =>
     env.features.mockApi
       ? adminMockApi.updateDocumentStatus(organizationUid, documentUid, status, note)
-      : Promise.reject(new Error('Document review is not available in the current backend API.')),
+      : Promise.reject(new Error('Document review is not available in the current service.')),
 
   previewOrganizationDocument: (organizationUid, documentUid) =>
     env.features.mockApi
@@ -211,7 +211,7 @@ export const adminApi = Object.freeze({
   addNote: (organizationUid, payload) =>
     env.features.mockApi
       ? adminMockApi.addNote(organizationUid, payload)
-      : Promise.reject(new Error('Admin notes are not available in the current backend API.')),
+      : Promise.reject(new Error('Admin notes are not available in the current service.')),
 
   listReviewers: () =>
     env.features.mockApi ? adminMockApi.listReviewers() : Promise.resolve([]),

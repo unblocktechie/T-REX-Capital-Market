@@ -11,18 +11,30 @@ const firstValidationMessage = (errors) => {
   return null;
 };
 
+export const sanitizeUserFacingMessage = (message) => {
+  if (typeof message !== 'string') return message;
+
+  return message
+    .replace(/\bBackend\s+API\b/g, 'Service')
+    .replace(/\bbackend\s+API\b/gi, 'service')
+    .replace(/\bBackend\s+server\b/g, 'Service')
+    .replace(/\bbackend\s+server\b/gi, 'service')
+    .replace(/\bBackend\b/g, 'Service')
+    .replace(/\bbackend\b/gi, 'service');
+};
+
 export const getErrorMessage = (error, fallback = 'Something went wrong. Please try again.') => {
   if (!error?.response && error?.code === 'ERR_NETWORK') {
     return "We're experiencing a temporary issue. Please try again in a few moments.";
   }
 
   const payload = error?.response?.data;
-  return (
+  return sanitizeUserFacingMessage(
     payload?.message ||
-    (typeof payload?.error === 'string' ? payload.error : payload?.error?.message) ||
-    firstValidationMessage(payload?.errors) ||
-    error?.message ||
-    fallback
+      (typeof payload?.error === 'string' ? payload.error : payload?.error?.message) ||
+      firstValidationMessage(payload?.errors) ||
+      error?.message ||
+      fallback,
   );
 };
 
@@ -45,7 +57,7 @@ export const getApiFieldErrors = (error) => {
       field: String(item?.field || '')
         .replace(/^body\./, '')
         .replace(/\[(\d+)\]/g, '.$1'),
-      message: item?.message || item?.msg || '',
+      message: sanitizeUserFacingMessage(item?.message || item?.msg || ''),
     }))
     .filter((item) => item.field && item.message);
 };

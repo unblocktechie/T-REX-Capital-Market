@@ -64,7 +64,7 @@ export default function OrganizationOverviewPage() {
     try {
       await organizationDocumentService.open(document, download);
     } catch {
-      toast.error('Document unavailable', { description: 'The backend document could not be opened.' });
+      toast.error('Document unavailable', { description: 'This document could not be opened. Please try again.' });
     }
   };
 
@@ -297,7 +297,7 @@ export default function OrganizationOverviewPage() {
                   <Fingerprint size={15} /> On-chain ID
                 </span>
                 <strong title={contractAddress || undefined}>
-                  {contractAddress || 'Not assigned by the backend'}
+                  {contractAddress || 'Not assigned yet'}
                 </strong>
                 <p>Smart-contract address assigned to this organization after approval.</p>
               </div>
