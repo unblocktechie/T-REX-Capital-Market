@@ -57,6 +57,7 @@ class TokenTransferService {
       senderIdentityAddress: row.senderIdentityAddress,
       recipientIdentityAddress: row.recipientIdentityAddress,
       tokenDecimals: Number(row.tokenDecimals),
+      tokenPrice: String(row.tokenPrice),
       tokenAmount: String(row.tokenAmount),
       tokenAmountRaw: String(row.tokenAmountRaw),
       transactionRequest: row.status === 'PENDING_TRANSFER' ? {
@@ -222,6 +223,7 @@ class TokenTransferService {
         senderIdentityAddress: ethers.getAddress(context.senderIdentityAddress),
         recipientIdentityAddress: ethers.getAddress(context.recipientIdentityAddress),
         tokenDecimals,
+        tokenPrice: String(context.tokenPrice),
         tokenAmount: amount.tokenAmount,
         tokenAmountRaw: amount.tokenAmountRaw.toString(),
         senderBalanceBeforeRaw: preparation.senderBalanceBeforeRaw,

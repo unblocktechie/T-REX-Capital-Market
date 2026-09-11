@@ -4,7 +4,7 @@ A production-oriented Node.js, Express, and MySQL API foundation for T-REX Capit
 
 ## Features
 
-- Issuer/investor signup role selection, email verification, verified-user login, forgot/reset password, and JWT authentication
+- Issuer/investor signup role selection, one-time POST email verification with immediate JWT login, password login, forgot/reset password, and JWT authentication
 - API-level role-based access control loaded from `permissionMaster`
 - Hybrid ONCHAINID claim synchronization: receipt verification, a global checkpointed multi-identity indexer, fast Retry, and targeted recovery
 - CRUD APIs for users, roles, menus, permissions, and general settings
@@ -86,6 +86,17 @@ Apply `database/migrations/20260910_add_token_redemption_flow.sql` for investor-
 Apply `database/migrations/20260910_add_investor_invitations.sql` for issuer discovery of completed investor profiles, unique token invitations, durable email-delivery state, and the investor invitation inbox. Invitation links use `FRONTEND_URL/app/marketplace/{tokenUid}`. See `docs/INVESTOR-INVITATIONS.md`.
 
 Apply `database/migrations/20260910_add_investor_portfolio_permission.sql` to grant investors access to the aggregated completed-investment portfolio endpoint.
+Apply `database/migrations/20260911_add_token_transfer_flow.sql` for backend-authoritative investor token sends, exact transaction verification, sent/received history, RBAC, expiry, and hybrid global/targeted fallback recovery. Configure the transfer confirmation, indexer start block, TTL, and worker values from `.env.example`. See `docs/TOKEN-TRANSFER-FLOW.md`.
+
+Apply `database/migrations/20260911_add_current_token_price.sql` to initialize `currentTokenPrice`
+from the immutable launch price, add the owner-only price update permission, and snapshot the
+effective price on token transfers. New purchase and redemption intents calculate against this
+current price; existing intent snapshots are not repriced.
+
+For a database exported from case-insensitive Windows MySQL and imported into case-sensitive Linux
+MySQL, run `database/fix-linux-table-name-case.sql` after selecting the hosted database. It renames
+all 45 tables to the exact camelCase identifiers used by runtime queries. See
+`docs/DATABASE-TABLE-CASE-GUIDE.md` before running it.
 
 ```bash
 npm run check

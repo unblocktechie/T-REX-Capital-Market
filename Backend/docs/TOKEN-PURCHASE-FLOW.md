@@ -53,7 +53,7 @@ addresses are valid, platform wallet is a Token Agent, and the requested amount 
 `maxBalancePerInvestor`. Only one unsettled purchase per investor is allowed, preventing a missing
 hash from ambiguously matching two identical USDT transfers.
 
-The backend snapshots token price and calculates raw amounts exactly. USDT is rounded **up** to
+The backend snapshots `currentTokenPrice` when the purchase intent is created and calculates raw amounts exactly. USDT is rounded **up** to
 the smallest USDT base unit so the treasury is never underpaid. Response example:
 
 ```json
@@ -99,9 +99,14 @@ new idempotency key; an expired intent cannot be confirmed or retried.
 { "txHash": "0x...64 hex characters..." }
 ```
 
-The backend verifies chain, transaction recipient, sender, `transfer` selector and arguments,
-receipt success, `PURCHASE_PAYMENT_CONFIRMATIONS`, the exact USDT `Transfer` event, and
-transaction-hash uniqueness. Exact expected values come only from the pending database row. An
+For a direct EOA transaction, the backend verifies the USDT transaction recipient and decodes the
+`transfer` selector and arguments. MetaMask may instead wrap the call through its delegated-wallet
+execution contract; in that case the outer `tx.to` and calldata are not treated as the USDT call.
+Both execution types must still have the expected investor as `tx.from`, zero native value, a
+successful canonical receipt, `PURCHASE_PAYMENT_CONFIRMATIONS`, and an exact `Transfer` event
+emitted by the configured USDT contract with the database investor, treasury, and raw amount.
+Transaction-hash uniqueness is also enforced. Exact expected values come only from the pending
+database row. An
 unmined or under-confirmed transaction returns HTTP `200` with the current `PENDING_PAYMENT` state
 and remains recoverable. A definitive
 mismatch returns `422` and never confirms payment.

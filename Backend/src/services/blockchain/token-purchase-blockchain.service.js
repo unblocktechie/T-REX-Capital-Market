@@ -114,20 +114,41 @@ class TokenPurchaseBlockchainService {
         throw new PurchaseBlockchainError('RPC_UNAVAILABLE', 'Could not fetch the payment transaction.', { transient: true });
       }
       if (!tx || !receipt) throw new PurchaseBlockchainError('TRANSACTION_NOT_FOUND', 'Payment transaction is not yet available.', { pending: true });
-      if (!sameAddress(tx.to, expected.usdtContractAddress)) throw new PurchaseBlockchainError('INVALID_USDT_CONTRACT', 'Payment was sent to a different contract.');
       if (!sameAddress(tx.from, expected.investorWalletAddress)) throw new PurchaseBlockchainError('INVALID_PAYMENT_SENDER', 'Payment sender does not match the investor wallet.');
-      let decoded;
-      try { decoded = this.usdtInterface.parseTransaction({ data: tx.data, value: tx.value }); } catch {
-        throw new PurchaseBlockchainError('INVALID_PAYMENT_FUNCTION', 'Payment transaction is not an ERC-20 transfer.');
+      if (BigInt(tx.value || 0) !== 0n) {
+        throw new PurchaseBlockchainError('INVALID_PAYMENT_VALUE', 'USDT payment transaction must not transfer native currency.');
       }
-      if (decoded?.name !== 'transfer') throw new PurchaseBlockchainError('INVALID_PAYMENT_FUNCTION', 'Payment must call transfer.');
-      if (!sameAddress(decoded.args[0], expected.treasuryWalletAddress)
-        || decoded.args[1].toString() !== String(expected.usdtAmountRaw)) {
-        throw new PurchaseBlockchainError('PAYMENT_PARAMETERS_MISMATCH', 'USDT recipient or amount does not match the pending purchase.');
+
+      // A normal EOA transaction calls USDT.transfer directly, so validate its calldata exactly.
+      // MetaMask smart/delegated execution sends the outer transaction to a delegation manager and
+      // performs the USDT call internally. In that case the authoritative proof is the successful,
+      // canonical receipt event emitted by the configured USDT contract itself. We still require
+      // tx.from to be the registered investor; an unrelated bundler/third party is not accepted.
+      const directTransfer = sameAddress(tx.to, expected.usdtContractAddress);
+      if (directTransfer) {
+        let decoded;
+        try { decoded = this.usdtInterface.parseTransaction({ data: tx.data, value: tx.value }); } catch {
+          throw new PurchaseBlockchainError('INVALID_PAYMENT_FUNCTION', 'Payment transaction is not an ERC-20 transfer.');
+        }
+        if (decoded?.name !== 'transfer') throw new PurchaseBlockchainError('INVALID_PAYMENT_FUNCTION', 'Payment must call transfer.');
+        if (!sameAddress(decoded.args[0], expected.treasuryWalletAddress)
+          || decoded.args[1].toString() !== String(expected.usdtAmountRaw)) {
+          throw new PurchaseBlockchainError('PAYMENT_PARAMETERS_MISMATCH', 'USDT recipient or amount does not match the pending purchase.');
+        }
       }
       if (Number(receipt.status) !== 1) throw new PurchaseBlockchainError('PAYMENT_REVERTED', 'USDT payment reverted on-chain.');
       const latest = await provider.getBlockNumber();
       this.expectedConfirmations(latest, receipt.blockNumber, confirmations);
+
+      let canonicalBlock;
+      try { canonicalBlock = await provider.getBlock(receipt.blockNumber); } catch {
+        throw new PurchaseBlockchainError('RPC_UNAVAILABLE', 'Could not verify the canonical payment block.', { transient: true });
+      }
+      if (!canonicalBlock || !receipt.blockHash
+        || String(canonicalBlock.hash).toLowerCase() !== String(receipt.blockHash).toLowerCase()) {
+        throw new PurchaseBlockchainError('CHAIN_REORGANIZATION', 'Payment block is no longer canonical.', { pending: true });
+      }
+
       let matched = null;
       for (const log of receipt.logs || []) {
         if (!sameAddress(log.address, expected.usdtContractAddress)) continue;
@@ -137,7 +158,12 @@ class TokenPurchaseBlockchainService {
           && parsed.args[2].toString() === String(expected.usdtAmountRaw)) { matched = log; break; }
       }
       if (!matched) throw new PurchaseBlockchainError('PAYMENT_EVENT_MISSING', 'Expected USDT Transfer event was not emitted.');
-      return { chainId, txHash: txHash.toLowerCase(), ...receiptFields(receipt, matched) };
+      return {
+        chainId,
+        txHash: txHash.toLowerCase(),
+        executionType: directTransfer ? 'DIRECT' : 'DELEGATED',
+        ...receiptFields(receipt, matched),
+      };
     });
   }
 

@@ -88,11 +88,16 @@ paths:
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/EmailRequest' } } } }
       responses: { '200': { description: Generic accepted response }, '422': { $ref: '#/components/responses/ValidationError' } }
   /api/v1/auth/verify-email:
-    get:
+    post:
       tags: [Authentication]
-      summary: Consume an email verification token
-      parameters: [{ $ref: '#/components/parameters/Token' }]
-      responses: { '200': { description: Email verified }, '400': { description: Invalid or expired token } }
+      summary: Verify email and create an authenticated JWT session
+      description: The frontend verification page submits the one-time token. No JWT is issued for an invalid, expired, used, or inactive account token.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TokenRequest' } } } }
+      responses:
+        '200': { description: Email verified and login successful, content: { application/json: { schema: { $ref: '#/components/schemas/LoginResponse' } } } }
+        '400': { description: Invalid, expired, revoked, or already used token }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
   /api/v1/auth/login:
     post:
       tags: [Authentication]
@@ -443,6 +448,24 @@ paths:
         '400': { description: A wallet does not match the organization wallet }
         '409': { description: Token is immutable }
         '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/tokens/me/price:
+    patch:
+      tags: [Token Creation]
+      summary: Update the current price of the authenticated issuer's deployed token
+      description: Only the token-owning issuer can update currentTokenPrice. initialTokenPrice is never changed. New purchase, redemption, and transfer intents snapshot this current price.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TokenPriceUpdateInput' }
+      responses:
+        '200': { description: Current token price updated; initial token price is unchanged }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { description: User is not the owning issuer }
+        '404': { description: Owned token was not found }
+        '409': { description: Token is not active and deployed, or changed concurrently }
+        '422': { $ref: '#/components/responses/ValidationError' }
   /api/v1/tokens/me/submit:
     post:
       tags: [Token Creation]
@@ -635,7 +658,7 @@ paths:
     post:
       tags: [Identity Registry]
       summary: Independently verify a registerIdentity transaction and conditionally confirm
-      description: The client may send only txHash. Every expected value comes from the PENDING database row.
+      description: The client may send only txHash. Every expected value comes from the PENDING database row. Direct registerIdentity transactions and strictly decoded single executions through a configured MetaMask Delegation Manager are supported.
       security: [{ bearerAuth: [] }]
       parameters:
         - { $ref: '#/components/parameters/InterestUid' }
@@ -1059,6 +1082,11 @@ components:
       type: object
       required: [email]
       properties: { email: { type: string, format: email, example: ada@example.com } }
+    TokenRequest:
+      type: object
+      required: [token]
+      properties:
+        token: { type: string, minLength: 64, maxLength: 64, pattern: '^[A-Fa-f0-9]{64}$' }
     LoginRequest:
       type: object
       required: [email, password]
@@ -1076,6 +1104,15 @@ components:
                 accessToken: { type: string }
                 tokenType: { type: string, example: Bearer }
                 expiresIn: { type: string, example: 1h }
+                user:
+                  type: object
+                  properties:
+                    userUid: { type: string, format: uuid }
+                    roleUid: { type: string, format: uuid }
+                    fullName: { type: string }
+                    email: { type: string, format: email }
+                    roleName: { type: string, example: Investor }
+                    emailVerified: { type: boolean, example: true }
     ResetPasswordRequest:
       type: object
       required: [token, newPassword]
@@ -1175,6 +1212,15 @@ components:
                 description: No individual minimum; completed owner arrays must total exactly 100 percent.
               isPrimary: { type: boolean, example: true }
         isDraft: { type: boolean, example: false }
+    TokenPriceUpdateInput:
+      type: object
+      additionalProperties: false
+      required: [currentTokenPrice]
+      properties:
+        currentTokenPrice:
+          type: number
+          exclusiveMinimum: 0
+          example: 1.25
     OrganizationSubmitInput:
       type: object
       required: [walletAddress]
@@ -1315,6 +1361,19 @@ components:
           type: string
           pattern: '^0x[a-fA-F0-9]{64}$'
           example: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    CreateTokenTransferInput:
+      type: object
+      required: [recipientWalletAddress, tokenAmount, idempotencyKey]
+      additionalProperties: false
+      properties:
+        recipientWalletAddress:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+        tokenAmount:
+          type: string
+          pattern: '^(?:0|[1-9]\d*)(?:\.\d+)?$'
+          example: '1.25'
+        idempotencyKey: { type: string, minLength: 8, maxLength: 100, example: send-20260911-0001 }
     CreateTokenRedemptionInput:
       type: object
       required: [tokenAmount, idempotencyKey]

@@ -15,6 +15,7 @@ const serviceWith = (tx, receipt, contractFactory = () => ({})) => new TokenPurc
   providerFactory: () => ({
     getNetwork: async () => ({ chainId: 11155111n }), getTransaction: async () => tx,
     getTransactionReceipt: async () => receipt, getBlockNumber: async () => 101,
+    getBlock: async () => ({ hash: receipt.blockHash }),
     waitForTransaction: async () => receipt, destroy: () => {},
   }),
   contractFactory,
@@ -31,6 +32,95 @@ test('strictly verifies the exact USDT transfer calldata, receipt, and event', a
   });
   assert.equal(verified.blockNumber, 100);
   assert.equal(verified.logIndex, 7);
+  assert.equal(verified.executionType, 'DIRECT');
+});
+
+test('accepts delegated wallet execution when the canonical USDT event exactly matches the intent', async () => {
+  const iface = new ethers.Interface(ERC20_ABI);
+  const DELEGATION_MANAGER = address('6');
+  const encoded = iface.encodeEventLog(iface.getEvent('Transfer'), [INVESTOR, TREASURY, 1500000n]);
+  const tx = {
+    to: DELEGATION_MANAGER,
+    from: INVESTOR,
+    data: '0xcef6d209',
+    value: 0n,
+  };
+  const receipt = {
+    status: 1, blockNumber: 100, blockHash: `0x${'b'.repeat(64)}`, index: 2,
+    gasUsed: 90000n, gasPrice: 11n,
+    logs: [{ address: USDT, topics: encoded.topics, data: encoded.data, index: 9 }],
+  };
+
+  const verified = await serviceWith(tx, receipt).verifyPayment(TX, {
+    usdtContractAddress: USDT,
+    investorWalletAddress: INVESTOR,
+    treasuryWalletAddress: TREASURY,
+    usdtAmountRaw: '1500000',
+  });
+
+  assert.equal(verified.executionType, 'DELEGATED');
+  assert.equal(verified.transactionIndex, 2);
+  assert.equal(verified.logIndex, 9);
+});
+
+test('rejects delegated execution from a different transaction sender', async () => {
+  const iface = new ethers.Interface(ERC20_ABI);
+  const encoded = iface.encodeEventLog(iface.getEvent('Transfer'), [INVESTOR, TREASURY, 1500000n]);
+  const tx = { to: address('6'), from: address('7'), data: '0xcef6d209', value: 0n };
+  const receipt = {
+    status: 1, blockNumber: 100, blockHash: `0x${'b'.repeat(64)}`,
+    logs: [{ address: USDT, topics: encoded.topics, data: encoded.data, index: 1 }],
+  };
+  await assert.rejects(serviceWith(tx, receipt).verifyPayment(TX, {
+    usdtContractAddress: USDT,
+    investorWalletAddress: INVESTOR,
+    treasuryWalletAddress: TREASURY,
+    usdtAmountRaw: '1500000',
+  }), (error) => error.code === 'INVALID_PAYMENT_SENDER');
+});
+
+test('rejects delegated execution without the exact configured USDT transfer event', async () => {
+  const iface = new ethers.Interface(ERC20_ABI);
+  const wrongAmount = iface.encodeEventLog(iface.getEvent('Transfer'), [INVESTOR, TREASURY, 1n]);
+  const tx = { to: address('6'), from: INVESTOR, data: '0xcef6d209', value: 0n };
+  const receipt = {
+    status: 1, blockNumber: 100, blockHash: `0x${'b'.repeat(64)}`,
+    logs: [{ address: USDT, topics: wrongAmount.topics, data: wrongAmount.data, index: 1 }],
+  };
+  await assert.rejects(serviceWith(tx, receipt).verifyPayment(TX, {
+    usdtContractAddress: USDT,
+    investorWalletAddress: INVESTOR,
+    treasuryWalletAddress: TREASURY,
+    usdtAmountRaw: '1500000',
+  }), (error) => error.code === 'PAYMENT_EVENT_MISSING');
+});
+
+test('rejects a delegated payment whose receipt block is no longer canonical', async () => {
+  const iface = new ethers.Interface(ERC20_ABI);
+  const encoded = iface.encodeEventLog(iface.getEvent('Transfer'), [INVESTOR, TREASURY, 1500000n]);
+  const tx = { to: address('6'), from: INVESTOR, data: '0xcef6d209', value: 0n };
+  const receipt = {
+    status: 1, blockNumber: 100, blockHash: `0x${'b'.repeat(64)}`,
+    logs: [{ address: USDT, topics: encoded.topics, data: encoded.data, index: 1 }],
+  };
+  const service = new TokenPurchaseBlockchainService({
+    sepoliaRpcUrl: 'rpc', chainId: 11155111, purchaseConfirmations: 2,
+  }, {
+    providerFactory: () => ({
+      getNetwork: async () => ({ chainId: 11155111n }),
+      getTransaction: async () => tx,
+      getTransactionReceipt: async () => receipt,
+      getBlockNumber: async () => 101,
+      getBlock: async () => ({ hash: `0x${'c'.repeat(64)}` }),
+      destroy: () => {},
+    }),
+  });
+  await assert.rejects(service.verifyPayment(TX, {
+    usdtContractAddress: USDT,
+    investorWalletAddress: INVESTOR,
+    treasuryWalletAddress: TREASURY,
+    usdtAmountRaw: '1500000',
+  }), (error) => error.code === 'CHAIN_REORGANIZATION' && error.pending === true);
 });
 
 test('interactive payment verification can use its configured one-block confirmation threshold', async () => {

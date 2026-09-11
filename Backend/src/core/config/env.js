@@ -43,7 +43,7 @@ const env = Object.freeze({
     issuerRoleUid: process.env.ISSUER_ROLE_UID || '00000000-0000-4000-8000-000000000003',
     investorRoleUid: process.env.INVESTOR_ROLE_UID || '00000000-0000-4000-8000-000000000004',
     bcryptRounds: Number(process.env.BCRYPT_ROUNDS || 12),
-    verificationTtlMinutes: Number(process.env.EMAIL_VERIFICATION_TOKEN_TTL_MINUTES || 1440),
+    verificationTtlMinutes: Number(process.env.EMAIL_VERIFICATION_TOKEN_TTL_MINUTES || 10),
     resetTtlMinutes: Number(process.env.PASSWORD_RESET_TOKEN_TTL_MINUTES || 30),
   },
   smtp: {
@@ -98,6 +98,13 @@ const env = Object.freeze({
     confirmations: Number(process.env.BLOCKCHAIN_CONFIRMATIONS || 1),
     // Registry confirmation is intentionally conservative because CONFIRMED is authoritative.
     registryConfirmations: Number(process.env.REGISTRY_CONFIRMATIONS || 12),
+    // MetaMask may wrap registerIdentity through its audited Delegation Manager. Only explicitly
+    // configured executors are accepted; the nested target, value, function and arguments are
+    // still decoded and verified against the pending operation.
+    registryDelegationManagerAddresses: csv(
+      process.env.REGISTRY_DELEGATION_MANAGER_ADDRESSES
+        || '0xdb9B1e94B5b69Df7e401DDbedE43491141047dB3',
+    ),
     registryRecoveryLookbackBlocks: Number(process.env.REGISTRY_RECOVERY_LOOKBACK_BLOCKS || 200000),
     registryRecoveryBlockOffset: Number(process.env.REGISTRY_RECOVERY_BLOCK_OFFSET || 20000),
     registryRpcEvidenceAttempts: Number(process.env.REGISTRY_RPC_EVIDENCE_ATTEMPTS || 5),

@@ -3,7 +3,8 @@ const { createUid } = require('../utils/token');
 const { identifier } = require('./base.repository');
 
 const tokenFields = [
-  'tokenName', 'tokenSymbol', 'decimals', 'initialTokenPrice', 'treasuryWalletAddress', 'tokenDescription',
+  'tokenName', 'tokenSymbol', 'decimals', 'initialTokenPrice', 'currentTokenPrice',
+  'treasuryWalletAddress', 'tokenDescription',
   'imageOriginalFileName', 'imageStorageKey', 'imageMimeType', 'imageFileSize', 'imageWidth', 'imageHeight',
   'imageChecksumSha256', 'imageVirusScanStatus', 'trustedClaimIssuerWalletAddress', 'maxInvestors',
   'maxBalancePerInvestor', 'countryRestrictionMode', 'tokenAgentWalletAddress', 'identityManagerWalletAddress',
@@ -103,6 +104,19 @@ class TokenRepository {
       [...entries.map(([, value]) => value), userUid],
       executor,
     );
+    return this.findByUserUid(userUid, executor);
+  }
+
+  async updateCurrentPriceByOwner(userUid, tokenUid, currentTokenPrice, executor) {
+    const result = await execute(
+      `UPDATE \`tokenMaster\`
+       SET \`currentTokenPrice\` = ?, \`updatedAt\` = UTC_TIMESTAMP(3)
+       WHERE \`tokenUid\` = ? AND \`userUid\` = ? AND \`status\` = 'deployed'
+         AND \`isActive\` = 1 AND \`isDeleted\` = 0`,
+      [currentTokenPrice, tokenUid, userUid],
+      executor,
+    );
+    if (!result.affectedRows) return null;
     return this.findByUserUid(userUid, executor);
   }
 

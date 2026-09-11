@@ -163,6 +163,9 @@ class TokenService {
     const { isDraft, ...fields } = input;
     const update = {
       ...fields,
+      ...(fields.initialTokenPrice !== undefined
+        ? { currentTokenPrice: fields.initialTokenPrice }
+        : {}),
       ...(processedImage?.fields || {}),
       currentStep: isDraft ? (current?.currentStep || 'tokenInformation') : 'claims',
       isDraft: true,
@@ -183,6 +186,26 @@ class TokenService {
       if (processedImage) await fs.promises.unlink(processedImage.filePath).catch(() => {});
       throw error;
     }
+  }
+
+  async updateCurrentPrice(user, input) {
+    const organization = await this.approvedOrganization(user);
+    const token = await this.repository.findByUserUid(user.userUid);
+    if (!token || token.organizationUid !== organization.organizationUid) {
+      throw new ApiError(404, 'Owned token was not found.', undefined, 'TOKEN_NOT_FOUND');
+    }
+    if (token.status !== 'deployed' || !token.isActive) {
+      throw new ApiError(409, 'Only an active deployed token price can be changed.', undefined, 'TOKEN_NOT_DEPLOYED');
+    }
+    const updated = await this.repository.updateCurrentPriceByOwner(
+      user.userUid,
+      token.tokenUid,
+      input.currentTokenPrice,
+    );
+    if (!updated) {
+      throw new ApiError(409, 'Token price changed concurrently or the token is no longer active.', undefined, 'TOKEN_PRICE_UPDATE_CONFLICT');
+    }
+    return updated;
   }
 
   async saveClaims(user, input) {

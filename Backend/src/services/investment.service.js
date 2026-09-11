@@ -69,6 +69,9 @@ class InvestmentService {
       status,
       page,
       limit,
+      // Restriction filtering is investor-specific. Admin marketplace requests must keep
+      // their complete catalogue view and therefore do not provide an investor identity.
+      investorUserUid: user.roleName === 'Investor' ? user.userUid : null,
     });
 
     const restrictionsByToken = await this.groupCountryRestrictions(rows.map((row) => row.tokenUid));

@@ -64,7 +64,9 @@ class TokenPurchaseRepository {
         GROUP BY x.\`tokenUid\`
       ) received ON received.\`tokenUid\` = portfolio.\`tokenUid\``;
     const select = `SELECT t.\`tokenUid\`, t.\`organizationUid\`, t.\`tokenName\`, t.\`tokenSymbol\`,
-        t.\`decimals\`, t.\`initialTokenPrice\`, t.\`treasuryWalletAddress\`, t.\`tokenDescription\`,
+        t.\`decimals\`, t.\`initialTokenPrice\`, t.\`currentTokenPrice\`,
+        COALESCE(t.\`currentTokenPrice\`, t.\`initialTokenPrice\`) AS \`tokenPrice\`,
+        t.\`treasuryWalletAddress\`, t.\`tokenDescription\`,
         t.\`imageStorageKey\`, t.\`imageMimeType\`, t.\`maxInvestors\`, t.\`maxInvestors\` AS \`maxHolder\`,
         t.\`maxBalancePerInvestor\`, t.\`countryRestrictionMode\`, t.\`tokenAddress\`,
         t.\`trustedClaimIssuerWalletAddress\`, t.\`tokenAgentWalletAddress\`,
@@ -113,7 +115,8 @@ class TokenPurchaseRepository {
               i.\`walletAddress\` AS \`investorWalletAddress\`, i.\`status\` AS \`investorStatus\`,
               i.\`isActive\` AS \`investorActive\`, i.\`isDeleted\` AS \`investorDeleted\`,
               t.\`tokenUid\`, t.\`tokenAddress\`, t.\`treasuryWalletAddress\`, t.\`identityRegistryAddress\`,
-              t.\`decimals\` AS \`tokenDecimals\`, CAST(t.\`initialTokenPrice\` AS CHAR) AS \`tokenPrice\`,
+              t.\`decimals\` AS \`tokenDecimals\`,
+              CAST(COALESCE(t.\`currentTokenPrice\`, t.\`initialTokenPrice\`) AS CHAR) AS \`tokenPrice\`,
               CAST(t.\`maxBalancePerInvestor\` AS CHAR) AS \`maxBalancePerInvestor\`,
               t.\`status\` AS \`tokenStatus\`, t.\`isActive\` AS \`tokenActive\`
        FROM \`tokenInvestmentInterest\` ii

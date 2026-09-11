@@ -56,10 +56,19 @@ const tokenSubmit = Joi.object({
   deploymentAttemptUid: uid,
 });
 
+const tokenPriceUpdate = Joi.object({
+  currentTokenPrice: Joi.number()
+    .positive()
+    .precision(18)
+    .max(999999999999999999)
+    .required(),
+});
+
 module.exports = {
   tokenInformation,
   tokenClaims,
   tokenCompliance,
   tokenGovernance,
   tokenSubmit,
+  tokenPriceUpdate,
 };

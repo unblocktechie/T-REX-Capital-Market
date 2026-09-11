@@ -12,7 +12,8 @@ class TokenRedemptionRepository {
               i.\`walletAddress\` AS \`investorWalletAddress\`, i.\`status\` AS \`investorStatus\`,
               i.\`isActive\` AS \`investorActive\`, i.\`isDeleted\` AS \`investorDeleted\`,
               t.\`tokenUid\`, t.\`tokenAddress\`, t.\`treasuryWalletAddress\`, t.\`decimals\` AS \`tokenDecimals\`,
-              CAST(t.\`initialTokenPrice\` AS CHAR) AS \`tokenPrice\`, t.\`status\` AS \`tokenStatus\`,
+              CAST(COALESCE(t.\`currentTokenPrice\`, t.\`initialTokenPrice\`) AS CHAR) AS \`tokenPrice\`,
+              t.\`status\` AS \`tokenStatus\`,
               t.\`isActive\` AS \`tokenActive\`, o.\`userUid\` AS \`issuerUserUid\`,
               o.\`status\` AS \`organizationStatus\`, o.\`isActive\` AS \`organizationActive\`,
               EXISTS(

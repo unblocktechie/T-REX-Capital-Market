@@ -12,11 +12,18 @@ const resolveSignupRoleUid = (isIssuer) => (
 );
 
 class AuthService {
-  constructor({ userRepository, roleRepository, authTokenRepository, emailService }) {
+  constructor({
+    userRepository,
+    roleRepository,
+    authTokenRepository,
+    emailService,
+    transactionRunner = withTransaction,
+  }) {
     this.userRepository = userRepository;
     this.roleRepository = roleRepository;
     this.authTokenRepository = authTokenRepository;
     this.emailService = emailService;
+    this.transactionRunner = transactionRunner;
   }
 
   tokenRecord(userUid, tokenType, token, ttlMinutes) {
@@ -40,7 +47,7 @@ class AuthService {
     const passwordHash = await bcrypt.hash(password, env.auth.bcryptRounds);
     const rawToken = createOpaqueToken();
 
-    const user = await withTransaction(async (connection) => {
+    const user = await this.transactionRunner(async (connection) => {
       const created = await this.userRepository.create({
         roleUid: role.roleUid,
         fullName,
@@ -65,7 +72,7 @@ class AuthService {
     const user = await this.userRepository.findByEmail(email);
     if (!user || user.emailVerified || !user.isActive) return;
     const rawToken = createOpaqueToken();
-    await withTransaction(async (connection) => {
+    await this.transactionRunner(async (connection) => {
       await this.authTokenRepository.revokeActive(user.userUid, TOKEN_TYPES.EMAIL_VERIFICATION, connection);
       await this.authTokenRepository.create(
         this.tokenRecord(user.userUid, TOKEN_TYPES.EMAIL_VERIFICATION, rawToken, env.auth.verificationTtlMinutes),
@@ -77,25 +84,35 @@ class AuthService {
 
   async verifyEmail(token) {
     const tokenHash = hashToken(token);
-    return withTransaction(async (connection) => {
-      const record = await this.authTokenRepository.findValid(tokenHash, TOKEN_TYPES.EMAIL_VERIFICATION, connection);
+    return this.transactionRunner(async (connection) => {
+      const record = await this.authTokenRepository.findValidForUpdate(
+        tokenHash,
+        TOKEN_TYPES.EMAIL_VERIFICATION,
+        connection,
+      );
       if (!record) throw ApiError.badRequest('Verification link is invalid or has expired.');
       const user = await this.userRepository.findByUid(record.userUid, connection);
       if (!user) throw ApiError.badRequest('Verification link is invalid or has expired.');
+
+      const authIdentity = await this.userRepository.findAuthIdentityByUid(user.userUid, connection);
+      this.assertAccountActive(authIdentity);
+
       await this.userRepository.markEmailVerified(user.userUid, connection);
       await this.authTokenRepository.markUsed(record.tokenUid, connection);
-      return this.userRepository.findByUid(user.userUid, connection);
+      return this.createAuthenticationSession({ ...authIdentity, emailVerified: true }, connection);
     });
   }
 
-  async login(email, password) {
-    const user = await this.userRepository.findAuthIdentityByEmail(email);
-    if (!user || !await bcrypt.compare(password, user.passwordHash)) {
-      throw ApiError.unauthorized('Email or password is incorrect.');
+  assertAccountActive(user) {
+    if (!user || !user.isActive || !user.roleActive) {
+      throw ApiError.forbidden('This account is inactive. Please contact support.');
     }
-    if (!user.emailVerified) throw ApiError.forbidden('Please verify your email before logging in.');
-    if (!user.isActive || !user.roleActive) throw ApiError.forbidden('This account is inactive. Please contact support.');
+  }
 
+  // The only JWT/session factory used by password login and email-verification login. Keep
+  // authentication claims here so both entry points always issue identical tokens.
+  async createAuthenticationSession(user, executor) {
+    this.assertAccountActive(user);
     const claims = {
       userUid: user.userUid,
       roleUid: user.roleUid,
@@ -109,8 +126,23 @@ class AuthService {
       audience: 'trex-capital-market-api',
       subject: user.userUid,
     });
-    await this.userRepository.updateLastLogin(user.userUid);
-    return { accessToken, tokenType: 'Bearer', expiresIn: env.jwt.expiry, user: claims };
+    await this.userRepository.updateLastLogin(user.userUid, executor);
+    return {
+      accessToken,
+      tokenType: 'Bearer',
+      expiresIn: env.jwt.expiry,
+      user: { ...claims, emailVerified: Boolean(user.emailVerified) },
+    };
+  }
+
+  async login(email, password) {
+    const user = await this.userRepository.findAuthIdentityByEmail(email);
+    if (!user || !await bcrypt.compare(password, user.passwordHash)) {
+      throw ApiError.unauthorized('Email or password is incorrect.');
+    }
+    this.assertAccountActive(user);
+    if (!user.emailVerified) throw ApiError.forbidden('Please verify your email before logging in.');
+    return this.createAuthenticationSession(user);
   }
 
   async forgotPassword(email) {
@@ -118,7 +150,7 @@ class AuthService {
     if (!user) throw ApiError.notFound('This email is not registered. Please sign up first.');
     if (!user.isActive) throw ApiError.forbidden('This account is inactive. Please contact support.');
     const rawToken = createOpaqueToken();
-    await withTransaction(async (connection) => {
+    await this.transactionRunner(async (connection) => {
       await this.authTokenRepository.revokeActive(user.userUid, TOKEN_TYPES.PASSWORD_RESET, connection);
       await this.authTokenRepository.create(
         this.tokenRecord(user.userUid, TOKEN_TYPES.PASSWORD_RESET, rawToken, env.auth.resetTtlMinutes),
@@ -136,7 +168,7 @@ class AuthService {
 
   async resetPassword(token, newPassword) {
     const passwordHash = await bcrypt.hash(newPassword, env.auth.bcryptRounds);
-    await withTransaction(async (connection) => {
+    await this.transactionRunner(async (connection) => {
       const record = await this.authTokenRepository.findValid(hashToken(token), TOKEN_TYPES.PASSWORD_RESET, connection);
       if (!record) throw ApiError.badRequest('Password reset link is invalid or has expired.');
       await this.userRepository.updatePassword(record.userUid, passwordHash, connection);

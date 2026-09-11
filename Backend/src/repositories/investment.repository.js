@@ -24,7 +24,9 @@ const historyFields = [
 
 // Token columns exposed by the investment marketplace (a read-only catalogue of tokens).
 const MARKETPLACE_TOKEN_COLUMNS = `t.\`tokenUid\`, t.\`organizationUid\`, t.\`tokenName\`, t.\`tokenSymbol\`,
-  t.\`decimals\`, t.\`initialTokenPrice\`, t.\`tokenDescription\`, t.\`imageStorageKey\`, t.\`imageMimeType\`,
+  t.\`decimals\`, t.\`initialTokenPrice\`, t.\`currentTokenPrice\`,
+  COALESCE(t.\`currentTokenPrice\`, t.\`initialTokenPrice\`) AS \`tokenPrice\`,
+  t.\`tokenDescription\`, t.\`imageStorageKey\`, t.\`imageMimeType\`,
   t.\`maxInvestors\`, t.\`maxInvestors\` AS \`maxHolder\`, t.\`maxBalancePerInvestor\`, t.\`countryRestrictionMode\`,
   t.\`tokenAddress\`, t.\`status\`, t.\`deployedAt\`, t.\`createdAt\`, t.\`updatedAt\`,
   o.\`legalCompanyName\`, o.\`walletAddress\` AS \`organizationWalletAddress\`,
@@ -42,7 +44,13 @@ class InvestmentRepository {
 
   // Read-only token catalogue. `status` defaults to 'deployed' (only live tokens are
   // investable); pass status = 'all' to list every non-deleted token (admin view).
-  async listMarketplaceTokens({ search, status = 'deployed', page = 1, limit = 20 } = {}, executor) {
+  async listMarketplaceTokens({
+    search,
+    status = 'deployed',
+    page = 1,
+    limit = 20,
+    investorUserUid = null,
+  } = {}, executor) {
     const safePage = Math.max(1, Math.trunc(Number(page) || 1));
     const safeLimit = Math.max(1, Math.trunc(Number(limit) || 20));
     const where = ['t.`isDeleted` = 0'];
@@ -54,6 +62,33 @@ class InvestmentRepository {
     if (search) {
       where.push('(t.`tokenName` LIKE ? OR t.`tokenSymbol` LIKE ?)');
       params.push(`%${search}%`, `%${search}%`);
+    }
+    // For investor requests, exclude tokens for which the investor's active-profile country
+    // is ineligible. A blocklist rejects listed countries; an allowlist rejects unlisted
+    // countries. Keep this in SQL (rather than filtering returned rows) so both the result
+    // page and total count describe the same eligible token set. A profile without a country
+    // retains the existing catalogue behavior; onboarding validation handles that separately.
+    if (investorUserUid) {
+      where.push(`NOT EXISTS (
+        SELECT 1
+        FROM \`investorMaster\` i
+        WHERE i.\`userUid\` = ? AND i.\`countryUid\` IS NOT NULL
+          AND i.\`isActive\` = 1 AND i.\`isDeleted\` = 0
+          AND (
+            (t.\`countryRestrictionMode\` = 'blocklist' AND EXISTS (
+              SELECT 1 FROM \`tokenCountryRestriction\` tr
+              WHERE tr.\`tokenUid\` = t.\`tokenUid\` AND tr.\`countryUid\` = i.\`countryUid\`
+                AND tr.\`isActive\` = 1 AND tr.\`isDeleted\` = 0
+            ))
+            OR
+            (t.\`countryRestrictionMode\` = 'allowlist' AND NOT EXISTS (
+              SELECT 1 FROM \`tokenCountryRestriction\` tr
+              WHERE tr.\`tokenUid\` = t.\`tokenUid\` AND tr.\`countryUid\` = i.\`countryUid\`
+                AND tr.\`isActive\` = 1 AND tr.\`isDeleted\` = 0
+            ))
+          )
+      )`);
+      params.push(investorUserUid);
     }
     const whereSql = where.join(' AND ');
     const offset = (safePage - 1) * safeLimit;
@@ -173,6 +208,8 @@ class InvestmentRepository {
     const rows = await execute(
       `SELECT ii.*,
               t.\`tokenName\`, t.\`tokenSymbol\`, t.\`decimals\`, t.\`initialTokenPrice\`,
+              t.\`currentTokenPrice\`,
+              COALESCE(t.\`currentTokenPrice\`, t.\`initialTokenPrice\`) AS \`tokenPrice\`,
               t.\`imageStorageKey\`, t.\`imageMimeType\`, t.\`tokenAddress\`, t.\`status\` AS \`tokenStatus\`,
               o.\`legalCompanyName\`, o.\`contractAddress\` AS \`organizationIdentityAddress\`,
               i.\`firstName\`, i.\`lastName\`, i.\`profileReference\`, i.\`status\` AS \`investorStatus\`,
@@ -308,6 +345,8 @@ class InvestmentRepository {
       `SELECT ii.\`interestUid\`, ii.\`tokenUid\`, ii.\`organizationUid\`, ii.\`status\`, ii.\`note\`,
               ii.\`walletAddress\`, ii.\`submittedAt\`, ii.\`decisionAt\`, ii.\`createdAt\`,
               t.\`tokenName\`, t.\`tokenSymbol\`, t.\`decimals\`, t.\`initialTokenPrice\`,
+              t.\`currentTokenPrice\`,
+              COALESCE(t.\`currentTokenPrice\`, t.\`initialTokenPrice\`) AS \`tokenPrice\`,
               t.\`maxInvestors\`, t.\`maxBalancePerInvestor\`,
               t.\`imageStorageKey\`, t.\`tokenAddress\`, t.\`status\` AS \`tokenStatus\`,
               o.\`legalCompanyName\`

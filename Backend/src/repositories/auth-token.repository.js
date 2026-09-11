@@ -16,6 +16,19 @@ class AuthTokenRepository extends BaseRepository {
     return rows[0] || null;
   }
 
+  // Locks the one-time token while it is consumed. This prevents two concurrent verification
+  // requests from both issuing a session for the same token before either transaction commits.
+  async findValidForUpdate(tokenHash, tokenType, executor) {
+    const rows = await execute(
+      `SELECT * FROM \`authToken\` WHERE \`tokenHash\` = ? AND \`tokenType\` = ?
+       AND \`usedAt\` IS NULL AND \`revokedAt\` IS NULL AND \`expiresAt\` > UTC_TIMESTAMP(3)
+       AND \`isDeleted\` = 0 LIMIT 1 FOR UPDATE`,
+      [tokenHash, tokenType],
+      executor,
+    );
+    return rows[0] || null;
+  }
+
   async revokeActive(userUid, tokenType, executor) {
     await execute(
       `UPDATE \`authToken\` SET \`revokedAt\` = UTC_TIMESTAMP(3), \`updatedAt\` = UTC_TIMESTAMP(3)

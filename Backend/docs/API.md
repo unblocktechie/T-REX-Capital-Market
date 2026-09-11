@@ -57,9 +57,39 @@ Validation error:
 
 Always returns a generic `200` response. Any previous unused verification link is revoked.
 
-### `GET /auth/verify-email?token=<64-hex-character-token>`
+### `POST /auth/verify-email`
 
-Returns the user with `emailVerified: true` and `emailVerifiedAt`. The link becomes unusable after success.
+```json
+{ "token": "<64-hex-character-token>" }
+```
+
+Atomically verifies the email, consumes the one-time token, records the verification and
+last-login timestamps, and returns the same Bearer JWT session shape as `/auth/login`.
+The JWT is issued only when the user and assigned role are active. Invalid, expired, revoked,
+or previously used tokens return `400`; an inactive user or role returns `403`.
+
+```json
+{
+  "success": true,
+  "message": "Email verified and login successful.",
+  "data": {
+    "accessToken": "eyJ...",
+    "tokenType": "Bearer",
+    "expiresIn": "1h",
+    "user": {
+      "userUid": "...",
+      "roleUid": "...",
+      "fullName": "Ada Lovelace",
+      "email": "ada@example.com",
+      "roleName": "Investor",
+      "emailVerified": true
+    }
+  }
+}
+```
+
+The email URL still opens the frontend `/verify-email?token=...` page. That page must submit
+the token to this POST endpoint; there is intentionally no state-changing GET endpoint.
 
 ### `POST /auth/login`
 
@@ -315,6 +345,10 @@ DELETE /organizations/me/documents/{documentUid}
 
 Token creation requires an authenticated Issuer with an approved organization and valid organization `walletAddress`. One token row is uniquely bound to one organization. After the token becomes `readyToDeploy` or `deployed`, issuer edits are rejected; the organization cannot create another token. A `deploymentFailed` token remains eligible for another verified deployment submission.
 
+`initialTokenPrice` is the immutable launch price. When token information is first saved, the backend
+sets `currentTokenPrice` to the same value. Marketplace, portfolio and token detail responses return
+both values and expose `tokenPrice` as the effective current price for compatibility.
+
 ### `GET /token-options`
 
 Publicly returns:
@@ -347,6 +381,21 @@ tokenImage=<PNG, JPEG, WebP, or SVG file>
 `tokenName` is trimmed, 3–50 characters, allows letters/numbers/spaces/hyphens/periods/apostrophes, cannot begin or end with punctuation, and cannot contain consecutive spaces. `tokenSymbol` is automatically uppercased and must contain 2–10 letters/numbers. Completed information requires every field except description and requires an existing or newly uploaded image.
 
 The image limit is 2 MB with dimensions from 256×256 through 4096×4096. The API decodes the actual file rather than trusting its extension, rejects MIME/signature mismatches and corrupted or unsafe SVG files, optionally invokes ClamAV, then re-encodes the image to optimized WebP (maximum optimized dimension 1024) without EXIF metadata.
+
+### `PATCH /tokens/me/price`
+
+Only the authenticated issuer who owns the active deployed token may change its current price.
+
+```json
+{
+  "currentTokenPrice": 1.25
+}
+```
+
+The value must be greater than zero with no more than 18 decimal places. The update changes only
+`currentTokenPrice`; it never changes `initialTokenPrice`. New purchase and redemption intents use
+this value to calculate USDT, while transfer intents snapshot it as the transfer-time valuation.
+Existing pending and completed transaction records retain their original price snapshot.
 
 ### `GET /tokens/me/image`
 
@@ -533,8 +582,11 @@ See `docs/INVESTOR-CLAIM-SUBMISSION.md` for payloads and
   and synchronizes the subscription instead of returning `INVESTOR_ALREADY_REGISTERED`.
 - `GET /investments/issuer/interests/{interestUid}/registry-registration` resumes the operation.
 - `POST /investments/issuer/interests/{interestUid}/registry-registration/{registryRegistrationUid}/confirm`
-  accepts only `{ "txHash": "0x..." }`. It verifies chain, sender, recipient, calldata, receipt,
-  deployed-version `IdentityRegistered` event and final registry state before atomically confirming.
+  accepts only `{ "txHash": "0x..." }`. It verifies chain, issuer sender, zero native value and
+  either a direct registry call or a strictly decoded call through an allowlisted MetaMask
+  Delegation Manager. The direct/nested registry target, `registerIdentity` calldata, canonical
+  receipt, deployed-version `IdentityRegistered` event and final state must all match before the
+  operation is atomically confirmed.
 
 Successful confirmation also atomically changes the subscription from `claimSubmitted` to
 `registered` and records a single `registered` event in `tokenInvestmentInterestHistory`. The API

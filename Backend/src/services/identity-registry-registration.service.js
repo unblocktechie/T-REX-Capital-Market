@@ -236,6 +236,7 @@ class IdentityRegistryRegistrationService {
             'MATCHED',
             registration.registryRegistrationUid,
             'Existing on-chain registration independently verified and synchronized.',
+            {},
             connection,
           );
         }

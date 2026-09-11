@@ -40,6 +40,13 @@ on the read (`/required-documents`) and on the write (`/interest`).
 ### Marketplace — Admin + Investor
 
 `GET /api/v1/investments/tokens`
+
+For an authenticated investor, the marketplace automatically excludes country-ineligible
+tokens using the country selected in that investor's active profile. An active `blocklist`
+excludes a token when `tokenCountryRestriction` contains the investor's `countryUid`; an
+active `allowlist` excludes it when the country is not listed. The filter is applied before
+pagination and counting. Admin marketplace requests are not country-filtered.
+
 List the token catalogue. Query: `page`, `limit`, `search` (name/symbol), `status`. Each item
 includes name, symbol, decimals, price, description, company,
 `organizationCountryName`, `organizationCountryCode` (the organization's own country),

@@ -23,6 +23,7 @@ class TokenTransferRepository {
               recipientUser.email AS recipientEmail,
               t.tokenUid, t.tokenAddress, t.identityRegistryAddress,
               t.decimals AS tokenDecimals,
+              CAST(COALESCE(t.currentTokenPrice,t.initialTokenPrice) AS CHAR) AS tokenPrice,
               CAST(t.maxBalancePerInvestor AS CHAR) AS maxBalancePerInvestor,
               t.status AS tokenStatus, t.isActive AS tokenActive
        FROM tokenInvestmentInterest si
@@ -113,15 +114,15 @@ class TokenTransferRepository {
          senderInvestorUid,recipientInvestorUid,senderUserUid,recipientUserUid,
          idempotencyKey,chainId,tokenAddress,identityRegistryAddress,
          senderWalletAddress,recipientWalletAddress,senderIdentityAddress,
-         recipientIdentityAddress,tokenDecimals,tokenAmount,tokenAmountRaw,
+         recipientIdentityAddress,tokenDecimals,tokenPrice,tokenAmount,tokenAmountRaw,
          senderBalanceBeforeRaw,recipientBalanceBeforeRaw,senderFrozenBeforeRaw,
          preparedAtBlock,expiresAt)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [transferUid, data.tokenUid, data.organizationUid, data.senderInterestUid, data.recipientInterestUid,
         data.senderInvestorUid, data.recipientInvestorUid, data.senderUserUid, data.recipientUserUid,
         data.idempotencyKey, data.chainId, data.tokenAddress, data.identityRegistryAddress,
         data.senderWalletAddress, data.recipientWalletAddress, data.senderIdentityAddress,
-        data.recipientIdentityAddress, data.tokenDecimals, data.tokenAmount, data.tokenAmountRaw,
+        data.recipientIdentityAddress, data.tokenDecimals, data.tokenPrice, data.tokenAmount, data.tokenAmountRaw,
         data.senderBalanceBeforeRaw, data.recipientBalanceBeforeRaw, data.senderFrozenBeforeRaw,
         data.preparedAtBlock, data.expiresAt], executor,
     );

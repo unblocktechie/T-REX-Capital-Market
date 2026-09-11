@@ -127,9 +127,13 @@ class IdentityRegistryReconciliationService {
   }
 
   async reconcileEvent(event) {
-    const registration = await this.repository.findPendingForEvent(event);
+    // A successful HTTP confirmation may commit before this durable raw event is processed. Look
+    // up the transaction owner first so the event ledger can become MATCHED idempotently instead
+    // of leaving an already-confirmed event UNMATCHED.
+    let registration = await this.repository.findByTxHash(event.txHash);
+    if (!registration) registration = await this.repository.findPendingForEvent(event);
     if (!registration) {
-      await this.repository.markEvent(event.registryEventUid, 'UNMATCHED', null, 'No matching PENDING registry operation exists yet.');
+      await this.repository.markEvent(event.registryEventUid, 'UNMATCHED', null, 'No matching registry operation exists yet.');
       return 'UNMATCHED';
     }
     try {
@@ -138,8 +142,15 @@ class IdentityRegistryReconciliationService {
       await this.repository.markEvent(event.registryEventUid, 'MATCHED', registration.registryRegistrationUid, 'Operation independently verified and confirmed.');
       return 'MATCHED';
     } catch (error) {
-      await this.repository.markEvent(event.registryEventUid, 'FAILED', registration.registryRegistrationUid, error.message);
-      if (error instanceof RegistryVerificationError && !error.transient && !error.pending) {
+      const terminal = error instanceof RegistryVerificationError && !error.transient && !error.pending;
+      await this.repository.markEvent(
+        event.registryEventUid,
+        'FAILED',
+        registration.registryRegistrationUid,
+        error.message,
+        { terminal },
+      );
+      if (terminal && registration.status === 'PENDING') {
         await this.repository.recordError(registration.registryRegistrationUid, error.code, error.message, { retrySeconds: null });
       }
       throw error;

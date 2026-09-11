@@ -7,7 +7,7 @@ const TOKEN_TRANSFER_ABI = [
   'function getFrozenTokens(address userAddress) view returns (uint256)',
   'function paused() view returns (bool)',
   'function identityRegistry() view returns (address)',
-  'function canTransfer(address from,address to,uint256 amount) view returns (bool,bytes1,bytes32)',
+  'function compliance() view returns (address)',
   'function transfer(address to,uint256 amount) returns (bool)',
   'event Transfer(address indexed from,address indexed to,uint256 value)',
 ];
@@ -16,6 +16,13 @@ const IDENTITY_REGISTRY_ABI = [
   'function contains(address userAddress) view returns (bool)',
   'function isVerified(address userAddress) view returns (bool)',
   'function identity(address userAddress) view returns (address)',
+];
+
+// ERC-3643 modular compliance. The T-REX token itself exposes no canTransfer(); the module rules
+// (country limits, max holders, etc.) live on the compliance contract, whose canTransfer returns a
+// single bool (this is NOT the ERC-1400 (bool,bytes1,bytes32) shape).
+const MODULAR_COMPLIANCE_ABI = [
+  'function canTransfer(address from,address to,uint256 amount) view returns (bool)',
 ];
 
 class TokenTransferBlockchainError extends Error {
@@ -83,13 +90,12 @@ class TokenTransferBlockchainService {
       try {
         const [decimals, senderBalance, recipientBalance, senderFrozen, paused, registryAddress,
           senderContains, recipientContains, senderVerified, recipientVerified,
-          senderIdentity, recipientIdentity, canTransferResult, preparedAtBlock] = await Promise.all([
+          senderIdentity, recipientIdentity, preparedAtBlock] = await Promise.all([
           token.decimals(), token.balanceOf(expected.senderWalletAddress), token.balanceOf(expected.recipientWalletAddress),
           token.getFrozenTokens(expected.senderWalletAddress), token.paused(), token.identityRegistry(),
           registry.contains(expected.senderWalletAddress), registry.contains(expected.recipientWalletAddress),
           registry.isVerified(expected.senderWalletAddress), registry.isVerified(expected.recipientWalletAddress),
           registry.identity(expected.senderWalletAddress), registry.identity(expected.recipientWalletAddress),
-          token.canTransfer(expected.senderWalletAddress, expected.recipientWalletAddress, BigInt(expected.tokenAmountRaw)),
           provider.getBlockNumber(),
         ]);
         if (!sameAddress(registryAddress, expected.identityRegistryAddress)) {
@@ -102,10 +108,24 @@ class TokenTransferBlockchainService {
           throw new TokenTransferBlockchainError('RECIPIENT_NOT_VERIFIED_ONCHAIN', 'Recipient is not verified in the token Identity Registry.');
         }
         if (paused) throw new TokenTransferBlockchainError('TOKEN_PAUSED', 'Token transfers are currently paused.');
-        const allowed = Array.isArray(canTransferResult) ? Boolean(canTransferResult[0]) : Boolean(canTransferResult?.[0]);
-        if (!allowed) {
-          const reason = canTransferResult?.[1] ? ethers.hexlify(canTransferResult[1]) : 'unknown';
-          throw new TokenTransferBlockchainError('TRANSFER_NOT_ALLOWED', `ERC-3643 compliance rejected the transfer (${reason}).`);
+        // ERC-3643 compliance pre-check via the token's modular compliance contract. A read failure
+        // here must not fail the intent (the on-chain transfer still enforces compliance), so it is
+        // guarded — only an explicit `false` (a genuine compliance rejection) blocks the intent.
+        let complianceAddress = null;
+        try { complianceAddress = await token.compliance(); } catch (complianceGetterError) { complianceAddress = null; }
+        if (ethers.isAddress(complianceAddress)) {
+          let allowed = true;
+          try {
+            const compliance = this.contractFactory(complianceAddress, MODULAR_COMPLIANCE_ABI, provider);
+            allowed = Boolean(await compliance.canTransfer(
+              expected.senderWalletAddress, expected.recipientWalletAddress, BigInt(expected.tokenAmountRaw),
+            ));
+          } catch (complianceError) {
+            allowed = true; // compliance unreadable -> defer to the on-chain transfer's own check
+          }
+          if (!allowed) {
+            throw new TokenTransferBlockchainError('TRANSFER_NOT_ALLOWED', 'ERC-3643 compliance rules rejected the transfer.');
+          }
         }
         const available = BigInt(senderBalance) - BigInt(senderFrozen);
         if (available < BigInt(expected.tokenAmountRaw)) {
@@ -302,5 +322,6 @@ module.exports = {
   TokenTransferBlockchainError,
   TOKEN_TRANSFER_ABI,
   IDENTITY_REGISTRY_ABI,
+  MODULAR_COMPLIANCE_ABI,
   sameAddress,
 };

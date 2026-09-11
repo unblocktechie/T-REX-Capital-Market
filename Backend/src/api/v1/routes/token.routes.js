@@ -20,6 +20,12 @@ const createTokenRouter = ({ controller, deploymentController, authenticate, aut
   router.put('/me/claims', validate({ body: schemas.tokenClaims }), authorize, asyncHandler(controller.saveClaims));
   router.put('/me/compliance', validate({ body: schemas.tokenCompliance }), authorize, asyncHandler(controller.saveCompliance));
   router.put('/me/governance', validate({ body: schemas.tokenGovernance }), authorize, asyncHandler(controller.saveGovernance));
+  router.patch(
+    '/me/price',
+    validate({ body: schemas.tokenPriceUpdate }),
+    authorize,
+    asyncHandler(controller.updatePrice),
+  );
 
   // Two-phase deployment attempt lifecycle (must precede final submit conceptually).
   router.post(

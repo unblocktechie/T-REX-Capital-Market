@@ -17,7 +17,8 @@ const context = {
   recipientWalletAddress: address('3'), recipientIdentityAddress: address('4'),
   recipientProfileStatus: 'submitted', recipientProfileActive: true,
   tokenUid: 'token-1', tokenAddress: address('5'), identityRegistryAddress: address('6'),
-  tokenDecimals: 2, maxBalancePerInvestor: '1000', tokenStatus: 'deployed', tokenActive: true,
+  tokenDecimals: 2, tokenPrice: '7.50', maxBalancePerInvestor: '1000',
+  tokenStatus: 'deployed', tokenActive: true,
 };
 
 const make = (overrides = {}) => {
@@ -90,6 +91,8 @@ test('creates an authoritative pending token transfer', async () => {
   assert.equal(result.transfer.status, 'PENDING_TRANSFER');
   assert.equal(result.transfer.tokenAmount, '2.5');
   assert.equal(result.transfer.tokenAmountRaw, '250');
+  assert.equal(result.transfer.tokenPrice, '7.50');
+  assert.equal(setup.state.row.tokenPrice, '7.50');
   assert.deepEqual(result.transfer.transactionRequest.args, [context.recipientWalletAddress, '250']);
   assert.ok(setup.state.row.expiresAt instanceof Date);
 });

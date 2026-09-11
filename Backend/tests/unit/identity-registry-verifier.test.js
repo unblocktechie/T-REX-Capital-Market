@@ -4,14 +4,19 @@ const ethers = require('ethers');
 const {
   IdentityRegistryVerifierService,
   IDENTITY_REGISTRY_ABI,
+  DELEGATION_MANAGER_ABI,
+  SINGLE_EXECUTION_MODE,
 } = require('../../src/services/blockchain/identity-registry-verifier.service');
 
 const REGISTRY = '0x1111111111111111111111111111111111111111';
 const ISSUER = '0x2222222222222222222222222222222222222222';
 const INVESTOR = '0x3333333333333333333333333333333333333333';
 const IDENTITY = '0x4444444444444444444444444444444444444444';
+const DELEGATION_MANAGER = '0x5555555555555555555555555555555555555555';
 const TX = `0x${'ab'.repeat(32)}`;
+const BLOCK_HASH = `0x${'cd'.repeat(32)}`;
 const iface = new ethers.Interface(IDENTITY_REGISTRY_ABI);
+const delegationInterface = new ethers.Interface(DELEGATION_MANAGER_ABI);
 
 const expected = {
   txHash: TX,
@@ -23,22 +28,54 @@ const expected = {
   countryCode: 356,
 };
 
-const makeVerifier = ({ to = REGISTRY, from = ISSUER, args = [INVESTOR, IDENTITY, 356], status = 1, includeEvent = true } = {}) => {
+const delegatedData = ({
+  target = REGISTRY,
+  args = [INVESTOR, IDENTITY, 356],
+  nestedValue = 0n,
+  mode = SINGLE_EXECUTION_MODE,
+  payloads = null,
+} = {}) => {
+  const callData = iface.encodeFunctionData('registerIdentity', args);
+  const execution = ethers.concat([
+    target,
+    ethers.zeroPadValue(ethers.toBeHex(nestedValue), 32),
+    callData,
+  ]);
+  const executionPayloads = payloads || [execution];
+  return delegationInterface.encodeFunctionData('redeemDelegations', [
+    executionPayloads.map(() => '0x1234'),
+    executionPayloads.map(() => mode),
+    executionPayloads,
+  ]);
+};
+
+const makeVerifier = ({
+  to = REGISTRY,
+  from = ISSUER,
+  args = [INVESTOR, IDENTITY, 356],
+  data = null,
+  value = 0n,
+  status = 1,
+  includeEvent = true,
+  canonicalBlockHash = BLOCK_HASH,
+  delegationManagers = [DELEGATION_MANAGER],
+} = {}) => {
   const event = iface.encodeEventLog(iface.getEvent('IdentityRegistered'), [INVESTOR, IDENTITY]);
   const provider = {
     getNetwork: async () => ({ chainId: 11155111n }),
     getTransaction: async () => ({
-      to, from, chainId: 11155111n, value: 0n,
-      data: iface.encodeFunctionData('registerIdentity', args),
+      to, from, chainId: 11155111n, value,
+      data: data || iface.encodeFunctionData('registerIdentity', args),
     }),
     getTransactionReceipt: async () => ({
-      status, blockNumber: 100, blockHash: `0x${'cd'.repeat(32)}`, index: 2,
+      status, blockNumber: 100, blockHash: BLOCK_HASH, index: 2,
       logs: includeEvent ? [{ address: REGISTRY, topics: event.topics, data: event.data, index: 7 }] : [],
     }),
     getBlockNumber: async () => 120,
+    getBlock: async () => ({ hash: canonicalBlockHash }),
     getLogs: async () => [{
       address: REGISTRY, topics: event.topics, data: event.data, transactionHash: TX,
-      blockNumber: 100, blockHash: `0x${'cd'.repeat(32)}`, transactionIndex: 2, index: 7,
+      blockNumber: 100, blockHash: BLOCK_HASH, transactionIndex: 2, index: 7,
     }],
     destroy() {},
   };
@@ -49,7 +86,10 @@ const makeVerifier = ({ to = REGISTRY, from = ISSUER, args = [INVESTOR, IDENTITY
     isAgent: async () => true,
   };
   return new IdentityRegistryVerifierService(
-    { sepoliaRpcUrl: 'mock', chainId: 11155111, supportedChainIds: [11155111], confirmations: 2 },
+    {
+      sepoliaRpcUrl: 'mock', chainId: 11155111, supportedChainIds: [11155111], confirmations: 2,
+      registryDelegationManagerAddresses: delegationManagers,
+    },
     { providerFactory: () => provider, contractFactory: () => contract },
   );
 };
@@ -82,6 +122,81 @@ test('registry verifier rejects another registry, sender, parameters, reverted r
   await assert.rejects(
     makeVerifier({ includeEvent: false }).verifyRegistration(expected),
     (error) => error.code === 'REGISTRY_EVENT_MISSING',
+  );
+});
+
+test('registry verifier accepts a strictly decoded MetaMask-style delegated registration', async () => {
+  const result = await makeVerifier({
+    to: DELEGATION_MANAGER,
+    data: delegatedData(),
+  }).verifyRegistration(expected);
+
+  assert.equal(result.executionType, 'DELEGATED');
+  assert.equal(result.txHash, TX);
+  assert.equal(result.blockNumber, 100);
+});
+
+test('registry verifier rejects an unapproved executor and mismatching delegated target', async () => {
+  await assert.rejects(
+    makeVerifier({
+      to: '0x6666666666666666666666666666666666666666',
+      data: delegatedData(),
+    }).verifyRegistration(expected),
+    (error) => error.code === 'INVALID_REGISTRY_CONTRACT',
+  );
+  await assert.rejects(
+    makeVerifier({
+      to: DELEGATION_MANAGER,
+      data: delegatedData({ target: IDENTITY }),
+    }).verifyRegistration(expected),
+    (error) => error.code === 'INVALID_REGISTRY_CONTRACT',
+  );
+});
+
+test('registry verifier rejects delegated parameter, value, mode, and batch mismatches', async () => {
+  await assert.rejects(
+    makeVerifier({
+      to: DELEGATION_MANAGER,
+      data: delegatedData({ args: [ISSUER, IDENTITY, 356] }),
+    }).verifyRegistration(expected),
+    (error) => error.code === 'REGISTRY_PARAMETERS_MISMATCH',
+  );
+  await assert.rejects(
+    makeVerifier({
+      to: DELEGATION_MANAGER,
+      data: delegatedData({ nestedValue: 1n }),
+    }).verifyRegistration(expected),
+    (error) => error.code === 'UNEXPECTED_TRANSACTION_VALUE',
+  );
+  await assert.rejects(
+    makeVerifier({
+      to: DELEGATION_MANAGER,
+      data: delegatedData({ mode: `0x${'01'.padStart(64, '0')}` }),
+    }).verifyRegistration(expected),
+    (error) => error.code === 'UNSUPPORTED_DELEGATED_REGISTRY_EXECUTION',
+  );
+  const duplicatePayload = ethers.concat([
+    REGISTRY,
+    ethers.zeroPadValue(ethers.toBeHex(0), 32),
+    iface.encodeFunctionData('registerIdentity', [INVESTOR, IDENTITY, 356]),
+  ]);
+  await assert.rejects(
+    makeVerifier({
+      to: DELEGATION_MANAGER,
+      data: delegatedData({ payloads: [duplicatePayload, duplicatePayload] }),
+    }).verifyRegistration(expected),
+    (error) => error.code === 'UNSUPPORTED_DELEGATED_REGISTRY_EXECUTION',
+  );
+});
+
+test('registry verifier rejects non-zero outer value and a non-canonical receipt block', async () => {
+  await assert.rejects(
+    makeVerifier({ value: 1n }).verifyRegistration(expected),
+    (error) => error.code === 'UNEXPECTED_TRANSACTION_VALUE',
+  );
+  await assert.rejects(
+    makeVerifier({ canonicalBlockHash: `0x${'ef'.repeat(32)}` }).verifyRegistration(expected),
+    (error) => error.code === 'CHAIN_REORGANIZATION' && error.pending === true,
   );
 });
 

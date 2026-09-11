@@ -96,6 +96,16 @@ test('creates authoritative pending purchase amounts and payment parameters', as
   assert.equal(result.purchase.expiration.expiresAt, state.row.expiresAt);
 });
 
+test('purchase amount is calculated from the current price supplied by token context', async () => {
+  const setup = make({ context: { ...context, tokenPrice: '2.25' } });
+  const result = await setup.service.create(investor, 'token-1', {
+    tokenAmount: '4', idempotencyKey: 'checkout-current-price',
+  });
+  assert.equal(result.purchase.tokenPrice, '2.25');
+  assert.equal(result.purchase.usdtAmount, '9.0');
+  assert.equal(result.purchase.usdtAmountRaw, '9000000');
+});
+
 test('purchase requires a registered interest and platform Token Agent', async () => {
   const notRegistered = make({ context: { ...context, interestStatus: 'claimSubmitted' } });
   await assert.rejects(notRegistered.service.create(investor, 'token-1', { tokenAmount: '1', idempotencyKey: 'checkout-123' }),

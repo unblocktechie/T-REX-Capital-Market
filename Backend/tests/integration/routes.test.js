@@ -34,8 +34,22 @@ test('protected routes require a Bearer token', async () => {
   assert.equal(response.body.error.code, 'UNAUTHORIZED');
 });
 
+test('email verification is a POST endpoint with a validated token body', async () => {
+  const response = await request(app).post('/api/v1/auth/verify-email').send({ token: 'invalid' }).expect(422);
+  assert.equal(response.body.error.code, 'VALIDATION_ERROR');
+  await request(app).get(`/api/v1/auth/verify-email?token=${'a'.repeat(64)}`).expect(404);
+});
+
 test('token creation routes require a Bearer token', async () => {
   const response = await request(app).get('/api/v1/tokens/me').expect(401);
+  assert.equal(response.body.error.code, 'UNAUTHORIZED');
+});
+
+test('current token price route requires issuer authentication', async () => {
+  const response = await request(app)
+    .patch('/api/v1/tokens/me/price')
+    .send({ currentTokenPrice: 1.25 })
+    .expect(401);
   assert.equal(response.body.error.code, 'UNAUTHORIZED');
 });
 

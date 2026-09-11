@@ -16,11 +16,12 @@ const event = {
   transactionIndex: 1, logIndex: 2,
 };
 
-const makeService = (verificationError = null) => {
-  const state = { row: { ...registration }, marks: [], confirms: 0, errors: [] };
+const makeService = (verificationError = null, initial = {}) => {
+  const state = { row: { ...registration, ...initial }, marks: [], confirms: 0, errors: [] };
   const repository = {
     findPendingForEvent: async () => state.row,
-    findByTxHash: async () => null,
+    findByTxHash: async (txHash) => (String(state.row.txHash || '').toLowerCase() === String(txHash).toLowerCase()
+      ? state.row : null),
     assignTransaction: async (uid, txHash) => { state.row.txHash = txHash; return state.row; },
     findByUid: async () => state.row,
     confirm: async (uid, data) => {
@@ -69,5 +70,16 @@ test('fallback never confirms an event whose transaction parameters do not verif
   assert.equal(state.row.status, 'PENDING');
   assert.equal(state.confirms, 0);
   assert.equal(state.marks.at(-1)[1], 'FAILED');
+  assert.equal(state.marks.at(-1)[4].terminal, true);
   assert.equal(state.errors.at(-1)[1], 'REGISTRY_PARAMETERS_MISMATCH');
+});
+
+test('fallback idempotently matches a stored event to an already confirmed transaction owner', async () => {
+  const { service, state } = makeService(null, { status: 'CONFIRMED', txHash: TX });
+
+  const result = await service.reconcileEvent(event);
+
+  assert.equal(result, 'MATCHED');
+  assert.equal(state.marks.at(-1)[1], 'MATCHED');
+  assert.equal(state.marks.at(-1)[2], registration.registryRegistrationUid);
 });

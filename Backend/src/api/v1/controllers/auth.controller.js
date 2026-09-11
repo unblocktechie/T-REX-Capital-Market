@@ -11,7 +11,7 @@ const createAuthController = (authService) => ({
     return sendSuccess(req, res, { message: 'If the account is eligible, a verification email has been sent.' });
   },
   verifyEmail: async (req, res) => sendSuccess(req, res, {
-    message: 'Email verified successfully. You can now log in.', data: await authService.verifyEmail(req.query.token),
+    message: 'Email verified and login successful.', data: await authService.verifyEmail(req.body.token),
   }),
   login: async (req, res) => sendSuccess(req, res, {
     message: 'Login successful.', data: await authService.login(req.body.email, req.body.password),

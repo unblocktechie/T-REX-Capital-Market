@@ -15,7 +15,7 @@ Redemption is manual on the issuer side and backend-authoritative on the settlem
 9. The backend verifies the exact burn and releases any redemption-created partial freeze that remains after burn.
 10. Only then is the redemption `COMPLETED`.
 
-The payment amount uses the token's stored `initialTokenPrice`; values are calculated in integer base units and rounded upward only when a USDT base-unit fraction occurs. There is currently no redemption fee.
+The payment amount snapshots the token's `currentTokenPrice` when the redemption intent is created; values are calculated in integer base units and rounded upward only when a USDT base-unit fraction occurs. Later issuer price changes do not alter an already-created redemption. There is currently no redemption fee.
 
 ## Safety invariants
 

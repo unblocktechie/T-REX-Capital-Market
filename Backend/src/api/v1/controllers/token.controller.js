@@ -26,6 +26,10 @@ const createTokenController = (service, optionRepository) => ({
     message: req.body.isDraft ? 'Token governance draft saved.' : 'Token governance roles saved.',
     data: await service.saveGovernance(req.user, req.body),
   }),
+  updatePrice: async (req, res) => sendSuccess(req, res, {
+    message: 'Current token price updated successfully.',
+    data: await service.updateCurrentPrice(req.user, req.body),
+  }),
   submit: async (req, res) => {
     const result = await service.submit(req.user, req.body);
     // Two-phase flow: the transaction is broadcast but not yet confirmed on-chain.

@@ -10,6 +10,11 @@ const IDENTITY_REGISTRY_ABI = [
   'function isAgent(address _agent) view returns (bool)',
 ];
 
+const DELEGATION_MANAGER_ABI = [
+  'function redeemDelegations(bytes[] _permissionContexts, bytes32[] _modes, bytes[] _executionCallDatas)',
+];
+const SINGLE_EXECUTION_MODE = ethers.ZeroHash;
+
 class RegistryVerificationError extends Error {
   constructor(code, message, { transient = false, pending = false } = {}) {
     super(message);
@@ -32,6 +37,13 @@ class IdentityRegistryVerifierService {
     this.contractFactory = dependencies.contractFactory
       || ((address, provider) => new ethers.Contract(address, IDENTITY_REGISTRY_ABI, provider));
     this.interface = dependencies.registryInterface || new ethers.Interface(IDENTITY_REGISTRY_ABI);
+    this.delegationInterface = dependencies.delegationInterface || new ethers.Interface(DELEGATION_MANAGER_ABI);
+  }
+
+  delegationManagerAddresses() {
+    const configured = Array.isArray(this.config.registryDelegationManagerAddresses)
+      ? this.config.registryDelegationManagerAddresses : [];
+    return new Set(configured.filter(ethers.isAddress).map((address) => ethers.getAddress(address)));
   }
 
   supportedChainIds() {
@@ -263,6 +275,103 @@ class IdentityRegistryVerifierService {
     return { transaction, receipt };
   }
 
+  decodeRegisterIdentity(data, value, expected) {
+    let decoded;
+    try {
+      decoded = this.interface.parseTransaction({ data, value });
+    } catch {
+      throw new RegistryVerificationError(
+        'INVALID_REGISTRY_FUNCTION',
+        'Transaction calldata is not a supported Identity Registry call.',
+      );
+    }
+    if (!decoded || decoded.name !== 'registerIdentity') {
+      throw new RegistryVerificationError('INVALID_REGISTRY_FUNCTION', 'Transaction does not call registerIdentity.');
+    }
+    const userAddress = decoded.args._userAddress ?? decoded.args[0];
+    const identityAddress = decoded.args._identity ?? decoded.args[1];
+    const countryCode = Number(decoded.args._country ?? decoded.args[2]);
+    if (!addressEqual(userAddress, expected.investorWalletAddress)
+      || !addressEqual(identityAddress, expected.investorIdentityAddress)
+      || countryCode !== Number(expected.countryCode)) {
+      throw new RegistryVerificationError(
+        'REGISTRY_PARAMETERS_MISMATCH',
+        'registerIdentity parameters do not match the pending operation.',
+      );
+    }
+  }
+
+  decodeSingleDelegatedExecution(payload) {
+    let bytes;
+    try {
+      bytes = ethers.getBytes(payload);
+    } catch {
+      throw new RegistryVerificationError('INVALID_DELEGATED_REGISTRY_CALL', 'Delegated execution payload is invalid.');
+    }
+    // ERC-7579 single execution encoding is target (20 bytes) + value (32 bytes) + calldata.
+    if (bytes.length < 56) {
+      throw new RegistryVerificationError('INVALID_DELEGATED_REGISTRY_CALL', 'Delegated execution payload is incomplete.');
+    }
+    return {
+      target: ethers.getAddress(ethers.hexlify(bytes.slice(0, 20))),
+      value: ethers.toBigInt(ethers.hexlify(bytes.slice(20, 52))),
+      data: ethers.hexlify(bytes.slice(52)),
+    };
+  }
+
+  verifyTransactionCall(transaction, expected) {
+    let outerValue;
+    try {
+      outerValue = BigInt(transaction.value ?? 0);
+    } catch {
+      throw new RegistryVerificationError('UNEXPECTED_TRANSACTION_VALUE', 'Registry transaction value is invalid.');
+    }
+    if (outerValue !== 0n) {
+      throw new RegistryVerificationError('UNEXPECTED_TRANSACTION_VALUE', 'Registry transaction must not send native value.');
+    }
+
+    if (addressEqual(transaction.to, expected.identityRegistryAddress)) {
+      this.decodeRegisterIdentity(transaction.data, outerValue, expected);
+      return 'DIRECT';
+    }
+
+    const delegationManagers = this.delegationManagerAddresses();
+    if (!ethers.isAddress(transaction.to) || !delegationManagers.has(ethers.getAddress(transaction.to))) {
+      throw new RegistryVerificationError('INVALID_REGISTRY_CONTRACT', 'Transaction was not sent to the expected Identity Registry or an approved delegated executor.');
+    }
+
+    let delegated;
+    try {
+      delegated = this.delegationInterface.parseTransaction({ data: transaction.data, value: outerValue });
+    } catch {
+      throw new RegistryVerificationError('INVALID_DELEGATED_REGISTRY_CALL', 'Delegated registry transaction calldata is invalid.');
+    }
+    if (!delegated || delegated.name !== 'redeemDelegations') {
+      throw new RegistryVerificationError('INVALID_DELEGATED_REGISTRY_CALL', 'Delegated transaction does not call redeemDelegations.');
+    }
+
+    const permissionContexts = delegated.args._permissionContexts ?? delegated.args.permissionContexts ?? delegated.args[0];
+    const modes = delegated.args._modes ?? delegated.args.modes ?? delegated.args[1];
+    const payloads = delegated.args._executionCallDatas ?? delegated.args.executionCallDatas ?? delegated.args[2];
+    if (permissionContexts.length !== 1 || modes.length !== 1 || payloads.length !== 1
+      || String(modes[0]).toLowerCase() !== SINGLE_EXECUTION_MODE.toLowerCase()) {
+      throw new RegistryVerificationError(
+        'UNSUPPORTED_DELEGATED_REGISTRY_EXECUTION',
+        'Delegated registry transaction must contain exactly one supported single execution.',
+      );
+    }
+
+    const execution = this.decodeSingleDelegatedExecution(payloads[0]);
+    if (!addressEqual(execution.target, expected.identityRegistryAddress)) {
+      throw new RegistryVerificationError('INVALID_REGISTRY_CONTRACT', 'Delegated execution target is not the expected Identity Registry.');
+    }
+    if (execution.value !== 0n) {
+      throw new RegistryVerificationError('UNEXPECTED_TRANSACTION_VALUE', 'Delegated registry call must not send native value.');
+    }
+    this.decodeRegisterIdentity(execution.data, execution.value, expected);
+    return 'DELEGATED';
+  }
+
   async verifyRegistration({ txHash, blockNumberHint = null, ...expected }) {
     if (!ethers.isHexString(txHash, 32)) {
       throw new RegistryVerificationError('INVALID_TX_HASH', 'The transaction hash must be a 32-byte hexadecimal value.');
@@ -280,30 +389,10 @@ class IdentityRegistryVerifierService {
       if (transaction.chainId !== null && transaction.chainId !== undefined && Number(transaction.chainId) !== chainId) {
         throw new RegistryVerificationError('WRONG_CHAIN', `Transaction declares chain ${transaction.chainId}, not ${chainId}.`);
       }
-      if (!addressEqual(transaction.to, expected.identityRegistryAddress)) {
-        throw new RegistryVerificationError('INVALID_REGISTRY_CONTRACT', 'Transaction was not sent to the expected Identity Registry.');
-      }
       if (!addressEqual(transaction.from, expected.issuerWalletAddress)) {
         throw new RegistryVerificationError('UNAUTHORIZED_TRANSACTION_SENDER', 'Transaction sender is not the authorized issuer wallet.');
       }
-
-      let decoded;
-      try {
-        decoded = this.interface.parseTransaction({ data: transaction.data, value: transaction.value });
-      } catch {
-        throw new RegistryVerificationError('INVALID_REGISTRY_FUNCTION', 'Transaction calldata is not a supported Identity Registry call.');
-      }
-      if (!decoded || decoded.name !== 'registerIdentity') {
-        throw new RegistryVerificationError('INVALID_REGISTRY_FUNCTION', 'Transaction does not call registerIdentity.');
-      }
-      const userAddress = decoded.args._userAddress ?? decoded.args[0];
-      const identityAddress = decoded.args._identity ?? decoded.args[1];
-      const countryCode = Number(decoded.args._country ?? decoded.args[2]);
-      if (!addressEqual(userAddress, expected.investorWalletAddress)
-        || !addressEqual(identityAddress, expected.investorIdentityAddress)
-        || countryCode !== Number(expected.countryCode)) {
-        throw new RegistryVerificationError('REGISTRY_PARAMETERS_MISMATCH', 'registerIdentity parameters do not match the pending operation.');
-      }
+      const executionType = this.verifyTransactionCall(transaction, expected);
       if (Number(receipt.status) !== 1) {
         throw new RegistryVerificationError('TRANSACTION_FAILED', 'Registry transaction reverted on-chain.');
       }
@@ -326,6 +415,19 @@ class IdentityRegistryVerifierService {
             { pending: true },
           );
         }
+      }
+
+      let canonicalBlock;
+      try {
+        canonicalBlock = await provider.getBlock(Number(receipt.blockNumber));
+      } catch {
+        throw new RegistryVerificationError('RPC_UNAVAILABLE', 'Could not verify the registry transaction block.', { transient: true });
+      }
+      if (!canonicalBlock?.hash) {
+        throw new RegistryVerificationError('RPC_UNAVAILABLE', 'Registry transaction block is temporarily unavailable.', { transient: true });
+      }
+      if (!receipt.blockHash || String(canonicalBlock.hash).toLowerCase() !== String(receipt.blockHash).toLowerCase()) {
+        throw new RegistryVerificationError('CHAIN_REORGANIZATION', 'Registry transaction block is no longer canonical.', { pending: true });
       }
 
       let matchingEvent = null;
@@ -375,6 +477,7 @@ class IdentityRegistryVerifierService {
         blockHash: receipt.blockHash || null,
         transactionIndex: Number(receipt.index ?? receipt.transactionIndex ?? 0),
         logIndex: Number(matchingEvent.index ?? matchingEvent.logIndex ?? 0),
+        executionType,
       };
     });
   }
@@ -384,5 +487,7 @@ module.exports = {
   IdentityRegistryVerifierService,
   RegistryVerificationError,
   IDENTITY_REGISTRY_ABI,
+  DELEGATION_MANAGER_ABI,
+  SINGLE_EXECUTION_MODE,
   addressEqual,
 };

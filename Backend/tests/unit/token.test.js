@@ -55,6 +55,65 @@ test('maximum balance per investor accepts an absolute token amount above 100', 
   assert.equal(result.value.maxBalancePerInvestor, 10000);
 });
 
+test('current token price update accepts a positive value with up to 18 decimals', () => {
+  assert.equal(schemas.tokenPriceUpdate.validate({ currentTokenPrice: '12.345678' }).error, undefined);
+  assert.ok(schemas.tokenPriceUpdate.validate({ currentTokenPrice: 0 }).error);
+  assert.ok(schemas.tokenPriceUpdate.validate({ currentTokenPrice: -1 }).error);
+});
+
+test('saving the launch price initializes the current token price to the same value', async () => {
+  let savedFields;
+  const service = new TokenService({
+    repository: {
+      findByUserUid: async () => ({ tokenUid: 'token-1', status: 'draft' }),
+      updateByUserUid: async (_userUid, fields) => { savedFields = fields; return fields; },
+    },
+    organizationRepository: { findByUserUid: async () => organization },
+  });
+
+  await service.saveInformation(issuer, { initialTokenPrice: 4.25, isDraft: true });
+  assert.equal(savedFields.initialTokenPrice, 4.25);
+  assert.equal(savedFields.currentTokenPrice, 4.25);
+});
+
+test('only the owning issuer can update a deployed token current price without changing launch price', async () => {
+  const token = {
+    tokenUid: 'token-1', organizationUid: organization.organizationUid,
+    status: 'deployed', isActive: true, initialTokenPrice: '1.00', currentTokenPrice: '1.00',
+  };
+  let update;
+  const service = new TokenService({
+    repository: {
+      findByUserUid: async () => token,
+      updateCurrentPriceByOwner: async (userUid, tokenUid, currentTokenPrice) => {
+        update = { userUid, tokenUid, currentTokenPrice };
+        return { ...token, currentTokenPrice };
+      },
+    },
+    organizationRepository: { findByUserUid: async () => organization },
+  });
+
+  const result = await service.updateCurrentPrice(issuer, { currentTokenPrice: 2.75 });
+  assert.deepEqual(update, { userUid: issuer.userUid, tokenUid: token.tokenUid, currentTokenPrice: 2.75 });
+  assert.equal(result.initialTokenPrice, '1.00');
+  assert.equal(result.currentTokenPrice, 2.75);
+});
+
+test('current price cannot be updated for another organization token', async () => {
+  const service = new TokenService({
+    repository: {
+      findByUserUid: async () => ({
+        tokenUid: 'token-2', organizationUid: 'another-organization', status: 'deployed', isActive: true,
+      }),
+    },
+    organizationRepository: { findByUserUid: async () => organization },
+  });
+  await assert.rejects(
+    service.updateCurrentPrice(issuer, { currentTokenPrice: 2 }),
+    (error) => error.code === 'TOKEN_NOT_FOUND' && error.statusCode === 404,
+  );
+});
+
 test('token submission requires a 32-byte EVM transaction hash', () => {
   assert.equal(schemas.tokenSubmit.validate({ transactionHash: `0x${'a'.repeat(64)}` }).error, undefined);
   assert.ok(schemas.tokenSubmit.validate({ transactionHash: '0x1234' }).error);

@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { signup, resetPassword } = require('../../src/schemas/auth.schema');
+const { signup, resetPassword, tokenBody } = require('../../src/schemas/auth.schema');
 
 test('signup trims names and normalizes email', () => {
   const { error, value } = signup.validate({
@@ -26,4 +26,9 @@ test('signup requires an explicit issuer or investor selection', () => {
 test('reset token must be 64 hexadecimal characters', () => {
   const { error } = resetPassword.validate({ token: 'not-a-token', newPassword: 'Launch!234' });
   assert.ok(error);
+});
+
+test('email verification accepts the one-time token only in the POST body', () => {
+  assert.equal(tokenBody.validate({ token: 'a'.repeat(64) }).error, undefined);
+  assert.ok(tokenBody.validate({ token: 'not-a-token' }).error);
 });

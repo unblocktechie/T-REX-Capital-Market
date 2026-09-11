@@ -313,6 +313,7 @@ CREATE TABLE IF NOT EXISTS `tokenMaster` (
   `tokenSymbol` VARCHAR(10) NULL,
   `decimals` TINYINT UNSIGNED NULL,
   `initialTokenPrice` DECIMAL(36,18) NULL,
+  `currentTokenPrice` DECIMAL(36,18) NULL,
   `treasuryWalletAddress` VARCHAR(42) NULL,
   `tokenDescription` VARCHAR(2000) NULL,
   `imageOriginalFileName` VARCHAR(255) NULL,
@@ -507,6 +508,7 @@ VALUES
   (UUID(), '00000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000007', 'Save token claims', 'TOKEN_SAVE_CLAIMS', 'PUT', '/api/v1/tokens/me/claims'),
   (UUID(), '00000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000007', 'Save token compliance rules', 'TOKEN_SAVE_COMPLIANCE', 'PUT', '/api/v1/tokens/me/compliance'),
   (UUID(), '00000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000007', 'Save token governance roles', 'TOKEN_SAVE_GOVERNANCE', 'PUT', '/api/v1/tokens/me/governance'),
+  (UUID(), '00000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000007', 'Update current token price', 'TOKEN_UPDATE_CURRENT_PRICE', 'PATCH', '/api/v1/tokens/me/price'),
   (UUID(), '00000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000007', 'Submit token for deployment', 'TOKEN_SUBMIT', 'POST', '/api/v1/tokens/me/submit')
 ON DUPLICATE KEY UPDATE
   `permissionName` = VALUES(`permissionName`),

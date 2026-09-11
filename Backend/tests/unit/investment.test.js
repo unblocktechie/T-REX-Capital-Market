@@ -139,9 +139,11 @@ test('an admin may filter by any status; an investor is forced to deployed', asy
   const a = makeService();
   await a.service.listTokens(admin, { status: 'draft' });
   assert.equal(a.state.listArgs.status, 'draft');
+  assert.equal(a.state.listArgs.investorUserUid, null);
   const i = makeService();
   await i.service.listTokens(investor, { status: 'draft' });
   assert.equal(i.state.listArgs.status, 'deployed');
+  assert.equal(i.state.listArgs.investorUserUid, investor.userUid);
 });
 
 test('token details include the treasury wallet address', async () => {

@@ -9,7 +9,7 @@ const createAuthRouter = (controller) => {
   router.use(authRateLimiter);
   router.post('/signup', validate({ body: schemas.signup }), asyncHandler(controller.signup));
   router.post('/resend-verification', validate({ body: schemas.emailOnly }), asyncHandler(controller.resendVerification));
-  router.get('/verify-email', validate({ query: schemas.tokenQuery }), asyncHandler(controller.verifyEmail));
+  router.post('/verify-email', validate({ body: schemas.tokenBody }), asyncHandler(controller.verifyEmail));
   router.post('/login', validate({ body: schemas.login }), asyncHandler(controller.login));
   router.post('/forgot-password', validate({ body: schemas.emailOnly }), asyncHandler(controller.forgotPassword));
   router.get('/verify-reset-token', validate({ query: schemas.tokenQuery }), asyncHandler(controller.verifyResetToken));

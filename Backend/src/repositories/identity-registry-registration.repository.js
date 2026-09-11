@@ -281,13 +281,16 @@ class IdentityRegistryRegistrationRepository {
     return rows[0] || null;
   }
 
-  async markEvent(registryEventUid, status, matchedRegistrationUid, message, executor) {
+  async markEvent(registryEventUid, status, matchedRegistrationUid, message, options = {}, executor) {
+    const terminal = options.terminal === true;
     await execute(
       `UPDATE \`identityRegistryBlockchainEvent\` SET \`processingStatus\` = ?,
-         \`matchedRegistrationUid\` = ?, \`processingAttempts\` = \`processingAttempts\` + 1,
+         \`matchedRegistrationUid\` = ?,
+         \`processingAttempts\` = CASE WHEN ? = 1 THEN 20 ELSE \`processingAttempts\` + 1 END,
          \`processingMessage\` = ?, \`processedAt\` = UTC_TIMESTAMP(3), \`updatedAt\` = UTC_TIMESTAMP(3)
        WHERE \`registryEventUid\` = ? AND \`isDeleted\` = 0`,
-      [status, matchedRegistrationUid || null, message ? String(message).slice(0, 2000) : null, registryEventUid], executor,
+      [status, matchedRegistrationUid || null, terminal ? 1 : 0,
+        message ? String(message).slice(0, 2000) : null, registryEventUid], executor,
     );
   }
 

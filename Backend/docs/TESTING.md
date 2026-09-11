@@ -37,15 +37,21 @@ Expected: HTTP `201`, a user UUID with Investor `roleUid` (`00000000-0000-4000-8
 
 ## 4. Receive and verify email
 
-Open the email delivered by the configured SMTP server. Click **Verify email**, or copy its API link:
+Open the email delivered by the configured SMTP server. Its link opens the frontend
+`/verify-email?token=...` page. Copy the token and simulate the frontend's explicit
+**Verify and continue** action:
 
 ```bash
-curl "http://localhost:3000/api/v1/auth/verify-email?token=TOKEN_FROM_EMAIL"
+curl -X POST http://localhost:3000/api/v1/auth/verify-email \
+  -H "Content-Type: application/json" \
+  -d '{"token":"TOKEN_FROM_EMAIL"}'
 ```
 
-Expected: HTTP `200`, `emailVerified: true`, and `emailVerifiedAt`. Reusing the link returns `400`.
+Expected: HTTP `200`, `emailVerified: true`, an `accessToken`, `tokenType: Bearer`, and
+`expiresIn`. Save the returned access token for protected requests. Reusing the token returns
+`400` and never issues another JWT.
 
-## 5. Login
+## 5. Login (optional verification of password login)
 
 ```bash
 curl -X POST http://localhost:3000/api/v1/auth/login -H "Content-Type: application/json" -d '{"email":"ada@example.com","password":"Launch!234"}'
@@ -387,6 +393,9 @@ ONCHAINID, and at least one `SIGNED` issuer claim. Use the investor JWT.
 3. In MetaMask, use the stored issuer wallet and the backend-returned registry, investor wallet,
    ONCHAINID, and country values in `registerIdentity`.
 4. Send only the hash to `POST .../registry-registration/{registryOperationId}/confirm`.
+   MetaMask may submit a direct registry transaction or wrap it through an address configured in
+   `REGISTRY_DELEGATION_MANAGER_ADDRESSES`; both must independently verify the exact nested registry,
+   issuer sender, investor, ONCHAINID, country, receipt event, canonical block and final state.
 5. `202` means wait/poll. A `200` response is complete only when `data.status` is `CONFIRMED`.
    Confirm that `tokenInvestmentInterest.status = 'registered'` and exactly one corresponding
    `tokenInvestmentInterestHistory.eventType = 'registered'` row exists.
@@ -553,3 +562,61 @@ ONCHAINID, and at least one `SIGNED` issuer claim. Use the investor JWT.
    FROM investorInvitation
    WHERE invitationUid = 'INVITATION_UID';
    ```
+
+## Investor token transfer
+
+1. Apply `database/migrations/20260911_add_token_transfer_flow.sql`, configure the transfer
+   environment variables, and restart the API so the transfer worker starts.
+2. Prepare two submitted investor profiles with ONCHAINIDs and `registered` interests for the same
+   deployed token. Give the sender enough unfrozen tokens and keep the recipient below the holder cap.
+3. Create the intent with `POST /api/v1/investments/tokens/TOKEN_UID/transfers`. Expect HTTP `201`,
+   `status=PENDING_TRANSFER`, normalized addresses, raw amount, expiry, and an authoritative
+   `transactionRequest`. Repeating the idempotency key must return the same row.
+4. Negative creation checks: recipient missing/incomplete/not registered, self-transfer, paused
+   token, wrong Identity Registry or ONCHAINID, frozen/insufficient balance, failed `canTransfer`,
+   holder-cap overflow, invalid amount precision, and another active sender/token intent.
+5. From the exact sender wallet call the returned token `transfer(recipient, amountRaw)`. Send only
+   its hash to `POST /api/v1/investments/transfers/TRANSFER_UID/confirm`.
+6. Expect HTTP `200`. `data.status=COMPLETED` is final; `PENDING_TRANSFER` means poll Detail/Retry.
+   Verify hash, block number/hash, transaction/log indexes, gas values, verified time, and before/after
+   balances are stored. Repeat the same hash and confirm idempotency.
+7. Negative confirmation checks: another chain, token contract, sender, recipient, amount, function,
+   native value, reverted receipt, missing event, reused hash, and a non-canonical block. None may
+   produce `COMPLETED`.
+8. Frontend-crash recovery: create and successfully transfer, but omit Confirm. The global indexer
+   must store the event and confirm the existing row with the actual event hash.
+9. Backend-crash recovery: submit Confirm, stop the backend after hash persistence, restart, and
+   verify the worker completes the same row without another wallet transaction.
+10. Abandon MetaMask without submitting. After TTL, grace, and global safe-head catch-up, expect
+    `EXPIRED`. A genuine event in the safe ledger must prevent expiration.
+11. Verify sent/received history with search, every status, and `direction=sent|received|all`. Sender
+    and recipient may view detail; an unrelated investor must receive `404`.
+12. Inspect durable state:
+
+    ```sql
+    SELECT status, txHash, blockNumber, blockHash, transactionIndex, logIndex,
+           gasUsed, effectiveGasPrice, syncStatus, syncAttempts, errorCode
+    FROM tokenTransfer WHERE transferUid = 'TRANSFER_UID';
+
+    SELECT txHash, status, blockNumber, blockHash, logIndex, errorCode
+    FROM tokenTransferTransaction WHERE transferUid = 'TRANSFER_UID' ORDER BY createdAt;
+
+    SELECT processingStatus, matchedTransferUid, txHash, blockNumber, logIndex
+    FROM tokenTransferBlockchainEvent WHERE matchedTransferUid = 'TRANSFER_UID';
+
+    SELECT * FROM blockchainIndexerCheckpoint WHERE indexerName = 'tokenTransfer';
+    ```
+
+## Current token price
+
+1. Apply `database/migrations/20260911_add_current_token_price.sql` and confirm every existing token
+   has `currentTokenPrice = initialTokenPrice`.
+2. Log in as the issuer who owns an active deployed token and call `PATCH /api/v1/tokens/me/price`
+   with `{ "currentTokenPrice": 2.25 }`. Expect HTTP `200`; verify `currentTokenPrice` changed and
+   `initialTokenPrice` did not.
+3. Attempt the same route as an investor or another issuer. Expect authorization/not-found denial,
+   and verify no token row changed.
+4. Create a purchase and redemption after the update. Their stored `tokenPrice` and calculated USDT
+   amounts must use `2.25`. Create a transfer and verify its stored `tokenPrice` is `2.25`.
+5. Change the current price again. Existing transaction rows must retain `2.25`; only newly created
+   intents use the later price.

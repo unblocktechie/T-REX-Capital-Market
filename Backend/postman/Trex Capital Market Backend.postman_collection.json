@@ -183,6 +183,11 @@
       "type": "string"
     },
     {
+      "key": "currentTokenPrice",
+      "value": "1.25",
+      "type": "string"
+    },
+    {
       "key": "adminOrganizationUid",
       "value": "",
       "type": "string"
@@ -470,10 +475,24 @@
         {
           "name": "Verify Email",
           "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/api/v1/auth/verify-email?token={{verificationToken}}",
-            "description": "Copy the latest token from the verification email into verificationToken before sending."
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{verificationToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/auth/verify-email",
+            "description": "Copy the latest token from the verification email into verificationToken. This consumes the token and returns the authenticated session."
           },
           "event": [
             {
@@ -483,8 +502,13 @@
                 "exec": [
                   "pm.test('Email is verified', function () {",
                   "  pm.response.to.have.status(200);",
-                  "  pm.expect(pm.response.json().data.emailVerified).to.eql(true);",
-                  "});"
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.data.user.emailVerified).to.eql(true);",
+                  "  pm.expect(json.data.tokenType).to.eql('Bearer');",
+                  "  pm.expect(json.data.accessToken).to.be.a('string').and.not.empty;",
+                  "});",
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.accessToken) pm.collectionVariables.set('userToken', json.data.accessToken);"
                 ]
               }
             }
@@ -2229,6 +2253,43 @@
               }
             }
           ]
+        },
+        {
+          "name": "Update Current Token Price",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentTokenPrice\": {{currentTokenPrice}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/tokens/me/price",
+            "description": "Issuer-only. Updates the owning deployed token currentTokenPrice without changing initialTokenPrice. New transaction intents snapshot this value."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Current token price is updated', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "pm.expect(Number(data.currentTokenPrice)).to.eql(Number(pm.collectionVariables.get('currentTokenPrice')));",
+                  "pm.expect(data.initialTokenPrice).to.not.eql(undefined);"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -2978,7 +3039,7 @@
               "options": { "raw": { "language": "json" } }
             },
             "url": "{{baseUrl}}/api/v1/investments/issuer/interests/{{interestUid}}/registry-registration/{{registryRegistrationUid}}/confirm",
-            "description": "Send only the MetaMask hash. Backend verifies chain, sender, registry, calldata, receipt, IdentityRegistered event, and final state. A successful confirmation atomically sets the interest to registered and records registered history. 202 means wait/poll; only 200 with status CONFIRMED is complete.",
+            "description": "Send only the MetaMask hash. Backend supports a direct registerIdentity transaction or a strictly decoded single execution through a configured MetaMask Delegation Manager. It verifies chain, issuer sender, zero native value, direct/nested registry target and calldata, canonical receipt, IdentityRegistered event, and final state. A successful confirmation atomically sets the interest to registered and records registered history. 202 means wait/poll; only 200 with status CONFIRMED is complete.",
             "auth": {
               "type": "bearer",
               "bearer": [{ "key": "token", "value": "{{userToken}}", "type": "string" }]

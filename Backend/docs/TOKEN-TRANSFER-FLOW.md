@@ -32,7 +32,9 @@ HTTP `200` does not itself mean the transfer completed. The frontend must read `
 The backend validates both investor profiles, both `registered` investment interests, token and
 Identity Registry addresses, ONCHAINID values, registry verification, token pause state,
 `canTransfer`, sender unfrozen balance, recipient holder cap, decimals, and absence of another
-active send for the same sender/token. It stores normalized authoritative values before returning:
+active send for the same sender/token. It snapshots `currentTokenPrice` as `tokenPrice` for an
+auditable transfer-time valuation; the ERC-3643 transfer itself still moves the exact token amount
+and does not perform a USDT conversion. It stores normalized authoritative values before returning:
 
 ```json
 {

@@ -57,6 +57,35 @@ test('redemption cannot exceed the investor unfrozen token balance', async () =>
   }), (error) => error.code === 'INSUFFICIENT_AVAILABLE_TOKEN_BALANCE');
 });
 
+test('redemption payout is calculated from the current snapshotted token price', async () => {
+  let saved;
+  const repository = {
+    findByIdempotency: async () => null,
+    findContext: async () => ({ ...context, tokenPrice: '12.5' }),
+    findActiveByInterest: async () => null,
+    create: async (data) => {
+      saved = { redemptionUid: 'redemption-current-price', status: 'PENDING_INVESTOR_AUTHORIZATION',
+        lockStatus: 'NOT_STARTED', paymentStatus: 'NOT_STARTED', burnStatus: 'NOT_STARTED',
+        unlockStatus: 'NOT_STARTED', syncStatus: 'IDLE', syncAttempts: 0, ...data };
+      return saved;
+    },
+    addHistory: async () => {},
+  };
+  const blockchain = {
+    prepare: async () => ({ chainId: 11155111, usdtDecimals: 6, balanceBeforeRaw: '1000',
+      frozenBeforeRaw: '0', totalSupplyBeforeRaw: '10000', platformWalletAddress: PLATFORM,
+      platformIsAgent: true, preparedAtBlock: 100 }),
+    authorizationPayload: () => ({}),
+  };
+  const service = new TokenRedemptionService({ repository, blockchain, executionService: {},
+    config: { redemptionUsdtAddress: USDT }, transactionRunner: (work) => work({}) });
+  const result = await service.create({ userUid: 'user-1', roleName: 'Investor' }, 'token-1', {
+    tokenAmount: '2', idempotencyKey: 'redeem-current-price',
+  });
+  assert.equal(result.redemption.tokenPrice, '12.5');
+  assert.equal(result.redemption.usdtAmount, '25.0');
+});
+
 test('issuer redemption detail includes the investor name', async () => {
   const repository = {
     findIssuerOwned: async () => ({

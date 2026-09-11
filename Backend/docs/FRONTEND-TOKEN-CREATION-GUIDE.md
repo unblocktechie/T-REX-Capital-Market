@@ -129,7 +129,26 @@ First send the TREX deployment transaction from the connected frontend wallet an
 
 Do not send contract addresses from browser state. The backend independently reads the Sepolia receipt, decodes the factory's `TREXSuiteDeployed` event, and returns the authoritative addresses. Success returns `status: deployed` with `platformAgentWallet`, the six suite addresses, `deployTxHash`, `deployedAtBlock`, and `deployedAt`.
 
-If the API returns `422 TOKEN_DEPLOYMENT_VERIFICATION_FAILED`, show `message` to the user and reload `GET /tokens/me`. The stored token will have `status: deploymentFailed` and `contractTxnMessage`; the user may retry deployment. A `deployed` token is permanently read-only.
+If the API returns `422 TOKEN_DEPLOYMENT_VERIFICATION_FAILED`, show `message` to the user and reload `GET /tokens/me`. The stored token will have `status: deploymentFailed` and `contractTxnMessage`; the user may retry deployment. A `deployed` token's creation fields are read-only, but its owning issuer may update `currentTokenPrice` through the dedicated price endpoint below.
+
+## Update deployed token price
+
+Render both `initialTokenPrice` (immutable launch price) and `currentTokenPrice` (editable current
+price) for the issuer. Submit only:
+
+```http
+PATCH /api/v1/tokens/me/price
+Content-Type: application/json
+```
+
+```json
+{ "currentTokenPrice": 1.25 }
+```
+
+Accept only a positive value with up to 18 decimal places. After success, replace local token state
+with the response. Never overwrite or send `initialTokenPrice` from this screen. Newly created
+purchase, redemption and transfer intents use the new current price; existing transaction rows keep
+their stored price snapshot.
 
 ## Draft behavior
 

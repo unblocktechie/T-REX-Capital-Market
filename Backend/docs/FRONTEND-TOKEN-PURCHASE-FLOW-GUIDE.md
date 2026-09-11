@@ -90,6 +90,13 @@ const tx = await usdt.transfer(
 );
 ```
 
+Depending on the connected MetaMask account type, the submitted transaction can be a direct USDT
+call or a delegated-wallet execution whose outer recipient is MetaMask's execution contract. Do
+not reject or reinterpret such a hash in the frontend based on `tx.to`. Send the returned hash to
+Confirm unchanged. The backend validates the transaction sender and canonical receipt, then
+requires the configured USDT contract to have emitted the exact investor-to-treasury `Transfer`
+event for `usdtAmountRaw` before it confirms payment.
+
 The backend allows only one unsettled purchase per investor. Therefore, clicking Purchase again
 while an earlier row is active may return that existing row instead of creating a duplicate. The
 button can remain enabled, but the frontend must inspect the returned `purchaseUid` and status.

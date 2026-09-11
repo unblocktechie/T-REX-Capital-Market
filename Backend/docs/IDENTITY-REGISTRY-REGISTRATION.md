@@ -81,12 +81,22 @@ outage or process crash remains recoverable. The backend then proves all of the 
 
 1. The RPC chain is supported and equals the operation chain.
 2. The transaction exists and is sufficiently confirmed.
-3. `tx.to` is the stored Identity Registry and `tx.from` is the stored issuer wallet.
-4. Calldata is exactly `registerIdentity(address,address,uint16)`.
-5. Investor wallet, ONCHAINID and country equal the stored authoritative values.
-6. The receipt succeeded.
-7. The expected deployed-version `IdentityRegistered(address,address)` event came from the stored registry.
-8. `contains`, `identity`, and `investorCountry` prove the matching final registry state.
+3. `tx.from` is the stored issuer wallet and the outer transaction sends no native value.
+4. For a direct transaction, `tx.to` is the stored Identity Registry and calldata is exactly
+   `registerIdentity(address,address,uint16)`.
+5. For a delegated smart-wallet transaction, `tx.to` is an explicitly configured
+   `REGISTRY_DELEGATION_MANAGER_ADDRESSES` entry, the outer call is exactly
+   `redeemDelegations(bytes[],bytes32[],bytes[])`, and it contains one supported single execution.
+   The packed nested target, native value, function and arguments are decoded independently; the
+   target must be the stored Identity Registry and the nested value must be zero.
+6. Investor wallet, ONCHAINID and country equal the stored authoritative values.
+7. The receipt succeeded, has the configured confirmations and its block hash is still canonical.
+8. The expected deployed-version `IdentityRegistered(address,address)` event came from the stored registry.
+9. `contains`, `identity`, and `investorCountry` prove the matching final registry state.
+
+MetaMask may wrap the frontend's normal `registerIdentity` request through its Delegation Manager.
+The frontend still submits only the returned transaction hash; it must not reject the transaction
+because the outer `tx.to` is the configured delegated executor.
 
 Only then does a conditional database transaction change `PENDING` to `CONFIRMED` and save the
 actual hash, block number/hash, transaction index, event log index, and `verifiedAt`. In that same
