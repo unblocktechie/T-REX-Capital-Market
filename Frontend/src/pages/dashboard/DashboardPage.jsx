@@ -82,7 +82,7 @@ const requestStatusMeta = (value) => {
 const tokenStatusMeta = (tokenRecord) => {
   const status = compactStatus(tokenRecord.status);
   if (tokenRecord.isDeployed || status === 'deployed') {
-    return { label: 'Deployed', tone: 'success', description: 'Token contracts are deployed and available for issuer operations.' };
+    return { label: 'Created', tone: 'success', description: 'Your token has been successfully created and is ready to use.' };
   }
   if (tokenRecord.isDeploymentPending || status === 'deploymentpending') {
     return { label: 'Deploying', tone: 'info', description: 'The deployment transaction is being finalized.' };
@@ -336,7 +336,7 @@ function IssuerDashboardPage() {
           id: 'organization-onboarding',
           icon: Building2,
           title: 'Complete organization onboarding',
-          description: 'Finish the remaining organization information before creating and deploying a token.',
+          description: 'Finish the remaining organization information before creating your token.',
           label: 'Continue',
           to: ROUTES.organization,
           tone: 'warning',
@@ -439,7 +439,7 @@ function IssuerDashboardPage() {
       value: investorTotal === null ? '—' : numberFormatter.format(investorTotal),
       helper: tokenRecord.isDeployed
         ? `Investor directory for ${tokenSymbol || tokenName}`
-        : 'Available after token deployment',
+        : 'Available after token creation',
       to: ROUTES.issuerInvestorDirectory,
       disabled: !tokenRecord.isDeployed,
     },
@@ -508,9 +508,11 @@ function IssuerDashboardPage() {
           <span className="issuer-dashboard-hero-live__eyebrow">{companyName}</span>
           <h2>Welcome back, {user?.name?.split(' ')[0] || 'Issuer'}.</h2>
           <p>
-            {tokenRecord.hasToken
-              ? `${tokenName}${tokenSymbol ? ` (${tokenSymbol})` : ''} is currently ${tokenStatus.label.toLowerCase()}. ${tokenStatus.description}`
-              : tokenStatus.description}
+            {tokenRecord.isDeployed
+              ? `Your token ${tokenName}${tokenSymbol ? ` (${tokenSymbol})` : ''} has been successfully created and is ready to use. You can now invite investors from the Investors menu and start managing your investor list.`
+              : tokenRecord.hasToken
+                ? `${tokenName}${tokenSymbol ? ` (${tokenSymbol})` : ''} is currently ${tokenStatus.label.toLowerCase()}. ${tokenStatus.description}`
+                : tokenStatus.description}
           </p>
           <div className="issuer-dashboard-hero-live__actions">
             <Button icon={Coins} onClick={() => navigate(tokenDestination)}>
@@ -901,7 +903,7 @@ function InvestorDashboardPage() {
         id: 'explore-marketplace',
         icon: Store,
         title: 'Explore available offerings',
-        description: `${numberFormatter.format(offeringTotal)} deployed offering${offeringTotal === 1 ? '' : 's'} currently available in the marketplace.`,
+        description: `${numberFormatter.format(offeringTotal)} created offering${offeringTotal === 1 ? '' : 's'} currently available in the marketplace.`,
         label: 'Open marketplace',
         to: ROUTES.marketplace,
         tone: 'info',
@@ -1069,7 +1071,7 @@ function InvestorDashboardPage() {
               },
               {
                 id: 'offerings', icon: Store, label: 'Marketplace offerings', value: offeringTotal,
-                helper: offeringTotal ? 'Deployed offerings available to explore' : 'No deployed offerings available',
+                helper: offeringTotal ? 'Created offerings available to explore' : 'No created offerings available',
                 to: ROUTES.marketplace,
               },
             ].map((metric) => {
@@ -1281,7 +1283,7 @@ function InvestorDashboardPage() {
                 <span className="investor-dashboard-live__offering-copy">
                   <small>{token.symbol || 'Token'}</small>
                   <strong>{token.name || 'Token offering'}</strong>
-                  <span>{[token.issuer, token.assetClass].filter((value) => value && value !== '—').join(' · ') || 'Deployed offering'}</span>
+                  <span>{[token.issuer, token.assetClass].filter((value) => value && value !== '—').join(' · ') || 'Created offering'}</span>
                 </span>
                 <ArrowRight size={16} />
               </button>
@@ -1290,7 +1292,7 @@ function InvestorDashboardPage() {
         ) : (
           <div className="investor-dashboard-live__empty-marketplace">
             <Store size={24} />
-            <div><strong>No deployed offerings available</strong><span>The marketplace will update when issuers publish deployed tokens.</span></div>
+            <div><strong>No created offerings available</strong><span>The marketplace will update when issuers make created tokens available.</span></div>
           </div>
         )}
       </Card>

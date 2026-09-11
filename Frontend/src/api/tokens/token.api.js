@@ -26,6 +26,16 @@ const normalizeChainId = (value) => {
 const normalizeDeploymentAttemptUid = (value) =>
   requiredText(value, 'Deployment attempt identifier');
 
+const normalizeCurrentTokenPrice = (value) => {
+  const normalized = String(value ?? '').trim();
+  if (!/^\d+(?:\.\d{1,18})?$/.test(normalized) || !/[1-9]/.test(normalized)) {
+    throw new Error('Current price must be greater than zero and use no more than 18 decimal places.');
+  }
+  const [wholeRaw = '0', fraction = ''] = normalized.split('.');
+  const whole = wholeRaw.replace(/^0+(?=\d)/, '') || '0';
+  return fraction ? `${whole}.${fraction}` : whole;
+};
+
 const normalizeDeploymentIdempotencyKey = (value) => {
   const normalized = requiredText(value, 'Deployment idempotency key');
   if (normalized.length > DEPLOYMENT_IDEMPOTENCY_KEY_MAX_LENGTH) {
@@ -64,6 +74,23 @@ export const tokenApi = Object.freeze({
         timeout: 60_000,
       })
       .then((response) => response.data),
+
+
+  updateCurrentPrice: (currentTokenPrice) => {
+    const normalized = normalizeCurrentTokenPrice(currentTokenPrice);
+    // Send a raw JSON numeric literal so values with up to 18 decimal places are not
+    // rounded by JavaScript's Number representation before they reach the API.
+    return apiClient
+      .patch(
+        TOKEN_ENDPOINTS.price,
+        `{"currentTokenPrice":${normalized}}`,
+        {
+          skipGlobalLoader: true,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      )
+      .then(unwrap);
+  },
 
   saveClaims: (payload) =>
     apiClient

@@ -95,7 +95,7 @@ const normalizeCardData = (token = {}) => {
     nestedToken.organization?.organizationName,
     nestedToken.issuer,
   );
-  const price = numericValue(token.price, token.initialTokenPrice, token.initialPrice, nestedToken.price, nestedToken.initialTokenPrice);
+  const price = numericValue(token.currentTokenPrice, token.currentPrice, token.price, nestedToken.currentTokenPrice, nestedToken.currentPrice, nestedToken.price, token.initialTokenPrice, token.initialPrice, nestedToken.initialTokenPrice);
   const maxHolders = numericValue(
     token.maxHolders,
     token.maxInvestors,
@@ -205,7 +205,7 @@ export function TokenApplicationCard({
             </div>
           ) : null}
           <div className="token-application-card__metric token-application-card__metric--primary token-application-card__metric--top-left">
-            <span>Token Price</span>
+            <span>Current Price</span>
             <strong><Coins size={19} /> {moneyLabel(card.price, card.currency)}</strong>
           </div>
           <div className="token-application-card__metric token-application-card__metric--primary token-application-card__metric--top-right">

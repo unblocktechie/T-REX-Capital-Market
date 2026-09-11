@@ -3,6 +3,7 @@ export const TOKEN_ENDPOINTS = Object.freeze({
   me: '/tokens/me',
   information: '/tokens/me/information',
   image: '/tokens/me/image',
+  price: '/tokens/me/price',
   claims: '/tokens/me/claims',
   compliance: '/tokens/me/compliance',
   governance: '/tokens/me/governance',

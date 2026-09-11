@@ -29,7 +29,7 @@ export default function DeploymentSuccessPage() {
   const { tokenAddress: routeTokenId } = useParams();
   const token = useMyToken();
   const deployment = useTokenIssuanceStore((state) => state.deployment);
-  useDocumentTitle('Deployment Successful');
+  useDocumentTitle('Token Created');
 
   if (token.isPending) {
     return (
@@ -92,11 +92,11 @@ export default function DeploymentSuccessPage() {
         <div className="deployment-complete-card__seal" aria-hidden="true">
           <CheckCircle2 size={31} />
         </div>
-        <StatusBadge status="valid">Deployed on Sepolia</StatusBadge>
-        <h1>Deployment Successful</h1>
+        <StatusBadge status="valid">Created on Sepolia</StatusBadge>
+        <h1>Token Created Successfully</h1>
         <p>
-          <strong>{tokenName} ({symbol})</strong> was deployed through the T-REX Gateway on
-          {` ${network}`}. The confirmed transaction hash has been recorded successfully.
+          Your token <strong>{tokenName} ({symbol})</strong> has been successfully created and is ready to use.
+          You can now invite investors from the Investors menu and start managing your investor list.
         </p>
 
         <div className="deployment-complete-card__records deployment-complete-card__records--single">
@@ -126,12 +126,12 @@ export default function DeploymentSuccessPage() {
         </div>
 
         <div className="deployment-complete-card__meta">
-          <span><BadgeCheck size={17} /> Status: deployed</span>
+          <span><BadgeCheck size={17} /> Status: Created</span>
           <span>
             <Fingerprint size={17} />
             {deployedAt
-              ? `Deployed ${new Date(deployedAt).toLocaleString()}`
-              : 'Deployment confirmed on-chain'}
+              ? `Created ${new Date(deployedAt).toLocaleString()}`
+              : 'Creation confirmed on-chain'}
           </span>
         </div>
       </section>
@@ -141,8 +141,8 @@ export default function DeploymentSuccessPage() {
         <div>
           <strong>What happens next?</strong>
           <p>
-            Open the token dashboard to review the token and the deployment information saved from
-            this confirmed transaction.
+            Open the token dashboard to review your token details and the transaction information saved from
+            this confirmed creation.
           </p>
         </div>
       </section>

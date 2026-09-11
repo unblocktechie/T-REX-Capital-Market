@@ -13,7 +13,7 @@ const labels = {
   'identity-claims': 'Identity & Claims',
   agents: 'Agents',
   deploying: 'Deployment Processing',
-  success: 'Deployment Successful',
+  success: 'Token Created',
   identity: 'Identity registry',
   compliance: 'Compliance rules',
   investors: 'Manage Request',

@@ -373,7 +373,7 @@ export default function MarketplaceTokenDetailsPage() {
           <section className="marketplace-detail-section">
             <span className="marketplace-detail-section-label">Investment snapshot</span>
             <div className="marketplace-snapshot-grid">
-              <SnapshotCard label="Token Price">{displayPrice(token.price, token.currency)}</SnapshotCard>
+              <SnapshotCard label="Current Price">{displayPrice(token.price, token.currency)}</SnapshotCard>
               <SnapshotCard label="Decimals">{displayNumber(token.decimals)}</SnapshotCard>
               <SnapshotCard label="Max Investors">{displayNumber(token.maxInvestors)}</SnapshotCard>
               <SnapshotCard label="Current Investors">{displayNumber(token.currentInvestors)}</SnapshotCard>

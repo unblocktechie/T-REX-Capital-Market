@@ -1,13 +1,9 @@
 import {
-  createPublicClient,
   createWalletClient,
   custom,
   getAddress,
-  http,
   isAddress,
-  parseUnits,
 } from 'viem';
-import { env } from '@/config/env';
 import { web3Config } from '@/config/web3';
 
 const ERC3643_TRANSFER_ABI = [
@@ -58,38 +54,6 @@ const requiredAddress = (value, label) => {
     throw new Error(`${label} is unavailable or invalid. Refresh the page and try again.`);
   }
   return getAddress(normalized);
-};
-
-const supportedTokenDecimals = (value) => {
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > 36) {
-    throw new Error('Token decimal configuration is unavailable. Refresh the page and try again.');
-  }
-  return parsed;
-};
-
-const requiredTransferAmount = (value, decimals) => {
-  const normalized = String(value || '').trim();
-  if (!/^\d+(?:\.\d+)?$/.test(normalized) || !/[1-9]/.test(normalized)) {
-    throw new Error('Enter a token amount greater than zero.');
-  }
-
-  try {
-    const rawAmount = parseUnits(normalized, decimals);
-    if (rawAmount <= 0n) throw new Error('Enter a token amount greater than zero.');
-    return rawAmount;
-  } catch (error) {
-    if (error?.message === 'Enter a token amount greater than zero.') throw error;
-    throw new Error(`Enter an amount with no more than ${decimals} decimal place${decimals === 1 ? '' : 's'}.`);
-  }
-};
-
-const publicClientFor = (chainId) => {
-  const chain = chainFor(chainId);
-  return createPublicClient({
-    chain,
-    transport: http(env.web3.rpcUrl),
-  });
 };
 
 async function activeRegisteredWallet({
@@ -144,32 +108,52 @@ async function activeRegisteredWallet({
 }
 
 /**
- * Send an investor-to-investor ERC-3643 token transfer directly from the
- * connected registered investor wallet. No backend approval or write API is
- * involved: the token contract is the authority for transfer compliance.
+ * Broadcast the exact transaction prepared by the transfer-intent API. The
+ * frontend deliberately does not rebuild the recipient or raw token amount;
+ * those authoritative values come from transactionRequest.
  */
 export async function submitInvestorTokenTransfer({
   connector,
   connectedAddress,
   investorWalletAddress,
-  tokenAddress,
-  recipient,
-  amount,
-  tokenDecimals,
-  chainId,
+  transactionRequest,
 }) {
-  const contractAddress = requiredAddress(tokenAddress, 'Token contract');
-  const recipientAddress = requiredAddress(recipient, 'Recipient wallet');
-  const decimals = supportedTokenDecimals(tokenDecimals);
-  const rawAmount = requiredTransferAmount(amount, decimals);
+  if (!transactionRequest || typeof transactionRequest !== 'object') {
+    throw new Error('The prepared transfer is unavailable. Refresh the transfer status and try again.');
+  }
+
+  const contractAddress = requiredAddress(transactionRequest.contractAddress, 'Prepared token contract');
+  const senderAddress = requiredAddress(transactionRequest.from, 'Prepared sender wallet');
+  const functionName = String(transactionRequest.functionName || '').trim();
+  const args = Array.isArray(transactionRequest.args) ? transactionRequest.args : [];
+  const recipientAddress = requiredAddress(args[0], 'Prepared recipient wallet');
+  let rawAmount;
+  try {
+    rawAmount = BigInt(String(args[1] ?? '').trim());
+  } catch {
+    throw new Error('The prepared transfer amount is invalid. Refresh the transfer status and try again.');
+  }
+
+  if (functionName !== 'transfer' || args.length < 2 || rawAmount <= 0n) {
+    throw new Error('The prepared transfer details are invalid. Refresh the transfer status and try again.');
+  }
+
+  const preparedChainId = parseChainId(transactionRequest.chainId);
+  const registeredAddress = requiredAddress(investorWalletAddress, 'Registered investor wallet');
+  if (senderAddress !== registeredAddress) {
+    throw new Error('The prepared transfer does not match your registered investment wallet. Refresh the page and try again.');
+  }
 
   const { provider, chain, account } = await activeRegisteredWallet({
     connector,
     connectedAddress,
     investorWalletAddress,
-    chainId,
+    chainId: preparedChainId,
   });
 
+  if (account !== senderAddress) {
+    throw new Error('Switch to the wallet prepared for this transfer before continuing.');
+  }
   if (recipientAddress === account) {
     throw new Error('Choose a recipient wallet different from your registered investment wallet.');
   }
@@ -188,53 +172,4 @@ export async function submitInvestorTokenTransfer({
     functionName: 'transfer',
     args: [recipientAddress, rawAmount],
   });
-}
-
-/**
- * Wait for the submitted transfer to be mined successfully. A transaction hash
- * is never treated as completion by itself. Unknown RPC/timeout failures keep
- * the transaction in a submitted/confirming state so the UI does not fabricate
- * either success or failure.
- */
-export async function waitForInvestorTokenTransferReceipt({
-  txHash,
-  chainId,
-  timeout = 30_000,
-}) {
-  const hash = String(txHash || '').trim();
-  if (!/^0x[a-fA-F0-9]{64}$/.test(hash)) {
-    throw new Error('The transfer transaction hash is invalid.');
-  }
-
-  try {
-    const receipt = await publicClientFor(chainId).waitForTransactionReceipt({
-      hash,
-      confirmations: 1,
-      timeout,
-    });
-
-    if (receipt.status !== 'success') {
-      const reverted = new Error('The transfer was confirmed by the network but did not succeed. No tokens were transferred.');
-      reverted.code = 'TRANSFER_REVERTED';
-      reverted.transactionHash = hash;
-      reverted.transactionSubmitted = true;
-      reverted.confirmedRevert = true;
-      throw reverted;
-    }
-
-    return receipt;
-  } catch (error) {
-    if (error?.confirmedRevert) throw error;
-
-    const pending = new Error(
-      error?.shortMessage
-      || error?.message
-      || 'The transfer is still waiting for network confirmation.',
-      { cause: error },
-    );
-    pending.code = 'TRANSFER_CONFIRMATION_PENDING';
-    pending.transactionHash = hash;
-    pending.transactionSubmitted = true;
-    throw pending;
-  }
 }

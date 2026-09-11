@@ -86,9 +86,6 @@ export default function LoginPage() {
         <h2 className="my-[7px] font-[var(--font-display)] text-[clamp(28px,3vw,38px)] leading-[1.16] tracking-[-0.025em] text-[var(--text)]">
           Sign in to T-REX Capital Market
         </h2>
-        <p className="m-0 text-sm leading-6 text-[var(--text-soft)]">
-          Access your issuer, investor, or compliance admin workspace securely.
-        </p>
       </div>
       {emailVerified ? (
         <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-[color-mix(in_srgb,var(--success-500)_30%,transparent)] bg-[color-mix(in_srgb,var(--success-500)_9%,transparent)] px-3.5 py-3 text-[13px] leading-5 text-[var(--success-500)]" role="status">

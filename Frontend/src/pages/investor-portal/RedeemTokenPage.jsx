@@ -44,6 +44,7 @@ import {
 import { createLocalId } from '@/utils/createLocalId';
 import { getApiFieldErrors, getErrorMessage, sanitizeUserFacingMessage } from '@/utils/error';
 import { getInvestmentActionContext } from '@/utils/investmentPurchase';
+import { resolveCurrentTokenPriceExact } from '@/utils/tokenPrice';
 import { transactionExplorerName, transactionExplorerUrl } from '@/utils/blockExplorer';
 import { redemptionRejectionReason } from '@/utils/issuerRedemption';
 
@@ -523,9 +524,7 @@ export default function RedeemTokenPage({
   const walletGuard = useRegisteredInvestorWalletGuard(preparedInvestorWallet, preparedChainId);
   const tokenDecimals = supportedTokenDecimals(token?.decimals);
   const tokenUid = clean(token?.id || token?.tokenUid);
-  const tokenPriceExact = canonicalDecimal(
-    token?.initialTokenPriceExact || token?.initialTokenPrice || token?.price || token?.initialPrice,
-  );
+  const latestTokenPriceExact = canonicalDecimal(resolveCurrentTokenPriceExact(token || {}));
 
   const {
     balance: tokenWalletBalance,
@@ -546,6 +545,15 @@ export default function RedeemTokenPage({
   const terminal = Boolean(redemptionStatus && TERMINAL_REDEMPTION_STATUSES.has(redemptionStatus));
   const awaitingAuthorization = redemptionStatus === 'PENDING_INVESTOR_AUTHORIZATION';
   const activeRedemption = Boolean(redemptionUid && !terminal);
+  const tokenPriceExact = canonicalDecimal(
+    (activeRedemption && (
+      redemption?.tokenPriceSnapshot
+      || redemption?.tokenPrice
+      || redemption?.currentTokenPrice
+      || redemption?.pricePerToken
+    ))
+    || latestTokenPriceExact,
+  );
   const validateAgainstBalance = !activeRedemption || awaitingAuthorization;
 
   const amountError = useMemo(() => {
@@ -1121,7 +1129,7 @@ export default function RedeemTokenPage({
         <aside className="investor-token-action-aside">
           <Card className="investor-token-order-card">
             <div className="investor-token-order-card__title"><span>Redemption summary</span><RotateCcw size={18} /></div>
-            <div className="investor-token-order-row"><span>Token Price</span><strong>{tokenPriceExact ? `$${formatExactTokenAmount(tokenPriceExact)} ${token.currency || ''}` : '—'}</strong></div>
+            <div className="investor-token-order-row"><span>{activeRedemption ? 'Redemption Price' : 'Current Token Price'}</span><strong>{tokenPriceExact ? `$${formatExactTokenAmount(tokenPriceExact)} ${token.currency || ''}` : '—'}</strong></div>
             <div className="investor-token-order-row"><span>Redeem Amount</span><strong>{normalizedAmount ? `${formatExactTokenAmount(normalizedAmount)} ${token.symbol}` : '—'}</strong></div>
             <div className="investor-token-order-row investor-token-order-row--primary"><span>Estimated Value</span><strong>{estimatedValue ? `$${estimatedValue} ${token.currency || ''}` : '—'}</strong></div>
             <div className="investor-token-order-row"><span>Network</span><strong>{walletGuard.targetNetworkLabel}</strong></div>
@@ -1144,7 +1152,10 @@ export default function RedeemTokenPage({
                 </span>
               </div>
             ) : null}
-            <div className="investor-token-action-note"><Info size={17} /><p><strong>Wallet confirmation</strong>Use your registered wallet to confirm the request. After approval, the issuer completes your payment and the redemption finishes automatically.</p></div>
+            <div className="investor-token-action-note" role="status">
+              <Info size={17} />
+              <p>Your redemption request is being reviewed by the issuer. No action is required from you unless you want to cancel the request. Once approved, your redemption will be processed.</p>
+            </div>
             <RegisteredInvestorWalletGate guard={walletGuard} actionLabel={awaitingAuthorization ? 'confirm redemption' : 'redeem tokens'} />
             <Button
               className="investor-token-order-card__cta"

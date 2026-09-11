@@ -50,6 +50,7 @@ import {
 } from '@/services/investor/investorTokenPurchaseTransaction.service';
 import { getErrorMessage, sanitizeUserFacingMessage } from '@/utils/error';
 import { getInvestmentActionContext } from '@/utils/investmentPurchase';
+import { resolveCurrentTokenPriceExact } from '@/utils/tokenPrice';
 
 const money = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
 
@@ -328,15 +329,24 @@ export default function PurchaseTokenPage({
   const tokenBalanceChainId = preparedChainId || walletGuard.targetChainId;
 
   const tokenDecimals = supportedTokenDecimals(token?.decimals);
-  const tokenPriceExact = clean(token?.initialTokenPriceExact || token?.initialTokenPrice || token?.price || token?.initialPrice);
+  const tokenPriceExact = clean(
+    purchase?.tokenPriceSnapshot
+    || purchase?.tokenPrice
+    || purchase?.currentTokenPrice
+    || purchase?.pricePerToken
+    || resolveCurrentTokenPriceExact(token || {}),
+  );
   const tokenPrice = Number(tokenPriceExact);
   const maxTokenBalanceExact = canonicalDecimal(
     token?.maxBalancePerInvestorExact || token?.maxBalancePerInvestor || token?.maxBalance,
   );
   const normalizedTokenAmount = canonicalDecimal(tokenAmountInput);
-  const estimatedPayment = Number.isFinite(tokenPrice) && tokenPrice > 0 && Number(normalizedTokenAmount) > 0
-    ? Number(normalizedTokenAmount) * tokenPrice
-    : 0;
+  const preparedPayment = Number(clean(purchase?.usdtAmount || purchase?.paymentAmount || purchase?.totalUsdtAmount));
+  const estimatedPayment = Number.isFinite(preparedPayment) && preparedPayment > 0
+    ? preparedPayment
+    : Number.isFinite(tokenPrice) && tokenPrice > 0 && Number(normalizedTokenAmount) > 0
+      ? Number(normalizedTokenAmount) * tokenPrice
+      : 0;
   const topics = token?.eligibility?.topics || [];
   const allRequiredClaimsReady = topics.length
     ? topics.every((topic) => topic.satisfied && !topic.rejected)
@@ -1270,7 +1280,7 @@ export default function PurchaseTokenPage({
               </p>
             ) : null}
             <div className="investor-token-action-calculation">
-              <span>Estimated payment at displayed token price</span>
+              <span>Estimated payment at current token price</span>
               <strong>
                 {estimatedPayment > 0
                   ? `${money.format(estimatedPayment)} ${token.currency || 'USDT'}`
@@ -1318,8 +1328,8 @@ export default function PurchaseTokenPage({
               <ShoppingCart size={18} />
             </div>
             <div className="investor-token-order-row">
-              <span>Displayed Token Price</span>
-              <strong>{Number.isFinite(tokenPrice) && tokenPrice > 0 ? `$${money.format(tokenPrice)} ${token.currency || ''}` : '—'}</strong>
+              <span>{purchaseUid ? 'Purchase Price' : 'Current Token Price'}</span>
+              <strong>{tokenPriceExact ? `$${displayServerAmount(tokenPriceExact)} ${token.currency || 'USDT'}` : '—'}</strong>
             </div>
             <div className="investor-token-order-row investor-token-order-row--primary">
               <span>Tokens to Receive</span>

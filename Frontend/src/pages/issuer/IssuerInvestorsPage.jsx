@@ -167,7 +167,7 @@ export default function IssuerInvestorsPage() {
         <div>
           <span className="issuer-redemptions-eyebrow">Investor subscription requests</span>
           <h1>Subscription Requests</h1>
-          <p>Review investment interests submitted for your organization&apos;s deployed tokens. Open a request to inspect the investor identity summary, required claim topics, and submitted documents.</p>
+          <p>Review investment interests submitted for your organization&apos;s created tokens. Open a request to inspect the investor identity summary, required claim topics, and submitted documents.</p>
         </div>
         <Button variant="secondary" icon={Download} disabled={!requests.length} onClick={handleExport}>Export CSV</Button>
       </header>

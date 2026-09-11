@@ -211,15 +211,29 @@ export const mapMarketplaceToken = (raw = {}, { interest = null, eligibility = n
         raw?.issuer?.name,
         raw?.issuer?.legalName,
       );
-  const price = numberOrNull(
+  const initialTokenPriceExact = text(
     raw?.initialTokenPrice,
-    raw?.price,
     raw?.initialPrice,
     tokenInformation?.initialTokenPrice,
-    tokenInformation?.price,
+    tokenInformation?.initialPrice,
     pricing?.initialTokenPrice,
     pricing?.initialPrice,
+    raw?.price,
+    tokenInformation?.price,
   );
+  const currentTokenPriceExact = text(
+    raw?.currentTokenPrice,
+    raw?.currentPrice,
+    tokenInformation?.currentTokenPrice,
+    tokenInformation?.currentPrice,
+    pricing?.currentTokenPrice,
+    pricing?.currentPrice,
+    raw?.price,
+    tokenInformation?.price,
+    initialTokenPriceExact,
+  );
+  const initialTokenPrice = numberOrNull(initialTokenPriceExact);
+  const price = numberOrNull(currentTokenPriceExact, initialTokenPriceExact);
   const requiredClaimTopics = array(raw?.requiredClaimTopics, raw?.claimTopics)
     .map((topic, index) => mapClaimTopic(topic, index));
 
@@ -230,18 +244,13 @@ export const mapMarketplaceToken = (raw = {}, { interest = null, eligibility = n
     symbol: (text(raw?.symbol, raw?.tokenSymbol, raw?.ticker, tokenInformation?.symbol) || '—').toUpperCase(),
     decimals: numberOrNull(raw?.decimals, tokenInformation?.decimals),
     price,
-    initialTokenPrice: price,
-    initialTokenPriceExact: text(
-      raw?.initialTokenPrice,
-      raw?.price,
-      raw?.initialPrice,
-      tokenInformation?.initialTokenPrice,
-      tokenInformation?.price,
-      pricing?.initialTokenPrice,
-      pricing?.initialPrice,
-    ),
+    currentTokenPrice: price,
+    currentTokenPriceExact,
+    currentPrice: price,
+    initialTokenPrice,
+    initialTokenPriceExact,
     nav: numberOrNull(raw?.nav, raw?.netAssetValue, price),
-    initialPrice: price,
+    initialPrice: initialTokenPrice,
     currency: text(raw?.currency, pricing?.currency, 'USDT').toUpperCase(),
     description: splitDescription(first(raw?.description, tokenInformation?.description)),
     shortDescription: text(raw?.shortDescription, raw?.description, tokenInformation?.description, tokenInformation?.assetClass),
@@ -368,6 +377,8 @@ export const mapMarketplaceToken = (raw = {}, { interest = null, eligibility = n
       raw?.networkChainId,
       tokenInformation?.chainId,
       raw?.network?.chainId,
+      raw?.chain?.chainId,
+      raw?.chain?.id,
     ),
     expectedApy: text(raw?.expectedApy, raw?.apy),
     liquidity: text(raw?.liquidity, raw?.liquidityType),
@@ -508,11 +519,21 @@ export const mapInterest = (raw = {}) => {
     initialTokenPrice: first(
       tokenRaw?.initialTokenPrice,
       tokenRaw?.initialPrice,
-      tokenRaw?.price,
       raw?.initialTokenPrice,
       raw?.initialPrice,
-      raw?.tokenPrice,
+      tokenRaw?.price,
       raw?.price,
+    ),
+    currentTokenPrice: first(
+      tokenRaw?.currentTokenPrice,
+      tokenRaw?.currentPrice,
+      raw?.currentTokenPrice,
+      raw?.currentPrice,
+      raw?.tokenPrice,
+      tokenRaw?.price,
+      raw?.price,
+      tokenRaw?.initialTokenPrice,
+      raw?.initialTokenPrice,
     ),
     currency: first(tokenRaw?.currency, raw?.currency, raw?.priceCurrency),
     minInvestment: first(

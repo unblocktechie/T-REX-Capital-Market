@@ -356,7 +356,22 @@ export const mapTokenForm = ({ data, options, countries, logo }) => {
       network: text(information?.network, information?.networkName),
     },
     supplyPricing: {
-      initialPrice: text(information?.initialTokenPrice, information?.initialPrice),
+      initialPrice: text(
+        information?.initialTokenPrice,
+        information?.initialPrice,
+        data?.initialTokenPrice,
+        data?.initialPrice,
+      ),
+      currentPrice: text(
+        information?.currentTokenPrice,
+        information?.currentPrice,
+        data?.currentTokenPrice,
+        data?.currentPrice,
+        information?.initialTokenPrice,
+        information?.initialPrice,
+        data?.initialTokenPrice,
+        data?.initialPrice,
+      ),
       currency: 'USDT',
     },
     identityClaims: {

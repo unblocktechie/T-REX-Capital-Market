@@ -47,7 +47,7 @@ export default function IssuerInvestorDirectoryPage() {
   useDocumentTitle('Investors');
   const tokenRecord = useMyToken();
   const tokenUid = tokenRecord.tokenUid;
-  const tokenName = getTokenRecordName(tokenRecord.token) || 'Deployed token';
+  const tokenName = getTokenRecordName(tokenRecord.token) || 'Created token';
   const tokenSymbol = getTokenRecordSymbol(tokenRecord.token);
   const [rows, setRows] = useState([]);
   const [meta, setMeta] = useState({ page: 1, limit: PAGE_SIZE, total: 0, totalPages: 1 });
@@ -222,7 +222,7 @@ export default function IssuerInvestorDirectoryPage() {
         <div>
           <span className="issuer-redemptions-eyebrow">Investor &amp; invitation management</span>
           <h1>Investors</h1>
-          <p>Discover completed investor profiles for your deployed token and send a secure invitation to review the offering.</p>
+          <p>Discover completed investor profiles for your created token and send a secure invitation to review the offering.</p>
         </div>
         <Button
           variant="secondary"
@@ -238,8 +238,8 @@ export default function IssuerInvestorDirectoryPage() {
       {!tokenRecord.isLoading && !canLoad ? (
         <Card className="issuer-investor-directory-empty">
           <EmptyState
-            title={tokenRecord.hasToken ? 'Deploy your token to invite investors' : 'Create a token before inviting investors'}
-            description="Investor invitations are available only for an approved issuer organization with a deployed token."
+            title={tokenRecord.hasToken ? 'Finish creating your token to invite investors' : 'Create a token before inviting investors'}
+            description="Investor invitations are available once your approved organization has a successfully created token."
           />
         </Card>
       ) : (

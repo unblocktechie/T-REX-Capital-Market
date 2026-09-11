@@ -59,7 +59,7 @@ export default function MyApplicationsPage() {
       ),
     },
     { key: 'status', header: 'Status', render: (value) => <MarketplaceStatusBadge status={value} /> },
-    { key: 'price', header: 'Token Price', render: (value, application) => <strong>{formatPrice(value, application.currency)}</strong> },
+    { key: 'price', header: 'Current Price', render: (value, application) => <strong>{formatPrice(value, application.currency)}</strong> },
     { key: 'submittedAt', header: 'Submitted', render: (value) => <strong>{value ? new Date(value).toLocaleDateString() : '—'}</strong> },
     { key: 'maxBalance', header: 'Max Balance / Holder', render: (value, application) => <strong>{value == null ? '—' : `${formatNumber(value)} ${application.symbol}`}</strong> },
     { key: 'maxInvestors', header: 'Max Holders', render: (value) => <strong>{value == null ? '—' : formatNumber(value)}</strong> },

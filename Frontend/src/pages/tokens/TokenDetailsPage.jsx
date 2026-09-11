@@ -6,28 +6,49 @@ import {
   Fingerprint,
   Landmark,
   Network,
+  PencilLine,
+  TrendingDown,
+  TrendingUp,
   ShieldCheck,
   UsersRound,
   WalletCards,
 } from 'lucide-react';
+import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import {
   AddressDisplay,
   StatusBadge,
 } from '@/components/token-issuance/IssuancePrimitives';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Modal } from '@/components/ui/Modal';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ROUTES } from '@/config/routes';
 import { web3Config } from '@/config/web3';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTokenDashboardData } from '@/hooks/useTokenDashboardData';
+import { getTokenRecordUid, myTokenQueryKey } from '@/hooks/useMyToken';
 import { formatMoney, formatNumber } from '@/utils/tokenIssuance';
+import { getErrorMessage } from '@/utils/error';
+import { tokenPriceChange, validateCurrentTokenPrice } from '@/utils/tokenPrice';
 import { getDeploymentTransactionHash } from '@/utils/transactionHash';
+import { tokenApi } from '@/api/tokens';
 import { shortenWalletAddress } from '@/utils/wallet';
 
 const firstText = (...values) =>
   String(values.find((value) => value !== undefined && value !== null) || '').trim();
+
+const formatTokenPrice = (value) => {
+  const normalized = String(value ?? '').trim();
+  const match = normalized.match(/^(\d+)(?:\.(\d+))?$/);
+  if (!match) return value ? formatMoney(value, 'USDT') : '—';
+  const whole = match[1].replace(/^0+(?=\d)/, '').replace(/\B(?=(\d{3})+(?!\d))/g, ',') || '0';
+  const fraction = (match[2] || '').replace(/0+$/, '');
+  return `${whole}${fraction ? `.${fraction}` : ''} USDT`;
+};
 
 const rawAddress = (raw, ...keys) => {
   for (const key of keys) {
@@ -70,7 +91,12 @@ export default function TokenDetailsPage() {
   const navigate = useNavigate();
   const { tokenAddress: routeTokenId } = useParams();
   const token = useTokenDashboardData();
+  const queryClient = useQueryClient();
   const { organization } = useOrganization();
+  const [priceEditorOpen, setPriceEditorOpen] = useState(false);
+  const [newPrice, setNewPrice] = useState('');
+  const [priceError, setPriceError] = useState('');
+  const [updatingPrice, setUpdatingPrice] = useState(false);
   const mapped = token.mapped || {};
   const information = mapped.tokenInformation || {};
   const identityClaims = mapped.identityClaims || { claimTopics: [], trustedIssuer: {} };
@@ -163,8 +189,68 @@ export default function TokenDetailsPage() {
   const countryNames = (compliance.countries || [])
     .map((country) => country?.countryName || country?.label || String(country || ''))
     .filter(Boolean);
-  const displayStatus = token.isDeployed ? 'Deployed' : 'Ready to Deploy';
+  const displayStatus = token.isDeployed ? 'Created' : 'Ready to Deploy';
   const initialPrice = mapped.supplyPricing?.initialPrice;
+  const currentPrice = mapped.supplyPricing?.currentPrice || initialPrice;
+  const priceValidationError = newPrice ? validateCurrentTokenPrice(newPrice) : '';
+  const priceChange = !priceValidationError && newPrice
+    ? tokenPriceChange(currentPrice, newPrice)
+    : null;
+  const priceUnchanged = priceChange?.direction === 'unchanged';
+
+  const openPriceEditor = () => {
+    setNewPrice(String(currentPrice || ''));
+    setPriceError('');
+    setPriceEditorOpen(true);
+  };
+
+  const closePriceEditor = () => {
+    if (updatingPrice) return;
+    setPriceEditorOpen(false);
+    setPriceError('');
+  };
+
+  const handlePriceUpdate = async () => {
+    const validationError = validateCurrentTokenPrice(newPrice);
+    if (validationError) {
+      setPriceError(validationError);
+      return;
+    }
+    if (tokenPriceChange(currentPrice, newPrice)?.direction === 'unchanged') {
+      setPriceError('Enter a price different from the current price.');
+      return;
+    }
+
+    setUpdatingPrice(true);
+    setPriceError('');
+    try {
+      const updatedToken = await tokenApi.updateCurrentPrice(newPrice);
+      const responseToken = updatedToken?.token && typeof updatedToken.token === 'object'
+        ? updatedToken.token
+        : updatedToken;
+      const nextToken = getTokenRecordUid(responseToken)
+        ? responseToken
+        : {
+            ...raw,
+            ...(responseToken && typeof responseToken === 'object' ? responseToken : {}),
+            currentTokenPrice: String(newPrice).trim(),
+            tokenInformation: {
+              ...(raw?.tokenInformation || raw?.information || {}),
+              ...(responseToken?.tokenInformation || responseToken?.information || {}),
+              currentTokenPrice: String(newPrice).trim(),
+            },
+          };
+      queryClient.setQueryData(myTokenQueryKey(token.userKey), nextToken);
+      setPriceEditorOpen(false);
+      toast.success('Current price updated', {
+        description: `${tokenName} now uses ${formatTokenPrice(newPrice)} as its current trading price.`,
+      });
+    } catch (error) {
+      setPriceError(getErrorMessage(error, 'The current price could not be updated. Please try again.'));
+    } finally {
+      setUpdatingPrice(false);
+    }
+  };
 
   return (
     <div className="token-details-page token-dashboard-page">
@@ -209,9 +295,15 @@ export default function TokenDetailsPage() {
             showFullAddress
             className="token-dashboard-header__contract"
           />
-          <div className="token-dashboard-header__price">
-            <small>Token price</small>
-            <strong>{initialPrice ? formatMoney(initialPrice, 'USDT') : '—'}</strong>
+          <div className="token-dashboard-header__price token-dashboard-header__price--editable">
+            <div className="token-dashboard-header__price-label">
+              <small>Current price</small>
+              <button type="button" onClick={openPriceEditor} aria-label="Edit current token price">
+                <PencilLine size={15} /> Edit
+              </button>
+            </div>
+            <strong>{formatTokenPrice(currentPrice)}</strong>
+            <span>Initial price {formatTokenPrice(initialPrice)}</span>
           </div>
         </div>
       </header>
@@ -369,13 +461,86 @@ export default function TokenDetailsPage() {
 
       <footer className="token-dashboard-footer">
         <div>
-          <strong>Your token configuration is locked.</strong>
-          <p>Create-token pages are no longer available after final validation.</p>
+          <strong>Your core token configuration is locked.</strong>
+          <p>The launch configuration stays fixed after creation. You can continue updating the current trading price above.</p>
         </div>
         <Button variant="secondary" onClick={() => navigate(ROUTES.dashboard)}>
           Return to Dashboard
         </Button>
       </footer>
+
+
+      <Modal
+        open={priceEditorOpen}
+        onClose={closePriceEditor}
+        title="Update current token price"
+        trapFocus
+        className="token-price-editor"
+        footer={(
+          <>
+            <Button variant="secondary" onClick={closePriceEditor} disabled={updatingPrice}>Cancel</Button>
+            <Button
+              onClick={handlePriceUpdate}
+              loading={updatingPrice}
+              disabled={updatingPrice || Boolean(priceValidationError) || !newPrice || priceUnchanged}
+            >
+              Update Current Price
+            </Button>
+          </>
+        )}
+      >
+        <div className="token-price-editor__intro">
+          <p>Update the trading price investors will see for new purchases, redemptions and transfers. The initial launch price remains unchanged.</p>
+        </div>
+        <div className="token-price-editor__snapshot" aria-label="Token price comparison">
+          <div><span>Initial Price</span><strong>{formatTokenPrice(initialPrice)}</strong><small>Fixed launch price</small></div>
+          <div><span>Current Price</span><strong>{formatTokenPrice(currentPrice)}</strong><small>Price in use now</small></div>
+        </div>
+        <Input
+          id="new-current-token-price"
+          label="New Price"
+          value={newPrice}
+          onChange={(event) => {
+            const value = event.target.value.replace(/,/g, '');
+            if (value === '' || /^\d*(?:\.\d{0,18})?$/.test(value)) {
+              setNewPrice(value);
+              setPriceError('');
+            }
+          }}
+          inputMode="decimal"
+          autoComplete="off"
+          placeholder="Enter new price"
+          trailing={<span className="token-price-editor__currency">USDT</span>}
+          error={priceError || priceValidationError}
+          hint="Enter a positive value with up to 18 decimal places."
+          disabled={updatingPrice}
+          required
+        />
+        <div className={`token-price-editor__change is-${priceChange?.direction || 'neutral'}`}>
+          <span className="token-price-editor__change-icon">
+            {priceChange?.direction === 'increase' ? <TrendingUp size={18} /> : priceChange?.direction === 'decrease' ? <TrendingDown size={18} /> : <CircleDollarSign size={18} />}
+          </span>
+          <div>
+            <span>Price Change</span>
+            <strong>
+              {!priceChange
+                ? 'Enter a new price to preview the change'
+                : priceChange.direction === 'unchanged'
+                  ? 'No change'
+                  : `${priceChange.direction === 'increase' ? '+' : '−'}${formatTokenPrice(priceChange.amountExact)}`}
+            </strong>
+            <small>
+              {!priceChange
+                ? 'Your change will be shown before you update.'
+                : priceChange.direction === 'increase'
+                  ? 'The current price will increase by this amount.'
+                  : priceChange.direction === 'decrease'
+                    ? 'The current price will decrease by this amount.'
+                    : 'Choose a different value to update the price.'}
+            </small>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

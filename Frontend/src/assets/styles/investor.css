@@ -17873,7 +17873,7 @@ button.investor-dashboard-live__metric:focus-visible,
 
 .investor-portfolio-summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -17929,6 +17929,37 @@ button.investor-dashboard-live__metric:focus-visible,
   line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.investor-portfolio-price-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-muted) 45%, var(--surface));
+  padding: 11px 13px;
+  color: var(--text-soft);
+}
+
+.investor-portfolio-price-note > svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.investor-portfolio-price-note > div {
+  display: grid;
+  gap: 2px;
+}
+
+.investor-portfolio-price-note strong {
+  color: var(--text);
+  font-size: 0.76rem;
+}
+
+.investor-portfolio-price-note span {
+  font-size: 0.72rem;
+  line-height: 1.45;
 }
 
 .investor-portfolio-toolbar {
@@ -18005,7 +18036,7 @@ button.investor-dashboard-live__metric:focus-visible,
 .investor-portfolio-list__head,
 .investor-portfolio-row {
   display: grid;
-  grid-template-columns: minmax(245px, 1.38fr) minmax(170px, 0.86fr) minmax(175px, 0.9fr) minmax(170px, 0.82fr) minmax(118px, 0.56fr);
+  grid-template-columns: minmax(205px, 1.2fr) minmax(150px, 0.82fr) minmax(145px, 0.78fr) minmax(140px, 0.72fr) minmax(155px, 0.88fr) minmax(108px, 0.52fr);
   align-items: center;
   gap: 16px;
 }
@@ -18101,12 +18132,11 @@ button.investor-dashboard-live__metric:focus-visible,
   font-size: 0.91rem;
 }
 
-.investor-portfolio-investment strong {
+.investor-portfolio-investment strong,
+.investor-portfolio-current-value strong,
+.investor-portfolio-token-price strong {
   font-size: 0.86rem;
-}
-
-.investor-portfolio-activity strong {
-  font-weight: 750;
+  font-variant-numeric: tabular-nums;
 }
 
 .investor-portfolio-actions {
@@ -18223,7 +18253,7 @@ button.investor-dashboard-live__metric:focus-visible,
 }
 
 .investor-portfolio-row.is-loading {
-  grid-template-columns: 44px minmax(180px, 1.3fr) minmax(120px, 0.7fr) minmax(120px, 0.7fr);
+  grid-template-columns: 44px minmax(180px, 1.25fr) repeat(3, minmax(110px, 0.72fr));
   min-height: 96px;
 }
 
@@ -18251,13 +18281,13 @@ button.investor-dashboard-live__metric:focus-visible,
   to { opacity: 1; }
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1180px) {
   .investor-portfolio-list__head {
     display: none;
   }
 
   .investor-portfolio-row {
-    grid-template-columns: minmax(240px, 1.25fr) repeat(2, minmax(150px, 0.75fr));
+    grid-template-columns: minmax(240px, 1.25fr) repeat(3, minmax(140px, 0.75fr));
     align-items: start;
     gap: 16px 20px;
   }
@@ -18267,8 +18297,7 @@ button.investor-dashboard-live__metric:focus-visible,
   }
 
   .investor-portfolio-actions {
-    grid-column: 2 / -1;
-    grid-row: 2;
+    grid-column: 3 / -1;
     display: flex;
     align-items: center;
     justify-content: flex-end;
@@ -18288,10 +18317,6 @@ button.investor-dashboard-live__metric:focus-visible,
 
   .investor-portfolio-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .investor-portfolio-summary__card:last-child {
-    grid-column: 1 / -1;
   }
 
   .investor-portfolio-toolbar {
@@ -18334,12 +18359,12 @@ button.investor-dashboard-live__metric:focus-visible,
     font-size: 0.86rem;
   }
 
-  .investor-portfolio-summary {
-    grid-template-columns: 1fr;
+  .investor-portfolio-price-note {
+    padding: 10px 11px;
   }
 
-  .investor-portfolio-summary__card:last-child {
-    grid-column: auto;
+  .investor-portfolio-summary {
+    grid-template-columns: 1fr;
   }
 
   .investor-portfolio-summary__card {
@@ -18381,5 +18406,53 @@ button.investor-dashboard-live__metric:focus-visible,
   .investor-portfolio-error .button {
     grid-column: 1 / -1;
     width: 100%;
+  }
+}
+
+/* Investor send flow: API-backed transfer history and recovery */
+.investor-token-transfer-retry {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.investor-token-transfer-history .investor-token-purchase-history__table-head,
+.investor-token-transfer-history .investor-token-purchase-history__row {
+  grid-template-columns: 1.18fr 0.78fr 0.95fr 1.18fr 0.92fr 1fr;
+}
+
+.investor-token-transfer-history__toolbar {
+  grid-template-columns: minmax(260px, 1fr) minmax(360px, auto);
+}
+
+.investor-token-transfer-history__filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(170px, 220px));
+  gap: 10px;
+  justify-content: end;
+}
+
+@media (max-width: 980px) {
+  .investor-token-transfer-history .investor-token-purchase-history__row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .investor-token-transfer-history__toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .investor-token-transfer-history__filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    justify-content: stretch;
+  }
+}
+
+@media (max-width: 640px) {
+  .investor-token-transfer-history .investor-token-purchase-history__row,
+  .investor-token-transfer-history__filters {
+    grid-template-columns: 1fr;
+  }
+
+  .investor-token-transfer-history__filters {
+    gap: 8px;
   }
 }

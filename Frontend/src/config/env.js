@@ -6,7 +6,7 @@ const envSchema = z.object({
   VITE_API_BASE_URL: z.string().url().default('http://192.168.29.90:3000/api'),
   VITE_API_VERSION: z.string().default('v1'),
   VITE_SOCKET_URL: z.string().default('ws://192.168.29.90:3000/ws'),
-  VITE_REQUEST_TIMEOUT: z.coerce.number().positive().default(15000),
+  VITE_REQUEST_TIMEOUT: z.coerce.number().positive().default(500000),
   VITE_USE_MOCK_API: z.enum(['true', 'false']).default('false'),
   VITE_ENABLE_DARK_MODE: z.enum(['true', 'false']).default('false'),
   VITE_ENABLE_ANALYTICS: z.enum(['true', 'false']).default('false'),

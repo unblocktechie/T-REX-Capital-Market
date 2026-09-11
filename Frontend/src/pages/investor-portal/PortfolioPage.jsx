@@ -4,24 +4,26 @@ import {
   Banknote,
   Briefcase,
   Coins,
-  History,
+  Info,
   RefreshCcw,
   Search,
   ShieldCheck,
+  WalletCards,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { formatUnits } from 'viem';
 import { InvestorHistoryPagination } from '@/components/investor-marketplace/InvestorHistoryPagination';
 import { MarketplaceTokenImage } from '@/components/investor-marketplace/MarketplaceTokenImage';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ROUTES } from '@/config/routes';
-import { web3Config } from '@/config/web3';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { useInvestorProfileData } from '@/hooks/useInvestorProfileData';
 import { investorPortfolioService } from '@/services/investor/investorPortfolioService';
-import { formatDate } from '@/utils/date';
+import { getInvestorPurchaseTokenBalance } from '@/services/investor/investorTokenPurchaseTransaction.service';
 import { getErrorMessage } from '@/utils/error';
-import { shortenWalletAddress } from '@/utils/wallet';
+import { resolveCurrentTokenPriceExact, resolveInitialTokenPriceExact } from '@/utils/tokenPrice';
 
 const PAGE_SIZE = 20;
 
@@ -43,38 +45,83 @@ const exactDecimal = (value, maximumFractionDigits = 6) => {
   return `${sign}${grouped}${fraction ? `.${fraction}` : ''}`;
 };
 
-const tokenAmount = (value, symbol) => `${exactDecimal(value, 6)} ${symbol || 'TOKEN'}`;
+const tokenAmount = (value, symbol) => `${exactDecimal(value, 8)} ${symbol || 'TOKEN'}`;
 const usdtAmount = (value, maximumFractionDigits = 2) => {
   const formatted = exactDecimal(value, maximumFractionDigits);
   return formatted === '—' ? '—' : `${formatted} USDT`;
 };
 
-const chainLabel = (token) => {
-  if (token?.chainName) return token.chainName;
-  const numericChainId = Number(token?.chainId);
-  const chain = web3Config.supportedChains.find((item) => item.id === numericChainId);
-  return chain?.name || (Number.isFinite(numericChainId) ? `Chain ${numericChainId}` : 'Network unavailable');
+const decimalParts = (value) => {
+  const normalized = String(value ?? '').replace(/,/g, '').trim();
+  const match = normalized.match(/^([+-]?)(\d+)(?:\.(\d+))?$/);
+  if (!match) return null;
+  const [, sign, integerPart, fraction = ''] = match;
+  return {
+    negative: sign === '-',
+    digits: BigInt(`${integerPart}${fraction}` || '0'),
+    scale: fraction.length,
+  };
 };
 
-const activityDate = (portfolio = {}) => (
-  portfolio.lastActivityAt
-  || portfolio.lastRedemptionAt
-  || portfolio.lastPurchaseAt
-  || portfolio.firstPurchaseAt
-  || ''
-);
+const pow10 = (value) => 10n ** BigInt(value);
 
-const restrictionSummary = (token) => {
-  const countryCount = Array.isArray(token?.permittedCountries) ? token.permittedCountries.length : 0;
-  if (countryCount > 0) return `${countryCount} permitted countr${countryCount === 1 ? 'y' : 'ies'}`;
-  if (token?.transferRestriction) return token.transferRestriction;
-  if (token?.restrictions && Object.keys(token.restrictions).length) return 'Transfer rules apply';
-  return 'Standard compliance rules';
+const formatScaledDecimal = (signedValue, scale, maximumFractionDigits = 2) => {
+  let value = signedValue;
+  let resolvedScale = scale;
+
+  if (resolvedScale > maximumFractionDigits) {
+    const divisor = pow10(resolvedScale - maximumFractionDigits);
+    const negative = value < 0n;
+    const absolute = negative ? -value : value;
+    const rounded = (absolute + (divisor / 2n)) / divisor;
+    value = negative ? -rounded : rounded;
+    resolvedScale = maximumFractionDigits;
+  }
+
+  if (resolvedScale < maximumFractionDigits) {
+    value *= pow10(maximumFractionDigits - resolvedScale);
+    resolvedScale = maximumFractionDigits;
+  }
+
+  const negative = value < 0n;
+  const absolute = negative ? -value : value;
+  const divisor = pow10(resolvedScale);
+  const whole = absolute / divisor;
+  const fraction = resolvedScale ? String(absolute % divisor).padStart(resolvedScale, '0') : '';
+  const grouped = whole.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return `${negative ? '-' : ''}${grouped}${resolvedScale ? `.${fraction}` : ''}`;
 };
+
+const sumDecimalValues = (values, maximumFractionDigits = 2) => {
+  const parts = values.map(decimalParts).filter(Boolean);
+  if (!parts.length) return null;
+  const scale = Math.max(...parts.map((part) => part.scale));
+  const total = parts.reduce((sum, part) => {
+    const scaled = part.digits * pow10(scale - part.scale);
+    return sum + (part.negative ? -scaled : scaled);
+  }, 0n);
+  return formatScaledDecimal(total, scale, maximumFractionDigits);
+};
+
+const multiplyDecimalValues = (left, right, maximumFractionDigits = 2) => {
+  const leftParts = decimalParts(left);
+  const rightParts = decimalParts(right);
+  if (!leftParts || !rightParts) return null;
+  const sign = leftParts.negative !== rightParts.negative ? -1n : 1n;
+  const product = leftParts.digits * rightParts.digits * sign;
+  return formatScaledDecimal(product, leftParts.scale + rightParts.scale, maximumFractionDigits);
+};
+
+const validTokenDecimals = (value) => {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= 0 && parsed <= 36 ? parsed : null;
+};
+
+const walletBalanceState = (status = 'loading', balance = '', reason = '') => ({ status, balance, reason });
 
 function PortfolioLoading() {
   return (
-    <Card className="investor-portfolio-list investor-portfolio-list--loading" aria-label="Loading portfolio holdings">
+    <Card className="investor-portfolio-list investor-portfolio-list--loading" aria-label="Loading portfolio">
       {[0, 1, 2, 3].map((row) => (
         <div className="investor-portfolio-row is-loading" key={row}>
           <span className="investor-portfolio-skeleton investor-portfolio-skeleton--logo" />
@@ -90,6 +137,7 @@ function PortfolioLoading() {
 export default function PortfolioPage() {
   useDocumentTitle('Portfolio');
   const navigate = useNavigate();
+  const investorProfileQuery = useInvestorProfileData();
   const [items, setItems] = useState([]);
   const [meta, setMeta] = useState({ page: 1, limit: PAGE_SIZE, total: 0, totalPages: 1 });
   const [search, setSearch] = useState('');
@@ -98,6 +146,15 @@ export default function PortfolioPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState('');
+  const [walletBalances, setWalletBalances] = useState({});
+  const [balanceRefreshKey, setBalanceRefreshKey] = useState(0);
+
+  const registeredWalletAddress = String(
+    investorProfileQuery.state?.wallet?.address
+      || investorProfileQuery.rawInvestor?.walletAddress
+      || investorProfileQuery.rawInvestor?.investor?.walletAddress
+      || '',
+  ).trim();
 
   const loadPortfolio = useCallback(async ({ quiet = false, signal } = {}) => {
     quiet ? setRefreshing(true) : setLoading(true);
@@ -139,32 +196,139 @@ export default function PortfolioPage() {
     if (page > meta.totalPages) setPage(Math.max(meta.totalPages, 1));
   }, [meta.totalPages, page]);
 
+  useEffect(() => {
+    const refreshVisibleBalances = () => setBalanceRefreshKey((value) => value + 1);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') refreshVisibleBalances();
+    };
+
+    window.addEventListener('focus', refreshVisibleBalances);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => {
+      window.removeEventListener('focus', refreshVisibleBalances);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    if (!items.length || loadError) {
+      setWalletBalances({});
+      return () => {
+        active = false;
+      };
+    }
+
+    setWalletBalances(Object.fromEntries(
+      items.map((token) => [token.tokenUid, walletBalanceState('loading')]),
+    ));
+
+    if (investorProfileQuery.isLoading) {
+      return () => {
+        active = false;
+      };
+    }
+
+    if (!registeredWalletAddress) {
+      setWalletBalances(Object.fromEntries(
+        items.map((token) => [token.tokenUid, walletBalanceState('unavailable', '', 'Registered wallet unavailable')]),
+      ));
+      return () => {
+        active = false;
+      };
+    }
+
+    Promise.all(items.map(async (token) => {
+      const tokenUid = token.tokenUid;
+      const decimals = validTokenDecimals(token.decimals);
+      if (!token.tokenAddress || !token.chainId || decimals === null) {
+        return [tokenUid, walletBalanceState('unavailable', '', 'Token balance details unavailable')];
+      }
+
+      try {
+        const rawBalance = await getInvestorPurchaseTokenBalance({
+          tokenAddress: token.tokenAddress,
+          investorWalletAddress: registeredWalletAddress,
+          chainId: token.chainId,
+        });
+        return [tokenUid, walletBalanceState('ready', formatUnits(rawBalance, decimals))];
+      } catch {
+        return [tokenUid, walletBalanceState('unavailable', '', 'Live wallet balance unavailable')];
+      }
+    })).then((entries) => {
+      if (active) setWalletBalances(Object.fromEntries(entries));
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [balanceRefreshKey, investorProfileQuery.isLoading, items, loadError, registeredWalletAddress]);
+
   const currentPage = Math.min(Math.max(meta.page || page, 1), Math.max(meta.totalPages || 1, 1));
   const start = meta.total ? ((currentPage - 1) * meta.limit) + 1 : 0;
   const end = meta.total ? Math.min(currentPage * meta.limit, meta.total) : 0;
 
-  const pageActivity = useMemo(() => items.reduce((summary, item) => ({
-    purchases: summary.purchases + (Number(item?.portfolio?.purchaseCount) || 0),
-    redemptions: summary.redemptions + (Number(item?.portfolio?.redemptionCount) || 0),
-  }), { purchases: 0, redemptions: 0 }), [items]);
+  const overview = useMemo(() => {
+    const investedValues = [];
+    const walletValues = [];
+    let purchaseCount = 0;
+    let verifiedBalances = 0;
+    let pricedBalances = 0;
+
+    items.forEach((token) => {
+      const portfolio = token?.portfolio || {};
+      if (decimalParts(portfolio.totalInvestedUsdtAmount)) investedValues.push(portfolio.totalInvestedUsdtAmount);
+      purchaseCount += Number.isFinite(Number(portfolio.purchaseCount)) ? Number(portfolio.purchaseCount) : 0;
+
+      const balanceState = walletBalances[token.tokenUid];
+      if (balanceState?.status === 'ready') {
+        verifiedBalances += 1;
+        const currentPrice = resolveCurrentTokenPriceExact(token);
+        const walletValue = multiplyDecimalValues(balanceState.balance, currentPrice, 2);
+        if (walletValue !== null) {
+          walletValues.push(walletValue);
+          pricedBalances += 1;
+        }
+      }
+    });
+
+    return {
+      totalInvested: sumDecimalValues(investedValues, 2),
+      estimatedWalletValue: pricedBalances === items.length && items.length
+        ? sumDecimalValues(walletValues, 2)
+        : null,
+      purchaseCount,
+      verifiedBalances,
+      pricedBalances,
+    };
+  }, [items, walletBalances]);
+
+  const summaryScope = meta.total > items.length ? 'shown on this page' : 'across your portfolio';
+  const balanceLoading = items.some((token) => walletBalances[token.tokenUid]?.status === 'loading');
 
   const openManagement = (tokenUid) => {
     navigate(`${ROUTES.assetManagement}?tokenUid=${encodeURIComponent(tokenUid)}`);
+  };
+
+  const refreshPortfolio = () => {
+    setBalanceRefreshKey((value) => value + 1);
+    loadPortfolio({ quiet: true });
   };
 
   return (
     <div className="page-stack investor-portfolio-page">
       <header className="investor-portfolio-header">
         <div>
-          <span className="eyebrow">Compliant token holdings</span>
+          <span className="eyebrow">Your token holdings</span>
           <h1>Portfolio</h1>
-          <p>Track security tokens from your completed purchases, including your current token amount, invested value, redemption activity, and offering details.</p>
+          <p>Review live balances in your registered wallet together with current token prices and completed investment totals.</p>
         </div>
         <Button
           variant="secondary"
           icon={RefreshCcw}
-          loading={refreshing}
-          onClick={() => loadPortfolio({ quiet: true })}
+          loading={refreshing || balanceLoading}
+          onClick={refreshPortfolio}
         >
           Refresh portfolio
         </Button>
@@ -181,32 +345,50 @@ export default function PortfolioPage() {
         </Card>
       ) : null}
 
-      <section className="investor-portfolio-summary" aria-label="Portfolio summary">
+      <section className="investor-portfolio-summary" aria-label="Portfolio overview">
         <Card className="investor-portfolio-summary__card">
-          <span className="investor-portfolio-summary__icon"><Coins size={20} /></span>
+          <span className="investor-portfolio-summary__icon"><WalletCards size={20} /></span>
           <div>
-            <span>Portfolio assets</span>
-            <strong>{loading ? '—' : meta.total}</strong>
-            <small>Tokens with at least one completed purchase</small>
+            <span>Estimated wallet value</span>
+            <strong>{loading || overview.estimatedWalletValue === null ? '—' : `${overview.estimatedWalletValue} USDT`}</strong>
+            <small>{loading ? 'Checking live balances' : `Live balance × current price, ${summaryScope}`}</small>
           </div>
         </Card>
         <Card className="investor-portfolio-summary__card">
           <span className="investor-portfolio-summary__icon"><Banknote size={20} /></span>
           <div>
-            <span>Completed purchases</span>
-            <strong>{loading ? '—' : pageActivity.purchases}</strong>
-            <small>Purchase transactions shown on this page</small>
+            <span>Total invested</span>
+            <strong>{loading || overview.totalInvested === null ? '—' : `${overview.totalInvested} USDT`}</strong>
+            <small>Completed purchases {summaryScope}</small>
           </div>
         </Card>
         <Card className="investor-portfolio-summary__card">
-          <span className="investor-portfolio-summary__icon"><History size={20} /></span>
+          <span className="investor-portfolio-summary__icon"><Coins size={20} /></span>
           <div>
-            <span>Completed redemptions</span>
-            <strong>{loading ? '—' : pageActivity.redemptions}</strong>
-            <small>Redemption transactions shown on this page</small>
+            <span>Completed purchases</span>
+            <strong>{loading ? '—' : overview.purchaseCount}</strong>
+            <small>Purchase records {summaryScope}</small>
+          </div>
+        </Card>
+        <Card className="investor-portfolio-summary__card">
+          <span className="investor-portfolio-summary__icon"><Briefcase size={20} /></span>
+          <div>
+            <span>Portfolio assets</span>
+            <strong>{loading ? '—' : meta.total}</strong>
+            <small>{loading ? 'Completed investment positions' : `${overview.verifiedBalances} of ${items.length} visible wallet balance${items.length === 1 ? '' : 's'} verified`}</small>
           </div>
         </Card>
       </section>
+
+      {!loading && !loadError && items.length ? (
+        <div className="investor-portfolio-price-note" role="note">
+          <Info size={17} />
+          <div>
+            <strong>Wallet balance is the source of truth for what you currently hold</strong>
+            <span>Balances are read live from each token contract for your registered wallet. Total invested and purchase counts reflect completed activity recorded on this platform. Direct wallet transfers can change your live balance without changing those historical investment totals, so this page does not calculate performance or cost-basis gain/loss.</span>
+          </div>
+        </div>
+      ) : null}
 
       {loading ? (
         <PortfolioLoading />
@@ -227,11 +409,11 @@ export default function PortfolioPage() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value.slice(0, 100))}
                 placeholder="Search token or issuer"
-                aria-label="Search portfolio holdings"
+                aria-label="Search portfolio"
               />
             </label>
             <div className="investor-portfolio-toolbar__meta">
-              <span><ShieldCheck size={15} /> Completed activity only</span>
+              <span><Coins size={15} /> Tokens with completed platform purchases</span>
               <small>Showing {start}{end > start ? `–${end}` : ''} of {meta.total} asset{meta.total === 1 ? '' : 's'}</small>
             </div>
           </Card>
@@ -240,17 +422,20 @@ export default function PortfolioPage() {
             <Card className="investor-portfolio-list">
               <div className="investor-portfolio-list__head" aria-hidden="true">
                 <span>Asset</span>
-                <span>Current holding</span>
-                <span>Investment</span>
-                <span>Activity</span>
+                <span>Wallet balance</span>
+                <span>Estimated value</span>
+                <span>Current price</span>
+                <span>Platform investment</span>
                 <span>Action</span>
               </div>
               {items.map((token) => {
                 const symbol = token?.symbol && token.symbol !== '—' ? token.symbol : 'TOKEN';
                 const portfolio = token?.portfolio || {};
-                const lastActivity = activityDate(portfolio);
-                const tokenAddress = token?.tokenAddress || '';
-                const claimsCount = Array.isArray(token?.requiredClaimTopics) ? token.requiredClaimTopics.length : 0;
+                const balanceState = walletBalances[token.tokenUid] || walletBalanceState('loading');
+                const currentPrice = resolveCurrentTokenPriceExact(token);
+                const estimatedValue = balanceState.status === 'ready'
+                  ? multiplyDecimalValues(balanceState.balance, currentPrice, 2)
+                  : null;
 
                 return (
                   <article className="investor-portfolio-row" key={token.tokenUid}>
@@ -259,35 +444,39 @@ export default function PortfolioPage() {
                       <div>
                         <strong>{token?.name || symbol}</strong>
                         <span>{[symbol, token?.issuer].filter((value) => value && value !== '—').join(' · ')}</span>
-                        <small className="investor-portfolio-asset__network">
-                          {chainLabel(token)}
-                          {tokenAddress ? ` · ${shortenWalletAddress(tokenAddress, 6, 5)}` : ''}
-                        </small>
-                        <small className="investor-portfolio-asset__compliance">
-                          {claimsCount} required claim{claimsCount === 1 ? '' : 's'} · {restrictionSummary(token)}
-                        </small>
+                        <small>Security token</small>
                       </div>
                     </div>
 
                     <div className="investor-portfolio-cell investor-portfolio-balance">
-                      <span className="investor-portfolio-cell__label">Current holding</span>
-                      <strong>{tokenAmount(portfolio.netTokenAmount, symbol)}</strong>
-                      <small>Purchased {tokenAmount(portfolio.totalPurchasedTokenAmount, symbol)}</small>
-                      <small>Redeemed {tokenAmount(portfolio.totalRedeemedTokenAmount || '0', symbol)}</small>
+                      <span className="investor-portfolio-cell__label">Wallet balance</span>
+                      <strong>
+                        {balanceState.status === 'loading'
+                          ? 'Checking…'
+                          : balanceState.status === 'ready'
+                            ? tokenAmount(balanceState.balance, symbol)
+                            : 'Unavailable'}
+                      </strong>
+                      <small>{balanceState.status === 'ready' ? 'Live registered-wallet balance' : balanceState.reason || 'Refresh to check balance'}</small>
+                    </div>
+
+                    <div className="investor-portfolio-cell investor-portfolio-current-value">
+                      <span className="investor-portfolio-cell__label">Estimated value</span>
+                      <strong>{estimatedValue === null ? '—' : `${estimatedValue} USDT`}</strong>
+                      <small>{balanceState.status === 'ready' && currentPrice ? 'Wallet balance × current price' : 'Available after live balance is verified'}</small>
+                    </div>
+
+                    <div className="investor-portfolio-cell investor-portfolio-token-price">
+                      <span className="investor-portfolio-cell__label">Current price</span>
+                      <strong>{currentPrice ? usdtAmount(currentPrice, 18) : '—'}</strong>
+                      <small>Initial price {resolveInitialTokenPriceExact(token) ? usdtAmount(resolveInitialTokenPriceExact(token), 18) : '—'}</small>
                     </div>
 
                     <div className="investor-portfolio-cell investor-portfolio-investment">
-                      <span className="investor-portfolio-cell__label">Investment</span>
+                      <span className="investor-portfolio-cell__label">Platform investment</span>
                       <strong>{usdtAmount(portfolio.totalInvestedUsdtAmount, 2)}</strong>
-                      <small>Avg. purchase {usdtAmount(portfolio.averagePurchasePrice, 6)}</small>
-                      <small>Offering price {usdtAmount(token?.initialTokenPriceExact || token?.initialTokenPrice || token?.price, 6)}</small>
-                    </div>
-
-                    <div className="investor-portfolio-cell investor-portfolio-activity">
-                      <span className="investor-portfolio-cell__label">Activity</span>
-                      <strong>{portfolio.purchaseCount} purchase{portfolio.purchaseCount === 1 ? '' : 's'}</strong>
-                      <small>{portfolio.redemptionCount} completed redemption{portfolio.redemptionCount === 1 ? '' : 's'}</small>
-                      <small>{lastActivity ? `Last activity ${formatDate(lastActivity, 'MMM DD, YYYY')}` : 'Activity date unavailable'}</small>
+                      <small>Avg. purchase {portfolio.averagePurchasePrice ? usdtAmount(portfolio.averagePurchasePrice, 18) : '—'}</small>
+                      <small>{portfolio.purchaseCount} completed purchase{portfolio.purchaseCount === 1 ? '' : 's'}</small>
                     </div>
 
                     <div className="investor-portfolio-actions">
@@ -317,7 +506,7 @@ export default function PortfolioPage() {
                     totalPages={meta.totalPages}
                     onPageChange={setPage}
                     disabled={refreshing}
-                    itemLabel="portfolio holdings"
+                    itemLabel="portfolio assets"
                   />
                 </div>
               ) : null}

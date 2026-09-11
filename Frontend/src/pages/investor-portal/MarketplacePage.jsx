@@ -3,7 +3,6 @@ import {
   ChevronDown,
   Search,
   ShieldCheck,
-  SlidersHorizontal,
   Store,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -21,10 +20,7 @@ import { getErrorMessage } from '@/utils/error';
 
 const PAGE_SIZE = 6;
 
-const CATALOGUE_OPTIONS = [
-  { value: 'deployed', label: 'Deployed tokens', description: 'Show live, deployed ERC-3643 tokens' },
-  { value: 'all', label: 'All token statuses', description: 'Include every token returned by the catalogue' },
-];
+const MARKETPLACE_CATALOGUE_STATUS = 'deployed';
 
 const APPLICATION_OPTIONS = [
   { value: 'all', label: 'Application: All', description: 'Show every application state' },
@@ -60,7 +56,6 @@ export default function MarketplacePage() {
   const [tokens, setTokens] = useState([]);
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebounce(query, 350);
-  const [catalogueStatus, setCatalogueStatus] = useState('deployed');
   const [applicationStatus, setApplicationStatus] = useState('all');
   const [sortBy, setSortBy] = useState('featured');
   const [page, setPage] = useState(1);
@@ -73,7 +68,7 @@ export default function MarketplacePage() {
     setLoading(true);
     setPage(1);
     investorMarketplaceService
-      .listOfferings({ page: 1, limit: PAGE_SIZE, search: debouncedQuery, status: catalogueStatus })
+      .listOfferings({ page: 1, limit: PAGE_SIZE, search: debouncedQuery, status: MARKETPLACE_CATALOGUE_STATUS })
       .then(({ items, meta: nextMeta }) => {
         if (!active) return;
         setTokens(items || []);
@@ -88,7 +83,7 @@ export default function MarketplacePage() {
     return () => {
       active = false;
     };
-  }, [debouncedQuery, catalogueStatus]);
+  }, [debouncedQuery]);
 
   const filteredTokens = useMemo(() => {
     const next = tokens.filter((token) => matchesApplicationStatus(token, applicationStatus));
@@ -122,7 +117,7 @@ export default function MarketplacePage() {
         page: nextPage,
         limit: PAGE_SIZE,
         search: debouncedQuery,
-        status: catalogueStatus,
+        status: MARKETPLACE_CATALOGUE_STATUS,
       });
       setTokens((current) => {
         const byId = new Map(current.map((token) => [token.id, token]));
@@ -169,7 +164,7 @@ export default function MarketplacePage() {
         <div>
           <span className="eyebrow">Investor marketplace</span>
           <h1>Explore compliant tokenized investments</h1>
-          <p>Browse deployed ERC-3643 security tokens and submit an investment interest when your required investor documents are complete.</p>
+          <p>Browse created ERC-3643 security tokens and submit an investment interest when your required investor documents are complete.</p>
         </div>
         <label className="marketplace-header-search">
           <Search size={17} aria-hidden="true" />
@@ -185,14 +180,6 @@ export default function MarketplacePage() {
 
       <Card className="marketplace-filter-bar">
         <div className="marketplace-filter-group" aria-label="Marketplace filters">
-          <MarketplaceDropdown
-            value={catalogueStatus}
-            options={CATALOGUE_OPTIONS}
-            onChange={setCatalogueStatus}
-            icon={SlidersHorizontal}
-            ariaLabel="Filter token deployment status"
-          />
-          <span className="marketplace-filter-divider" />
           <MarketplaceDropdown
             value={applicationStatus}
             options={APPLICATION_OPTIONS}
@@ -238,8 +225,8 @@ export default function MarketplacePage() {
         <Card className="marketplace-empty-state">
           <span><Store size={28} /></span>
           <h2>No offerings match these filters</h2>
-          <p>Try a different application status, deployment status, or search term.</p>
-          <Button variant="secondary" onClick={() => { setQuery(''); setCatalogueStatus('deployed'); setApplicationStatus('all'); }}>Clear filters</Button>
+          <p>Try a different application status or search term.</p>
+          <Button variant="secondary" onClick={() => { setQuery(''); setApplicationStatus('all'); }}>Clear filters</Button>
         </Card>
       )}
 

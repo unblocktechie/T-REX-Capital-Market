@@ -22,6 +22,14 @@ const PURCHASE_HISTORY_STATUSES = new Set([
   'COMPLETED',
   'EXPIRED',
 ]);
+const TRANSFER_HISTORY_STATUSES = new Set([
+  'all',
+  'PENDING_TRANSFER',
+  'COMPLETED',
+  'EXPIRED',
+  'MANUAL_REVIEW',
+]);
+const TRANSFER_DIRECTIONS = new Set(['all', 'sent', 'received']);
 const REDEMPTION_HISTORY_STATUSES = new Set([
   'all',
   'PENDING_INVESTOR_AUTHORIZATION',
@@ -57,6 +65,21 @@ const unwrapPurchaseResponse = (response) => {
     ...data,
     message: response?.data?.message || data.message || purchase?.message || '',
     requestId: response?.data?.requestId || data.requestId || purchase?.requestId || '',
+    httpStatus: response?.status,
+  };
+};
+
+const unwrapTransferResponse = (response) => {
+  const data = unwrap(response);
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return data;
+  const transfer = data.transfer && typeof data.transfer === 'object' && !Array.isArray(data.transfer)
+    ? data.transfer
+    : null;
+  return {
+    ...(transfer || {}),
+    ...data,
+    message: response?.data?.message || data.message || transfer?.message || '',
+    requestId: response?.data?.requestId || data.requestId || transfer?.requestId || '',
     httpStatus: response?.status,
   };
 };
@@ -155,6 +178,21 @@ const cleanPurchaseHistoryStatus = (value) => {
     throw new Error('Invalid purchase history status.');
   }
   return canonical;
+};
+
+const cleanTransferHistoryStatus = (value) => {
+  const normalized = String(value || 'all').trim();
+  const canonical = normalized.toLowerCase() === 'all' ? 'all' : normalized.toUpperCase();
+  if (!TRANSFER_HISTORY_STATUSES.has(canonical)) {
+    throw new Error('Invalid transfer history status.');
+  }
+  return canonical;
+};
+
+const cleanTransferDirection = (value) => {
+  const normalized = String(value || 'all').trim().toLowerCase();
+  if (!TRANSFER_DIRECTIONS.has(normalized)) throw new Error('Invalid transfer direction.');
+  return normalized;
 };
 
 const cleanRedemptionHistoryStatus = (value) => {
@@ -286,6 +324,74 @@ export const investmentApi = Object.freeze({
         { skipGlobalLoader: true, validateStatus: accept2xx },
       )
       .then(unwrapPurchaseResponse),
+
+  createTokenTransfer: (tokenUid, { recipientWalletAddress, tokenAmount, idempotencyKey }) =>
+    apiClient
+      .post(
+        INVESTMENT_ENDPOINTS.tokenTransfers(requiredUid(tokenUid, 'Token identifier')),
+        {
+          recipientWalletAddress: requiredUid(recipientWalletAddress, 'Recipient wallet address'),
+          tokenAmount: requiredDecimalString(tokenAmount, 'Transfer amount'),
+          idempotencyKey: requiredUid(idempotencyKey, 'Transfer idempotency key'),
+        },
+        { skipGlobalLoader: true, validateStatus: accept2xx },
+      )
+      .then(unwrapTransferResponse),
+
+  getTokenTransfer: (transferUid, { signal } = {}) =>
+    apiClient
+      .get(INVESTMENT_ENDPOINTS.transfer(requiredUid(transferUid, 'Transfer identifier')), {
+        signal,
+        skipGlobalLoader: true,
+        validateStatus: accept2xx,
+      })
+      .then(unwrapTransferResponse),
+
+  confirmTokenTransfer: (transferUid, txHash) =>
+    apiClient
+      .post(
+        INVESTMENT_ENDPOINTS.confirmTransfer(requiredUid(transferUid, 'Transfer identifier')),
+        { txHash: requiredUid(txHash, 'Transaction hash') },
+        { skipGlobalLoader: true, validateStatus: accept2xx },
+      )
+      .then(unwrapTransferResponse),
+
+  retryTokenTransfer: (transferUid) =>
+    apiClient
+      .post(
+        INVESTMENT_ENDPOINTS.retryTransfer(requiredUid(transferUid, 'Transfer identifier')),
+        {},
+        { skipGlobalLoader: true, validateStatus: accept2xx },
+      )
+      .then(unwrapTransferResponse),
+
+  async listTokenTransfers(tokenUid, { page = 1, limit = 20, search = '', status = 'all', direction = 'all', signal } = {}) {
+    const normalizedStatus = cleanTransferHistoryStatus(status);
+    const normalizedDirection = cleanTransferDirection(direction);
+    const normalizedSearch = String(search || '').trim().slice(0, 100);
+    const response = await apiClient.get(
+      INVESTMENT_ENDPOINTS.tokenTransfers(requiredUid(tokenUid, 'Token identifier')),
+      {
+        params: {
+          page: normalizePage(page),
+          limit: normalizeLimit(limit, 20),
+          search: normalizedSearch,
+          status: normalizedStatus,
+          direction: normalizedDirection,
+        },
+        signal,
+        skipGlobalLoader: true,
+        validateStatus: accept2xx,
+      },
+    );
+    const data = unwrap(response);
+    const transfers = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.transfers)
+        ? data.transfers
+        : [];
+    return { data: transfers, meta: responseMeta(response, data) };
+  },
 
   createTokenRedemption: (tokenUid, { tokenAmount, idempotencyKey }) =>
     apiClient
