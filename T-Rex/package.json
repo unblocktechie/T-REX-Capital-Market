@@ -5,8 +5,14 @@
   "description": "T-REX Capital Market platform built on top of the official @erc3643org/erc-3643 (T-REX) protocol package.",
   "scripts": {
     "compile": "hardhat compile",
+    "test": "hardhat test",
     "deploy:compliance-modules": "ts-node scripts/deploy-compliance-modules.ts",
-    "phase0:deploy-platform": "ts-node scripts/phase0-01-deploy-platform.ts"
+    "deploy:platform-controller": "ts-node scripts/deploy-platform-controller.ts",
+    "wire:platform-controller": "ts-node scripts/wire-platform-controller.ts",
+    "phase0:deploy-platform": "ts-node scripts/phase0-01-deploy-platform.ts",
+    "phase0:redeploy-factory": "ts-node scripts/phase0-01b-redeploy-factory.ts",
+    "sync:erc3643-artifacts": "ts-node scripts/sync-erc3643-artifacts.ts",
+    "diagnose:transfer": "ts-node scripts/diagnose-transfer.ts"
   },
   "dependencies": {
     "@erc3643org/erc-3643": "4.1.3",
