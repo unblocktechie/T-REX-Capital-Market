@@ -55,7 +55,19 @@ Validation error:
 { "email": "ada@example.com" }
 ```
 
-Always returns a generic `200` response. Any previous unused verification link is revoked.
+Returns HTTP `200`. When the account is already verified, no email is sent and the response is:
+
+```json
+{
+  "success": true,
+  "message": "User is already verified. You can log in.",
+  "data": { "status": "ALREADY_VERIFIED", "emailVerified": true }
+}
+```
+
+For an eligible unverified account, any previous unused verification link is revoked and a
+new email is sent. Unknown and inactive accounts retain the generic accepted response. Their
+existence or state is not disclosed.
 
 ### `POST /auth/verify-email`
 
@@ -437,13 +449,16 @@ A completed step requires at least one active claim topic and `organizationActsA
 
 ```json
 {
-  "tokenAgentWalletAddress": "0x1111111111111111111111111111111111111111",
   "identityManagerWalletAddress": "0x1111111111111111111111111111111111111111",
   "isDraft": false
 }
 ```
 
-Both addresses must be valid EVM addresses and must match the approved organization's `walletAddress` case-insensitively.
+`identityManagerWalletAddress` must be a valid EVM address matching the approved organization's
+`walletAddress` case-insensitively. The backend automatically stores
+`tokenAgentWalletAddress = PLATFORM_CONTROLLER_ADDRESS` (default
+`0x9BEFDF75Dc94bbB36532c5d7A74daab28714f579`). The frontend must treat this field as read-only
+and should omit it from the request. A legacy client-supplied Token Agent value is ignored.
 
 ### `POST /tokens/me/submit`
 
@@ -455,7 +470,10 @@ The frontend deploys the TREX suite first, waits for the wallet transaction, and
 }
 ```
 
-The backend revalidates all completed sections, active claims/countries, the optimized image, trusted issuer, token agent, and identity manager. It then waits for the configured confirmation count, requires a successful receipt, accepts `TREXSuiteDeployed` only from `TREX_FACTORY_ADDRESS`, resolves the block timestamp, and saves:
+The backend revalidates all completed sections, active claims/countries, the optimized image,
+trusted issuer, backend-configured Platform Controller Token Agent, and identity manager. It then
+waits for the configured confirmation count, requires a successful receipt, accepts
+`TREXSuiteDeployed` only from `TREX_FACTORY_ADDRESS`, resolves the block timestamp, and saves:
 
 ```json
 {
@@ -596,6 +614,27 @@ Unmined/under-confirmed hashes return `202`; definitive mismatches remain `PENDI
 The global registry indexer plus targeted recovery worker reconciles frontend-crash cases without
 creating transactions or trusting events alone. See `docs/IDENTITY-REGISTRY-REGISTRATION.md`.
 
+## Frontend-executed blockchain transactions
+
+Invest, Send, and Redeem are executed directly by the authenticated investor wallet. The backend
+does not prepare, sign, relay, mint, burn, transfer USDT, or continue these transactions.
+
+- `POST /investments/transactions/confirm` accepts `{ chainId, txHash, tokenUid, expectedAction }`,
+  where `expectedAction` is `INVEST`, `TRANSFER`, or `REDEMPTION`. It independently verifies the
+  current canonical transaction, sender, target, calldata, deployed token, receipt, events,
+  controller configuration, exact on-chain quote/USDT settlement, and confirmations. It returns
+  HTTP 200 with `SUBMITTED`, `CONFIRMED`, or `FAILED`; authoritative mismatches remain 4xx.
+- `GET /investments/transactions?page=1&limit=20&tokenUid=&type=ALL&status=ALL&walletAddress=&txHash=&fromDate=&toDate=&search=`
+  returns role-scoped canonical history. Investor access is wallet-scoped; issuer access is
+  organization-scoped; Super Administrator access is global.
+- `GET /investments/transactions/export` accepts the same filters and exports the complete filtered
+  result as CSV.
+
+The `canonicalTransactions` checkpointed indexer independently finds confirmed controller
+buy/redeem transactions and token transfers. The API is only the fast UI path; it is not required
+for execution or recovery. See `docs/BLOCKCHAIN-TRANSACTION-INDEXER.md` and
+`docs/FRONTEND-BLOCKCHAIN-TRANSACTION-GUIDE.md`.
+
 ## Investor token purchase (USDT)
 
 - `GET /investments/me/portfolio?page=1&limit=20&search=` returns one row per token for which the
@@ -605,72 +644,42 @@ creating transactions or trusting events alone. See `docs/IDENTITY-REGISTRY-REGI
   The totals include purchase/redemption counts, tokens purchased, USDT invested, completed tokens
   redeemed, remaining database-derived net token amount, average purchase price, and activity dates.
 
-- `POST /investments/tokens/{tokenUid}/purchases` with
-  `{ "tokenAmount": "10.25", "idempotencyKey": "checkout-202600910-0001" }` creates the
-  authoritative `PENDING_PAYMENT` intent. The interest must be `registered`.
 - `GET /investments/tokens/{tokenUid}/purchases?page=1&limit=20&search=&status=all` returns the
-  authenticated investor's purchase history for that token, newest first, with pagination,
-  free-text search, and lifecycle-status filtering.
-- `POST /investments/purchases/{purchaseUid}/confirm` accepts only `{ "txHash": "0x..." }` and
-  independently verifies the configured USDT contract, investor sender, treasury recipient, exact
-  raw amount, calldata, successful receipt, interactive confirmation threshold, and Transfer event.
+  authenticated investor's legacy purchase history. It is retained read-only for production-data
+  migration; new UI history must use `/investments/transactions?type=INVEST`.
 - `GET /investments/purchases/{purchaseUid}` returns payment, mint, synchronization, errors, and
-  the append-only transaction history.
-- `POST /investments/purchases/{purchaseUid}/retry` queues payment/mint reconciliation.
+  append-only legacy transaction history.
 
-Each created intent returns `expiration.expiresAt`. A `PENDING_PAYMENT` row with no submitted
-payment hash becomes `EXPIRED` in the background after the configured TTL and grace period, but
-only after the global USDT indexer has caught up to the safe chain head. Confirm returns HTTP `200`
-with `data.status = EXPIRED`; Retry returns `409 PURCHASE_EXPIRED`. The investor must create a fresh
-intent with a new idempotency key.
-Rows with a payment hash are not auto-expired.
+The investor reads live USDT allowance, approves the Platform Controller when necessary, and calls
+`PlatformController.buy()` directly. The controller atomically collects USDT and issues the token.
+The old purchase create/confirm/retry POST endpoints and backend mint workers are retired.
 
-After verified USDT payment the same API call acquires the global mint lease and submits
-`mint(investorWalletAddress, tokenAmountRaw)`, waits for the configured confirmation, verifies the
-mint transaction/event/final state, persists all receipt metadata, and normally returns `COMPLETED`.
-If the wait times out, it returns HTTP `200` with `MINT_SUBMITTED` and the worker finalizes the same
-stored hash. Confirm returns HTTP `200` for every persisted lifecycle result, including
-`PENDING_PAYMENT`, `PAYMENT_CONFIRMED`, `MINT_SUBMITTED`, `COMPLETED`, and `EXPIRED`; clients must
-branch on `data.status`. Definitive verification errors and conflicts remain 4xx responses.
-An under-confirmed but successful transaction remains queued with transaction-history status
-`PENDING`; it is not exposed as a synchronization failure and does not populate purchase error fields.
-Status progresses `PENDING_PAYMENT -> PAYMENT_CONFIRMED -> MINT_SUBMITTED -> COMPLETED`, or
-`PENDING_PAYMENT -> EXPIRED` when the payment was abandoned before any hash was received.
-The global USDT indexer recovers missing frontend hashes, and targeted token-event recovery handles
-a mint broadcast whose hash was not persisted. See `docs/TOKEN-PURCHASE-FLOW.md` and
-`docs/FRONTEND-TOKEN-PURCHASE-FLOW-GUIDE.md`.
-
-## Manual token redemption (issuer USDT payout)
+## Token redemption
 
 - `POST /investments/tokens/{tokenUid}/redemptions` creates the authoritative intent and returns an EIP-712 investor authorization payload.
 - `POST /investments/redemptions/{redemptionUid}/authorize` verifies that the registered investor wallet signed the exact intent.
-- Investor list/detail/cancel/retry APIs support the ongoing lifecycle; list supports pagination, search, and status filtering.
-- Issuers review through `/investments/issuer/redemptions`; the issuer detail response includes `investorName`, and approval queues the platform Token Agent token lock.
-- After `TOKENS_LOCKED`, the issuer transfers the exact stored raw USDT amount from the treasury wallet to the investor wallet.
-- `POST /investments/issuer/redemptions/{redemptionUid}/payment/confirm` accepts only `txHash` and verifies canonical chain, sender, USDT contract, calldata, recipient, amount, receipt, and Transfer event.
-- Verified payment queues platform `burn`; any remaining redemption-created partial freeze is released before `COMPLETED`.
+- Investor list/detail/cancel APIs and issuer list/detail/approve/reject APIs retain the off-chain
+  request and review workflow. Issuer detail includes `investorName`.
+- Issuer approval no longer queues a token lock. The issuer grants the Platform Controller reusable
+  USDT allowance from the issuer wallet.
+- After approval/funding, the investor calls `PlatformController.redeem()` directly. The controller
+  atomically burns tokens and transfers issuer USDT to the investor.
+- The matching legacy request becomes `COMPLETED` only after canonical verification/indexing.
 
-The global USDT indexer recovers missing payment hashes. Targeted event recovery finds missing platform lock/burn/unlock hashes before retrying an action. See `docs/TOKEN-REDEMPTION-FLOW.md` and `docs/FRONTEND-TOKEN-REDEMPTION-GUIDE.md`.
+The legacy redemption retry and issuer payment-confirm endpoints, platform lock/burn/unlock worker,
+and backend USDT settlement are retired.
 
 ## Investor token transfer (ERC-3643)
 
-- `POST /investments/tokens/{tokenUid}/transfers` creates `PENDING_TRANSFER` before MetaMask. Body:
-  `{ "recipientWalletAddress": "0x...", "tokenAmount": "1.25", "idempotencyKey": "send-..." }`.
-- `POST /investments/transfers/{transferUid}/confirm` accepts only `{ "txHash": "0x..." }` and
-  independently verifies chain, token contract, sender, exact transfer calldata, recipient, raw
-  amount, successful receipt, confirmations, canonical block, Transfer event, and receipt-block balances.
 - `GET /investments/transfers/{transferUid}` returns detail and append-only hash history to its sender
-  or recipient.
+  or recipient for legacy rows.
 - `GET /investments/tokens/{tokenUid}/transfers?page=1&limit=20&search=&status=all&direction=all`
-  returns sent/received history with pagination, search, status, and direction filters.
-- `POST /investments/transfers/{transferUid}/retry` queues recovery and never creates a chain transaction.
+  returns legacy sent/received history during migration.
 
-Both investors must have completed profiles, ONCHAINIDs, and `registered` interests for the same
-deployed token. The backend also checks Identity Registry state, `canTransfer`, token pause state,
-unfrozen sender balance, and recipient holder cap before creating the intent. Status is
-`PENDING_TRANSFER -> COMPLETED`, or `PENDING_TRANSFER -> EXPIRED` when no hash or matching safe-chain
-event exists by the deadline. The global deployed-token event indexer recovers missing frontend
-hashes; a bounded targeted scan covers address-snapshot races. See `docs/TOKEN-TRANSFER-FLOW.md`.
+The investor calls the ERC-3643 token `transfer()` directly and the contracts enforce eligibility,
+restrictions, holding limits, pause/freeze rules, and identity state. The old transfer
+create/confirm/retry POST endpoints and execution recovery workers are retired. New UI history uses
+`/investments/transactions?type=TRANSFER`.
 
 ## Investor invitations
 
@@ -680,7 +689,8 @@ Issuer endpoints require an issuer JWT and an issuer-owned, deployed `tokenUid`:
   returns only active users whose investor profile is complete (`status = submitted`). Search covers
   investor name, email, wallet, and profile reference. `invitationStatus` supports `all`,
   `notInvited`, `PENDING`, `SENT`, and `VIEWED`. Every row contains profile/location/compliance
-  details, current invitation state, existing token-interest state, and `eligibleForInvitation`.
+  details, top-level `accreditationType`, current invitation state, existing token-interest state,
+  and `eligibleForInvitation`. `compliance.accreditationType` remains available for compatibility.
 - `POST /investments/issuer/investors/{investorUid}/invitations` with
   `{ "tokenUid": "uuid" }` validates issuer ownership, approved organization, deployed token,
   completed investor profile, active email, token country rules, and absence of an existing

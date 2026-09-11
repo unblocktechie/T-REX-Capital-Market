@@ -34,7 +34,7 @@ independently of any frontend state.
 | `TrexDeploymentSyncInterval` | `60` | Runner interval in minutes. |
 | `TrexDeploymentLastSyncBlock` | `0` | Checkpoint — last fully processed block. Never rescans the whole chain. |
 | `TrexDeploymentBlockOffset` | `500` | Blocks per `eth_getLogs` request (prevents RPC range/timeout limits). |
-| `TrexDeploymentConfirmationBlocks` | `12` | Reorg buffer; only blocks up to `latest - this` are processed. |
+| `TrexDeploymentConfirmationBlocks` | `2` | Reorg buffer; only blocks up to `latest - this` are processed. |
 | `TrexDeploymentStartBlock` | `0` | Optional first-run start block. Set to the factory deploy block for full recovery; `0` starts one offset window behind the safe head. |
 | `TrexDeploymentSyncEnabled` | `true` | On/off switch (DB-level). |
 

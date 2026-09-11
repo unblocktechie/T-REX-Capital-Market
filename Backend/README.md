@@ -11,7 +11,7 @@ A production-oriented Node.js, Express, and MySQL API foundation for T-REX Capit
 - Issuer-only organization onboarding with company, jurisdiction, beneficial-owner, document, draft, and final-submission steps
 - Backend-authoritative Identity Registry registration with strict transaction/event/state verification and hybrid recovery
 - Administrator organization review with OnchainID creation before approval, rejection reasons, and one controlled issuer revision cycle
-- Approved-issuer token creation drafts with claim topics, ISO 3166-1 numeric country rules, governance-wallet validation, and deployment readiness
+- Approved-issuer token creation drafts with claim topics, ISO 3166-1 numeric country rules, backend-authoritative Platform Controller Token Agent, governance-wallet validation, and deployment readiness
 - Signature-verified token images re-encoded to optimized metadata-free WebP, with optional ClamAV scanning
 - Searchable country, state, and city reference APIs with validated parent-child relationships
 - Multiple PDF/PNG/JPG organization uploads with file-size limits, checksums, secure storage names, download, and soft delete
@@ -81,7 +81,7 @@ Apply `database/migrations/20260910_expire_abandoned_token_purchases.sql` to exp
 
 Apply `database/migrations/20260910_add_investor_token_purchase_history.sql` for the investor-owned token purchase history endpoint. Frontend integration is documented in `docs/FRONTEND-TOKEN-PURCHASE-FLOW-GUIDE.md`.
 
-Apply `database/migrations/20260910_add_token_redemption_flow.sql` for investor-authorized manual redemption, issuer USDT payout verification, platform token lock/burn/unlock settlement, RBAC, audit history, and hybrid fallback recovery. Configure `REDEMPTION_USDT_ADDRESS`, keep `REDEMPTION_CONFIRMATIONS=12` in production, and set the indexer start block. See `docs/TOKEN-REDEMPTION-FLOW.md` and `docs/FRONTEND-TOKEN-REDEMPTION-GUIDE.md`.
+Apply `database/migrations/20260910_add_token_redemption_flow.sql` for investor-authorized manual redemption, issuer USDT payout verification, platform token lock/burn/unlock settlement, RBAC, audit history, and hybrid fallback recovery. Configure `REDEMPTION_USDT_ADDRESS`, use the standardized two-block confirmation threshold, and set the indexer start block. See `docs/TOKEN-REDEMPTION-FLOW.md` and `docs/FRONTEND-TOKEN-REDEMPTION-GUIDE.md`.
 
 Apply `database/migrations/20260910_add_investor_invitations.sql` for issuer discovery of completed investor profiles, unique token invitations, durable email-delivery state, and the investor invitation inbox. Invitation links use `FRONTEND_URL/app/marketplace/{tokenUid}`. See `docs/INVESTOR-INVITATIONS.md`.
 
@@ -95,8 +95,22 @@ current price; existing intent snapshots are not repriced.
 
 For a database exported from case-insensitive Windows MySQL and imported into case-sensitive Linux
 MySQL, run `database/fix-linux-table-name-case.sql` after selecting the hosted database. It renames
-all 45 tables to the exact camelCase identifiers used by runtime queries. See
+all 48 tables to the exact camelCase identifiers used by runtime queries. See
 `docs/DATABASE-TABLE-CASE-GUIDE.md` before running it.
+Apply `database/migrations/20260911_set_blockchain_confirmations_to_two.sql` to standardize all existing database-backed deployment, claim, registry, purchase, redemption, and transfer worker confirmation settings at two blocks.
+
+Apply `database/migrations/20260911_add_canonical_blockchain_transactions.sql` before deploying
+the frontend-wallet transaction architecture. It adds role-scoped canonical history, strict fast
+transaction confirmation, global checkpointed fallback indexing, reorg metadata, and disables the
+legacy purchase/transfer orchestration plus redemption settlement permissions. Configure
+`TRANSACTION_INDEXER_START_BLOCK` to the earliest controller/token activity that must be backfilled.
+For an environment where the application code was deployed before this migration, also run
+`database/migrations/20260911_repair_blockchain_transaction_permissions.sql`; it safely restores
+missing or inactive transaction API grants and can be rerun.
+See `docs/BLOCKCHAIN-TRANSACTION-INDEXER.md` and
+`docs/FRONTEND-BLOCKCHAIN-TRANSACTION-GUIDE.md`. The complete status ownership, API order,
+frontend polling rules, and indexer recovery behavior are documented in
+`docs/BLOCKCHAIN-TRANSACTION-STATUS-AND-API-FLOW.md`.
 
 ```bash
 npm run check
@@ -104,7 +118,7 @@ npm test
 npm start
 ```
 
-See [API documentation](docs/API.md), [investor claim flow](docs/INVESTOR-CLAIM-SUBMISSION.md), [frontend claim Retry guide](docs/FRONTEND-INVESTOR-CLAIM-RETRY-GUIDE.md), [global claim indexer](docs/CLAIM-INDEXER.md), [targeted claim recovery](docs/CLAIM-RECOVERY-RUNNER.md), [frontend organization guide](docs/FRONTEND-ORGANIZATION-GUIDE.md), [frontend token guide](docs/FRONTEND-TOKEN-CREATION-GUIDE.md), [frontend token purchase guide](docs/FRONTEND-TOKEN-PURCHASE-FLOW-GUIDE.md), [token transfer flow](docs/TOKEN-TRANSFER-FLOW.md), [token redemption architecture](docs/TOKEN-REDEMPTION-FLOW.md), [frontend redemption guide](docs/FRONTEND-TOKEN-REDEMPTION-GUIDE.md), [investor invitations](docs/INVESTOR-INVITATIONS.md), [testing guide](docs/TESTING.md), [OpenAPI specification](docs/openapi.yaml), [editable database diagram](docs/trex-capital-market-database.excalidraw), and the import-ready [Postman collection](postman/Trex%20Capital%20Market%20Backend.postman_collection.json).
+See [API documentation](docs/API.md), [transaction status and API flow](docs/BLOCKCHAIN-TRANSACTION-STATUS-AND-API-FLOW.md), [frontend wallet transaction guide](docs/FRONTEND-BLOCKCHAIN-TRANSACTION-GUIDE.md), [canonical transaction indexer](docs/BLOCKCHAIN-TRANSACTION-INDEXER.md), [investor claim flow](docs/INVESTOR-CLAIM-SUBMISSION.md), [frontend claim Retry guide](docs/FRONTEND-INVESTOR-CLAIM-RETRY-GUIDE.md), [global claim indexer](docs/CLAIM-INDEXER.md), [targeted claim recovery](docs/CLAIM-RECOVERY-RUNNER.md), [frontend organization guide](docs/FRONTEND-ORGANIZATION-GUIDE.md), [frontend token guide](docs/FRONTEND-TOKEN-CREATION-GUIDE.md), [investor invitations](docs/INVESTOR-INVITATIONS.md), [testing guide](docs/TESTING.md), [OpenAPI specification](docs/openapi.yaml), [editable database diagram](docs/trex-capital-market-database.excalidraw), and the import-ready [Postman collection](postman/Trex%20Capital%20Market%20Backend.postman_collection.json).
 
 ## Response contract
 

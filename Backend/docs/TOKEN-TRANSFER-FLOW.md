@@ -1,4 +1,8 @@
-# ERC-3643 Token Transfer Flow
+# ERC-3643 Token Transfer Flow (legacy)
+
+> Deprecated on 2026-09-11. New sends call the token `transfer()` directly from the investor wallet.
+> The backend records the result through the canonical confirm API/indexer; it does not create an
+> intent or prepare calldata. See `FRONTEND-BLOCKCHAIN-TRANSACTION-GUIDE.md`.
 
 This flow lets a registered investor send a deployed platform token to another investor who is
 already registered and verified for the same token. The database records intent before MetaMask,
@@ -132,13 +136,13 @@ Operational tables are `tokenTransfer`, `tokenTransferTransaction`,
 ## Configuration
 
 ```env
-TRANSFER_CONFIRMATIONS=1
-TRANSFER_INDEXER_CONFIRMATIONS=12
+TRANSFER_CONFIRMATIONS=2
+TRANSFER_INDEXER_CONFIRMATIONS=2
 TRANSFER_INTENT_TTL_MINUTES=15
 TRANSFER_INDEXER_START_BLOCK=0
 TRANSFER_WORKER_ENABLED=true
 ```
 
-Use `TRANSFER_CONFIRMATIONS=12` in production if the UI must not display `COMPLETED` before the
-conservative reorg buffer. Set `TRANSFER_INDEXER_START_BLOCK` to the earliest deployed platform
-token block to avoid unnecessary historical scanning.
+Both interactive verification and the background indexer use the standardized two-block threshold.
+Set `TRANSFER_INDEXER_START_BLOCK` to the earliest deployed platform token block to avoid
+unnecessary historical scanning.

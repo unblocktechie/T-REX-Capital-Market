@@ -65,6 +65,7 @@ class InvestorInvitationService {
       email: row.email,
       dateOfBirth: row.dateOfBirth,
       gender: row.gender,
+      accreditationType: row.accreditationType,
       address: {
         streetAddress: row.streetAddress,
         countryUid: row.countryUid,

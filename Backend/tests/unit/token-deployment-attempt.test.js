@@ -5,6 +5,7 @@ const { TokenDeploymentAttemptService } = require('../../src/services/token-depl
 const { TokenService } = require('../../src/services/token.service');
 
 const ORG_WALLET = '0x1111111111111111111111111111111111111111';
+const PLATFORM_CONTROLLER = '0x9BEFDF75Dc94bbB36532c5d7A74daab28714f579';
 const OTHER_WALLET = '0x2222222222222222222222222222222222222222';
 const TX_HASH = `0x${'a'.repeat(64)}`;
 const TX_HASH_2 = `0x${'b'.repeat(64)}`;
@@ -275,7 +276,7 @@ const deployedTokenTemplate = () => ({
   maxInvestors: 2000,
   maxBalancePerInvestor: 10000,
   countryRestrictionMode: 'allowlist',
-  tokenAgentWalletAddress: ORG_WALLET,
+  tokenAgentWalletAddress: PLATFORM_CONTROLLER,
   identityManagerWalletAddress: ORG_WALLET,
 });
 

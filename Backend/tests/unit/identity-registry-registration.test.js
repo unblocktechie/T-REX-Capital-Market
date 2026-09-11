@@ -7,6 +7,7 @@ const REGISTRY = '0x1111111111111111111111111111111111111111';
 const ISSUER = '0x2222222222222222222222222222222222222222';
 const INVESTOR = '0x3333333333333333333333333333333333333333';
 const IDENTITY = '0x4444444444444444444444444444444444444444';
+const PLATFORM_CONTROLLER = '0x9BEFDF75Dc94bbB36532c5d7A74daab28714f579';
 const TX = `0x${'ab'.repeat(32)}`;
 const issuer = { userUid: 'issuer-user', roleName: 'Issuer' };
 
@@ -21,7 +22,8 @@ const makeService = ({
   };
   const context = {
     interestUid: 'interest-1', interestStatus, tokenUid: 'token-1', organizationUid: 'org-1', investorUid: 'investor-1',
-    tokenStatus: 'deployed', identityRegistryAddress: REGISTRY, tokenAgentWalletAddress: ISSUER,
+    tokenStatus: 'deployed', identityRegistryAddress: REGISTRY,
+    tokenAgentWalletAddress: PLATFORM_CONTROLLER, identityManagerWalletAddress: ISSUER,
     countryRestrictionMode: 'allowlist', countryListed: true,
     issuerUserUid: issuer.userUid, issuerWalletAddress: ISSUER, organizationStatus: 'approved', organizationActive: true,
     investorWalletAddress: INVESTOR, investorIdentityAddress: IDENTITY, investorStatus: 'submitted', investorActive: true,

@@ -70,7 +70,13 @@ class AuthService {
 
   async resendVerification(email) {
     const user = await this.userRepository.findByEmail(email);
-    if (!user || user.emailVerified || !user.isActive) return;
+    if (user?.emailVerified) {
+      return { status: 'ALREADY_VERIFIED', emailVerified: true };
+    }
+    // Keep unknown and inactive accounts indistinguishable. This preserves the existing
+    // anti-enumeration behavior while allowing a known verified account to guide the user
+    // back to login explicitly.
+    if (!user || !user.isActive) return { status: 'REQUEST_ACCEPTED' };
     const rawToken = createOpaqueToken();
     await this.transactionRunner(async (connection) => {
       await this.authTokenRepository.revokeActive(user.userUid, TOKEN_TYPES.EMAIL_VERIFICATION, connection);
@@ -80,6 +86,7 @@ class AuthService {
       );
     });
     await this.emailService.sendEmail({ to: user.email, ...verificationEmail({ fullName: user.fullName, token: rawToken }) });
+    return { status: 'REQUEST_ACCEPTED' };
   }
 
   async verifyEmail(token) {

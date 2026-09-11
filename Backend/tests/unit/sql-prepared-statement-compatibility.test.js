@@ -4,6 +4,7 @@ const { sqlInteger } = require('../../src/utils/sql');
 const { TokenPurchaseRepository } = require('../../src/repositories/token-purchase.repository');
 const { TokenRedemptionRepository } = require('../../src/repositories/token-redemption.repository');
 const { InvestorClaimSubmissionRepository } = require('../../src/repositories/investor-claim-submission.repository');
+const { BlockchainTransactionRepository } = require('../../src/repositories/blockchain-transaction.repository');
 
 const captureExecutor = () => {
   const calls = [];
@@ -21,6 +22,19 @@ test('sqlInteger produces safe numeric SQL literals and rejects non-integers', (
   assert.equal(sqlInteger('25', { min: 1 }), '25');
   assert.throws(() => sqlInteger('20; DROP TABLE userMaster'), TypeError);
   assert.throws(() => sqlInteger(-1), TypeError);
+});
+
+test('canonical transaction upsert binds exactly one value for every placeholder', async () => {
+  const executor = captureExecutor();
+  await new BlockchainTransactionRepository().upsert({
+    chainId: 11155111, tokenUid: 'token-1', organizationUid: 'org-1', tokenAddress: '0x1',
+    transactionHash: `0x${'a'.repeat(64)}`, type: 'TRANSFER', initiatedByWallet: '0x2',
+    status: 'SUBMITTED',
+  }, executor);
+  assert.equal(executor.calls.length, 2);
+  for (const call of executor.calls) {
+    assert.equal(call.params.length, (call.sql.match(/\?/g) || []).length);
+  }
 });
 
 test('reconciliation repository limits are sanitized literals, not prepared-statement parameters', async () => {

@@ -6,30 +6,38 @@ const schemas = require('../../../schemas/investment.schema');
 // All investment routes are authenticated + DB-authorized (permissionMaster). The
 // marketplace list/detail/image are granted to admin + investor; the journey endpoints to
 // investor; the review endpoints to issuer. See 20260909_add_investment_journey.sql.
-const createInvestmentRouter = ({ controller, registryController, purchaseController, redemptionController, authenticate, authorize }) => {
+const createInvestmentRouter = ({ controller, registryController, purchaseController, redemptionController, transferController, transactionController, invitationController, authenticate, authorize }) => {
   const router = express.Router();
   router.use(authenticate);
+
+  // Wallet transactions are executed by the frontend. This endpoint is only a fast,
+  // independently verified path into the same canonical history used by the indexer.
+  router.post(
+    '/transactions/confirm',
+    validate({ body: schemas.confirmBlockchainTransaction }),
+    authorize,
+    asyncHandler(transactionController.confirm),
+  );
+  router.get(
+    '/transactions',
+    validate({ query: schemas.blockchainTransactionHistoryQuery }),
+    authorize,
+    asyncHandler(transactionController.list),
+  );
+  router.get(
+    '/transactions/export',
+    validate({ query: schemas.blockchainTransactionExportQuery }),
+    authorize,
+    asyncHandler(transactionController.export),
+  );
 
   // Marketplace (admin + investor).
   router.get('/tokens', validate({ query: schemas.listTokensQuery }), authorize, asyncHandler(controller.listTokens));
   router.get('/tokens/:tokenUid', validate({ params: schemas.tokenParams }), authorize, asyncHandler(controller.getToken));
   router.get('/tokens/:tokenUid/image', validate({ params: schemas.tokenParams }), authorize, asyncHandler(controller.tokenImage));
 
-  // Backend-authoritative USDT purchase intent -> payment verification -> platform-agent mint.
-  router.post(
-    '/tokens/:tokenUid/purchases',
-    validate({ params: schemas.tokenParams, body: schemas.createPurchase }),
-    authorize,
-    asyncHandler(purchaseController.create),
-  );
-
-  // Backend-authoritative investor-to-investor ERC-3643 transfer intent and verification.
-  router.post(
-    '/tokens/:tokenUid/transfers',
-    validate({ params: schemas.tokenParams, body: schemas.createTransfer }),
-    authorize,
-    asyncHandler(transferController.create),
-  );
+  // Legacy purchase/transfer rows remain read-only during migration. Wallet transaction
+  // execution never depends on creating a backend intent.
   router.get(
     '/tokens/:tokenUid/transfers',
     validate({ params: schemas.tokenParams, query: schemas.transferHistoryQuery }),
@@ -42,20 +50,9 @@ const createInvestmentRouter = ({ controller, registryController, purchaseContro
     authorize,
     asyncHandler(transferController.get),
   );
-  router.post(
-    '/transfers/:transferUid/confirm',
-    validate({ params: schemas.transferParams, body: schemas.confirmPurchase }),
-    authorize,
-    asyncHandler(transferController.confirm),
-  );
-  router.post(
-    '/transfers/:transferUid/retry',
-    validate({ params: schemas.transferParams, body: schemas.emptyBody }),
-    authorize,
-    asyncHandler(transferController.retry),
-  );
 
-  // Investor-authorized, issuer-funded manual redemption with platform lock/burn settlement.
+  // Off-chain redemption request and issuer decision workflow. The approved redemption
+  // transaction itself is signed by the investor in the frontend and observed above.
   router.post(
     '/tokens/:tokenUid/redemptions',
     validate({ params: schemas.tokenParams, body: schemas.createRedemption }),
@@ -86,12 +83,6 @@ const createInvestmentRouter = ({ controller, registryController, purchaseContro
     authorize,
     asyncHandler(redemptionController.cancel),
   );
-  router.post(
-    '/redemptions/:redemptionUid/retry',
-    validate({ params: schemas.redemptionParams, body: schemas.emptyBody }),
-    authorize,
-    asyncHandler(redemptionController.retry),
-  );
   router.get(
     '/tokens/:tokenUid/purchases',
     validate({ params: schemas.tokenParams, query: schemas.purchaseHistoryQuery }),
@@ -103,18 +94,6 @@ const createInvestmentRouter = ({ controller, registryController, purchaseContro
     validate({ params: schemas.purchaseParams }),
     authorize,
     asyncHandler(purchaseController.get),
-  );
-  router.post(
-    '/purchases/:purchaseUid/confirm',
-    validate({ params: schemas.purchaseParams, body: schemas.confirmPurchase }),
-    authorize,
-    asyncHandler(purchaseController.confirm),
-  );
-  router.post(
-    '/purchases/:purchaseUid/retry',
-    validate({ params: schemas.purchaseParams, body: schemas.emptyBody }),
-    authorize,
-    asyncHandler(purchaseController.retry),
   );
 
   // Investor journey.
@@ -220,12 +199,6 @@ const createInvestmentRouter = ({ controller, registryController, purchaseContro
     validate({ params: schemas.redemptionParams, body: schemas.rejectRedemption }),
     authorize,
     asyncHandler(redemptionController.reject),
-  );
-  router.post(
-    '/issuer/redemptions/:redemptionUid/payment/confirm',
-    validate({ params: schemas.redemptionParams, body: schemas.confirmPurchase }),
-    authorize,
-    asyncHandler(redemptionController.confirmPayment),
   );
   router.get(
     '/issuer/interests/:interestUid',

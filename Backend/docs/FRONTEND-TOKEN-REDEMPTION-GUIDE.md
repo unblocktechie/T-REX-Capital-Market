@@ -1,4 +1,8 @@
-# Frontend Token Redemption Guide
+# Frontend Token Redemption Guide (deprecated settlement)
+
+> Retain only the off-chain redemption request and issuer review portions. Replace all direct issuer
+> payment-confirm and backend burn/unlock steps with the frontend wallet/controller flow in
+> `FRONTEND-BLOCKCHAIN-TRANSACTION-GUIDE.md`.
 
 ## Investor flow
 

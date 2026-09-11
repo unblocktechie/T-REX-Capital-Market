@@ -1,4 +1,9 @@
-# Token Redemption Flow
+# Token Redemption Flow (business workflow plus legacy settlement)
+
+> Settlement sections describing backend USDT payment, lock, burn, unlock, or retry are deprecated
+> as of 2026-09-11. The request/authorization/issuer-decision workflow remains. The investor wallet
+> calls `PlatformController.redeem()` and canonical verification/indexing completes the record. See
+> `FRONTEND-BLOCKCHAIN-TRANSACTION-GUIDE.md`.
 
 ## Settlement model
 
@@ -147,7 +152,7 @@ Required runtime configuration:
 
 ```dotenv
 REDEMPTION_USDT_ADDRESS=0x...
-REDEMPTION_CONFIRMATIONS=12
+REDEMPTION_CONFIRMATIONS=2
 REDEMPTION_AUTHORIZATION_TTL_MINUTES=30
 REDEMPTION_INDEXER_START_BLOCK=0
 REDEMPTION_WORKER_ENABLED=true

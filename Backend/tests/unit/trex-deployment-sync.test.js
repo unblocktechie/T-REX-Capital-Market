@@ -38,7 +38,7 @@ const makeSettings = (overrides = {}) => {
     TrexDeploymentSyncInterval: '60',
     TrexDeploymentLastSyncBlock: '0',
     TrexDeploymentBlockOffset: '500',
-    TrexDeploymentConfirmationBlocks: '12',
+    TrexDeploymentConfirmationBlocks: '2',
     TrexDeploymentStartBlock: '0',
     TrexDeploymentSyncEnabled: 'true',
     ...overrides,
@@ -98,8 +98,8 @@ test('discovers a TREXSuiteDeployed event and synchronizes the matching pending 
   assert.equal(captured.update.fields.deployTxHash, TX);
   assert.equal(captured.update.fields.deployedAtBlock, 100);
   assert.ok(/^0x[0-9a-f]{64}$/i.test(captured.update.fields.deploymentSalt));
-  // checkpoint advanced to the safe head (120 - 12)
-  assert.equal(settings.store.TrexDeploymentLastSyncBlock, '108');
+  // checkpoint advanced to the safe head (120 - 2)
+  assert.equal(settings.store.TrexDeploymentLastSyncBlock, '118');
 });
 
 test('is idempotent when the token is already deployed at the same address', async () => {
@@ -130,7 +130,7 @@ test('skips when on-chain name/symbol do not match the database record', async (
 test('does nothing when the checkpoint already covers the safe head', async () => {
   let getLogsCalled = false;
   const { service } = makeService({
-    settings: makeSettings({ TrexDeploymentLastSyncBlock: '108' }),
+    settings: makeSettings({ TrexDeploymentLastSyncBlock: '118' }),
     provider: makeProvider({ getLogs: async () => { getLogsCalled = true; return []; } }),
   });
   const stats = await service.run();

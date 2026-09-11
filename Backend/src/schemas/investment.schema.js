@@ -152,6 +152,34 @@ const confirmRegistryRegistration = Joi.object({
 
 const emptyBody = Joi.object({});
 
+const confirmBlockchainTransaction = Joi.object({
+  chainId: Joi.number().integer().positive().required(),
+  txHash: Joi.string().trim().lowercase().pattern(/^0x[a-fA-F0-9]{64}$/).required(),
+  tokenUid: uid.required(),
+  expectedAction: Joi.string().uppercase().valid('INVEST', 'TRANSFER', 'REDEMPTION').required(),
+});
+
+const transactionHistoryFilters = {
+  tokenUid: uid,
+  type: Joi.string().uppercase().valid(
+    'INVEST', 'TRANSFER', 'REDEMPTION', 'USDT_APPROVAL', 'TOKEN_ISSUE', 'TOKEN_BURN', 'PRICE_UPDATE', 'ALL',
+  ).default('ALL'),
+  status: Joi.string().uppercase().valid('SUBMITTED', 'CONFIRMED', 'FAILED', 'ORPHANED', 'ALL').default('ALL'),
+  walletAddress: Joi.string().trim().pattern(/^0x[a-fA-F0-9]{40}$/),
+  txHash: Joi.string().trim().lowercase().pattern(/^0x[a-fA-F0-9]{64}$/),
+  fromDate: Joi.date().iso(),
+  toDate: Joi.date().iso().min(Joi.ref('fromDate')),
+  search: Joi.string().trim().max(100).allow('').default(''),
+};
+
+const blockchainTransactionHistoryQuery = Joi.object({
+  ...transactionHistoryFilters,
+  page: Joi.number().integer().min(1).default(1),
+  limit: Joi.number().integer().min(1).max(100).default(20),
+});
+
+const blockchainTransactionExportQuery = Joi.object(transactionHistoryFilters);
+
 // Issuer rejection: DOC_REJECTED requires the rejected claim-topic codes; OTHER forbids them.
 const rejectInterest = Joi.object({
   rejectReasonType: Joi.string().valid(...REJECT_REASON_TYPES).required(),
@@ -201,6 +229,9 @@ module.exports = {
   rejectRedemption,
   confirmRegistryRegistration,
   emptyBody,
+  confirmBlockchainTransaction,
+  blockchainTransactionHistoryQuery,
+  blockchainTransactionExportQuery,
   interestDocumentParams,
   rejectInterest,
   approveInterest,

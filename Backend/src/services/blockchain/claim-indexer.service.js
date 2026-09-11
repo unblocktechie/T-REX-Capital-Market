@@ -25,7 +25,7 @@ const DEFAULTS = {
   intervalSeconds: 15,
   startBlock: 0,
   blockOffset: 1000,
-  confirmationBlocks: 12,
+  confirmationBlocks: 2,
   addressBatchSize: 100,
   eventBatchSize: 200,
   leaseSeconds: 120,

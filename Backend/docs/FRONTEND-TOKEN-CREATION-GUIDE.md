@@ -90,17 +90,22 @@ Use an amount input for `maxBalancePerInvestor`, not a percentage input. It repr
 
 ## Step 4: Governance roles
 
-Pre-fill both fields using `organizationWalletAddress` returned by `GET /tokens/me` or the approved organization form:
+The Token Agent is backend-controlled. Do not provide an editable Token Agent input and do not
+derive it from the connected/platform wallet. Submit only the organization-controlled Identity
+Manager address:
 
 ```json
 {
-  "tokenAgentWalletAddress": "0x1111111111111111111111111111111111111111",
   "identityManagerWalletAddress": "0x1111111111111111111111111111111111111111",
   "isDraft": false
 }
 ```
 
-Send to `PUT /api/v1/tokens/me/governance`. Both fields must exactly represent the organization wallet (comparison is case-insensitive).
+Send to `PUT /api/v1/tokens/me/governance`. `identityManagerWalletAddress` must exactly represent
+the organization wallet (comparison is case-insensitive). The response and subsequent
+`GET /tokens/me` return `tokenAgentWalletAddress` as the configured Platform Controller contract,
+currently `0x9BEFDF75Dc94bbB36532c5d7A74daab28714f579`. Render it as read-only in review screens and use
+that backend value when building the TREX deployment transaction.
 
 ## Step 5: Final review
 

@@ -106,7 +106,7 @@ test('global claim indexer stores events before advancing its checkpoint and con
   assert.equal(result.leaseAcquired, true);
   assert.equal(result.identityCount, 1);
   assert.equal(result.rpcLogQueries, 1);
-  assert.equal(state.checkpoint.lastIndexedBlock, 120 - 12);
+  assert.equal(state.checkpoint.lastIndexedBlock, 120 - 2);
   assert.ok(state.calls.findIndex(([name]) => name === 'storeEvents') < state.calls.findIndex(([name]) => name === 'advanceCheckpoint'));
   assert.equal(state.submission.status, 'CONFIRMED');
   assert.equal(state.submission.txHash, TX);

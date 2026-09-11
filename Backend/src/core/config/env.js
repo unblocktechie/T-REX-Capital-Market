@@ -42,7 +42,7 @@ const env = Object.freeze({
   auth: {
     issuerRoleUid: process.env.ISSUER_ROLE_UID || '00000000-0000-4000-8000-000000000003',
     investorRoleUid: process.env.INVESTOR_ROLE_UID || '00000000-0000-4000-8000-000000000004',
-    bcryptRounds: Number(process.env.BCRYPT_ROUNDS || 12),
+    bcryptRounds: Number(process.env.BCRYPT_ROUNDS || 2),
     verificationTtlMinutes: Number(process.env.EMAIL_VERIFICATION_TOKEN_TTL_MINUTES || 10),
     resetTtlMinutes: Number(process.env.PASSWORD_RESET_TOKEN_TTL_MINUTES || 30),
   },
@@ -93,16 +93,24 @@ const env = Object.freeze({
     sepoliaFallbackRpcUrls: csv(process.env.SEPOLIA_FALLBACK_RPC_URLS),
     deployerPrivateKey: process.env.DEPLOYER_PRIVATE_KEY,
     deployerAddress: process.env.DEPLOYER_ADDRESS,
+    // Backend-authoritative Token Agent assigned to every newly configured TREX token.
+    platformControllerAddress: process.env.PLATFORM_CONTROLLER_ADDRESS
+      || '0x9BEFDF75Dc94bbB36532c5d7A74daab28714f579',
     identityFactoryAddress: process.env.IDENTITY_FACTORY_ADDRESS,
     trexFactoryAddress: process.env.TREX_FACTORY_ADDRESS,
-    confirmations: Number(process.env.BLOCKCHAIN_CONFIRMATIONS || 1),
+    confirmations: Number(process.env.BLOCKCHAIN_CONFIRMATIONS || 2),
     // Registry confirmation is intentionally conservative because CONFIRMED is authoritative.
-    registryConfirmations: Number(process.env.REGISTRY_CONFIRMATIONS || 12),
+    registryConfirmations: Number(process.env.REGISTRY_CONFIRMATIONS || 2),
     // MetaMask may wrap registerIdentity through its audited Delegation Manager. Only explicitly
     // configured executors are accepted; the nested target, value, function and arguments are
     // still decoded and verified against the pending operation.
     registryDelegationManagerAddresses: csv(
       process.env.REGISTRY_DELEGATION_MANAGER_ADDRESSES
+        || '0xdb9B1e94B5b69Df7e401DDbedE43491141047dB3',
+    ),
+    transactionDelegationManagerAddresses: csv(
+      process.env.TRANSACTION_DELEGATION_MANAGER_ADDRESSES
+        || process.env.REGISTRY_DELEGATION_MANAGER_ADDRESSES
         || '0xdb9B1e94B5b69Df7e401DDbedE43491141047dB3',
     ),
     registryRecoveryLookbackBlocks: Number(process.env.REGISTRY_RECOVERY_LOOKBACK_BLOCKS || 200000),
@@ -130,8 +138,8 @@ const env = Object.freeze({
     purchaseUsdtAddress: process.env.PURCHASE_USDT_ADDRESS || '0x8fC7e68897bd74c4B6340d2DC857a7ED2677aF6A',
     // The interactive confirm API may accept a successfully mined payment earlier than the
     // conservative worker finality threshold so it can submit the platform mint immediately.
-    purchasePaymentConfirmations: Number(process.env.PURCHASE_PAYMENT_CONFIRMATIONS || 1),
-    purchaseConfirmations: Number(process.env.PURCHASE_CONFIRMATIONS || 12),
+    purchasePaymentConfirmations: Number(process.env.PURCHASE_PAYMENT_CONFIRMATIONS || 2),
+    purchaseConfirmations: Number(process.env.PURCHASE_CONFIRMATIONS || 2),
     // A payment intent with no submitted hash is abandoned after this period. The worker
     // applies an additional indexed-chain grace period before changing it to EXPIRED.
     purchaseIntentTtlMinutes: Number(process.env.PURCHASE_INTENT_TTL_MINUTES || 15),
@@ -141,17 +149,21 @@ const env = Object.freeze({
     // verified at the conservative redemption confirmation threshold.
     redemptionUsdtAddress: process.env.REDEMPTION_USDT_ADDRESS
       || process.env.PURCHASE_USDT_ADDRESS || '0x8fC7e68897bd74c4B6340d2DC857a7ED2677aF6A',
-    redemptionConfirmations: Number(process.env.REDEMPTION_CONFIRMATIONS || 12),
+    redemptionConfirmations: Number(process.env.REDEMPTION_CONFIRMATIONS || 2),
     redemptionAuthorizationTtlMinutes: Number(process.env.REDEMPTION_AUTHORIZATION_TTL_MINUTES || 30),
     redemptionIndexerStartBlock: Number(process.env.REDEMPTION_INDEXER_START_BLOCK || 0),
     redemptionWorkerEnabled: booleanValue(process.env.REDEMPTION_WORKER_ENABLED, true),
     // Investor-to-investor ERC-3643 transfers. Interactive confirmation can be low for local
     // UX while the global fallback indexer remains behind a conservative safe head.
-    transferConfirmations: Number(process.env.TRANSFER_CONFIRMATIONS || 1),
-    transferIndexerConfirmations: Number(process.env.TRANSFER_INDEXER_CONFIRMATIONS || 12),
+    transferConfirmations: Number(process.env.TRANSFER_CONFIRMATIONS || 2),
+    transferIndexerConfirmations: Number(process.env.TRANSFER_INDEXER_CONFIRMATIONS || 2),
     transferIntentTtlMinutes: Number(process.env.TRANSFER_INTENT_TTL_MINUTES || 15),
     transferIndexerStartBlock: Number(process.env.TRANSFER_INDEXER_START_BLOCK || 0),
     transferWorkerEnabled: booleanValue(process.env.TRANSFER_WORKER_ENABLED, true),
+    // Canonical read-only history for wallet-executed Platform Controller and token transactions.
+    transactionIndexerEnabled: booleanValue(process.env.TRANSACTION_INDEXER_ENABLED, true),
+    transactionIndexerStartBlock: Number(process.env.TRANSACTION_INDEXER_START_BLOCK || 0),
+    transactionIndexerConfirmations: Number(process.env.TRANSACTION_INDEXER_CONFIRMATIONS || process.env.BLOCKCHAIN_CONFIRMATIONS || 2),
   },
 });
 

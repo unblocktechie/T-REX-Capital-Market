@@ -66,7 +66,7 @@ class TokenRedemptionBlockchainService {
     this.transferTopic = this.usdtInterface.getEvent('Transfer').topicHash;
   }
 
-  confirmations() { return Math.max(1, Number(this.config.redemptionConfirmations || 12)); }
+  confirmations() { return Math.max(1, Number(this.config.redemptionConfirmations || 2)); }
 
   async withProvider(work) {
     if (!this.config.sepoliaRpcUrl) throw new RedemptionBlockchainError('RPC_UNAVAILABLE', 'Blockchain RPC is not configured.', { transient: true });
@@ -83,15 +83,10 @@ class TokenRedemptionBlockchainService {
   }
 
   platformWalletAddress() {
-    if (!this.config.deployerPrivateKey) throw new RedemptionBlockchainError('PLATFORM_WALLET_NOT_CONFIGURED', 'Platform wallet is not configured.');
-    let address;
-    try { address = new ethers.Wallet(this.config.deployerPrivateKey).address; } catch {
-      throw new RedemptionBlockchainError('PLATFORM_WALLET_INVALID', 'Platform private key is invalid.');
+    if (!ethers.isAddress(this.config.platformControllerAddress || '')) {
+      throw new RedemptionBlockchainError('PLATFORM_CONTROLLER_NOT_CONFIGURED', 'Platform Controller is not configured.');
     }
-    if (this.config.deployerAddress && !sameAddress(address, this.config.deployerAddress)) {
-      throw new RedemptionBlockchainError('PLATFORM_WALLET_MISMATCH', 'Configured deployer address does not match the private key.');
-    }
-    return ethers.getAddress(address);
+    return ethers.getAddress(this.config.platformControllerAddress);
   }
 
   async prepare({ usdtContractAddress, tokenAddress, investorWalletAddress }) {

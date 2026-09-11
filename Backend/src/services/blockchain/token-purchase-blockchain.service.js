@@ -46,7 +46,7 @@ class TokenPurchaseBlockchainService {
     this.transferTopic = this.usdtInterface.getEvent('Transfer').topicHash;
   }
 
-  confirmations() { return Math.max(1, Number(this.config.purchaseConfirmations || 12)); }
+  confirmations() { return Math.max(1, Number(this.config.purchaseConfirmations || 2)); }
 
   async withProvider(work) {
     if (!this.config.sepoliaRpcUrl) throw new PurchaseBlockchainError('RPC_UNAVAILABLE', 'Blockchain RPC is not configured.', { transient: true });
@@ -63,16 +63,10 @@ class TokenPurchaseBlockchainService {
   }
 
   platformWalletAddress() {
-    if (!this.config.deployerPrivateKey) throw new PurchaseBlockchainError('PLATFORM_WALLET_NOT_CONFIGURED', 'Platform wallet is not configured.');
-    let address;
-    try { address = new ethers.Wallet(this.config.deployerPrivateKey).address; } catch {
-      throw new PurchaseBlockchainError('PLATFORM_WALLET_INVALID', 'Platform private key is invalid.');
+    if (!ethers.isAddress(this.config.platformControllerAddress || '')) {
+      throw new PurchaseBlockchainError('PLATFORM_CONTROLLER_NOT_CONFIGURED', 'Platform Controller is not configured.');
     }
-    if (this.config.deployerAddress && ethers.isAddress(this.config.deployerAddress)
-      && !sameAddress(address, this.config.deployerAddress)) {
-      throw new PurchaseBlockchainError('PLATFORM_WALLET_MISMATCH', 'Configured deployer address does not match the private key.');
-    }
-    return ethers.getAddress(address);
+    return ethers.getAddress(this.config.platformControllerAddress);
   }
 
   async prepare({ usdtContractAddress, tokenAddress, investorWalletAddress }) {
@@ -238,7 +232,7 @@ class TokenPurchaseBlockchainService {
     confirmations = this.confirmations(),
     timeoutMs = Number(this.config.transactionTimeoutMs || 120000),
   } = {}) {
-    const required = Math.max(1, Number(confirmations || 1));
+    const required = Math.max(1, Number(confirmations || 2));
     try {
       const receipt = await this.withProvider((provider) => provider.waitForTransaction(
         txHash, required, Math.max(1000, Number(timeoutMs || 120000)),

@@ -8,6 +8,7 @@ class IdentityRegistryRegistrationRepository {
       `SELECT ii.\`interestUid\`, ii.\`status\` AS \`interestStatus\`, ii.\`tokenUid\`,
               ii.\`organizationUid\`, ii.\`investorUid\`, ii.\`investorUserUid\`,
               t.\`status\` AS \`tokenStatus\`, t.\`identityRegistryAddress\`, t.\`tokenAgentWalletAddress\`,
+              t.\`identityManagerWalletAddress\`,
               t.\`countryRestrictionMode\`, t.\`deployedAtBlock\`,
               o.\`userUid\` AS \`issuerUserUid\`, o.\`walletAddress\` AS \`issuerWalletAddress\`,
               o.\`status\` AS \`organizationStatus\`, o.\`isActive\` AS \`organizationActive\`,

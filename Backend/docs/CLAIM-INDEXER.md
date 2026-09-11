@@ -38,7 +38,7 @@ DB match remain `UNMATCHED` and are retried, which supports DB/event arrival rac
 | `ClaimIndexerIntervalSeconds` | `15` | Scheduler interval |
 | `ClaimIndexerStartBlock` | `0` | Explicit start; zero uses `CLAIM_INDEXER_START_BLOCK` / TREX factory start |
 | `ClaimIndexerBlockOffset` | `1000` | Blocks per sequential chunk |
-| `ClaimIndexerConfirmationBlocks` | `12` | Reorg buffer |
+| `ClaimIndexerConfirmationBlocks` | `2` | Reorg buffer |
 | `ClaimIndexerAddressBatchSize` | `100` | Identity addresses per RPC filter |
 | `ClaimIndexerEventBatchSize` | `200` | Stored events reconciled per run |
 | `ClaimIndexerLeaseSeconds` | `120` | Distributed lease duration |

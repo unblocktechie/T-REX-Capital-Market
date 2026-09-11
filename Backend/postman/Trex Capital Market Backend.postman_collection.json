@@ -270,6 +270,10 @@
       "value": "PASTE_ISSUER_REGISTER_IDENTITY_TX_HASH"
     },
     {
+      "key": "blockchainTransactionHash",
+      "value": "PASTE_FRONTEND_BUY_TRANSFER_OR_REDEEM_TX_HASH"
+    },
+    {
       "key": "purchaseUid",
       "value": ""
     },
@@ -466,7 +470,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Request is accepted', () => pm.response.to.have.status(200));"
+                  "pm.test('Request is accepted', () => pm.response.to.have.status(200));",
+                  "pm.test('Already verified accounts return an explicit state', function () {",
+                  "  const json = pm.response.json();",
+                  "  if (json.data && json.data.status === 'ALREADY_VERIFIED') {",
+                  "    pm.expect(json.data.emailVerified).to.eql(true);",
+                  "    pm.expect(json.message).to.include('already verified');",
+                  "  }",
+                  "});"
                 ]
               }
             }
@@ -2059,14 +2070,15 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"tokenAgentWalletAddress\": \"{{walletAddress}}\",\n  \"identityManagerWalletAddress\": \"{{walletAddress}}\",\n  \"isDraft\": false\n}",
+              "raw": "{\n  \"identityManagerWalletAddress\": \"{{walletAddress}}\",\n  \"isDraft\": false\n}",
               "options": {
                 "raw": {
                   "language": "json"
                 }
               }
             },
-            "url": "{{baseUrl}}/api/v1/tokens/me/governance"
+            "url": "{{baseUrl}}/api/v1/tokens/me/governance",
+            "description": "The backend assigns PLATFORM_CONTROLLER_ADDRESS as tokenAgentWalletAddress. Send only the organization wallet as identityManagerWalletAddress."
           },
           "event": [
             {
@@ -2075,7 +2087,9 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Token governance roles are saved', () => pm.response.to.have.status(200));",
-                  "pm.expect(pm.response.json().data.currentStep).to.eql('review');"
+                  "const token = pm.response.json().data;",
+                  "pm.expect(token.currentStep).to.eql('review');",
+                  "pm.expect(token.tokenAgentWalletAddress.toLowerCase()).to.eql('0x9befdf75dc94bbb36532c5d7a74daab28714f579');"
                 ]
               }
             }
@@ -2699,39 +2713,56 @@
           }
         },
         {
-          "name": "Create Pending Token Purchase",
+          "name": "Confirm Frontend Wallet Transaction",
           "request": {
             "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{investorToken}}", "type": "string" }] },
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"tokenAmount\": \"{{purchaseTokenAmount}}\",\n  \"idempotencyKey\": \"{{purchaseIdempotencyKey}}\"\n}",
+              "raw": "{\n  \"chainId\": 11155111,\n  \"txHash\": \"{{blockchainTransactionHash}}\",\n  \"tokenUid\": \"{{investmentTokenUid}}\",\n  \"expectedAction\": \"INVEST\"\n}",
               "options": { "raw": { "language": "json" } }
             },
-            "url": "{{baseUrl}}/api/v1/investments/tokens/{{investmentTokenUid}}/purchases",
-            "description": "Requires a registered investment interest. Creates PENDING_PAYMENT before MetaMask and returns backend-authoritative USDT contract, treasury recipient, token amount, exact raw USDT amount, and expiration.expiresAt. If MetaMask is abandoned and no hash is sent, the background worker changes the intent to EXPIRED; create a new intent with a new idempotency key."
+            "url": "{{baseUrl}}/api/v1/investments/transactions/confirm",
+            "description": "Optional fast path after the investor signs PlatformController.buy(), token.transfer(), or PlatformController.redeem(). Change expectedAction accordingly. The backend independently verifies canonical chain data; the fallback indexer recovers the transaction if this call is missed."
           },
           "event": [{
             "listen": "test",
             "script": { "type": "text/javascript", "exec": [
-              "pm.test('Purchase intent created/resumed', () => pm.expect([200, 201]).to.include(pm.response.code));",
+              "pm.test('Canonical transaction state returned', () => pm.response.to.have.status(200));",
               "const data = pm.response.json().data;",
-              "if (data?.purchaseUid) pm.collectionVariables.set('purchaseUid', data.purchaseUid);",
-              "pm.expect(data.status).to.eql('PENDING_PAYMENT');",
-              "pm.expect(data.expiration.expiresAt).to.be.a('string');",
-              "console.log('Call USDT transfer to', data.treasuryWalletAddress, 'for raw amount', data.usdtAmountRaw);"
+              "pm.expect(data.status).to.be.oneOf(['SUBMITTED', 'CONFIRMED', 'FAILED']);"
             ] }
           }]
         },
         {
-          "name": "List Token Purchase History",
+          "name": "List Canonical Blockchain Transactions",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{investorToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/investments/transactions?page=1&limit=20&tokenUid={{investmentTokenUid}}&type=ALL&status=ALL&search=",
+            "description": "Role-scoped canonical history. Use type INVEST, TRANSFER, or REDEMPTION for individual screens."
+          }
+        },
+        {
+          "name": "Export Canonical Blockchain Transactions",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{investorToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/investments/transactions/export?tokenUid={{investmentTokenUid}}&type=ALL&status=ALL&search=",
+            "description": "Downloads the complete filtered UTF-8 CSV result. Issuer tokens are organization-scoped and investor results are wallet-scoped."
+          }
+        },
+        {
+          "name": "Legacy - List Token Purchase History",
           "request": {
             "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{investorToken}}", "type": "string" }] },
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/api/v1/investments/tokens/{{investmentTokenUid}}/purchases?page=1&limit=20&search=&status=all",
-            "description": "Returns only the authenticated investor's purchases for this token, newest first. Supports search across IDs, hashes, addresses, and amounts plus lifecycle status filtering. Use data.status for table state and meta for pagination."
+            "description": "Read-only legacy production history. New purchase UI must use /investments/transactions?type=INVEST."
           },
           "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
             "pm.test('Purchase history fetched', () => pm.response.to.have.status(200));",
@@ -2756,26 +2787,7 @@
           ] } }]
         },
         {
-          "name": "Confirm USDT Purchase Payment",
-          "request": {
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{investorToken}}", "type": "string" }] },
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"txHash\": \"{{purchasePaymentTxHash}}\"\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": "{{baseUrl}}/api/v1/investments/purchases/{{purchaseUid}}/confirm",
-            "description": "Send only the MetaMask USDT transfer hash before expiration. Backend verifies chain, sender, USDT contract, transfer recipient/amount, receipt, confirmations, and event, then performs and verifies the platform-agent mint. Valid persisted lifecycle outcomes always return HTTP 200; inspect data.status."
-          },
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
-            "pm.test('Current purchase state returned', () => pm.response.to.have.status(200));",
-            "pm.expect(pm.response.json().data.status).to.be.oneOf(['PENDING_PAYMENT', 'PAYMENT_CONFIRMED', 'MINT_SUBMITTED', 'COMPLETED', 'EXPIRED']);"
-          ] } }]
-        },
-        {
-          "name": "Get Token Purchase Settlement",
+          "name": "Legacy - Get Token Purchase Settlement",
           "request": {
             "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{investorToken}}", "type": "string" }] },
             "method": "GET",
@@ -2786,20 +2798,6 @@
           "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
             "pm.test('Purchase settlement fetched', () => pm.response.to.have.status(200));",
             "console.log('Purchase status:', pm.response.json().data?.status);"
-          ] } }]
-        },
-        {
-          "name": "Retry Token Purchase Reconciliation",
-          "request": {
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{investorToken}}", "type": "string" }] },
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{}", "options": { "raw": { "language": "json" } } },
-            "url": "{{baseUrl}}/api/v1/investments/purchases/{{purchaseUid}}/retry",
-            "description": "Queues idempotent payment/mint recovery. It never creates a duplicate payment row or blindly submits a second mint. Returns 200 if already complete, otherwise 202."
-          },
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
-            "pm.test('Purchase retry accepted/completed', () => pm.expect([200, 202]).to.include(pm.response.code));"
           ] } }]
         },
         {
@@ -3351,7 +3349,7 @@
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }],
             "url": "{{baseUrl}}/api/v1/investments/issuer/investors?tokenUid={{investmentTokenUid}}&page=1&limit=20&search=&invitationStatus=all",
-            "description": "Lists only active submitted investor profiles. Each row includes invitation state, existing-interest state, and country eligibility for the issuer-owned deployed token."
+            "description": "Lists only active submitted investor profiles. Each row includes top-level accreditationType, invitation state, existing-interest state, and country eligibility for the issuer-owned deployed token."
           },
           "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
             "pm.test('Completed investors listed', () => pm.response.to.have.status(200));",
@@ -3408,7 +3406,7 @@
     },
     {
       "name": "Token Redemption",
-      "description": "Manual issuer-funded redemption: investor intent + EIP-712 authorization, issuer approval, platform token lock, issuer USDT payment verification, platform burn, cleanup unlock, and fallback retry.",
+      "description": "Off-chain redemption request and issuer decision. Issuer grants controller USDT allowance once; investor signs PlatformController.redeem(); canonical confirmation/indexing records the atomic burn and payout.",
       "item": [
         {
           "name": "Investor - Create Redemption",
@@ -3459,15 +3457,6 @@
           }
         },
         {
-          "name": "Investor or Issuer - Retry Synchronization",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Authorization", "value": "Bearer {{investorToken}}" }, { "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{}", "options": { "raw": { "language": "json" } } },
-            "url": "{{baseUrl}}/api/v1/investments/redemptions/{{redemptionUid}}/retry"
-          }
-        },
-        {
           "name": "Issuer - List Redemption Requests",
           "request": {
             "method": "GET",
@@ -3484,7 +3473,7 @@
           }
         },
         {
-          "name": "Issuer - Approve and Queue Token Lock",
+          "name": "Issuer - Approve Redemption Request",
           "request": {
             "method": "POST",
             "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }, { "key": "Content-Type", "value": "application/json" }],
@@ -3500,53 +3489,12 @@
             "body": { "mode": "raw", "raw": "{\n  \"reason\": \"Redemption request requires additional review.\"\n}", "options": { "raw": { "language": "json" } } },
             "url": "{{baseUrl}}/api/v1/investments/issuer/redemptions/{{redemptionUid}}/reject"
           }
-        },
-        {
-          "name": "Issuer - Confirm USDT Payment",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }, { "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"txHash\": \"{{redemptionPaymentTxHash}}\"\n}", "options": { "raw": { "language": "json" } } },
-            "url": "{{baseUrl}}/api/v1/investments/issuer/redemptions/{{redemptionUid}}/payment/confirm",
-            "description": "Send only txHash. The backend verifies chain, USDT contract, treasury sender, investor recipient, exact amount, canonical receipt and Transfer event before burning."
-          }
         }
       ]
     },
     {
-      "name": "Token Transfer",
+      "name": "Token Transfer (Legacy Read Only)",
       "item": [
-        {
-          "name": "Investor - Create Pending Transfer",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Authorization", "value": "Bearer {{investorToken}}" }, { "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"recipientWalletAddress\": \"{{transferRecipientWalletAddress}}\",\n  \"tokenAmount\": \"{{transferTokenAmount}}\",\n  \"idempotencyKey\": \"{{transferIdempotencyKey}}\"\n}", "options": { "raw": { "language": "json" } } },
-            "url": "{{baseUrl}}/api/v1/investments/tokens/{{investmentTokenUid}}/transfers",
-            "description": "Creates the backend-authoritative PENDING_TRANSFER row before MetaMask. The recipient must be another completed investor registered for the same token. Use only data.transactionRequest for the wallet call."
-          },
-          "event": [{
-            "listen": "test",
-            "script": {
-              "type": "text/javascript",
-              "exec": [
-                "pm.test('Pending transfer intent is returned', () => pm.expect([200, 201]).to.include(pm.response.code));",
-                "const json = pm.response.json();",
-                "if (json.data?.transferUid) pm.collectionVariables.set('transferUid', json.data.transferUid);"
-              ]
-            }
-          }]
-        },
-        {
-          "name": "Investor - Confirm Transfer Transaction",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Authorization", "value": "Bearer {{investorToken}}" }, { "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"txHash\": \"{{transferTxHash}}\"\n}", "options": { "raw": { "language": "json" } } },
-            "url": "{{baseUrl}}/api/v1/investments/transfers/{{transferUid}}/confirm",
-            "description": "Send only the MetaMask hash. HTTP 200 may be PENDING_TRANSFER or COMPLETED; data.status is authoritative."
-          }
-        },
         {
           "name": "Investor - Get Transfer Detail",
           "request": {
@@ -3561,16 +3509,6 @@
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{investorToken}}" }],
             "url": "{{baseUrl}}/api/v1/investments/tokens/{{investmentTokenUid}}/transfers?page=1&limit=20&search=&status=all&direction=all"
-          }
-        },
-        {
-          "name": "Investor - Retry Transfer Synchronization",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Authorization", "value": "Bearer {{investorToken}}" }, { "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{}", "options": { "raw": { "language": "json" } } },
-            "url": "{{baseUrl}}/api/v1/investments/transfers/{{transferUid}}/retry",
-            "description": "Queues lightweight verification/targeted recovery. It never submits another blockchain transaction."
           }
         }
       ]

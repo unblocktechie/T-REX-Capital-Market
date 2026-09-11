@@ -86,7 +86,9 @@ paths:
       tags: [Authentication]
       summary: Resend an email verification link
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/EmailRequest' } } } }
-      responses: { '200': { description: Generic accepted response }, '422': { $ref: '#/components/responses/ValidationError' } }
+      responses:
+        '200': { description: Generic accepted response, or ALREADY_VERIFIED when the account has already been verified }
+        '422': { $ref: '#/components/responses/ValidationError' }
   /api/v1/auth/verify-email:
     post:
       tags: [Authentication]
@@ -675,6 +677,48 @@ paths:
         '422': { description: Definitive sender, target, calldata, receipt, event, or state mismatch }
         '503': { description: RPC unavailable; operation remains PENDING and recoverable }
 
+  /api/v1/investments/transactions/confirm:
+    post:
+      tags: [Blockchain Transactions]
+      summary: Verify and record a frontend wallet transaction
+      description: Optional fast path. The backend independently verifies the transaction; the fallback indexer remains authoritative when this API is missed.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConfirmBlockchainTransactionInput' }
+      responses:
+        '200': { description: Current SUBMITTED, CONFIRMED, or FAILED canonical state }
+        '403': { description: Sender is not the authenticated investor wallet }
+        '422': { description: Chain, contract, function, token, event, quote, or settlement mismatch }
+        '503': { description: Blockchain RPC is temporarily unavailable }
+  /api/v1/investments/transactions:
+    get:
+      tags: [Blockchain Transactions]
+      summary: List role-scoped canonical blockchain transaction history
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { in: query, name: tokenUid, schema: { type: string, format: uuid } }
+        - { in: query, name: type, schema: { type: string, enum: [INVEST, TRANSFER, REDEMPTION, USDT_APPROVAL, TOKEN_ISSUE, TOKEN_BURN, PRICE_UPDATE, ALL], default: ALL } }
+        - { in: query, name: status, schema: { type: string, enum: [SUBMITTED, CONFIRMED, FAILED, ORPHANED, ALL], default: ALL } }
+        - { in: query, name: walletAddress, schema: { type: string } }
+        - { in: query, name: txHash, schema: { type: string } }
+        - { in: query, name: fromDate, schema: { type: string, format: date-time } }
+        - { in: query, name: toDate, schema: { type: string, format: date-time } }
+        - { $ref: '#/components/parameters/Search' }
+      responses:
+        '200': { description: Paginated canonical transaction rows }
+  /api/v1/investments/transactions/export:
+    get:
+      tags: [Blockchain Transactions]
+      summary: Export the full role-scoped filtered transaction history as CSV
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: UTF-8 CSV file }
+
   /api/v1/investments/tokens/{tokenUid}/purchases:
     get:
       tags: [Token Purchases]
@@ -691,26 +735,6 @@ paths:
         '200': { description: Newest-first investor-owned purchase rows with pagination metadata }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
-    post:
-      tags: [Token Purchases]
-      summary: Create an authoritative pending USDT purchase intent
-      security: [{ bearerAuth: [] }]
-      parameters:
-        - in: path
-          name: tokenUid
-          required: true
-          schema: { type: string, format: uuid }
-      requestBody:
-        required: true
-        content: { application/json: { schema: { $ref: '#/components/schemas/CreateTokenPurchaseInput' } } }
-      responses:
-        '200': { description: Existing idempotent or active purchase returned }
-        '201': { description: PENDING_PAYMENT intent created with authoritative transfer parameters and expiration deadline }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '409': { description: Investor/token/agent/cap prerequisites are not satisfied }
-        '422': { $ref: '#/components/responses/ValidationError' }
-        '503': { description: Blockchain prerequisites are temporarily unavailable }
   /api/v1/investments/me/portfolio:
     get:
       tags: [Token Purchases]
@@ -735,37 +759,6 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-  /api/v1/investments/purchases/{purchaseUid}/confirm:
-    post:
-      tags: [Token Purchases]
-      summary: Verify the USDT transfer and synchronously submit the platform mint
-      security: [{ bearerAuth: [] }]
-      parameters: [{ $ref: '#/components/parameters/PurchaseUid' }]
-      requestBody:
-        required: true
-        content: { application/json: { schema: { $ref: '#/components/schemas/ConfirmTokenPurchaseInput' } } }
-      responses:
-        '200': { description: Current persisted lifecycle state; inspect data.status for pending, minting, completed, or expired }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '409': { description: Hash is already used or another payment hash is assigned }
-        '422': { description: Sender, contract, calldata, amount, receipt, or event mismatch }
-  /api/v1/investments/purchases/{purchaseUid}/retry:
-    post:
-      tags: [Token Purchases]
-      summary: Queue idempotent payment or mint reconciliation
-      security: [{ bearerAuth: [] }]
-      parameters: [{ $ref: '#/components/parameters/PurchaseUid' }]
-      requestBody:
-        required: true
-        content: { application/json: { schema: { type: object, additionalProperties: false } } }
-      responses:
-        '200': { description: Purchase was already completed }
-        '202': { description: Reconciliation queued }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { description: The purchase intent has EXPIRED; create a new intent }
 
   /api/v1/investments/tokens/{tokenUid}/transfers:
     get:
@@ -783,21 +776,6 @@ paths:
         '200': { description: Accessible transfer rows with pagination metadata }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
-    post:
-      tags: [Token Transfers]
-      summary: Create an authoritative pending investor token transfer
-      security: [{ bearerAuth: [] }]
-      parameters:
-        - { in: path, name: tokenUid, required: true, schema: { type: string, format: uuid } }
-      requestBody:
-        required: true
-        content: { application/json: { schema: { $ref: '#/components/schemas/CreateTokenTransferInput' } } }
-      responses:
-        '200': { description: Existing idempotent or active transfer returned }
-        '201': { description: PENDING_TRANSFER intent and authoritative transactionRequest created }
-        '409': { description: Investor, registry, balance, compliance, or holder-cap prerequisite failed }
-        '422': { $ref: '#/components/responses/ValidationError' }
-        '503': { description: Blockchain prerequisites are temporarily unavailable }
   /api/v1/investments/transfers/{transferUid}:
     get:
       tags: [Token Transfers]
@@ -807,32 +785,6 @@ paths:
       responses:
         '200': { description: Current transfer lifecycle and audit state }
         '404': { $ref: '#/components/responses/NotFound' }
-  /api/v1/investments/transfers/{transferUid}/confirm:
-    post:
-      tags: [Token Transfers]
-      summary: Independently verify an investor token transfer transaction
-      security: [{ bearerAuth: [] }]
-      parameters: [{ $ref: '#/components/parameters/TransferUid' }]
-      requestBody:
-        required: true
-        content: { application/json: { schema: { $ref: '#/components/schemas/ConfirmTokenPurchaseInput' } } }
-      responses:
-        '200': { description: Current persisted status; inspect data.status for PENDING_TRANSFER, COMPLETED, or EXPIRED }
-        '409': { description: Transaction is reused, already assigned, or operation is terminal }
-        '422': { description: Chain, token, sender, calldata, receipt, event, or state mismatch }
-  /api/v1/investments/transfers/{transferUid}/retry:
-    post:
-      tags: [Token Transfers]
-      summary: Queue idempotent transfer hash/event reconciliation
-      security: [{ bearerAuth: [] }]
-      parameters: [{ $ref: '#/components/parameters/TransferUid' }]
-      requestBody:
-        required: true
-        content: { application/json: { schema: { type: object, additionalProperties: false } } }
-      responses:
-        '200': { description: Already complete or a new wallet transaction is required }
-        '202': { description: Reconciliation queued }
-        '409': { description: Transfer is expired or requires manual review }
 
   /api/v1/investments/tokens/{tokenUid}/redemptions:
     get:
@@ -887,20 +839,12 @@ paths:
   /api/v1/investments/redemptions/{redemptionUid}/cancel:
     post:
       tags: [Token Redemptions]
-      summary: Cancel before payment; confirmed locks are safely released first
+      summary: Cancel the off-chain request before a redemption transaction is submitted
       security: [{ bearerAuth: [] }]
       parameters: [{ $ref: '#/components/parameters/RedemptionUid' }]
       responses:
-        '200': { description: Cancelled or CANCELLATION_PENDING }
-        '409': { description: Cancellation is no longer safe after payment submission }
-  /api/v1/investments/redemptions/{redemptionUid}/retry:
-    post:
-      tags: [Token Redemptions]
-      summary: Queue idempotent settlement reconciliation
-      security: [{ bearerAuth: [] }]
-      parameters: [{ $ref: '#/components/parameters/RedemptionUid' }]
-      responses:
-        '200': { description: Reconciliation queued or terminal state returned }
+        '200': { description: Request cancelled }
+        '409': { description: Cancellation is no longer allowed after blockchain submission }
   /api/v1/investments/issuer/redemptions:
     get:
       tags: [Token Redemptions]
@@ -925,13 +869,13 @@ paths:
   /api/v1/investments/issuer/redemptions/{redemptionUid}/approve:
     post:
       tags: [Token Redemptions]
-      summary: Approve redemption and queue the platform token lock
+      summary: Approve the off-chain redemption request
       security: [{ bearerAuth: [] }]
       parameters: [{ $ref: '#/components/parameters/RedemptionUid' }]
       requestBody:
         content: { application/json: { schema: { $ref: '#/components/schemas/ApproveTokenRedemptionInput' } } }
       responses:
-        '200': { description: Approved with lock queued or submitted }
+        '200': { description: Approved; issuer allowance and final redeem remain frontend/on-chain actions }
   /api/v1/investments/issuer/redemptions/{redemptionUid}/reject:
     post:
       tags: [Token Redemptions]
@@ -943,19 +887,6 @@ paths:
         content: { application/json: { schema: { $ref: '#/components/schemas/RejectTokenRedemptionInput' } } }
       responses:
         '200': { description: Redemption rejected }
-  /api/v1/investments/issuer/redemptions/{redemptionUid}/payment/confirm:
-    post:
-      tags: [Token Redemptions]
-      summary: Independently verify issuer USDT payment and queue platform burn
-      security: [{ bearerAuth: [] }]
-      parameters: [{ $ref: '#/components/parameters/RedemptionUid' }]
-      requestBody:
-        required: true
-        content: { application/json: { schema: { $ref: '#/components/schemas/ConfirmTokenPurchaseInput' } } }
-      responses:
-        '200': { description: Current payment/burn lifecycle state }
-        '409': { description: Tokens are not locked or another hash is assigned }
-        '422': { description: Definitive on-chain payment mismatch }
 
   /api/v1/investments/issuer/investors:
     get:
@@ -1304,6 +1235,8 @@ components:
         tokenAgentWalletAddress:
           type: string
           pattern: '^0x[a-fA-F0-9]{40}$'
+          deprecated: true
+          description: Legacy input accepted but ignored. The backend always stores PLATFORM_CONTROLLER_ADDRESS as Token Agent.
         identityManagerWalletAddress:
           type: string
           pattern: '^0x[a-fA-F0-9]{40}$'
@@ -1342,38 +1275,18 @@ components:
           type: string
           pattern: '^0x[a-fA-F0-9]{64}$'
           example: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-    CreateTokenPurchaseInput:
+    ConfirmBlockchainTransactionInput:
       type: object
-      required: [tokenAmount, idempotencyKey]
+      required: [chainId, txHash, tokenUid, expectedAction]
       additionalProperties: false
       properties:
-        tokenAmount:
-          type: string
-          pattern: '^(?:0|[1-9]\d*)(?:\.\d+)?$'
-          example: '10.25'
-        idempotencyKey: { type: string, minLength: 8, maxLength: 100, example: checkout-20260910-0001 }
-    ConfirmTokenPurchaseInput:
-      type: object
-      required: [txHash]
-      additionalProperties: false
-      properties:
+        chainId: { type: integer, example: 11155111 }
         txHash:
           type: string
           pattern: '^0x[a-fA-F0-9]{64}$'
           example: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-    CreateTokenTransferInput:
-      type: object
-      required: [recipientWalletAddress, tokenAmount, idempotencyKey]
-      additionalProperties: false
-      properties:
-        recipientWalletAddress:
-          type: string
-          pattern: '^0x[a-fA-F0-9]{40}$'
-        tokenAmount:
-          type: string
-          pattern: '^(?:0|[1-9]\d*)(?:\.\d+)?$'
-          example: '1.25'
-        idempotencyKey: { type: string, minLength: 8, maxLength: 100, example: send-20260911-0001 }
+        tokenUid: { type: string, format: uuid }
+        expectedAction: { type: string, enum: [INVEST, TRANSFER, REDEMPTION] }
     CreateTokenRedemptionInput:
       type: object
       required: [tokenAmount, idempotencyKey]

@@ -152,7 +152,7 @@ class IdentityRegistryVerifierService {
         throw new RegistryVerificationError('RPC_UNAVAILABLE', 'Could not determine the registry recovery block range.', { transient: true });
       }
       const requiredConfirmations = Math.max(1, Number(
-        this.config.registryConfirmations ?? this.config.confirmations ?? 12,
+        this.config.registryConfirmations ?? this.config.confirmations ?? 2,
       ));
       const safeLatestBlock = Math.max(0, latestBlock - requiredConfirmations + 1);
       const requestedEnd = toBlock === null ? safeLatestBlock : Math.min(safeLatestBlock, Number(toBlock));
@@ -398,7 +398,7 @@ class IdentityRegistryVerifierService {
       }
 
       const requiredConfirmations = Math.max(1, Number(
-        this.config.registryConfirmations ?? this.config.confirmations ?? 12,
+        this.config.registryConfirmations ?? this.config.confirmations ?? 2,
       ));
       if (requiredConfirmations > 1) {
         let latestBlock;

@@ -49,6 +49,7 @@ const createV1Router = () => {
     purchaseController: dependencies.controllers.tokenPurchases,
     redemptionController: dependencies.controllers.tokenRedemptions,
     transferController: dependencies.controllers.tokenTransfers,
+    transactionController: dependencies.controllers.blockchainTransactions,
     invitationController: dependencies.controllers.investorInvitations,
     authenticate: dependencies.authenticate,
     authorize: dependencies.authorize,

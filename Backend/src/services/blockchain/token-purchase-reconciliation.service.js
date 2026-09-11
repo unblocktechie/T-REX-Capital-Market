@@ -13,7 +13,7 @@ const SETTING_KEYS = {
   expirationBatchSize: 'PurchaseExpirationBatchSize', expirationGraceSeconds: 'PurchaseIntentExpiryGraceSeconds',
 };
 const DEFAULTS = {
-  intervalSeconds: 15, blockOffset: 1000, confirmationBlocks: 12, leaseSeconds: 180,
+  intervalSeconds: 15, blockOffset: 1000, confirmationBlocks: 2, leaseSeconds: 180,
   batchSize: 50, eventBatchSize: 200, maxChunksPerRun: 10, expirationBatchSize: 50,
   expirationGraceSeconds: 180,
 };
@@ -103,7 +103,7 @@ class TokenPurchaseReconciliationService {
         // protects the settlement boundary even if the worker runs long after initial confirmation.
         if (!row.paymentTxHash) throw new PurchaseBlockchainError('PAYMENT_PROOF_MISSING', 'Confirmed payment has no transaction hash.');
         await this.blockchain.verifyPayment(row.paymentTxHash, this.expected(row), {
-          confirmations: Math.max(1, Number(this.config.purchasePaymentConfirmations || 1)),
+          confirmations: Math.max(1, Number(this.config.purchasePaymentConfirmations || 2)),
         });
         // A prepared block without a hash means the process may have crashed immediately after
         // broadcasting. Wait until that block is safe and search for the exact mint event first.

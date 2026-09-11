@@ -14,6 +14,7 @@ class TokenPurchaseService {
     mintService,
     investmentRepository = null,
     tokenRepository = null,
+    transactionService = null,
     config = env.blockchain,
     transactionRunner = withTransaction,
   }) {
@@ -22,6 +23,7 @@ class TokenPurchaseService {
     this.mintService = mintService;
     this.investmentRepository = investmentRepository;
     this.tokenRepository = tokenRepository;
+    this.transactionService = transactionService;
     this.config = config;
     this.transactionRunner = transactionRunner;
   }
@@ -279,6 +281,25 @@ class TokenPurchaseService {
     this.assertInvestor(user);
     let row = await this.repository.findOwnedByUid(purchaseUid, user.userUid);
     if (!row) throw new ApiError(404, 'Purchase was not found.', undefined, 'PURCHASE_NOT_FOUND');
+    if (this.transactionService) {
+      const normalized = txHash.toLowerCase();
+      if (row.status !== 'COMPLETED' && !row.paymentTxHash) {
+        row = await this.repository.assignPaymentHash(purchaseUid, normalized, false);
+      }
+      const transaction = await this.transactionService.confirm(user, {
+        chainId: Number(row.chainId),
+        txHash: normalized,
+        tokenUid: row.tokenUid,
+        expectedAction: 'INVEST',
+      });
+      row = await this.repository.findByUid(purchaseUid);
+      return {
+        purchase: this.present(row),
+        idempotent: transaction.status === 'CONFIRMED' && row.status === 'COMPLETED',
+        pendingVerification: transaction.status === 'SUBMITTED',
+        transaction: this.transactionService.present(transaction),
+      };
+    }
     if (row.status === 'EXPIRED') {
       return { purchase: this.present(row), idempotent: true, expired: true };
     }
@@ -309,7 +330,7 @@ class TokenPurchaseService {
     try {
       await this.repository.recordTransaction(purchaseUid, 'PAYMENT', normalized, 'RECEIVED');
       const verified = await this.blockchain.verifyPayment(normalized, this.expected(row), {
-        confirmations: Math.max(1, Number(this.config.purchasePaymentConfirmations || 1)),
+        confirmations: Math.max(1, Number(this.config.purchasePaymentConfirmations || 2)),
       });
       await this.transactionRunner(async (connection) => {
         const changed = await this.repository.confirmPayment(purchaseUid, verified, connection);
@@ -348,6 +369,16 @@ class TokenPurchaseService {
       throw new ApiError(409, 'This payment intent expired and cannot be retried. Create a new purchase intent.', undefined, 'PURCHASE_EXPIRED');
     }
     if (row.status === 'COMPLETED') return { purchase: this.present(row), alreadyCompleted: true };
+    if (this.transactionService && row.paymentTxHash) {
+      const transaction = await this.transactionService.confirm(user, {
+        chainId: Number(row.chainId), txHash: row.paymentTxHash,
+        tokenUid: row.tokenUid, expectedAction: 'INVEST',
+      });
+      return {
+        purchase: this.present(await this.repository.findByUid(purchaseUid)),
+        alreadyCompleted: transaction.status === 'CONFIRMED',
+      };
+    }
     if (row.status === 'MINT_SUBMITTED' && row.errorStage === 'MINT' && row.nextSyncAt === null) {
       await this.repository.resetFailedMint(purchaseUid);
     }

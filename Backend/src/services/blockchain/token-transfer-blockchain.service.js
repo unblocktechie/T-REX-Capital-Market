@@ -57,7 +57,7 @@ class TokenTransferBlockchainService {
     this.transferTopic = this.tokenInterface.getEvent('Transfer').topicHash;
   }
 
-  confirmations() { return Math.max(1, Number(this.config.transferConfirmations || 12)); }
+  confirmations() { return Math.max(1, Number(this.config.transferConfirmations || 2)); }
 
   async withProvider(work) {
     if (!this.config.sepoliaRpcUrl) {

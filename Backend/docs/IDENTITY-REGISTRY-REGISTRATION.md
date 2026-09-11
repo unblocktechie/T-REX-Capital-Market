@@ -143,8 +143,8 @@ rewinds atomically, marks orphaned events non-canonical, moves affected confirma
 
 Operator settings use the `RegistryIndexer*` and `RegistryRecovery*` keys seeded by migration
 `20260909_add_identity_registry_registration.sql`. In production set `REGISTRY_INDEXER_START_BLOCK`
-to the earliest relevant deployed registry block, keep `REGISTRY_CONFIRMATIONS` at a reorg-safe
-value (the default is 12), and monitor checkpoint lag, lease expiry, errors,
+to the earliest relevant deployed registry block, keep `REGISTRY_CONFIRMATIONS` at the configured
+two-block threshold, and monitor checkpoint lag, lease expiry, errors,
 pending age, and reconciliation counts.
 
 ## Database records

@@ -32,6 +32,7 @@ const investor = {
   countryUid: 'country-in',
   countryNumericCode: '356',
   countryListed: true,
+  accreditationType: 'institutional',
   status: 'submitted',
   profileStatus: 'submitted',
   isActive: true,
@@ -84,6 +85,13 @@ test('invitation schemas require token context and validate inbox filters', () =
   assert.equal(schemas.createInvestorInvitation.validate({ tokenUid }).error, undefined);
   assert.ok(schemas.createInvestorInvitation.validate({}).error);
   assert.equal(schemas.investorInvitationsQuery.validate({ status: 'VIEWED' }).value.status, 'VIEWED');
+});
+
+test('issuer investor list exposes accreditationType as a top-level column', async () => {
+  const { service } = makeService();
+  const result = await service.listIssuerInvestors(issuer, { tokenUid, page: 1, limit: 5 });
+  assert.equal(result.items[0].accreditationType, 'institutional');
+  assert.equal(result.items[0].compliance.accreditationType, 'institutional');
 });
 
 test('issuer invite sends one email and transitions the same row to SENT', async () => {

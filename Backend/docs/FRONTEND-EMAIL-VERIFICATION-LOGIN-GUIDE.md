@@ -120,6 +120,11 @@ function resolveAuthenticatedLandingRoute(roleName) {
 - If it returns `403`, do not retry automatically and do not store any session data.
 - Prevent double-clicks while `VERIFYING`; the backend token is intentionally one-time use.
 
+When the user requests another verification email, inspect the successful response from
+`POST /api/v1/auth/resend-verification`. If `data.status` is `ALREADY_VERIFIED`, show
+**User is already verified. You can log in.** and route them to Login instead of showing an
+email-sent confirmation. The backend does not send another email in this state.
+
 ## Important compatibility change
 
 The old endpoint is removed:

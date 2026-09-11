@@ -72,7 +72,7 @@ COMPLETED                         BURN_CONFIRMED
                                   COMPLETED
 ```
 
-The configured confirmation requirement is currently 12 blocks by default. Until the requirement is met, the applicable submitted status remains unchanged and the background worker checks it again.
+The configured confirmation requirement is currently 2 blocks by default. Until the requirement is met, the applicable submitted status remains unchanged and the background worker checks it again.
 
 ## Main status reference
 

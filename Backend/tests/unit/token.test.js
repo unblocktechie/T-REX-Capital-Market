@@ -19,6 +19,7 @@ const organization = {
   walletAddress: '0x1111111111111111111111111111111111111111',
 };
 const issuer = { userUid: 'user-1', roleName: 'Issuer' };
+const PLATFORM_CONTROLLER = '0x9BEFDF75Dc94bbB36532c5d7A74daab28714f579';
 
 test('token information trims names, uppercases symbols, and accepts only supported decimals', () => {
   const valid = schemas.tokenInformation.validate({
@@ -74,6 +75,24 @@ test('saving the launch price initializes the current token price to the same va
   await service.saveInformation(issuer, { initialTokenPrice: 4.25, isDraft: true });
   assert.equal(savedFields.initialTokenPrice, 4.25);
   assert.equal(savedFields.currentTokenPrice, 4.25);
+  assert.equal(savedFields.tokenAgentWalletAddress, PLATFORM_CONTROLLER);
+});
+
+test('creating a token draft assigns the Platform Controller before any wizard step is saved', async () => {
+  let creationData;
+  const service = new TokenService({
+    repository: {
+      findByUserUid: async () => null,
+      createForOrganization: async (_organization, _userUid, data) => {
+        creationData = data;
+        return { tokenUid: 'token-1', ...data };
+      },
+    },
+  });
+
+  const result = await service.getOrCreate(issuer, organization);
+  assert.equal(creationData.tokenAgentWalletAddress, PLATFORM_CONTROLLER);
+  assert.equal(result.tokenAgentWalletAddress, PLATFORM_CONTROLLER);
 });
 
 test('only the owning issuer can update a deployed token current price without changing launch price', async () => {
@@ -138,7 +157,7 @@ test('completed claims require at least one active claim topic and trusted issue
   );
 });
 
-test('token agent and identity manager must equal the approved organization wallet', async () => {
+test('token agent is always the Platform Controller while identity manager remains the organization wallet', async () => {
   const repository = {
     findByUserUid: async () => ({ tokenUid: 'token-1', status: 'draft', currentStep: 'governance' }),
     updateByUserUid: async (userUid, fields) => ({ userUid, ...fields }),
@@ -148,21 +167,22 @@ test('token agent and identity manager must equal the approved organization wall
     organizationRepository: { findByUserUid: async () => organization },
   });
 
-  await assert.rejects(
-    service.saveGovernance(issuer, {
-      tokenAgentWalletAddress: '0x2222222222222222222222222222222222222222',
-      identityManagerWalletAddress: organization.walletAddress,
-      isDraft: false,
-    }),
-    /must match the approved organization walletAddress/,
-  );
-
   const result = await service.saveGovernance(issuer, {
+    // Legacy frontend values are ignored; the backend owns the Token Agent value.
     tokenAgentWalletAddress: organization.walletAddress,
     identityManagerWalletAddress: organization.walletAddress,
     isDraft: false,
   });
   assert.equal(result.currentStep, 'review');
+  assert.equal(result.tokenAgentWalletAddress, PLATFORM_CONTROLLER);
+
+  await assert.rejects(
+    service.saveGovernance(issuer, {
+      identityManagerWalletAddress: '0x2222222222222222222222222222222222222222',
+      isDraft: false,
+    }),
+    /must match the approved organization walletAddress/,
+  );
 });
 
 test('deployed or ready-to-deploy token cannot be edited into another token', () => {
@@ -226,7 +246,7 @@ test('final token submission verifies the frontend transaction and marks the onl
     maxInvestors: 2000,
     maxBalancePerInvestor: 10000,
     countryRestrictionMode: 'allowlist',
-    tokenAgentWalletAddress: organization.walletAddress,
+    tokenAgentWalletAddress: PLATFORM_CONTROLLER,
     identityManagerWalletAddress: organization.walletAddress,
   };
   const service = new TokenService({
@@ -355,7 +375,7 @@ test('failed TREX receipt extraction persists deploymentFailed and a diagnostic 
     maxInvestors: 2000,
     maxBalancePerInvestor: 10000,
     countryRestrictionMode: 'allowlist',
-    tokenAgentWalletAddress: organization.walletAddress,
+    tokenAgentWalletAddress: PLATFORM_CONTROLLER,
     identityManagerWalletAddress: organization.walletAddress,
   };
   const transactionHash = `0x${'b'.repeat(64)}`;

@@ -1,4 +1,9 @@
-# Token Purchase and Settlement
+# Token Purchase and Settlement (legacy)
+
+> Deprecated on 2026-09-11. This document describes retained production-data tables only. New
+> purchases are executed with `PlatformController.buy()` by the investor wallet, confirmed through
+> `/api/v1/investments/transactions/confirm`, and recovered by the canonical indexer. Do not call
+> the purchase create/confirm/retry endpoints. See `FRONTEND-BLOCKCHAIN-TRANSACTION-GUIDE.md`.
 
 This flow lets a registered investor pay in configured Sepolia USDT and receive the deployed
 ERC-3643 token. The backend is authoritative for amounts, payment verification, and mint
@@ -22,8 +27,8 @@ the configured treasury wallet.
 
 ```env
 PURCHASE_USDT_ADDRESS=0x8fC7e68897bd74c4B6340d2DC857a7ED2677aF6A
-PURCHASE_PAYMENT_CONFIRMATIONS=1
-PURCHASE_CONFIRMATIONS=1
+PURCHASE_PAYMENT_CONFIRMATIONS=2
+PURCHASE_CONFIRMATIONS=2
 PURCHASE_INTENT_TTL_MINUTES=15
 PURCHASE_INDEXER_START_BLOCK=0
 PURCHASE_WORKER_ENABLED=true

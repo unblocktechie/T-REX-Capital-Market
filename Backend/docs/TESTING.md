@@ -298,16 +298,19 @@ curl -X PUT http://localhost:3000/api/v1/tokens/me/compliance \
 
 Expected: the response restriction includes the authoritative three-digit `iso3166NumericCode`. Multiple unique countries are supported.
 
-Save governance using the same organization address in both fields:
+Save governance with the organization address as Identity Manager. The Token Agent is assigned by
+the backend from `PLATFORM_CONTROLLER_ADDRESS`:
 
 ```bash
 curl -X PUT http://localhost:3000/api/v1/tokens/me/governance \
   -H "Authorization: Bearer ISSUER_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"tokenAgentWalletAddress":"ORGANIZATION_WALLET_ADDRESS","identityManagerWalletAddress":"ORGANIZATION_WALLET_ADDRESS","isDraft":false}'
+  -d '{"identityManagerWalletAddress":"ORGANIZATION_WALLET_ADDRESS","isDraft":false}'
 ```
 
-A different valid wallet must return `400`.
+Expected: the response contains
+`tokenAgentWalletAddress: 0x9BEFDF75Dc94bbB36532c5d7A74daab28714f579`. A different valid
+Identity Manager wallet must return `400`. A legacy client-supplied Token Agent is ignored.
 
 Review and submit:
 
@@ -416,7 +419,39 @@ ONCHAINID, and at least one `SIGNED` issuer claim. Use the investor JWT.
    WHERE interestUid = 'INTEREST_UID' AND eventType = 'registered';
    ```
 
-## Investor token purchase and mint settlement
+## Frontend wallet transaction and fallback indexer
+
+1. Apply `database/migrations/20260911_add_canonical_blockchain_transactions.sql`, configure
+   `PLATFORM_CONTROLLER_ADDRESS`, payment token, RPC, chain ID, confirmation count, and the earliest
+   required `TRANSACTION_INDEXER_START_BLOCK`.
+2. Invest: from the registered investor wallet, approve live USDT allowance when needed and call
+   `PlatformController.buy(tokenAddress, tokenAmountRaw)`. The backend must not be required for
+   either wallet transaction.
+3. Submit the resulting hash to `POST /api/v1/investments/transactions/confirm` with chain ID,
+   token UID, and `expectedAction=INVEST`. Verify exact sender, controller target/function, token,
+   issue event, USDT event/direction, controller quote, canonical block, and confirmations. Expect
+   `SUBMITTED` until safe and then `CONFIRMED`.
+4. Transfer: call token `transfer()` directly, then use the same endpoint with
+   `expectedAction=TRANSFER`. Verify the exact event values are decoded from chain data.
+5. Redemption: complete the off-chain request and issuer decision, approve issuer USDT allowance,
+   then call `PlatformController.redeem()` from the investor wallet. Confirm it with
+   `expectedAction=REDEMPTION`; verify atomic burn and issuer-to-investor settlement.
+6. Repeat every confirmation call and re-index each block. Confirm only one row exists per
+   `(chainId, transactionHash, type)` and no duplicate legacy transition/history is created.
+7. Stop the backend, execute one transaction, restart, and verify `canonicalTransactions` resumes
+   from `blockchainIndexerCheckpoint`, finds the missed event, and creates the same `CONFIRMED` row.
+8. Test a token added after the global checkpoint advanced. Verify `blockchainIndexedContract`
+   backfills from its deployment block without rewinding all other contracts.
+9. Test wrong chain, sender, target, function, token, quote, event, reverted receipt, fake hash, and
+   block-hash mismatch. None may become `CONFIRMED`. A transient RPC/database failure must not
+   advance the affected checkpoint range.
+10. Test role scope and CSV export: investors see their wallet only, issuers see their organizations
+    only, Super Administrator sees all, and exports respect every filter.
+
+The sections below describe read-only legacy tables retained during production-data migration.
+Their transaction-orchestration POST endpoints and runners are retired.
+
+## Legacy investor token purchase and mint settlement
 
 1. Configure Sepolia RPC, platform signer, and `PURCHASE_USDT_ADDRESS`. Confirm the platform wallet
    is a Token Agent for the deployed token and use an investor interest with status `registered`.
@@ -494,7 +529,7 @@ ONCHAINID, and at least one `SIGNED` issuer claim. Use the investor JWT.
     by token name, symbol, token address, and issuer company. Confirm a second investor cannot see
     the first investor's portfolio.
 
-## Manual token redemption
+## Legacy manual token redemption settlement
 
 1. Apply `database/migrations/20260910_add_token_redemption_flow.sql`, configure the redemption
    environment values, and restart the API so the redemption worker starts.
@@ -504,7 +539,7 @@ ONCHAINID, and at least one `SIGNED` issuer claim. Use the investor JWT.
 3. Sign the returned EIP-712 `authorization.typedData` with the registered investor wallet and call
    Authorize. Verify a different wallet signature and an expired signature both return `422`.
 4. With the owning issuer token, list/detail the request and approve it. Verify another issuer gets
-   `404`. Poll until the platform lock has 12 confirmations and status is `TOKENS_LOCKED`.
+   `404`. Poll until the platform lock has 2 confirmations and status is `TOKENS_LOCKED`.
 5. From the exact `issuerPaymentWalletAddress`, call USDT `transfer(investorWalletAddress,
    usdtAmountRaw)`. Submit only the hash to the payment-confirm endpoint. Wrong sender, recipient,
    amount, contract, reverted receipt, and non-canonical block must never advance payment.
@@ -563,7 +598,7 @@ ONCHAINID, and at least one `SIGNED` issuer claim. Use the investor JWT.
    WHERE invitationUid = 'INVITATION_UID';
    ```
 
-## Investor token transfer
+## Legacy investor token transfer
 
 1. Apply `database/migrations/20260911_add_token_transfer_flow.sql`, configure the transfer
    environment variables, and restart the API so the transfer worker starts.

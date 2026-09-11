@@ -44,7 +44,7 @@ not change it to `FAILED`.
 | `ClaimRecoveryEnabled` | `true` | Enables targeted recovery |
 | `ClaimRecoveryIntervalSeconds` | `15` | Worker interval |
 | `ClaimRecoveryBlockOffset` | `1000` | Maximum blocks per log query |
-| `ClaimRecoveryConfirmationBlocks` | `12` | Safe-head/reorg buffer |
+| `ClaimRecoveryConfirmationBlocks` | `2` | Safe-head/reorg buffer |
 | `ClaimRecoveryLookbackBlocks` | `200000` | Legacy-row fallback only |
 | `ClaimRecoveryBatchSize` | `100` | Candidates per run |
 

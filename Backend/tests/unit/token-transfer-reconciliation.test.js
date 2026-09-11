@@ -44,7 +44,7 @@ test('recovers a missing transaction hash with the targeted fallback and confirm
     dependencies: { leaseOwner: 'test' },
   });
   const stats = { hashesRecovered: 0, transfersConfirmed: 0, pendingConfirmations: 0, errors: 0 };
-  await service.reconcile(state.row, 120, 12, stats);
+  await service.reconcile(state.row, 120, 2, stats);
   assert.equal(state.row.status, 'COMPLETED');
   assert.equal(state.row.txHash, TX);
   assert.equal(stats.hashesRecovered, 1);
@@ -74,11 +74,11 @@ test('global indexer stores events before advancing its checkpoint', async () =>
     repository,
     checkpointRepository,
     blockchain: {
-      chainHead: async () => ({ chainId: 11155111, latestBlock: 112 }),
+      chainHead: async () => ({ chainId: 11155111, latestBlock: 102 }),
       scanEvents: async () => [{ txHash: TX }],
       blockHash: async () => `0x${'c'.repeat(64)}`,
     },
-    config: { transferWorkerEnabled: true, transferIndexerConfirmations: 12 },
+    config: { transferWorkerEnabled: true, transferIndexerConfirmations: 2 },
     dependencies: { leaseOwner: 'test' },
   });
   const result = await service.run();

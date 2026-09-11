@@ -69,7 +69,7 @@ class IdentityRegistryRegistrationService {
     const requiredAddresses = [
       ['identityRegistryAddress', context.identityRegistryAddress],
       ['issuerWalletAddress', context.issuerWalletAddress],
-      ['tokenAgentWalletAddress', context.tokenAgentWalletAddress],
+      ['identityManagerWalletAddress', context.identityManagerWalletAddress],
       ['investorWalletAddress', context.investorWalletAddress],
       ['investorIdentityAddress', context.investorIdentityAddress],
     ];
@@ -77,8 +77,8 @@ class IdentityRegistryRegistrationService {
     if (invalid) {
       throw new ApiError(409, `Required blockchain value ${invalid[0]} is unavailable or invalid.`, undefined, 'REGISTRY_PREREQUISITES_INCOMPLETE');
     }
-    if (ethers.getAddress(context.tokenAgentWalletAddress) !== ethers.getAddress(context.issuerWalletAddress)) {
-      throw new ApiError(409, 'Token agent does not match the issuer organization wallet.', undefined, 'TOKEN_AGENT_MISMATCH');
+    if (ethers.getAddress(context.identityManagerWalletAddress) !== ethers.getAddress(context.issuerWalletAddress)) {
+      throw new ApiError(409, 'Identity manager does not match the issuer organization wallet.', undefined, 'IDENTITY_MANAGER_MISMATCH');
     }
     const country = Number(context.countryNumericCode);
     if (!context.countryActive || context.countryDeleted || !Number.isInteger(country) || country < 1 || country > 999) {

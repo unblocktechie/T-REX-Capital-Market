@@ -1,4 +1,8 @@
-# Frontend Token Purchase Flow
+# Frontend Token Purchase Flow (deprecated)
+
+> Do not implement this legacy create/confirm/retry flow. Use
+> `FRONTEND-BLOCKCHAIN-TRANSACTION-GUIDE.md`; the investor now calls `PlatformController.buy()`
+> directly and reports only the observed hash to the optional canonical confirmation endpoint.
 
 This guide describes the investor purchase screen, MetaMask interaction, confirmation call, and
 token-specific history table. The backend response `data.status` is the settlement source of truth.

@@ -35,8 +35,9 @@ Authorization: Bearer ISSUER_TOKEN
 
 Only investor-role users with active, non-deleted, submitted profiles are returned. The API first
 proves that `tokenUid` belongs to the authenticated issuer, the organization is approved and active,
-and the token is deployed. Supported invitation filters are `all`, `notInvited`, `PENDING`, `SENT`,
-and `VIEWED`.
+and the token is deployed. It returns `accreditationType` as a top-level field on every investor row;
+the field also remains in the `compliance` object for backward compatibility. Supported invitation
+filters are `all`, `notInvited`, `PENDING`, `SENT`, and `VIEWED`.
 
 Each investor row includes:
 

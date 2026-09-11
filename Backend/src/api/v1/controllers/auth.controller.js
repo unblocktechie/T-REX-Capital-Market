@@ -7,8 +7,16 @@ const createAuthController = (authService) => ({
     data: await authService.signup(req.body),
   }),
   resendVerification: async (req, res) => {
-    await authService.resendVerification(req.body.email);
-    return sendSuccess(req, res, { message: 'If the account is eligible, a verification email has been sent.' });
+    const result = await authService.resendVerification(req.body.email);
+    if (result.status === 'ALREADY_VERIFIED') {
+      return sendSuccess(req, res, {
+        message: 'User is already verified. You can log in.',
+        data: result,
+      });
+    }
+    return sendSuccess(req, res, {
+      message: 'If the account is eligible, a verification email has been sent.',
+    });
   },
   verifyEmail: async (req, res) => sendSuccess(req, res, {
     message: 'Email verified and login successful.', data: await authService.verifyEmail(req.body.token),

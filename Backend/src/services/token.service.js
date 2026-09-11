@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const ethers = require('ethers');
+const { env } = require('../core/config/env');
 const { ApiError } = require('../core/errors/api-error');
 const { withTransaction } = require('../database/connection');
 const { logger } = require('./common/log.service');
@@ -23,7 +24,7 @@ const DEPLOYMENT_REQUIRED_FIELDS = [
 ];
 
 const ORGANIZATION_WALLET_FIELDS = [
-  'trustedClaimIssuerWalletAddress', 'tokenAgentWalletAddress', 'identityManagerWalletAddress',
+  'trustedClaimIssuerWalletAddress', 'identityManagerWalletAddress',
 ];
 
 const RPC_ERROR_CODES = new Set([
@@ -55,6 +56,7 @@ class TokenService {
     imageService,
     deploymentReceiptService,
     attemptRepository,
+    config = env.blockchain,
     transactionRunner = withTransaction,
   }) {
     this.repository = repository;
@@ -64,7 +66,21 @@ class TokenService {
     this.imageService = imageService;
     this.deploymentReceiptService = deploymentReceiptService;
     this.attemptRepository = attemptRepository;
+    this.config = config;
     this.transactionRunner = transactionRunner;
+  }
+
+  platformControllerAddress() {
+    const address = this.config?.platformControllerAddress;
+    if (!address || !ethers.isAddress(address)) {
+      throw new ApiError(
+        500,
+        'The Platform Controller Token Agent is not configured correctly.',
+        undefined,
+        'PLATFORM_CONTROLLER_NOT_CONFIGURED',
+      );
+    }
+    return ethers.getAddress(address);
   }
 
   assertIssuer(user) {
@@ -93,7 +109,8 @@ class TokenService {
   }
 
   // Reusable pre-deployment eligibility gate. Verifies every configuration field,
-  // that governance wallets equal the approved organization wallet, that at least
+  // that issuer-managed governance wallets equal the approved organization wallet, that the
+  // Token Agent equals the backend-configured Platform Controller, that at least
   // one claim topic and one country restriction exist, and that the optimized image
   // is still present. Returns the loaded claim topics and country restrictions.
   async assertTokenReadyForDeployment(token, organization) {
@@ -102,6 +119,10 @@ class TokenService {
       if (String(token[field]).toLowerCase() !== organization.walletAddress.toLowerCase()) {
         throw ApiError.badRequest(`${field} must match the approved organization walletAddress.`);
       }
+    }
+    if (!ethers.isAddress(token.tokenAgentWalletAddress)
+      || ethers.getAddress(token.tokenAgentWalletAddress) !== this.platformControllerAddress()) {
+      throw ApiError.badRequest('tokenAgentWalletAddress must match the configured Platform Controller address.');
     }
     const [claimTopics, countryRestrictions] = await Promise.all([
       this.repository.listClaimTopics(token.tokenUid),
@@ -135,6 +156,7 @@ class TokenService {
     const existing = await this.repository.findByUserUid(user.userUid, executor);
     if (existing) return existing;
     return this.repository.createForOrganization(organization, user.userUid, {
+      tokenAgentWalletAddress: this.platformControllerAddress(),
       currentStep: 'tokenInformation',
       isDraft: true,
       status: 'draft',
@@ -163,6 +185,9 @@ class TokenService {
     const { isDraft, ...fields } = input;
     const update = {
       ...fields,
+      // Never accept the Token Agent from client state. Every new/editable token uses the
+      // configured Platform Controller contract as its authoritative Token Agent.
+      tokenAgentWalletAddress: this.platformControllerAddress(),
       ...(fields.initialTokenPrice !== undefined
         ? { currentTokenPrice: fields.initialTokenPrice }
         : {}),
@@ -286,19 +311,15 @@ class TokenService {
     const current = await this.getOrCreate(user, organization);
     this.assertEditable(current);
     this.validateOrganizationWallet(
-      'tokenAgentWalletAddress',
-      input.tokenAgentWalletAddress,
-      organization.walletAddress,
-      input.isDraft,
-    );
-    this.validateOrganizationWallet(
       'identityManagerWalletAddress',
       input.identityManagerWalletAddress,
       organization.walletAddress,
       input.isDraft,
     );
     return this.repository.updateByUserUid(user.userUid, {
-      tokenAgentWalletAddress: input.tokenAgentWalletAddress,
+      // `tokenAgentWalletAddress` in a legacy frontend payload is intentionally ignored.
+      // The backend owns this security-sensitive deployment parameter.
+      tokenAgentWalletAddress: this.platformControllerAddress(),
       identityManagerWalletAddress: input.identityManagerWalletAddress,
       currentStep: input.isDraft ? current.currentStep : 'review',
       isDraft: true,

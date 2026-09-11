@@ -16,6 +16,8 @@
 RENAME TABLE
   `authtoken` TO `authToken`,
   `blockchainindexercheckpoint` TO `blockchainIndexerCheckpoint`,
+  `blockchainindexedcontract` TO `blockchainIndexedContract`,
+  `blockchaintransaction` TO `blockchainTransaction`,
   `citymaster` TO `cityMaster`,
   `claimtopicmaster` TO `claimTopicMaster`,
   `countrymaster` TO `countryMaster`,

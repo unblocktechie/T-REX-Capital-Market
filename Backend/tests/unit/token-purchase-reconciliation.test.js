@@ -84,7 +84,7 @@ test('worker treats insufficient mint confirmations as queued progress, not a fa
   };
   const blockchain = {
     verifyMint: async () => {
-      throw new PurchaseBlockchainError('INSUFFICIENT_CONFIRMATIONS', 'Transaction has 1 confirmation(s); 12 required.', { pending: true });
+      throw new PurchaseBlockchainError('INSUFFICIENT_CONFIRMATIONS', 'Transaction has 1 confirmation(s); 2 required.', { pending: true });
     },
   };
   const service = new TokenPurchaseReconciliationService({
@@ -116,7 +116,7 @@ test('runner expires no-hash intents only after the USDT indexer reaches the saf
   };
   const checkpointRepository = {
     ensureCheckpoint: async () => {}, acquireLease: async () => true,
-    findCheckpoint: async () => ({ lastIndexedBlock: 88, startBlock: 1 }),
+    findCheckpoint: async () => ({ lastIndexedBlock: 98, startBlock: 1 }),
     releaseLease: async () => {},
   };
   const service = new TokenPurchaseReconciliationService({

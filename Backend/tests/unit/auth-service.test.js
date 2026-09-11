@@ -28,6 +28,26 @@ test('forgot password rejects an inactive registered account', async () => {
   );
 });
 
+test('resend verification reports an already-verified user without sending another email', async () => {
+  let emailSent = false;
+  const service = new AuthService({
+    userRepository: { findByEmail: async () => ({ userUid: 'user-1', emailVerified: true, isActive: true }) },
+    roleRepository: {}, authTokenRepository: {},
+    emailService: { sendEmail: async () => { emailSent = true; } },
+  });
+  const result = await service.resendVerification('verified@example.com');
+  assert.deepEqual(result, { status: 'ALREADY_VERIFIED', emailVerified: true });
+  assert.equal(emailSent, false);
+});
+
+test('resend verification keeps unknown and inactive accounts on the generic response state', async () => {
+  const unknown = createService(null);
+  assert.deepEqual(await unknown.resendVerification('missing@example.com'), { status: 'REQUEST_ACCEPTED' });
+
+  const inactive = createService({ userUid: 'user-1', emailVerified: false, isActive: false });
+  assert.deepEqual(await inactive.resendVerification('inactive@example.com'), { status: 'REQUEST_ACCEPTED' });
+});
+
 const verifiedIdentity = {
   userUid: 'user-1',
   roleUid: 'role-investor',

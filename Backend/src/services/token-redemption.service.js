@@ -259,7 +259,8 @@ class TokenRedemptionService {
       await this.transactionRunner(async (connection) => {
         const changed = await this.repository.transition(redemptionUid, 'PENDING_ISSUER_APPROVAL', {
           status: 'ISSUER_APPROVED', issuerDecisionAt: new Date(), issuerDecisionNote: note || null,
-          lockStatus: 'QUEUED', syncStatus: 'QUEUED', syncRequestedAt: new Date(), nextSyncAt: new Date(),
+          lockStatus: 'NOT_REQUIRED', paymentStatus: 'AWAITING_ISSUER', burnStatus: 'NOT_REQUIRED',
+          unlockStatus: 'NOT_REQUIRED', syncStatus: 'IDLE', syncRequestedAt: null, nextSyncAt: null,
         }, connection);
         if (!changed) throw new ApiError(409, 'Redemption state changed during approval.', undefined, 'REDEMPTION_STATE_CHANGED');
         await this.repository.addHistory({
@@ -270,8 +271,11 @@ class TokenRedemptionService {
       });
       row = await this.repository.findByUid(redemptionUid);
     }
-    const execution = row.status === 'ISSUER_APPROVED' ? await this.executionService.submit('LOCK', row) : { row, idempotent: true };
-    return { redemption: this.present(execution.row || row, { includeAuthorization: false }), lockSubmitted: Boolean(execution.submitted), idempotent: execution.idempotent };
+    return {
+      redemption: this.present(row, { includeAuthorization: false }),
+      lockSubmitted: false,
+      idempotent: row.status !== 'ISSUER_APPROVED',
+    };
   }
 
   async reject(user, redemptionUid, reason) {
@@ -377,7 +381,7 @@ class TokenRedemptionService {
     const row = await this.repository.findOwned(redemptionUid, user.userUid);
     if (!row) throw new ApiError(404, 'Redemption was not found.', undefined, 'REDEMPTION_NOT_FOUND');
     if (row.status === 'CANCELLED') return { redemption: this.present(row), idempotent: true };
-    if (['PENDING_INVESTOR_AUTHORIZATION', 'PENDING_ISSUER_APPROVAL'].includes(row.status)) {
+    if (['PENDING_INVESTOR_AUTHORIZATION', 'PENDING_ISSUER_APPROVAL', 'ISSUER_APPROVED'].includes(row.status)) {
       await this.transactionRunner(async (connection) => {
         const changed = await this.repository.transition(redemptionUid, row.status, {
           status: 'CANCELLED', lockStatus: 'NOT_REQUIRED', paymentStatus: 'NOT_REQUIRED',
@@ -391,26 +395,7 @@ class TokenRedemptionService {
       });
       return { redemption: this.present(await this.repository.findByUid(redemptionUid)), idempotent: false };
     }
-    if (['ISSUER_APPROVED', 'TOKEN_LOCK_SUBMITTED', 'TOKENS_LOCKED'].includes(row.status)) {
-      await this.transactionRunner(async (connection) => {
-        const changed = await this.repository.transition(redemptionUid, row.status, {
-          status: 'CANCELLATION_PENDING', paymentStatus: 'NOT_REQUIRED', burnStatus: 'NOT_REQUIRED',
-          unlockStatus: row.lockStatus === 'CONFIRMED' ? 'QUEUED' : 'NOT_STARTED',
-          unlockAmountRaw: row.lockStatus === 'CONFIRMED' ? String(row.tokenAmountRaw) : null,
-          syncStatus: 'QUEUED', syncRequestedAt: new Date(), nextSyncAt: new Date(),
-        }, connection);
-        if (!changed) throw new ApiError(409, 'Redemption changed during cancellation.', undefined, 'REDEMPTION_STATE_CHANGED');
-        await this.repository.addHistory({
-          redemptionUid, eventType: 'CANCELLATION_REQUESTED', fromStatus: row.status,
-          toStatus: 'CANCELLATION_PENDING', actorRole: 'investor', actorUserUid: user.userUid,
-          message: 'Cancellation queued; any confirmed token lock will be released first.',
-        }, connection);
-      });
-      const current = await this.repository.findByUid(redemptionUid);
-      if (current.unlockStatus === 'QUEUED') await this.executionService.submit('UNLOCK', current);
-      return { redemption: this.present(await this.repository.findByUid(redemptionUid)), idempotent: false };
-    }
-    throw new ApiError(409, 'Redemption cannot be cancelled after issuer payment submission.', undefined, 'REDEMPTION_CANCELLATION_NOT_ALLOWED');
+    throw new ApiError(409, 'Redemption cannot be cancelled after its blockchain transaction is submitted.', undefined, 'REDEMPTION_CANCELLATION_NOT_ALLOWED');
   }
 
   async retry(user, redemptionUid) {
