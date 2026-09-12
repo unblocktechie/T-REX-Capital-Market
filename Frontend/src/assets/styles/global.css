@@ -5162,19 +5162,21 @@ body,
   display: inline-flex;
   max-width: 100%;
   align-items: center;
-  gap: 12px;
   margin-bottom: 14px;
 }
 
 .trex-loader__brand-logo {
-  flex: 0 0 auto;
+  min-width: 0;
+  color: var(--brand-panel-text);
 }
 
+/* Use the same complete T-REX lockup and portrait-shield treatment as the
+   application sidebar so the route/onboarding loader never crops the logo. */
 .trex-loader__brand .trex-logo__mark {
-  width: 38px;
-  height: 38px;
-  flex-basis: 38px;
-  padding: 3px;
+  width: 42px;
+  height: 42px;
+  flex-basis: 42px;
+  padding: 0;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--text) 14%, var(--border));
   border-radius: 12px;
@@ -5182,12 +5184,10 @@ body,
   box-shadow: 0 8px 22px rgba(15, 23, 42, 0.12);
 }
 
-/* Keep the loader brand mark identical to the sidebar lockup. The source
-   shield is portrait-oriented, so forcing it to fill a square clips it. */
 .trex-loader__brand .trex-mark-image {
   display: block;
   width: auto;
-  height: 100%;
+  height: 33px;
   max-width: 100%;
   max-height: 100%;
   margin-inline: auto;
@@ -5196,25 +5196,14 @@ body,
   filter: drop-shadow(0 2px 3px rgba(15, 23, 42, 0.16));
 }
 
-.trex-loader__brand-copy {
-  display: grid;
-  min-width: 0;
-}
-
-.trex-loader__brand-copy strong {
+.trex-loader__brand .trex-logo__copy strong {
   color: var(--brand-panel-text);
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.1;
-  letter-spacing: 0.02em;
+  font-size: 15px;
 }
 
-.trex-loader__brand-copy small {
+.trex-loader__brand .trex-logo__copy small {
   color: var(--brand-panel-muted);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
+  opacity: 1;
 }
 
 .trex-loader__eyebrow {
@@ -6984,6 +6973,26 @@ body,
   line-height: 1.65;
 }
 
+.issuer-dashboard-next-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: 760px;
+  margin-top: 14px;
+  border-left: 3px solid color-mix(in srgb, var(--primary-500) 55%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--primary-500) 5%, var(--surface));
+  padding: 9px 11px;
+  color: var(--text-soft);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.issuer-dashboard-next-step strong {
+  flex: 0 0 auto;
+  color: var(--text);
+}
+
 .issuer-dashboard-hero-live__actions {
   display: flex;
   flex-wrap: wrap;
@@ -7636,6 +7645,10 @@ button.issuer-dashboard-live-metric:disabled {
   .issuer-dashboard-hero-live h2 {
     font-size: 28px;
   }
+  .issuer-dashboard-next-step {
+    flex-direction: column;
+    gap: 2px;
+  }
   .issuer-dashboard-metric-grid {
     grid-template-columns: 1fr;
   }
@@ -7706,5 +7719,171 @@ button.issuer-dashboard-live-metric:disabled {
   .issuer-dashboard-action-item__icon {
     width: 34px;
     height: 34px;
+  }
+}
+
+/* ========================================================================== 
+   Sidebar action indicators
+   Quiet, actionable notification cues for issuer/investor tasks that need the
+   signed-in user's attention. Counts remain visible without changing routes.
+   ========================================================================== */
+.sidebar-link__icon-wrap {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+}
+
+.sidebar-link__icon-wrap > svg {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+}
+
+.sidebar-link__attention-dot {
+  position: absolute;
+  top: -4px;
+  right: -5px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--sidebar-bg);
+  border-radius: 999px;
+  background: var(--success-500);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--success-500) 13%, transparent);
+}
+
+.sidebar-link__attention-badge {
+  display: inline-flex;
+  min-width: 23px;
+  height: 23px;
+  margin-left: auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--success-500) 34%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--success-500) 15%, transparent);
+  padding: 0 6px;
+  color: color-mix(in srgb, var(--success-500) 86%, white 14%);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.sidebar-link--attention:not(.is-active) {
+  color: color-mix(in srgb, var(--brand-panel-text) 90%, var(--brand-link-muted));
+}
+
+.sidebar-link--attention:not(.is-active):hover .sidebar-link__attention-dot {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--success-500) 17%, transparent);
+}
+
+/* A collapsed desktop sidebar still needs to communicate that work is waiting. */
+.sidebar--collapsed .sidebar-link__attention-badge {
+  display: none;
+}
+
+.sidebar--collapsed .sidebar-link__attention-dot {
+  display: block;
+}
+
+@media (max-width: 900px) {
+  .sidebar--collapsed .sidebar-link__attention-badge {
+    display: inline-flex;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .sidebar-link__attention-dot {
+    animation: sidebar-attention-pulse 2.4s ease-out infinite;
+  }
+}
+
+@keyframes sidebar-attention-pulse {
+  0%, 55%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--success-500) 12%, transparent); }
+  75% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--success-500) 0%, transparent); }
+}
+
+/*
+ * Pending user actions are informational, not warnings. A calm blue treatment
+ * is easier to scan on the dark navigation and avoids making normal pending
+ * work feel like an error. Genuinely new inbox items continue to use green.
+ */
+.sidebar-link--attention-action .sidebar-link__attention-dot {
+  background: #69b7ff;
+  box-shadow: 0 0 0 3px rgb(105 183 255 / 16%);
+}
+
+.sidebar-link__attention-badge--action {
+  border-color: rgb(105 183 255 / 42%);
+  background: rgb(47 128 237 / 20%);
+  color: #dceeff;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 3%);
+}
+
+/* Give a pending-action row a very light cue without competing with active navigation. */
+.sidebar-link--attention-action:not(.is-active) {
+  background: linear-gradient(90deg, rgb(47 128 237 / 7%), transparent 78%);
+}
+
+.sidebar-link--attention-action:not(.is-active):hover {
+  background: linear-gradient(90deg, rgb(47 128 237 / 12%), rgb(255 255 255 / 3%));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .sidebar-link--attention-action .sidebar-link__attention-dot {
+    animation-name: sidebar-attention-pulse-action;
+  }
+}
+
+@keyframes sidebar-attention-pulse-action {
+  0%, 55%, 100% { box-shadow: 0 0 0 3px rgb(105 183 255 / 15%); }
+  75% { box-shadow: 0 0 0 6px rgb(105 183 255 / 0%); }
+}
+
+/* Clickable application brand: gives issuer and investor users a predictable way back to Dashboard. */
+.brand__home-link {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  border-radius: 12px;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+}
+
+.brand__home-link:hover {
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.brand__home-link:active {
+  transform: translateY(1px);
+}
+
+.brand__home-link:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--brand-panel-text) 78%, transparent);
+  outline-offset: 3px;
+}
+
+.sidebar--collapsed .brand__home-link {
+  justify-content: center;
+}
+
+/* Keep the brand lockup sizing identical after making it a navigation link. */
+.brand__home-link {
+  flex: 1;
+}
+
+.sidebar--collapsed .brand__home-link {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 900px) {
+  .sidebar--collapsed .brand__home-link {
+    flex: 1;
   }
 }

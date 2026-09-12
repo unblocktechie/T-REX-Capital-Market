@@ -70,7 +70,7 @@ export function IssuanceLayout({
     <div className={cn('issuance-page', pageClassName)}>
       <div className="issuance-page__topbar">
         <button type="button" className="issuance-back-link" onClick={() => navigate(ROUTES.createToken)}>
-          <ArrowLeft size={17} /> Issuance overview
+          <ArrowLeft size={17} /> Asset setup overview
         </button>
         <span className="issuance-progress-copy">
           Step {currentStep?.number || 1} of {TOKEN_ISSUANCE_STEPS.length}
@@ -92,6 +92,20 @@ export function IssuanceLayout({
         </div>
       </header>
 
+      {currentStep?.guidance ? (
+        <section className="issuance-step-guidance" aria-label="Step guidance">
+          <span className="issuance-step-guidance__number">{currentStep.number}</span>
+          <div>
+            <strong>What to do</strong>
+            <p>{currentStep.guidance}</p>
+          </div>
+          <div>
+            <strong>Why it matters</strong>
+            <p>{currentStep.impact}</p>
+          </div>
+        </section>
+      ) : null}
+
       {bootstrap.error ? (
         <div className="issuance-backend-error">
           <InfoCallout title="Connection required" tone="warning" icon={AlertTriangle}>
@@ -109,12 +123,12 @@ export function IssuanceLayout({
       ) : null}
 
       {backend.isLocked ? (
-        <InfoCallout title="Token configuration is locked" tone="info">
+        <InfoCallout title="Asset setup is locked" tone="info">
           {normalizedBackendStatus === 'deploymentpending'
-            ? 'Token creation is in progress. Locked token settings cannot be changed while the wallet transaction is being submitted and verified.'
+            ? 'Asset creation is in progress. These settings cannot be changed while the required account actions are being submitted and verified.'
             : normalizedBackendStatus === 'deploymentfailed'
-              ? 'The previous token-creation transaction did not complete. Review its status before trying again; locked token settings remain unchanged.'
-              : 'This token setup has already been validated for creation. Its locked settings can no longer be changed.'}
+              ? 'The previous asset-creation action did not complete. Review its status before trying again; the saved settings remain unchanged.'
+              : 'This asset setup has already been validated for creation. Its locked settings can no longer be changed.'}
         </InfoCallout>
       ) : null}
 

@@ -3,6 +3,7 @@ import { ArrowLeft, LockKeyhole, RefreshCw } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ApplicationHistory } from '@/components/application-history/ApplicationHistory';
+import { InvestmentJourneyTracker } from '@/components/application-history/InvestmentJourneyTracker';
 import { ApplicationSummary } from '@/components/application-history/ApplicationSummary';
 import { SecureDocumentPreviewModal } from '@/components/common/SecureDocumentPreviewModal';
 import { UploadMissingDocumentsModal } from '@/components/investor-marketplace/MarketplaceModals';
@@ -15,6 +16,7 @@ import { investorMarketplaceService } from '@/services/investor/investorMarketpl
 import { MARKETPLACE_STATUS } from '@/services/investor/investorMarketplaceLocalService';
 import { getErrorMessage } from '@/utils/error';
 import { isApplicationPurchaseReady } from '@/utils/investmentPurchase';
+import { getInvestmentJourney } from '@/utils/investmentJourney';
 
 export default function ApplicationDetailsPage() {
   const { interestUid } = useParams();
@@ -79,6 +81,13 @@ export default function ApplicationDetailsPage() {
   const canResubmit = Boolean(history?.summary?.canResubmit ?? application?.interest?.canResubmit);
 
   const purchaseReady = useMemo(() => isApplicationPurchaseReady(history, application), [application, history]);
+  const journey = useMemo(() => getInvestmentJourney({
+    status: application?.interest?.status || history?.summary?.status || history?.status || application?.status,
+    viewerRole: 'investor',
+    purchaseReady,
+    canResubmit,
+    rejectReasonType: currentRejectType,
+  }), [application, canResubmit, currentRejectType, history, purchaseReady]);
 
 
   const supportContext = useMemo(() => {
@@ -208,27 +217,37 @@ export default function ApplicationDetailsPage() {
 
       <header className="application-detail-header">
         <div>
-          <span className="eyebrow">Application tracking</span>
+          <span className="eyebrow">Your investment application</span>
           <h1>Application Details</h1>
-          <p>Review the complete audit trail, exact document snapshots, rejection reasons, and current status for this investment application.</p>
+          <p>See where your application is, who needs to act next, and what will happen after the current step.</p>
         </div>
         <div className="application-detail-header__actions">
           <Button variant="secondary" icon={RefreshCw} loading={refreshing} onClick={() => void loadApplication({ silent: true })}>Refresh</Button>
         </div>
       </header>
 
+      <InvestmentJourneyTracker
+        journey={journey}
+        action={purchaseReady ? (
+          <Button onClick={() => navigate(ROUTES.purchaseToken(interestUid))}>Invest Now</Button>
+        ) : journey.actionKey === 'verification' ? (
+          <Button onClick={() => navigate(ROUTES.applicationClaim(interestUid))}>Complete Verification</Button>
+        ) : journey.actionKey === 'reupload' ? (
+          <Button loading={documentTypesLoading} onClick={() => void openReupload()}>Upload Requested Documents</Button>
+        ) : null}
+      />
+
       <ApplicationSummary
         application={application}
         history={history}
         purchaseReady={purchaseReady}
-        onPurchase={purchaseReady ? () => navigate(ROUTES.purchaseToken(interestUid)) : undefined}
       />
 
       <section className="application-history-section">
         <div className="application-history-section__heading">
           <div>
-            <h2>Application History</h2>
-            <p>Review your application attempts and status updates.</p>
+            <h2>Updates & documents</h2>
+            <p>See what happened at each step and review the documents connected to your application.</p>
           </div>
           <span>{history.timeline?.length || 0} event{history.timeline?.length === 1 ? '' : 's'}</span>
         </div>

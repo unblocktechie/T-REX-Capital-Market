@@ -17,6 +17,16 @@ import { getErrorMessage } from '@/utils/error';
 
 const PAGE_SIZE = 5;
 
+const formatInvestorType = (value) => {
+  const normalized = String(value || '').trim();
+  if (!normalized) return '—';
+
+  return normalized
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+};
+
 const INVITATION_FILTERS = [
   { value: 'all', label: 'All investors', description: 'Show every completed investor profile' },
   { value: 'notInvited', label: 'Not invited', description: 'Investors who have not received this token invitation' },
@@ -166,6 +176,15 @@ export default function IssuerInvestorDirectoryPage() {
             <small>{investor.email || 'Completed investor profile'}</small>
           </div>
         </div>
+      ),
+    },
+    {
+      key: 'accreditationType',
+      header: 'Investor Type',
+      render: (value) => (
+        <span className="invitation-directory-investor-type" title={formatInvestorType(value)}>
+          {formatInvestorType(value)}
+        </span>
       ),
     },
     {

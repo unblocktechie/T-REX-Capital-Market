@@ -71,7 +71,7 @@ export function TokenLogoUploader({ value, onChange, error, onInteraction }) {
   return (
     <div className="issuance-field issuance-field--full token-logo-field">
       <label className="issuance-field__label" htmlFor="token-logo-input">
-        Token Logo<span className="issuance-required" aria-hidden="true">*</span>
+        Asset logo<span className="issuance-required" aria-hidden="true">*</span>
       </label>
 
       <div
@@ -106,12 +106,12 @@ export function TokenLogoUploader({ value, onChange, error, onInteraction }) {
 
         <div className="token-logo-preview" aria-live="polite">
           {value?.dataUrl ? (
-            <img src={value.dataUrl} alt="Uploaded token logo preview" />
+            <img src={value.dataUrl} alt="Uploaded asset logo preview" />
           ) : (
             <ImagePlus size={25} aria-hidden="true" />
           )}
           {processing ? (
-            <span className="token-logo-preview__loading" aria-label="Processing token logo">
+            <span className="token-logo-preview__loading" aria-label="Processing asset logo">
               <LoaderCircle size={19} />
             </span>
           ) : null}
@@ -119,7 +119,7 @@ export function TokenLogoUploader({ value, onChange, error, onInteraction }) {
 
         <div className="token-logo-uploader__content">
           <div className="token-logo-uploader__heading">
-            <strong>{value?.name || 'Upload a token logo'}</strong>
+            <strong>{value?.name || 'Upload an asset logo'}</strong>
             {value ? (
               <span>
                 {value.width}×{value.height}px · {(value.size / 1024).toFixed(0)} KB
@@ -154,7 +154,7 @@ export function TokenLogoUploader({ value, onChange, error, onInteraction }) {
                 className="token-logo-action token-logo-action--danger"
                 onClick={removeLogo}
                 disabled={processing}
-                aria-label="Remove token logo"
+                aria-label="Remove asset logo"
               >
                 <Trash2 size={15} /> Remove
               </button>

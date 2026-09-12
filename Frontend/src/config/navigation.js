@@ -1,4 +1,4 @@
-import { Building2, Briefcase, Coins, FileText, LayoutDashboard, Mail, RefreshCcw, Store, Users, UsersRound, WalletCards } from 'lucide-react';
+import { Building2, Briefcase, Coins, FileText, History, LayoutDashboard, Mail, RefreshCcw, Store, Users, UsersRound, WalletCards } from 'lucide-react';
 import { PERMISSIONS, ROLES } from './permissions';
 import { ROUTES } from './routes';
 
@@ -48,6 +48,14 @@ export const navigationGroups = Object.freeze([
         roles: [ROLES.issuer],
       },
       {
+        label: 'Transaction History',
+        shortLabel: 'Transactions',
+        to: ROUTES.transactions,
+        icon: History,
+        permission: PERMISSIONS.dashboardView,
+        roles: [ROLES.issuer],
+      },
+      {
         label: 'Redemption Requests',
         shortLabel: 'Redemptions',
         to: ROUTES.issuerRedemptions,
@@ -88,8 +96,8 @@ export const navigationGroups = Object.freeze([
         roles: [ROLES.investor],
       },
       {
-        label: 'Manage Tokens',
-        shortLabel: 'Manage Tokens',
+        label: 'Manage Investments',
+        shortLabel: 'Manage Investments',
         to: ROUTES.assetManagement,
         icon: Briefcase,
         permission: PERMISSIONS.dashboardView,
@@ -100,26 +108,30 @@ export const navigationGroups = Object.freeze([
 ]);
 
 export const routeMeta = Object.freeze({
-  [ROUTES.dashboard]: { title: 'Overview', description: 'Issuer capital market dashboard' },
+  [ROUTES.dashboard]: { title: 'Dashboard', description: 'Your issuer activity and next actions' },
   [ROUTES.organization]: {
     title: 'Organization',
-    description: 'Institutional KYB onboarding and verification',
+    description: 'Verified company details and approved management access',
   },
   [ROUTES.createToken]: {
     title: 'Tokens',
-    description: 'Guided security-token setup and launch',
+    description: 'Guided investment asset setup and launch',
   },
   tokenDetails: {
-    title: 'Token',
-    description: 'Token settings, price and blockchain details',
+    title: 'Investment Asset',
+    description: 'Price, investor access, limits, and technical details',
   },
   [ROUTES.investors]: {
     title: 'Investment Requests',
-    description: 'Review investor requests to invest in your token',
+    description: 'Review investor applications and required actions',
   },
   [ROUTES.issuerInvestorDirectory]: {
     title: 'Investors',
-    description: 'Discover completed investor profiles and manage token invitations',
+    description: 'Review approved investors and send investment invitations',
+  },
+  [ROUTES.transactions]: {
+    title: 'Transaction History',
+    description: 'Track confirmed token movements and export transaction records',
   },
   [ROUTES.invitations]: {
     title: 'Invitations',
@@ -129,10 +141,10 @@ export const routeMeta = Object.freeze({
     title: 'Redemption Requests',
     description: 'Review requests to redeem tokens and complete approved payments',
   },
-  [ROUTES.marketplace]: { title: 'Marketplace', description: 'Discover security-token investment opportunities' },
-  marketplaceToken: { title: 'Marketplace Asset', description: 'Review a compliant tokenized investment offering' },
+  [ROUTES.marketplace]: { title: 'Marketplace', description: 'Explore available investment opportunities' },
+  marketplaceToken: { title: 'Investment Details', description: 'Review the investment, eligibility requirements, and next action' },
   [ROUTES.applications]: { title: 'My Applications', description: 'Track your investment applications' },
   [ROUTES.portfolio]: { title: 'Portfolio', description: 'See what you hold, its estimated value and your investment history' },
-  [ROUTES.assetManagement]: { title: 'Manage Tokens', description: 'Buy, send and redeem tokens you are approved to hold' },
-  [ROUTES.profile]: { title: 'Profile', description: 'Personal account settings' },
+  [ROUTES.assetManagement]: { title: 'Manage Investments', description: 'Invest more, send, or redeem assets you are approved to hold' },
+  [ROUTES.profile]: { title: 'Investor Profile', description: 'Your identity, investment information, documents, and registered wallet' },
 });

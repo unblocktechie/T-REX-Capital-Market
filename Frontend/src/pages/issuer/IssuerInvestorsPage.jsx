@@ -14,42 +14,20 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { issuerInvestorSubscriptionsService } from '@/services/issuer/issuerInvestorSubscriptionsService';
 import { formatDate } from '@/utils/date';
 import { getErrorMessage } from '@/utils/error';
+import { getInvestmentJourney } from '@/utils/investmentJourney';
 
 const PAGE_SIZE = 5;
 
 const INTEREST_STATUS_OPTIONS = [
-  { value: 'all', label: 'All Requests', description: 'All visible investment request statuses' },
-  { value: 'pending', label: 'Pending', description: 'Requests waiting for the next action' },
-  { value: 'submitIntrest', label: 'Pending Review', description: 'Investment requests waiting for issuer review' },
-  { value: 'verifiedByIssuer', label: 'Verification Approved', description: 'Requests whose investor verification has been approved' },
-  { value: 'claimSubmitted', label: 'Verification Submitted', description: 'Requests where the investor completed the required verification' },
-  { value: 'approved', label: 'Approved', description: 'Requests that have been approved' },
-  { value: 'rejected', label: 'Rejected', description: 'Requests that were not approved' },
+  { value: 'all', label: 'All Requests', description: 'Every investment request' },
+  { value: 'submitIntrest', label: 'Needs My Review', description: 'Applications waiting for your review' },
+  { value: 'claimSubmitted', label: 'Needs Final Approval', description: 'Investors who finished verification and need your approval' },
+  { value: 'verifiedByIssuer', label: 'Waiting for Investor', description: 'Your review is complete and the investor must finish verification' },
+  { value: 'pending', label: 'Investor Completing Application', description: 'The investor still needs to provide required information' },
+  { value: 'approved', label: 'Approved', description: 'Requests that reached approval' },
+  { value: 'rejected', label: 'Not Approved', description: 'Requests that were not approved' },
   { value: 'cancelled', label: 'Cancelled', description: 'Requests that are no longer active' },
 ];
-
-const requestStatusMeta = (value) => {
-  const normalized = String(value || '').trim().toLowerCase();
-  const compact = normalized.replace(/[\s_-]+/g, '');
-  if (['verifiedbyissuer', 'verified'].includes(compact)) return { label: 'Verification Approved', tone: 'success' };
-  if (compact === 'claimsubmitted') return { label: 'Verification Submitted', tone: 'success' };
-  if (normalized === 'approved') return { label: 'Approved', tone: 'success' };
-  if (normalized === 'rejected') return { label: 'Rejected', tone: 'danger' };
-  if (normalized === 'cancelled') return { label: 'Cancelled', tone: 'neutral' };
-  if (normalized === 'pending') return { label: 'Pending', tone: 'pending' };
-  if (['submitintrest', 'submitted', 'pending_review', 'under_review'].includes(normalized)) {
-    return { label: 'Pending Review', tone: 'pending' };
-  }
-  return {
-    label: normalized ? normalized.replaceAll('_', ' ').replace(/\b\w/g, (character) => character.toUpperCase()) : 'Pending Review',
-    tone: 'neutral',
-  };
-};
-
-function RequestStatusBadge({ status }) {
-  const meta = requestStatusMeta(status);
-  return <AppStatusBadge status={status} label={meta.label} tone={meta.tone} compact />;
-}
 
 function exportTextFile(filename, text) {
   const blob = new Blob([text], { type: 'text/csv;charset=utf-8;' });
@@ -128,26 +106,46 @@ export default function IssuerInvestorsPage() {
       render: (_value, request) => (
         <div className="issuer-investor-cell">
           <div className="issuer-avatar">{request.investorName.slice(0, 1).toUpperCase()}</div>
-          <div><strong>{request.investorName}</strong><small>{request.investorCode || request.email || 'Investor identity'}</small></div>
+          <div><strong>{request.investorName}</strong><small>{request.email || request.investorCode || 'Investor application'}</small></div>
         </div>
       ),
     },
-    { key: 'status', header: 'Status', render: (value) => <RequestStatusBadge status={value} /> },
+    {
+      key: 'tokenName',
+      header: 'Asset',
+      render: (_value, request) => <div className="application-journey-table-copy"><strong>{request.tokenName || '—'}</strong><small>{request.tokenSymbol || 'Investment asset'}</small></div>,
+    },
+    {
+      key: 'status',
+      header: 'Where it is',
+      render: (_value, request) => {
+        const journey = getInvestmentJourney({ status: request.status, viewerRole: 'issuer', canResubmit: request.canResubmit, rejectReasonType: request.rejectReasonType });
+        return <AppStatusBadge status={request.status} label={journey.statusLabel} tone={journey.tone} compact />;
+      },
+    },
+    {
+      key: 'nextAction',
+      header: 'Who acts next',
+      render: (_value, request) => {
+        const journey = getInvestmentJourney({ status: request.status, viewerRole: 'issuer', canResubmit: request.canResubmit, rejectReasonType: request.rejectReasonType });
+        return <div className="application-journey-table-copy"><strong>{journey.title}</strong><small>Next action: {journey.owner}</small></div>;
+      },
+    },
     {
       key: 'requestedDate',
-      header: 'Date',
+      header: 'Submitted',
       render: (value) => <div className="issuer-date-cell"><strong>{formatDate(value, 'MMM DD, YYYY')}</strong><small>{formatDate(value, 'hh:mm A')}</small></div>,
     },
     {
       key: 'actions',
       header: 'Action',
       align: 'end',
-      render: (_value, request) => <Button variant="secondary" size="sm" icon={Eye} onClick={() => navigate(`${ROUTES.investors}/${request.interestUid}`)}>View Details</Button>,
+      render: (_value, request) => <Button variant="secondary" size="sm" icon={Eye} onClick={() => navigate(`${ROUTES.investors}/${request.interestUid}`)}>View Progress</Button>,
     },
   ], [navigate]);
 
   const handleExport = () => {
-    const header = ['Investor', 'Wallet', 'Status', 'Submitted At', 'Token', 'Interest UID'];
+    const header = ['Investor', 'Investor Account', 'Status', 'Submitted At', 'Asset', 'Application ID'];
     const rows = requests.map((request) => [
       request.investorName,
       request.investorCode,
@@ -165,9 +163,9 @@ export default function IssuerInvestorsPage() {
     <div className="page-stack issuer-investors-page issuer-investors-workspace">
       <header className="issuer-page-header issuer-subscriptions-header">
         <div>
-          <span className="issuer-redemptions-eyebrow">Investor investment requests</span>
+          <span className="issuer-redemptions-eyebrow">Investor journey tracking</span>
           <h1>Investment Requests</h1>
-          <p>Review investor requests for your organization&apos;s created tokens. Open a request to review the investor profile, required verification and submitted documents.</p>
+          <p>See which requests need your action, which are waiting for the investor, and which are ready for final approval.</p>
         </div>
         <Button variant="secondary" icon={Download} disabled={!requests.length} onClick={handleExport}>Export CSV</Button>
       </header>
@@ -176,7 +174,7 @@ export default function IssuerInvestorsPage() {
         <div className="issuer-subscriptions-toolbar">
           <Input
             aria-label="Search investment requests"
-            placeholder="Search investor, token or request ID"
+            placeholder="Search investor, asset or application ID"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             leading={Search}
@@ -198,7 +196,7 @@ export default function IssuerInvestorsPage() {
             Showing <strong>{pageStart}{pageEnd > pageStart ? `–${pageEnd}` : ''}</strong> of {visibleRequests.length} request{visibleRequests.length === 1 ? '' : 's'}
             {visibleRequests.length !== requests.length ? ` (${requests.length} total)` : ''}
           </span>
-          <span>Statuses reflect the latest request state.</span>
+          <span>Each status tells you who needs to act next.</span>
         </div>
       </Card>
 

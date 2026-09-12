@@ -16,6 +16,7 @@ import {
   loadInvestorDraft,
 } from '@/services/investor';
 import { pendingDeploymentService } from '@/services/pendingDeployment.service';
+import { resolveAuthenticatedLandingRoute } from '@/services/auth-landing.service';
 import { loginSchema } from '@/validations/auth.schemas';
 
 export default function LoginPage() {
@@ -23,7 +24,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const from = location.state?.from?.pathname || ROUTES.dashboard;
+  const from = location.state?.from?.pathname || null;
   const sessionExpired = searchParams.get('reason') === 'session-expired';
   const emailVerified = searchParams.get('verified') === 'true';
   const pendingDeployment = pendingDeploymentService.get();
@@ -67,13 +68,30 @@ export default function LoginPage() {
           ? loadInvestorDraft(session.user).draft
           : null;
       const destination =
-        session?.user?.role === ROLES.admin
-          ? ROUTES.adminReviewQueue
-          : session?.user?.role === ROLES.investor &&
-              !isInvestorWorkspaceUnlocked(investorState)
-            ? ROUTES.investors
-            : from;
+        session?.user?.role === ROLES.investor && !isInvestorWorkspaceUnlocked(investorState)
+          ? ROUTES.investors
+          : from || resolveAuthenticatedLandingRoute(session?.user?.role);
       navigate(destination, { replace: true });
+    },
+    onError: (error, variables) => {
+      const status = error?.response?.status;
+      const payload = error?.response?.data;
+      const message = String(
+        payload?.message ||
+          (typeof payload?.error === 'string' ? payload.error : payload?.error?.message) ||
+          '',
+      );
+      const needsEmailVerification =
+        status === 403 &&
+        /(?:verify|verification).*email|email.*(?:verify|verification)/i.test(message);
+
+      if (!needsEmailVerification) return;
+
+      const email = String(variables?.email || '').trim();
+      const params = new URLSearchParams({ reason: 'verification-required' });
+      if (email) params.set('email', email);
+
+      navigate(`${ROUTES.verifyEmail}?${params.toString()}`, { replace: true });
     },
   });
 

@@ -22,8 +22,9 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useInvestorProfileData } from '@/hooks/useInvestorProfileData';
 import { investorPortfolioService } from '@/services/investor/investorPortfolioService';
 import { getInvestorPurchaseTokenBalance } from '@/services/investor/investorTokenPurchaseTransaction.service';
+import { getPlatformTokenPrice } from '@/services/blockchain/trexPlatformController.service';
 import { getErrorMessage } from '@/utils/error';
-import { resolveCurrentTokenPriceExact, resolveInitialTokenPriceExact } from '@/utils/tokenPrice';
+import { resolveInitialTokenPriceExact } from '@/utils/tokenPrice';
 
 const PAGE_SIZE = 20;
 
@@ -147,6 +148,7 @@ export default function PortfolioPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [walletBalances, setWalletBalances] = useState({});
+  const [platformPrices, setPlatformPrices] = useState({});
   const [balanceRefreshKey, setBalanceRefreshKey] = useState(0);
 
   const registeredWalletAddress = String(
@@ -215,6 +217,7 @@ export default function PortfolioPage() {
 
     if (!items.length || loadError) {
       setWalletBalances({});
+      setPlatformPrices({});
       return () => {
         active = false;
       };
@@ -222,6 +225,9 @@ export default function PortfolioPage() {
 
     setWalletBalances(Object.fromEntries(
       items.map((token) => [token.tokenUid, walletBalanceState('loading')]),
+    ));
+    setPlatformPrices(Object.fromEntries(
+      items.map((token) => [token.tokenUid, { status: 'loading', value: '', reason: '' }]),
     ));
 
     if (investorProfileQuery.isLoading) {
@@ -234,30 +240,46 @@ export default function PortfolioPage() {
       setWalletBalances(Object.fromEntries(
         items.map((token) => [token.tokenUid, walletBalanceState('unavailable', '', 'Registered wallet unavailable')]),
       ));
-      return () => {
-        active = false;
-      };
+    } else {
+      Promise.all(items.map(async (token) => {
+        const tokenUid = token.tokenUid;
+        const decimals = validTokenDecimals(token.decimals);
+        if (!token.tokenAddress || !token.chainId || decimals === null) {
+          return [tokenUid, walletBalanceState('unavailable', '', 'Token balance details unavailable')];
+        }
+
+        try {
+          const rawBalance = await getInvestorPurchaseTokenBalance({
+            tokenAddress: token.tokenAddress,
+            investorWalletAddress: registeredWalletAddress,
+            chainId: token.chainId,
+          });
+          return [tokenUid, walletBalanceState('ready', formatUnits(rawBalance, decimals))];
+        } catch {
+          return [tokenUid, walletBalanceState('unavailable', '', 'Live wallet balance unavailable')];
+        }
+      })).then((entries) => {
+        if (active) setWalletBalances(Object.fromEntries(entries));
+      });
     }
 
     Promise.all(items.map(async (token) => {
       const tokenUid = token.tokenUid;
-      const decimals = validTokenDecimals(token.decimals);
-      if (!token.tokenAddress || !token.chainId || decimals === null) {
-        return [tokenUid, walletBalanceState('unavailable', '', 'Token balance details unavailable')];
+      if (!token.tokenAddress || !token.chainId) {
+        return [tokenUid, { status: 'unavailable', value: '', reason: 'Current price unavailable' }];
       }
-
       try {
-        const rawBalance = await getInvestorPurchaseTokenBalance({
-          tokenAddress: token.tokenAddress,
-          investorWalletAddress: registeredWalletAddress,
-          chainId: token.chainId,
-        });
-        return [tokenUid, walletBalanceState('ready', formatUnits(rawBalance, decimals))];
+        const price = await getPlatformTokenPrice({ tokenAddress: token.tokenAddress, chainId: token.chainId });
+        const value = String(price.currentTokenPrice || '').trim();
+        if (!value || /^0(?:\.0+)?$/.test(value)) {
+          return [tokenUid, { status: 'unavailable', value: '', reason: 'Current price is not active on-chain' }];
+        }
+        return [tokenUid, { status: 'ready', value, reason: '' }];
       } catch {
-        return [tokenUid, walletBalanceState('unavailable', '', 'Live wallet balance unavailable')];
+        return [tokenUid, { status: 'unavailable', value: '', reason: 'Live current price unavailable' }];
       }
     })).then((entries) => {
-      if (active) setWalletBalances(Object.fromEntries(entries));
+      if (active) setPlatformPrices(Object.fromEntries(entries));
     });
 
     return () => {
@@ -284,7 +306,9 @@ export default function PortfolioPage() {
       const balanceState = walletBalances[token.tokenUid];
       if (balanceState?.status === 'ready') {
         verifiedBalances += 1;
-        const currentPrice = resolveCurrentTokenPriceExact(token);
+        const currentPrice = platformPrices[token.tokenUid]?.status === 'ready'
+          ? platformPrices[token.tokenUid].value
+          : '';
         const walletValue = multiplyDecimalValues(balanceState.balance, currentPrice, 2);
         if (walletValue !== null) {
           walletValues.push(walletValue);
@@ -302,10 +326,10 @@ export default function PortfolioPage() {
       verifiedBalances,
       pricedBalances,
     };
-  }, [items, walletBalances]);
+  }, [items, platformPrices, walletBalances]);
 
   const summaryScope = meta.total > items.length ? 'shown on this page' : 'across your portfolio';
-  const balanceLoading = items.some((token) => walletBalances[token.tokenUid]?.status === 'loading');
+  const balanceLoading = items.some((token) => walletBalances[token.tokenUid]?.status === 'loading' || platformPrices[token.tokenUid]?.status === 'loading');
 
   const openManagement = (tokenUid) => {
     navigate(`${ROUTES.assetManagement}?tokenUid=${encodeURIComponent(tokenUid)}`);
@@ -363,14 +387,6 @@ export default function PortfolioPage() {
           </div>
         </Card>
         <Card className="investor-portfolio-summary__card">
-          <span className="investor-portfolio-summary__icon"><Coins size={20} /></span>
-          <div>
-            <span>Completed purchases</span>
-            <strong>{loading ? '—' : overview.purchaseCount}</strong>
-            <small>Purchase records {summaryScope}</small>
-          </div>
-        </Card>
-        <Card className="investor-portfolio-summary__card">
           <span className="investor-portfolio-summary__icon"><Briefcase size={20} /></span>
           <div>
             <span>Portfolio assets</span>
@@ -385,7 +401,7 @@ export default function PortfolioPage() {
           <Info size={17} />
           <div>
             <strong>Wallet balance is the source of truth for what you currently hold</strong>
-            <span>Wallet balances are read live from the blockchain. Total invested and purchase counts include only completed purchases made through T-REX Capital Market. Direct wallet transfers can change your balance without changing that purchase history, so performance is not estimated when the cost basis cannot be guaranteed.</span>
+            <span>Wallet balances and current prices are read live from the blockchain. Total invested and purchase counts include only completed purchases made through T-REX Capital Market. Direct wallet transfers can change your balance without changing that purchase history, so the page avoids performance estimates when the cost basis cannot be guaranteed.</span>
           </div>
         </div>
       ) : null}
@@ -432,8 +448,9 @@ export default function PortfolioPage() {
                 const symbol = token?.symbol && token.symbol !== '—' ? token.symbol : 'TOKEN';
                 const portfolio = token?.portfolio || {};
                 const balanceState = walletBalances[token.tokenUid] || walletBalanceState('loading');
-                const currentPrice = resolveCurrentTokenPriceExact(token);
-                const estimatedValue = balanceState.status === 'ready'
+                const currentPriceState = platformPrices[token.tokenUid] || { status: 'loading', value: '', reason: '' };
+                const currentPrice = currentPriceState.status === 'ready' ? currentPriceState.value : '';
+                const estimatedValue = balanceState.status === 'ready' && currentPriceState.status === 'ready'
                   ? multiplyDecimalValues(balanceState.balance, currentPrice, 2)
                   : null;
 
@@ -463,12 +480,13 @@ export default function PortfolioPage() {
                     <div className="investor-portfolio-cell investor-portfolio-current-value">
                       <span className="investor-portfolio-cell__label">Estimated value</span>
                       <strong>{estimatedValue === null ? '—' : `${estimatedValue} USDT`}</strong>
-                      <small>{balanceState.status === 'ready' && currentPrice ? 'Wallet balance × current price' : 'Available after live balance is verified'}</small>
+                      <small>{balanceState.status === 'ready' && currentPrice ? 'Wallet balance × live current price' : currentPriceState.reason || 'Available after live balance and price are verified'}</small>
                     </div>
 
                     <div className="investor-portfolio-cell investor-portfolio-token-price">
                       <span className="investor-portfolio-cell__label">Current price</span>
-                      <strong>{currentPrice ? usdtAmount(currentPrice, 18) : '—'}</strong>
+                      <strong>{currentPriceState.status === 'loading' ? 'Checking…' : currentPrice ? usdtAmount(currentPrice, 18) : 'Unavailable'}</strong>
+                      <small>{currentPriceState.status === 'ready' ? 'Live platform-contract price' : currentPriceState.reason || 'Live price unavailable'}</small>
                       <small>Initial price {resolveInitialTokenPriceExact(token) ? usdtAmount(resolveInitialTokenPriceExact(token), 18) : '—'}</small>
                     </div>
 

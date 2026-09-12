@@ -15,6 +15,8 @@ import { toCompliancePayload } from '@/api/tokens/token.mapper';
 import { SelectField } from '@/components/organization/OrganizationFields';
 import {
   FieldWrapper,
+  HelpDetails,
+  ImpactNote,
   SectionCard,
   SelectionChip,
   TextInput,
@@ -52,7 +54,7 @@ export default function ComplianceRulesPage() {
   const [saving, setSaving] = useState(false);
   const [serverErrors, setServerErrors] = useState({});
   const errors = validateCompliance(data);
-  useDocumentTitle('Transfer Rules');
+  useDocumentTitle('Investment Rules');
 
   const countryOptions = useMemo(
     () =>
@@ -93,7 +95,7 @@ export default function ComplianceRulesPage() {
     setTouched((current) => ({ ...current, [name]: true }));
     setServerErrors((current) => ({
       ...current,
-      [name]: 'Enter a positive whole number. Decimal values are not allowed.',
+      [name]: 'Use a whole number, such as 500 or 2,000.',
     }));
   };
   const blur = (name) => setTouched((current) => ({ ...current, [name]: true }));
@@ -127,14 +129,14 @@ export default function ComplianceRulesPage() {
       const response = await tokenApi.saveCompliance(toCompliancePayload(data, false));
       recordBackendSave('compliance', response);
       markStepCompleted('compliance');
-      toast.success('Transfer rules saved.');
+      toast.success('Investment rules saved.');
       navigate(ROUTES.tokenIssuanceStep('agents'));
     } catch (error) {
       setServerErrors(mapTokenApiFieldErrors(error, COMPLIANCE_FIELD_MAP));
-      toast.error('Transfer rules were not saved.', {
+      toast.error('Investment rules were not saved.', {
         description: getTokenApiErrorMessage(
           error,
-          'Review the investor limits and restricted countries before retrying.',
+          'Review the investor limits and blocked countries before trying again.',
         ),
       });
     } finally {
@@ -146,51 +148,41 @@ export default function ComplianceRulesPage() {
     <div className="issuance-sidebar-stack compliance-sidebar-stack">
       <section className="compliance-explainer-card" aria-labelledby="compliance-explainer-title">
         <span className="compliance-explainer-card__eyebrow">
-          <ShieldCheck size={15} aria-hidden="true" /> Automatic transfer checks
+          <ShieldCheck size={15} aria-hidden="true" /> Automatic checks
         </span>
-        <h3 id="compliance-explainer-title">What happens when tokens move</h3>
+        <h3 id="compliance-explainer-title">How these rules are applied</h3>
         <ol>
           <li>
             <span>1</span>
-            <p>Before a transfer, the token checks whether the sender and recipient are approved investors.</p>
+            <p><strong>We check the investor.</strong> They must have completed the investor checks you selected.</p>
           </li>
           <li>
             <span>2</span>
-            <p>It checks the required verification, country rules and holding limits for both wallets.</p>
+            <p><strong>We check your limits.</strong> Their country, holding amount, and investor limit are checked.</p>
           </li>
           <li>
             <span>3</span>
-            <p>The transfer proceeds only when all of your configured rules are satisfied.</p>
+            <p><strong>The transaction can continue.</strong> It proceeds only when every required rule is satisfied.</p>
           </li>
         </ol>
+        <HelpDetails className="compliance-technical-details" title="View technical details">
+          The same checks are applied automatically before eligible asset transfers are completed.
+        </HelpDetails>
       </section>
 
       <section className="issuance-summary-card compliance-live-summary">
         <span className="issuance-card-icon">
           <ListChecks size={19} />
         </span>
-        <h3>Configuration Summary</h3>
-        <dl className="issuance-summary-list">
-          <div>
-            <dt>Investor limit</dt>
-            <dd>{data.maximumInvestors ? formatNumber(data.maximumInvestors) : 'Not set'}</dd>
-          </div>
-          <div>
-            <dt>Individual balance cap</dt>
-            <dd>{data.maximumBalance ? formatNumber(data.maximumBalance) : 'Not set'}</dd>
-          </div>
-          <div>
-            <dt>Country rule</dt>
-            <dd className="compliance-summary-status">Block selected countries</dd>
-          </div>
-          <div>
-            <dt>Restricted countries</dt>
-            <dd>{data.countries.length || 'None'}</dd>
-          </div>
-        </dl>
+        <h3>Your current rules</h3>
+        <div className="compliance-sentence-summary" aria-live="polite">
+          <p><strong>{data.maximumInvestors ? `Up to ${formatNumber(data.maximumInvestors)} investors` : 'Investor limit not set'}</strong></p>
+          <p><strong>{data.maximumBalance ? `Each investor can hold up to ${formatNumber(data.maximumBalance)} units` : 'Per-investor limit not set'}</strong></p>
+          <p><strong>{data.countries.length ? `${data.countries.length} ${data.countries.length === 1 ? 'country' : 'countries'} blocked` : 'No countries blocked'}</strong></p>
+        </div>
         <div className="compliance-immutability-note">
           <AlertTriangle size={17} aria-hidden="true" />
-          <p>Some transfer rules can be difficult to relax after token creation. Review them carefully before launch.</p>
+          <p>Review these limits carefully. Some rules may be difficult to change after the asset is created.</p>
         </div>
       </section>
     </div>
@@ -199,8 +191,8 @@ export default function ComplianceRulesPage() {
   return (
     <IssuanceLayout
       stepKey="compliance"
-      title="Transfer Rules"
-      description="Set holding limits and country restrictions that automatically apply when tokens are transferred."
+      title="Investment Rules"
+      description="Set how many investors can participate, how much one investor can hold, and which countries you want to block."
       sidebar={summary}
       onBack={() => navigate(ROUTES.tokenIssuanceStep('identity-claims'))}
       onContinue={continueStep}
@@ -215,59 +207,69 @@ export default function ComplianceRulesPage() {
         title={(
           <span className="compliance-section-title">
             <SlidersHorizontal size={19} aria-hidden="true" />
-            Holding Limits
+            Set investor limits
           </span>
         )}
-        description="Define the maximum number of investors and the balance allowed per investor."
+        description="These limits control how many investors can hold the asset and the most any one investor can hold."
       >
         <div className="issuance-form-grid compliance-limit-grid">
-          <FieldWrapper
-            label="Maximum Investors"
-            required
-            error={fieldError('maximumInvestors')}
-            hint="Enter a positive whole number only. Decimals are not allowed."
-            htmlFor="maximum-investors"
-          >
-            <TextInput
-              id="maximum-investors"
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              value={data.maximumInvestors}
-              onChange={(event) => updateWholeNumber('maximumInvestors', event.target.value)}
-              onBlur={() => blur('maximumInvestors')}
-              onKeyDown={(event) => {
-                if (['-', '+', 'e', 'E', '.', ','].includes(event.key)) event.preventDefault();
-              }}
-              placeholder="e.g. 2000"
+          <div className="compliance-field-with-impact">
+            <FieldWrapper
+              label="Maximum number of investors"
+              required
               error={fieldError('maximumInvestors')}
-              disabled={backend.isLocked}
-            />
-          </FieldWrapper>
+              hint="Example: enter 2,000 if you want to allow up to 2,000 investors. Use a whole number."
+              htmlFor="maximum-investors"
+            >
+              <TextInput
+                id="maximum-investors"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={data.maximumInvestors}
+                onChange={(event) => updateWholeNumber('maximumInvestors', event.target.value)}
+                onBlur={() => blur('maximumInvestors')}
+                onKeyDown={(event) => {
+                  if (['-', '+', 'e', 'E', '.', ','].includes(event.key)) event.preventDefault();
+                }}
+                placeholder="Example: 2000"
+                error={fieldError('maximumInvestors')}
+                disabled={backend.isLocked}
+              />
+            </FieldWrapper>
+            <ImpactNote title="What happens when this limit is reached">
+              A new investor cannot receive the asset until the number of current investors falls below this limit.
+            </ImpactNote>
+          </div>
 
-          <FieldWrapper
-            label="Maximum Holding per Investor"
-            required
-            error={fieldError('maximumBalance')}
-            hint="Enter a positive whole number only. Decimals are not allowed."
-            htmlFor="maximum-balance"
-          >
-            <TextInput
-              id="maximum-balance"
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              value={data.maximumBalance}
-              onChange={(event) => updateWholeNumber('maximumBalance', event.target.value)}
-              onBlur={() => blur('maximumBalance')}
-              onKeyDown={(event) => {
-                if (['-', '+', 'e', 'E', '.', ','].includes(event.key)) event.preventDefault();
-              }}
-              placeholder="e.g. 5"
+          <div className="compliance-field-with-impact">
+            <FieldWrapper
+              label="Maximum amount one investor can hold"
+              required
               error={fieldError('maximumBalance')}
-              disabled={backend.isLocked}
-            />
-          </FieldWrapper>
+              hint="Example: enter 500 if one investor should never hold more than 500 units. Use a whole number."
+              htmlFor="maximum-balance"
+            >
+              <TextInput
+                id="maximum-balance"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={data.maximumBalance}
+                onChange={(event) => updateWholeNumber('maximumBalance', event.target.value)}
+                onBlur={() => blur('maximumBalance')}
+                onKeyDown={(event) => {
+                  if (['-', '+', 'e', 'E', '.', ','].includes(event.key)) event.preventDefault();
+                }}
+                placeholder="Example: 500"
+                error={fieldError('maximumBalance')}
+                disabled={backend.isLocked}
+              />
+            </FieldWrapper>
+            <ImpactNote title="What happens if an investor would go above this amount">
+              The investment or transfer will be blocked before the investor goes above the limit.
+            </ImpactNote>
+          </div>
         </div>
       </SectionCard>
 
@@ -276,36 +278,37 @@ export default function ComplianceRulesPage() {
         title={(
           <span className="compliance-section-title">
             <Globe2 size={19} aria-hidden="true" />
-            Restricted Countries
+            Where can investors participate?
           </span>
         )}
-        description="Select the countries whose residents are not eligible to invest in this offering."
+        description="Investors from all countries are allowed unless you block a country below."
       >
-        <div className="jurisdiction-preview" aria-hidden="true">
-          <div className="jurisdiction-preview__visual">
+        <div className="jurisdiction-preview">
+          <div className="jurisdiction-preview__visual" aria-hidden="true">
             <Globe2 size={42} />
           </div>
           <div>
-            <span>Restricted countries</span>
-            <strong>{data.countries.length ? `${data.countries.length} restricted` : 'No restricted countries'}</strong>
+            <span>Country access</span>
+            <strong>{data.countries.length ? `${data.countries.length} blocked` : 'All countries currently allowed'}</strong>
             <p>
               {data.countries.length
-                ? 'Investors who reside in the selected countries will not be able to receive this token.'
-                : 'Investors from all countries are currently allowed, as long as they meet the verification and holding rules above.'}
+                ? 'Investors registered in the countries below will not be able to receive this asset.'
+                : 'You have not blocked any countries. Investors may participate if they meet your other investor requirements and limits.'}
             </p>
           </div>
         </div>
 
         <div className="compliance-country-section">
-          <h3>Add Restricted Country</h3>
+          <h3>Block a country</h3>
+          <p className="compliance-section-helper">Only add a country when investors from that country should not be allowed to receive this asset.</p>
           <div className="country-add-row compliance-country-add-row">
             <SelectField
               id="compliance-country"
-              label="Country"
+              label="Country to block"
               value={selectedCountry}
               options={availableCountries}
               placeholder={backend.countryOptions.length ? 'Select a country…' : 'Loading countries…'}
-              hint="Choose a country to prevent residents there from receiving this token."
+              hint="Choose a country, then select Block Country."
               searchable
               showEmptyOption
               disabled={!backend.countryOptions.length || backend.isLocked}
@@ -318,7 +321,7 @@ export default function ComplianceRulesPage() {
               onClick={addCountry}
               disabled={!selectedCountry || backend.isLocked}
             >
-              Add Restriction
+              Block Country
             </Button>
           </div>
           {(serverErrors.countries || (submitted ? errors.countries : '')) ? (
@@ -329,11 +332,11 @@ export default function ComplianceRulesPage() {
         </div>
 
         <div className="restricted-country-list-section">
-          <h3>Restricted Countries</h3>
+          <h3>Countries currently blocked</h3>
           {data.countries.length ? (
             <div
               className="issuance-chip-list compliance-country-list compliance-country-chip-list"
-              aria-label="Restricted countries"
+              aria-label="Blocked countries"
             >
               {data.countries.map((country) => (
                 <SelectionChip
@@ -347,7 +350,7 @@ export default function ComplianceRulesPage() {
           ) : (
             <div className="issuance-empty-inline compliance-country-empty">
               <Globe2 size={18} />
-              <span>No restricted countries configured.</span>
+              <span>No countries are blocked. All countries are currently allowed.</span>
             </div>
           )}
         </div>

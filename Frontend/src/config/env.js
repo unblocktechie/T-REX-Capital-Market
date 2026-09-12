@@ -1,5 +1,11 @@
 import { z } from 'zod';
 
+// Default Platform Controller that must be registered as a Token Agent on every
+// newly created T-REX token. It remains environment-overridable for controlled
+// network migrations, while this address is the default for the current platform.
+export const DEFAULT_TREX_PLATFORM_CONTROLLER_ADDRESS =
+  '0x9BEFDF75Dc94bbB36532c5d7A74daab28714f579';
+
 const envSchema = z.object({
   VITE_APP_NAME: z.string().default('T-REX Capital Market'),
   VITE_APP_VERSION: z.string().default('1.0.0'),
@@ -18,6 +24,8 @@ const envSchema = z.object({
   VITE_SEPOLIA_RPC_URL: z.string().url().default('https://ethereum-sepolia-rpc.publicnode.com'),
   VITE_TREX_GATEWAY_ADDRESS: z.string().default('0x32c06Dcd426ee86c4FDD2514c58785ff7A5DDAc0'),
   VITE_TREX_PLATFORM_WALLET_ADDRESS: z.string().default('0xDbBdcA99d568B54feaAb6c6D34e8f0093c509859'),
+  VITE_TREX_PLATFORM_CONTROLLER_ADDRESS: z.string().default(DEFAULT_TREX_PLATFORM_CONTROLLER_ADDRESS),
+  VITE_TREX_PAYMENT_TOKEN_ADDRESS: z.string().default('0x86B14D29A59b745bF08c42661322d13142d5eb49'),
   VITE_ONCHAIN_ID_FACTORY_ADDRESS: z.string().default('0xe1da45b88C9d3f4347A6E1C6e8ee63e360068a15'),
   VITE_COUNTRY_RESTRICT_MODULE_ADDRESS: z.string().default('0xF5D3F29B57f2fd33aDbF5d6A5F5C774C07D18fDf'),
   VITE_MAX_BALANCE_MODULE_ADDRESS: z.string().default('0x45747f7068CE9C743b82ec3E8E92627b495860A6'),
@@ -51,6 +59,8 @@ export const env = Object.freeze({
   trex: {
     gateway: parsed.VITE_TREX_GATEWAY_ADDRESS,
     platformWallet: parsed.VITE_TREX_PLATFORM_WALLET_ADDRESS,
+    platformController: parsed.VITE_TREX_PLATFORM_CONTROLLER_ADDRESS,
+    paymentToken: parsed.VITE_TREX_PAYMENT_TOKEN_ADDRESS,
     identityFactory: parsed.VITE_ONCHAIN_ID_FACTORY_ADDRESS,
     complianceModules: {
       countryRestrict: parsed.VITE_COUNTRY_RESTRICT_MODULE_ADDRESS,

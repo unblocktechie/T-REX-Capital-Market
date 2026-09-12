@@ -76,6 +76,8 @@ export const normalizeAuthSession = (payload) => {
 
   return {
     accessToken,
+    tokenType: firstDefined(payload?.tokenType, 'Bearer'),
+    expiresIn: firstDefined(payload?.expiresIn, null),
     user: {
       id: firstDefined(
         source?.userUid,

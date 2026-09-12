@@ -40,21 +40,21 @@ const eventMeta = (event, { viewerRole = '', currentStatus = '' } = {}) => {
 
   if (isRegistryRegistrationConfirmedEvent(event)) {
     return viewerRole === 'investor'
-      ? { title: 'Purchase Available', tone: 'success', Icon: CheckCircle2, badge: 'Ready to Purchase' }
-      : { title: 'Investor Approved for Token', tone: 'success', Icon: CheckCircle2, badge: 'Approved Investor' };
+      ? { title: 'Investment Access Enabled', tone: 'success', Icon: CheckCircle2, badge: 'Ready to Invest' }
+      : { title: 'Investor Access Enabled', tone: 'success', Icon: CheckCircle2, badge: 'Completed' };
   }
 
   if (claimVerificationEvent && viewerRole === 'investor') {
-    return { title: 'Verification Approved', tone: 'success', Icon: CheckCircle2, badge: 'Approved' };
+    return { title: 'Issuer Review Completed', tone: 'success', Icon: CheckCircle2, badge: 'Your Action' };
   }
 
   if (claimVerificationEvent && viewerRole === 'issuer') {
-    return { title: 'Verification Approved', tone: 'success', Icon: CheckCircle2, badge: 'Verified' };
+    return { title: 'Issuer Review Completed', tone: 'success', Icon: CheckCircle2, badge: 'Review Complete' };
   }
 
   switch (String(event?.eventType || '').toLowerCase()) {
     case 'claimsubmitted':
-      return { title: 'Verification Submitted', tone: 'success', Icon: CheckCircle2, badge: 'Submitted' };
+      return { title: 'Verification Completed', tone: 'success', Icon: CheckCircle2, badge: 'Submitted' };
     case 'approved':
       return { title: 'Application Approved', tone: 'success', Icon: CheckCircle2, badge: 'Approved' };
     case 'rejected':
@@ -68,6 +68,16 @@ const eventMeta = (event, { viewerRole = '', currentStatus = '' } = {}) => {
   }
 };
 
+
+const friendlyRequirementLabel = (value) => {
+  const normalized = String(value || '').trim().toUpperCase();
+  if (!normalized) return '';
+  if (normalized.includes('KYC') || normalized.includes('IDENTITY')) return 'Identity verification';
+  if (normalized.includes('ACCREDIT')) return 'Investor eligibility';
+  if (normalized.includes('COUNTRY') || normalized.includes('JURISDICTION')) return 'Country eligibility';
+  return normalized.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (character) => character.toUpperCase());
+};
+
 const formatBytes = (value) => {
   const bytes = Number(value);
   if (!Number.isFinite(bytes) || bytes <= 0) return '';
@@ -79,16 +89,18 @@ const formatBytes = (value) => {
 const defaultEventCopy = (event, viewerRole = '') => {
   if (isRegistryRegistrationConfirmedEvent(event)) {
     return viewerRole === 'investor'
-      ? 'You can now purchase this token.'
-      : 'This investor is now eligible to purchase the token.';
+      ? 'Your investment access is enabled. You can now invest in this asset.'
+      : 'This investor now has access to invest in this asset.';
   }
 
   switch (String(event?.eventType || '').toLowerCase()) {
-    case 'claimsubmitted': return 'All required investor verification was submitted successfully.';
+    case 'claimsubmitted': return viewerRole === 'investor'
+      ? 'Your required verification was submitted successfully. The issuer will now complete final approval.'
+      : 'The investor completed the required verification. Final approval can now be completed.';
     case 'approved': return 'This application has been approved.';
     case 'rejected': return event?.rejectReason || 'The issuer rejected this application submission.';
-    case 'resubmitted': return 'The investor resubmitted updated documents for review.';
-    case 'submitted': return 'The investor submitted this application for issuer review.';
+    case 'resubmitted': return viewerRole === 'investor' ? 'You submitted the requested updates for another review.' : 'The investor submitted the requested updates for another review.';
+    case 'submitted': return viewerRole === 'investor' ? 'Your application was sent to the issuer for review.' : 'The investor submitted this application for your review.';
     default: return event?.note || 'Application activity was recorded.';
   }
 };
@@ -111,7 +123,7 @@ export function SubmittedDocument({
               document.originalFileName || document.file,
               document.versionNumber ? `v${document.versionNumber}` : '',
               formatBytes(document.fileSize),
-              document.claimTopicCode,
+              friendlyRequirementLabel(document.claimTopicCode),
             ].filter(Boolean).join(' · ')}
           </small>
         </div>
@@ -161,9 +173,9 @@ export function ApplicationHistoryItem({
     || event.resubmitAttempt != null,
   );
   const submissionLabel = event.submissionNumber != null
-    ? `Submission ${event.submissionNumber}`
+    ? `Version ${event.submissionNumber}`
     : event.resubmitAttempt != null
-      ? `Resubmission ${event.resubmitAttempt}`
+      ? `Update ${event.resubmitAttempt}`
       : '';
 
   const actorRole = String(event.actorRole || 'system').toLowerCase();
@@ -202,10 +214,10 @@ export function ApplicationHistoryItem({
                 <XCircle size={17} />
                 <div>
                   <strong>Reason</strong>
-                  <p>{event.rejectReason || 'The issuer rejected this application submission.'}</p>
+                  <p>{event.rejectReason || 'The issuer did not approve this application.'}</p>
                   {event.rejectedClaim?.length ? (
                     <div className="application-history-claim-list">
-                      {event.rejectedClaim.map((claim) => <span key={claim}>{claim.replaceAll('_', ' ')}</span>)}
+                      {event.rejectedClaim.map((claim) => <span key={claim}>{friendlyRequirementLabel(claim)}</span>)}
                     </div>
                   ) : null}
                 </div>
@@ -213,43 +225,45 @@ export function ApplicationHistoryItem({
             ) : isInvestorClaimAction ? (
               <div className="application-history-message application-history-message--claim-action is-success">
                 <FileCheck2 size={16} />
-                <span>Your application has been approved. Complete the required verification to unlock investing in this token.</span>
+                <span>Your application passed the issuer review. Complete the required verification so the issuer can give you investment access.</span>
                 {onSubmitClaim ? <Button size="sm" onClick={onSubmitClaim}>Complete Verification</Button> : null}
               </div>
             ) : isIssuerWaitingForInvestor ? (
               <div className="application-history-waiting-action">
                 <Clock3 size={17} />
                 <div>
-                  <strong>Waiting for Investor Action</strong>
-                  <span>The investor still needs to complete the required verification. Once it is submitted, you can approve them to hold this token.</span>
+                  <strong>Waiting for investor</strong>
+                  <span>Your review is complete. The investor still needs to finish verification before you can complete final approval.</span>
                 </div>
               </div>
             ) : isInvestorClaimsSubmitted ? (
               <div className="application-history-investor-claim-submitted">
                 <div className={`application-history-message application-history-message--notify-issuer is-${meta.tone}`}>
-                  <FileCheck2 size={16} />
-                  <span>The investor has submitted all required verification. You can now complete the final approval step.</span>
+                  <Clock3 size={16} />
+                  <span>Nothing needed from you right now. Your verification is complete and the issuer is handling final approval.</span>
                   <Button
                     size="sm"
                     variant="secondary"
                     onClick={() => setContactSupportOpen(true)}
                   >
-                    Notify Issuer
+                    Get Help
                   </Button>
                 </div>
               </div>
             ) : (
               <div className={`application-history-message is-${meta.tone}`}>
                 <FileCheck2 size={16} />
-                <span>{isRegistryRegistrationConfirmedEvent(event) ? defaultEventCopy(event, viewerRole) : (event.note || defaultEventCopy(event, viewerRole))}</span>
+                <span>{['submitted', 'resubmitted', 'approved', 'claimsubmitted'].includes(String(event.eventType || '').toLowerCase()) || isRegistryRegistrationConfirmedEvent(event)
+                  ? defaultEventCopy(event, viewerRole)
+                  : (event.note || defaultEventCopy(event, viewerRole))}</span>
               </div>
             )}
 
             {hasDocuments ? (
               <div className="application-history-documents">
                 <div className="application-history-documents__title">
-                  <span>Submitted Documents</span>
-                  {event.submissionNumber != null ? <small>Snapshot #{event.submissionNumber}</small> : null}
+                  <span>Submitted documents</span>
+                  {event.submissionNumber != null ? <small>Version {event.submissionNumber}</small> : null}
                 </div>
                 {event.documents.map((document) => (
                   <SubmittedDocument
@@ -266,8 +280,8 @@ export function ApplicationHistoryItem({
 
             <div className="application-history-item__footer">
               <span>Recorded by: <strong>{actorDisplayName}</strong></span>
-              {event.resubmitAttempt != null ? <span>Resubmission attempt: <strong>{event.resubmitAttempt}</strong></span> : null}
-              {canReupload ? <Button variant="danger" size="sm" icon={UploadCloud} onClick={onReupload}>Re-upload</Button> : null}
+              {event.resubmitAttempt != null ? <span>Update attempt: <strong>{event.resubmitAttempt}</strong></span> : null}
+              {canReupload ? <Button variant="danger" size="sm" icon={UploadCloud} onClick={onReupload}>Upload Requested Documents</Button> : null}
             </div>
           </div>
         ) : null}

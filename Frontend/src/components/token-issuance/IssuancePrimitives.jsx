@@ -114,6 +114,28 @@ export function InfoCallout({ title, children, tone = 'info', icon: Icon = Info 
   );
 }
 
+
+export function HelpDetails({ title = 'What does this mean?', children, className }) {
+  return (
+    <details className={cn('issuance-help-details', className)}>
+      <summary>
+        <Info size={14} aria-hidden="true" />
+        <span>{title}</span>
+      </summary>
+      <div className="issuance-help-details__content">{children}</div>
+    </details>
+  );
+}
+
+export function ImpactNote({ title = 'What happens', children, tone = 'neutral', className }) {
+  return (
+    <div className={cn('issuance-impact-note', `issuance-impact-note--${tone}`, className)}>
+      <strong>{title}</strong>
+      <p>{children}</p>
+    </div>
+  );
+}
+
 export function AddressDisplay({
   address,
   label,
@@ -121,14 +143,33 @@ export function AddressDisplay({
   emptyLabel = 'Not assigned',
   compact = false,
   showFullAddress = false,
+  showCopyText = false,
+  copyLabel = 'Copy address',
   className,
 }) {
   const [copied, setCopied] = useState(false);
   const copyAddress = async () => {
-    if (!address || !navigator?.clipboard) return;
-    await navigator.clipboard.writeText(address);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1400);
+    if (!address) return;
+
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(address);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = address;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      setCopied(false);
+    }
   };
 
   return (
@@ -145,8 +186,15 @@ export function AddressDisplay({
       </div>
       {address ? (
         <div className="issuance-address__actions">
-          <button type="button" onClick={copyAddress} aria-label="Copy address" title="Copy address">
+          <button
+            type="button"
+            onClick={copyAddress}
+            className={cn(showCopyText && 'issuance-address__copy-button--labeled')}
+            aria-label={copied ? `${copyLabel} copied` : copyLabel}
+            title={copied ? 'Copied' : copyLabel}
+          >
             {copied ? <Check size={16} /> : <Copy size={16} />}
+            {showCopyText ? <span aria-live="polite">{copied ? 'Copied' : 'Copy'}</span> : null}
           </button>
           {explorerUrl ? (
             <a href={explorerUrl} target="_blank" rel="noreferrer" aria-label="Open in explorer" title="Open in explorer">

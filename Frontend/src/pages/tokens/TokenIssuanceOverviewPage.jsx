@@ -18,37 +18,42 @@ import { useTokenIssuanceStore } from '@/store/tokenIssuance.store';
 
 const roadmap = [
   {
-    title: 'Basics',
-    description: 'Define the token name, symbol, decimals, price, treasury wallet and description.',
+    title: 'Asset Details',
+    description: 'Add your asset name, symbol, price, payment details, and description.',
+    impact: 'These details identify your asset and define how investors will recognize and value it.',
     icon: BadgeCheck,
   },
   {
-    title: 'Investor Verification',
-    description: 'Choose the identity and eligibility checks investors must complete.',
+    title: 'Who Can Invest',
+    description: 'Choose the checks investors must pass before they can participate.',
+    impact: 'Only investors who meet the requirements you select will be allowed to invest or receive the asset.',
     icon: Fingerprint,
   },
   {
-    title: 'Transfer Rules',
-    description: 'Configure investor limits, balance limits and geographic restrictions.',
+    title: 'Investment Rules',
+    description: 'Set limits and restrictions for your investors.',
+    impact: 'These rules help control who can invest, how much they can hold, and where transfers are allowed.',
     icon: ShieldCheck,
   },
   {
-    title: 'Platform Permissions',
-    description: 'Review the authorized wallets used for token operations and investor approval.',
+    title: 'Who Manages This Asset',
+    description: 'Review the approved organization account used to manage the asset.',
+    impact: 'These permissions show what your approved organization account can manage after creation.',
     icon: LockKeyhole,
   },
   {
-    title: 'Review',
-    description: 'Review all settings before creating the token.',
+    title: 'Review & Create',
+    description: 'Review all your settings and create the asset when everything is ready.',
+    impact: 'Your final settings are checked before the asset is created and recorded on the blockchain.',
     icon: Rocket,
   },
 ];
 
 const standardBenefits = [
-  ['Investor verification before transfers', Fingerprint],
-  ['Verified investor access', ShieldCheck],
-  ['Clear verification and transaction records', BadgeCheck],
-  ['Transfer rules checked before every transfer', LockKeyhole],
+  ['Verify investors before they invest', Fingerprint],
+  ['Allow access only to approved investors', ShieldCheck],
+  ['Apply your investment rules automatically', LockKeyhole],
+  ['Keep investment activity securely recorded', BadgeCheck],
 ];
 
 export default function TokenIssuanceOverviewPage() {
@@ -95,11 +100,11 @@ export default function TokenIssuanceOverviewPage() {
     <div className="issuance-overview-page">
       <header className="issuance-overview-hero">
         <div>
-          <span className="eyebrow">Guided token setup</span>
-          <h1>Asset Issuance Wizard</h1>
+          <span className="eyebrow">Guided asset setup</span>
+          <h1>Create Your Investment Asset</h1>
           <p>
-            Create a compliant security token through a guided setup designed for institutional
-            issuers.
+            Set up your asset in a few simple steps. We’ll guide you through the information,
+            investor requirements, and rules needed to launch.
           </p>
         </div>
         <Button
@@ -107,7 +112,7 @@ export default function TokenIssuanceOverviewPage() {
           size="lg"
           onClick={openWizard}
         >
-          {hasStartedWizard ? 'Continue Wizard' : 'Start Wizard'}
+          {hasStartedWizard ? 'Continue Setup' : 'Start Setup'}
         </Button>
       </header>
 
@@ -118,11 +123,10 @@ export default function TokenIssuanceOverviewPage() {
               <Rocket size={20} />
             </span>
             <div>
-              <span className="eyebrow">Setup Roadmap</span>
-              <h2>Five focused stages from setup to launch</h2>
+              <span className="eyebrow">Simple Setup</span>
+              <h2>Set Up Your Asset in 5 Simple Steps</h2>
               <p>
-                Each completed step is saved securely to your account, so your token configuration stays
-                consistent as you move through the wizard.
+                Complete each step to prepare your asset for investors. Your progress is saved automatically.
               </p>
             </div>
           </div>
@@ -138,6 +142,7 @@ export default function TokenIssuanceOverviewPage() {
                   <div>
                     <strong>{step.title}</strong>
                     <p>{step.description}</p>
+                    <small className="issuance-roadmap-list__impact">Why it matters: {step.impact}</small>
                   </div>
                   <ArrowRight size={17} aria-hidden="true" />
                 </article>
@@ -153,13 +158,12 @@ export default function TokenIssuanceOverviewPage() {
                 <ShieldCheck size={20} />
               </span>
               <div>
-                <span className="eyebrow">Technical standard · ERC-3643</span>
-                <h2>Investor eligibility built into every transfer</h2>
+                <span className="eyebrow">Built-In Investor Checks</span>
+                <h2>Your rules are checked automatically</h2>
               </div>
             </div>
             <p>
-              ERC-3643 helps enforce investor verification and transfer rules automatically.
-              Technical blockchain details remain available when you need them.
+              Your investor requirements and investment rules are checked automatically before investments and transfers are completed.
             </p>
             <div className="issuance-benefit-list">
               {standardBenefits.map(([label, Icon]) => (
@@ -175,10 +179,9 @@ export default function TokenIssuanceOverviewPage() {
               <Zap size={20} />
             </span>
             <div>
-              <h3>Instant Settlement</h3>
+              <h3>Fast, Automatic Processing</h3>
               <p>
-                Approved token transfers settle on-chain after the investor and transfer requirements
-                are satisfied.
+                Once an investment meets your requirements, it can be processed automatically and securely recorded on the blockchain.
               </p>
             </div>
           </section>

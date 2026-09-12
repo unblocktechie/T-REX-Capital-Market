@@ -8,19 +8,13 @@ import {
 } from 'viem';
 import { env } from '@/config/env';
 import { web3Config } from '@/config/web3';
-
-const ERC20_TRANSFER_ABI = [
-  {
-    type: 'function',
-    name: 'transfer',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'to', type: 'address' },
-      { name: 'amount', type: 'uint256' },
-    ],
-    outputs: [{ name: '', type: 'bool' }],
-  },
-];
+import {
+  approvePlatformPurchaseSpending,
+  getPlatformPaymentApprovalState,
+  isPlatformWalletRejection,
+  submitPlatformPurchase,
+  waitForPlatformTransactionReceipt,
+} from '@/services/blockchain/trexPlatformController.service';
 
 const ERC20_BALANCE_ABI = [
   {
@@ -42,8 +36,9 @@ const walletErrorText = (error) =>
   `${error?.shortMessage || ''} ${error?.details || ''} ${error?.message || ''}`.toLowerCase();
 
 export const isInvestorPurchaseWalletRejection = (error) =>
-  walletErrorCode(error) === 4001 ||
-  /user rejected|user denied|request rejected|rejected the request/.test(walletErrorText(error));
+  isPlatformWalletRejection(error)
+  || walletErrorCode(error) === 4001
+  || /user rejected|user denied|request rejected|rejected the request/.test(walletErrorText(error));
 
 const parseChainId = (value) => {
   if (typeof value === 'number') return value;
@@ -56,18 +51,6 @@ const requiredAddress = (value, label) => {
   const normalized = String(value || '').trim();
   if (!isAddress(normalized)) throw new Error(`${label} is unavailable. Refresh the page and try again.`);
   return getAddress(normalized);
-};
-
-const requiredRawAmount = (value) => {
-  const normalized = String(value ?? '').trim();
-  if (!/^\d+$/.test(normalized)) {
-    throw new Error('The payment amount returned by the server is invalid. Refresh the page and try again.');
-  }
-  const amount = BigInt(normalized);
-  if (amount <= 0n) {
-    throw new Error('The payment amount returned by the server is invalid. Refresh the page and try again.');
-  }
-  return amount;
 };
 
 const chainFor = (value) => {
@@ -137,99 +120,87 @@ const activeRegisteredWallet = async ({ connector, connectedAddress, investorWal
 };
 
 /**
- * Broadcast the USDT payment for a backend-created purchase intent.
- *
- * Transaction-critical values are deliberately read only from preparedPurchase.
- * The caller must wait for a successful receipt before sharing the hash with the
- * backend confirm API.
+ * Read whether the registered investor already completed the app's persistent
+ * USDT spending approval. This is a read-only on-chain check and survives page
+ * refreshes because the allowance lives in the USDT contract.
  */
-export async function submitInvestorPurchasePayment({
-  connector,
-  connectedAddress,
-  preparedPurchase,
+export async function getInvestorUsdtSpendingApproval({
+  investorWalletAddress,
+  chainId,
+  requiredPaymentAmountRaw,
 }) {
-  const chainId = parseChainId(preparedPurchase?.chainId);
-  const usdtContractAddress = requiredAddress(
-    preparedPurchase?.usdtContractAddress,
-    'Payment token contract',
-  );
-  const treasuryWalletAddress = requiredAddress(
-    preparedPurchase?.treasuryWalletAddress,
-    'Issuer treasury wallet',
-  );
-  const investorWalletAddress = requiredAddress(
-    preparedPurchase?.investorWalletAddress,
-    'Registered investor wallet',
-  );
-  const usdtAmountRaw = requiredRawAmount(preparedPurchase?.usdtAmountRaw);
-
-  const { provider, chain, account } = await activeRegisteredWallet({
-    connector,
-    connectedAddress,
-    investorWalletAddress,
+  return getPlatformPaymentApprovalState({
+    owner: investorWalletAddress,
     chainId,
-  });
-
-  const walletClient = createWalletClient({
-    account,
-    chain,
-    transport: custom(provider),
-  });
-
-  return walletClient.writeContract({
-    account,
-    chain,
-    address: usdtContractAddress,
-    abi: ERC20_TRANSFER_ABI,
-    functionName: 'transfer',
-    args: [treasuryWalletAddress, usdtAmountRaw],
+    requiredAmountRaw: requiredPaymentAmountRaw,
   });
 }
 
 /**
- * Wait for the payment transaction to be mined successfully. The frontend uses
- * one confirmed receipt as the gate before it shares the hash with the backend;
- * the backend remains authoritative for its own required confirmation depth.
+ * Complete the one-time USDT spending approval only. No purchase is submitted
+ * by this function. The Platform Controller receives MAX_UINT256 allowance so
+ * later purchases can reuse the same permission without another approval.
  */
+export async function approveInvestorUsdtSpending({
+  connector,
+  connectedAddress,
+  investorWalletAddress,
+  chainId,
+  onStep,
+}) {
+  return approvePlatformPurchaseSpending({
+    connector,
+    connectedAddress,
+    investorWalletAddress,
+    chainId,
+    onStep,
+  });
+}
+
+/**
+ * Submit a purchase directly from the registered investor wallet to the
+ * Platform Controller. No backend purchase intent is required. USDT spending
+ * approval remains a separate wallet transaction.
+ */
+export async function submitInvestorPurchasePayment({
+  connector,
+  connectedAddress,
+  investorWalletAddress,
+  chainId,
+  tokenAddress,
+  tokenAmountRaw,
+  tokenAmount,
+  expectedPaymentAmountRaw,
+  onStep,
+}) {
+  return submitPlatformPurchase({
+    connector,
+    connectedAddress,
+    investorWalletAddress,
+    chainId,
+    tokenAddress,
+    tokenAmountRaw,
+    tokenAmount,
+    expectedPaymentAmountRaw,
+    onStep,
+  });
+}
+
+/** Wait for the Platform Controller purchase transaction to confirm. */
 export async function waitForInvestorPurchasePaymentReceipt({ txHash, chainId, timeout = 180_000 }) {
-  const hash = String(txHash || '').trim();
-  if (!/^0x[a-fA-F0-9]{64}$/.test(hash)) {
-    throw new Error('The payment transaction hash is invalid.');
-  }
-
   try {
-    const receipt = await publicClientFor(chainId).waitForTransactionReceipt({
-      hash,
-      confirmations: 1,
-      timeout,
-    });
-
-    if (receipt.status !== 'success') {
-      const reverted = new Error('The payment transaction was confirmed but did not succeed. No purchase confirmation was sent.');
-      reverted.code = 'PAYMENT_REVERTED';
-      reverted.transactionHash = hash;
-      reverted.transactionSubmitted = true;
-      reverted.confirmedRevert = true;
-      throw reverted;
-    }
-
-    return receipt;
+    return await waitForPlatformTransactionReceipt({ txHash, chainId, timeout });
   } catch (error) {
-    if (error?.confirmedRevert) throw error;
-    const pending = new Error(
-      error?.shortMessage
-      || error?.message
-      || 'The payment is still waiting for network confirmation.',
-      { cause: error },
-    );
-    pending.transactionHash = hash;
-    pending.transactionSubmitted = true;
-    pending.code = 'PAYMENT_CONFIRMATION_PENDING';
-    throw pending;
+    if (error?.confirmedRevert) {
+      error.code = 'PURCHASE_REVERTED';
+      throw error;
+    }
+    error.code = 'PURCHASE_CONFIRMATION_PENDING';
+    throw error;
   }
 }
 
-/** Read the registered investor's current deployed-token balance before payment. */
+/** Read the registered investor's current token balance before purchase. */
 export async function getInvestorPurchaseTokenBalance(preparedPurchase) {
   const tokenAddress = requiredAddress(preparedPurchase?.tokenAddress, 'Token contract');
   const investorWalletAddress = requiredAddress(

@@ -18,7 +18,7 @@ export function OrganizationSummaryHeader({ organization }) {
       <div className="org-summary-header__identity">
         <span className="org-summary-header__avatar">{initialsFor(company.legalName)}</span>
         <div>
-          <span className="eyebrow">Organization Verified (KYB)</span>
+          <span className="eyebrow">Organization verified</span>
           <h1>{company.legalName || 'Verified Organization'}</h1>
           <p>
             <Building2 size={15} /> {company.entityTypeName || company.entityType || 'Registered entity'}
@@ -30,7 +30,7 @@ export function OrganizationSummaryHeader({ organization }) {
       <div className="org-summary-header__status">
         <OrganizationStatusBadge status={ORGANIZATION_STATUSES.VERIFIED} />
         <small>
-          <CheckCircle2 size={14} /> Registration {company.registrationNumber || 'confirmed'}
+          <CheckCircle2 size={14} /> Registration no. {company.registrationNumber || 'confirmed'}
         </small>
       </div>
     </Card>

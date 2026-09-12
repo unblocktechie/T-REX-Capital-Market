@@ -2913,6 +2913,54 @@ button.org-stepper__button {
   background: rgba(16, 185, 129, 0.09);
 }
 
+.org-wallet-card__technical {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--brand-panel-border);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--brand-panel-glass) 82%, transparent);
+}
+
+.org-wallet-card__technical > summary {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  color: var(--brand-panel-soft);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+  cursor: pointer;
+  list-style: none;
+}
+
+.org-wallet-card__technical > summary::-webkit-details-marker {
+  display: none;
+}
+
+.org-wallet-card__technical > summary::after {
+  content: '+';
+  margin-left: auto;
+  color: var(--brand-link-muted);
+  font-size: 16px;
+}
+
+.org-wallet-card__technical[open] > summary::after {
+  content: '−';
+}
+
+.org-wallet-card__technical > summary:hover,
+.org-wallet-card__technical > summary:focus-visible {
+  background: var(--brand-panel-glass-hover);
+  color: var(--brand-panel-text);
+  outline: 0;
+}
+
+.org-wallet-card__technical .org-wallet-card__contract {
+  margin: 0 12px 12px;
+}
+
 .org-wallet-card__contract-label {
   display: inline-flex;
   align-items: center;

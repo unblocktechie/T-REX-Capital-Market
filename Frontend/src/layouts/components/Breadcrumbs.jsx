@@ -19,7 +19,7 @@ const labels = {
   investors: 'Investment Requests',
   'investor-directory': 'Investors',
   invitations: 'Invitations',
-  transactions: 'Transactions',
+  transactions: 'Transaction History',
   redemptions: 'Redemption Requests',
   'corporate-actions': 'Corporate actions',
   documents: 'Documents',
@@ -27,9 +27,9 @@ const labels = {
   team: 'Team & access',
   marketplace: 'Marketplace',
   applications: 'My Applications',
-  'asset-management': 'Manage Tokens',
+  'asset-management': 'Manage Investments',
   'submit-claim': 'Complete Verification',
-  profile: 'Profile',
+  profile: 'Investor Profile',
   settings: 'Settings',
   organization: 'Organization',
   'company-information': 'Company Information',
@@ -50,7 +50,7 @@ export function Breadcrumbs() {
   const getLabel = (part, index) => {
     const isTokenIdentifier = parts[index - 1] === 'tokens' && part !== 'new';
     if (isTokenIdentifier) return tokenSymbol || 'Token details';
-    if (parts[index - 1] === 'marketplace') return 'Offering Details';
+    if (parts[index - 1] === 'marketplace') return 'Investment Details';
     if (parts[index - 1] === 'applications') return 'Application Details';
     if (parts[index - 1] === 'investors') return 'Investment Request Details';
     if (parts[index - 1] === 'redemptions') return 'Redemption Details';

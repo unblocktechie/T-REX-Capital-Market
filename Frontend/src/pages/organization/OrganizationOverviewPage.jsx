@@ -121,9 +121,9 @@ export default function OrganizationOverviewPage() {
     if (!contractAddress) return;
     try {
       await navigator.clipboard.writeText(contractAddress);
-      toast.success('On-chain identity copied');
+      toast.success('Verification record copied');
     } catch {
-      toast.error('Unable to copy on-chain ID');
+      toast.error('Unable to copy verification record');
     }
   };
 
@@ -136,37 +136,37 @@ export default function OrganizationOverviewPage() {
         {[
           {
             icon: Globe2,
-            label: 'Country',
+            label: 'Registered in',
             value: primaryJurisdiction,
-            helper: 'Incorporation',
+            helper: 'Company registration country',
             tone: 'blue',
           },
           {
             icon: Building2,
-            label: 'Entity Type',
+            label: 'Company type',
             value: company.entityTypeName || company.entityType || 'Registered entity',
-            helper: 'Company',
+            helper: 'Legal structure',
             tone: 'purple',
           },
           {
             icon: UsersRound,
-            label: 'Ultimate Beneficial Owners',
+            label: 'Company owners',
             value: owners.length,
-            helper: `${owners.length === 1 ? 'Total owner' : 'Total owners'}`,
+            helper: `${owners.length === 1 ? 'Owner on record' : 'Owners on record'}`,
             tone: 'green',
           },
           {
             icon: Rocket,
-            label: 'Token Readiness',
+            label: 'Issuer access',
             value: 'Ready',
-            helper: 'Launch enabled',
+            helper: 'Can create and manage assets',
             tone: 'orange',
           },
           {
             icon: FileCheck2,
-            label: 'Documents',
+            label: 'Verification documents',
             value: documents.length,
-            helper: 'Uploaded',
+            helper: 'Documents on file',
             tone: 'sky',
           },
         ].map((metric) => (
@@ -184,17 +184,17 @@ export default function OrganizationOverviewPage() {
           <header>
             <div>
               <h2>Company Details</h2>
-              <p>Verified legal identity, registration profile, and regulatory footprint.</p>
+              <p>Your verified company information used for your issuer account.</p>
             </div>
             <span className="org-readonly-verified"><BadgeCheck size={15} /> Verified</span>
           </header>
           <dl className="org-detail-grid org-detail-grid--comfortable">
             <div>
-              <dt>Legal Company Name</dt>
+              <dt>Company name</dt>
               <dd>{company.legalName || '—'}</dd>
             </div>
             <div>
-              <dt>Headquarters Address</dt>
+              <dt>Registered address</dt>
               <dd>
                 {company.address.street || '—'}
                 {(company.address.cityName || company.address.city) ? `, ${company.address.cityName || company.address.city}` : ''}
@@ -203,7 +203,7 @@ export default function OrganizationOverviewPage() {
               </dd>
             </div>
             <div>
-              <dt>Entity Type</dt>
+              <dt>Company type</dt>
               <dd>{company.entityTypeName || company.entityType || '—'}</dd>
             </div>
             <div>
@@ -215,15 +215,15 @@ export default function OrganizationOverviewPage() {
               <dd>{company.registrationNumber || '—'}</dd>
             </div>
             <div>
-              <dt>Country of Incorporation</dt>
+              <dt>Registered in</dt>
               <dd>{primaryJurisdiction}</dd>
             </div>
             <div>
-              <dt>Date of Incorporation</dt>
+              <dt>Date incorporated</dt>
               <dd>{incorporationDate}</dd>
             </div>
             <div>
-              <dt>Tax ID Number</dt>
+              <dt>Tax ID</dt>
               <dd>{jurisdiction.taxIdentificationNumber || 'Not provided'}</dd>
             </div>
           </dl>
@@ -232,8 +232,8 @@ export default function OrganizationOverviewPage() {
         <Card className="org-wallet-card">
           <header className="org-wallet-card__header">
             <div>
-              <span className="org-wallet-card__eyebrow">Wallet integration</span>
-              <h2>Master Organization Wallet</h2>
+              <span className="org-wallet-card__eyebrow">Secure management account</span>
+              <h2>Approved Organization Wallet</h2>
             </div>
             <span
               className={`org-wallet-card__status ${
@@ -250,15 +250,15 @@ export default function OrganizationOverviewPage() {
                 <Wallet size={20} />
               </span>
               <div className="org-wallet-card__address-copy">
-                <small>Organization Wallet</small>
+                <small>Approved wallet</small>
                 <strong title={organizationWallet || undefined}>
                   {organizationWallet
                     ? shortenWalletAddress(organizationWallet, 9, 9)
                     : 'Wallet address unavailable'}
                 </strong>
                 <p>
-                  This verified wallet is used to create and manage tokens, approve investors, and
-                  authorize future issuer actions.
+                  This is the wallet your organization approved. It is used to create and manage assets,
+                  approve investors, and confirm important issuer actions.
                 </p>
               </div>
               {organizationWallet ? (
@@ -278,53 +278,56 @@ export default function OrganizationOverviewPage() {
               <article>
                 <span><Network size={17} /></span>
                 <div>
-                  <small>Network</small>
+                  <small>Blockchain network</small>
                   <strong>{walletNetworkName}</strong>
                 </div>
               </article>
               <article>
                 <span><ShieldCheck size={17} /></span>
                 <div>
-                  <small>Verification status</small>
+                  <small>Verified on</small>
                   <strong>{verifiedDate}</strong>
                 </div>
               </article>
             </div>
 
-            <article className="org-wallet-card__contract">
-              <div className="org-wallet-card__contract-copy">
-                <span className="org-wallet-card__contract-label">
-                  <Fingerprint size={15} /> Organization On-chain Identity
-                </span>
-                <strong title={contractAddress || undefined}>
-                  {contractAddress || 'Not assigned yet'}
-                </strong>
-                <p>A technical on-chain identity created for your verified organization.</p>
-              </div>
-              {contractAddress ? (
-                <button
-                  type="button"
-                  className="org-wallet-card__copy-button org-wallet-card__copy-button--contract"
-                  onClick={copyContractAddress}
-                  aria-label="Copy organization on-chain identity"
-                  title="Copy on-chain identity"
-                >
-                  <Copy size={16} />
-                </button>
-              ) : null}
-            </article>
+            <details className="org-wallet-card__technical">
+              <summary>View technical details</summary>
+              <article className="org-wallet-card__contract">
+                <div className="org-wallet-card__contract-copy">
+                  <span className="org-wallet-card__contract-label">
+                    <Fingerprint size={15} /> Organization verification record
+                  </span>
+                  <strong title={contractAddress || undefined}>
+                    {contractAddress || 'Not assigned yet'}
+                  </strong>
+                  <p>This blockchain record securely links the approved wallet to your verified organization.</p>
+                </div>
+                {contractAddress ? (
+                  <button
+                    type="button"
+                    className="org-wallet-card__copy-button org-wallet-card__copy-button--contract"
+                    onClick={copyContractAddress}
+                    aria-label="Copy organization verification record"
+                    title="Copy verification record"
+                  >
+                    <Copy size={16} />
+                  </button>
+                ) : null}
+              </article>
+            </details>
           </div>
 
           <footer className="org-wallet-card__footer">
             <div className="org-wallet-card__jurisdiction">
-              <small>Primary jurisdiction</small>
+              <small>Registered in</small>
               <b>{primaryJurisdiction}</b>
             </div>
             {walletExplorerUrl || contractExplorerUrl ? (
               <div className="org-wallet-card__actions">
                 {walletExplorerUrl ? (
                   <a href={walletExplorerUrl} target="_blank" rel="noreferrer">
-                    <ExternalLink size={15} /> View wallet
+                    <ExternalLink size={15} /> View on blockchain
                   </a>
                 ) : null}
                 {contractExplorerUrl ? (
@@ -334,7 +337,7 @@ export default function OrganizationOverviewPage() {
                     target="_blank"
                     rel="noreferrer"
                   >
-                    <ExternalLink size={15} /> View contract
+                    <ExternalLink size={15} /> View verification record
                   </a>
                 ) : null}
               </div>
@@ -347,10 +350,10 @@ export default function OrganizationOverviewPage() {
         <Card className="org-readonly-card org-overview-ubo-card">
           <header>
             <div>
-              <h2>Ultimate Beneficial Owners (UBOs)</h2>
-              <p>Verified ownership distribution and primary control information.</p>
+              <h2>Company Owners</h2>
+              <p>People recorded as owners of this organization.</p>
             </div>
-            <span className="org-readonly-verified"><CheckCircle2 size={15} /> {totalOwnership.toFixed(0)}% disclosed</span>
+            <span className="org-readonly-verified"><CheckCircle2 size={15} /> {totalOwnership.toFixed(0)}% ownership provided</span>
           </header>
 
           <div className="org-overview-ubo-list">
@@ -371,7 +374,7 @@ export default function OrganizationOverviewPage() {
                 </div>
               </article>
             )) : (
-              <div className="org-overview-empty-note">No beneficial owners available.</div>
+              <div className="org-overview-empty-note">No company owners are available.</div>
             )}
           </div>
         </Card>
@@ -379,8 +382,8 @@ export default function OrganizationOverviewPage() {
         <Card className="org-readonly-card org-overview-doc-card" id="organization-documents">
           <header>
             <div>
-              <h2>Document Vault</h2>
-              <p>Submitted legal files securely stored and available for review.</p>
+              <h2>Verification Documents</h2>
+              <p>Documents submitted to verify your organization.</p>
             </div>
             <span className="org-readonly-verified"><FolderKanban size={15} /> {documents.length} uploaded</span>
           </header>

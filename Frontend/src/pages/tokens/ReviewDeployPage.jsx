@@ -112,9 +112,15 @@ export default function ReviewDeployPage() {
     .toLowerCase()
     .replace(/[^a-z]/g, '');
   const isReadyToDeploy = normalizedBackendStatus === 'readytodeploy';
-  const isDeploymentPending = normalizedBackendStatus === 'deploymentpending';
+  const isDeploymentPending = [
+    'deploymentpending',
+    'deploymentconfirmed',
+    'configurationpending',
+    'priceconfirmationrequired',
+  ].includes(normalizedBackendStatus);
+  const isConfigurationFailed = normalizedBackendStatus === 'configurationfailed';
   const isDeploymentFailed = normalizedBackendStatus === 'deploymentfailed';
-  const isDeployed = normalizedBackendStatus === 'deployed';
+  const isDeployed = ['deployed', 'completed', 'active'].includes(normalizedBackendStatus);
   const blocking = hasBlockingReviewErrors(checks) || isDeployed;
   const validChecks = checks.filter((check) => check.status === 'valid').length;
   const kyc = identityClaims.claimTopics.find((topic) => topic.id === 'kyc');
@@ -126,7 +132,7 @@ export default function ReviewDeployPage() {
     ? wallet.chain?.name ||
       `Unsupported network${wallet.chainId ? ` (Chain ID ${wallet.chainId})` : ''}`
     : 'No network connected';
-  useDocumentTitle('Review & Launch');
+  useDocumentTitle('Review & Create');
 
   const switchToRequiredNetwork = async () => {
     if (!wallet.isConnected || wallet.isCorrectNetwork || wallet.isBusy) return;
@@ -146,7 +152,12 @@ export default function ReviewDeployPage() {
   };
 
   const openDeployment = () => {
-    if (isDeploymentPending) {
+    if (isDeploymentPending || isConfigurationFailed) {
+      const retryMode = normalizedBackendStatus === 'priceconfirmationrequired'
+        ? 'price-confirmation'
+        : ['deploymentconfirmed', 'configurationpending', 'configurationfailed'].includes(normalizedBackendStatus)
+          ? 'configuration'
+          : 'backend-sync';
       setDeployment({
         status: 'processing',
         activeStage: 4,
@@ -154,13 +165,17 @@ export default function ReviewDeployPage() {
         attemptStatus: 'pending',
         error: '',
         canRetry: false,
-        retryMode: 'backend-sync',
+        retryMode,
         walletAction: {
           key: 'backend-resume',
           status: 'syncing',
           title: 'Checking token creation status',
           description:
-            'An existing token-creation attempt will be resumed safely. MetaMask will open only if no transaction has already been submitted.',
+            retryMode === 'configuration'
+              ? 'The asset already exists. We will check the live transfer state and continue only the missing setup step.'
+              : retryMode === 'price-confirmation'
+                ? 'The asset already exists. We will check the live price and continue only the missing price step.'
+                : 'An existing token-creation attempt will be resumed safely. MetaMask will open only if no transaction has already been submitted.',
         },
       });
       navigate(ROUTES.tokenDeploying);
@@ -275,11 +290,11 @@ export default function ReviewDeployPage() {
     <>
       <IssuanceLayout
         stepKey="review"
-        title="Review & Create Token"
-        description={`Review the setup below before your Organization Wallet creates the token on ${networkLabel}. Technical transaction details remain available during confirmation.`}
+        title="Review & Create"
+        description="Review your business settings in plain language. You can go back and change anything that does not match your intended offering before creating the asset."
         onBack={() => navigate(ROUTES.tokenIssuanceStep('agents'))}
         onContinue={openDeployment}
-        continueLabel="Create Token"
+        continueLabel={isDeploymentPending || isConfigurationFailed ? 'Continue Setup' : 'Create Asset'}
         continueIcon={Rocket}
         continueDisabled={blocking}
         hideFooter
@@ -288,7 +303,7 @@ export default function ReviewDeployPage() {
         <div className="review-dashboard">
           <div className="review-dashboard__top-grid">
             <ReviewCard
-              title="Token Basics"
+              title="Asset Details"
               stepKey="token-information"
               icon={Coins}
               className="review-token-card"
@@ -298,32 +313,32 @@ export default function ReviewDeployPage() {
                   {tokenInformation.logo?.dataUrl ? (
                     <img
                       src={tokenInformation.logo.dataUrl}
-                      alt={`${tokenInformation.name || 'Token'} logo`}
+                      alt={`${tokenInformation.name || 'Asset'} logo`}
                     />
                   ) : (
                     <Coins size={24} aria-hidden="true" />
                   )}
                 </span>
                 <div>
-                  <span>Token configuration</span>
-                  <strong>{tokenInformation.name || 'Unnamed token'}</strong>
+                  <span>Asset setup</span>
+                  <strong>{tokenInformation.name || 'Unnamed asset'}</strong>
                   <small>{tokenInformation.symbol || 'No symbol configured'}</small>
                 </div>
               </div>
 
               <dl className="review-detail-grid review-detail-grid--token">
-                <DetailItem label="Token Name">{tokenInformation.name}</DetailItem>
+                <DetailItem label="Asset name">{tokenInformation.name}</DetailItem>
                 <DetailItem label="Symbol">{tokenInformation.symbol}</DetailItem>
-                <DetailItem label="Decimals">{tokenInformation.decimals}</DetailItem>
-                <DetailItem label="Initial Token Price">
+                <DetailItem label="Decimal places">{tokenInformation.decimals}</DetailItem>
+                <DetailItem label="Starting price per unit">
                   {supplyPricing.initialPrice
                     ? formatMoney(supplyPricing.initialPrice, 'USDT')
                     : '—'}
                 </DetailItem>
-                <DetailItem label="Treasury Wallet" full>
+                <DetailItem label="Approved organization account" full>
                   <AddressDisplay address={tokenInformation.treasuryWallet} compact />
                 </DetailItem>
-                <DetailItem label="Token Description" full>
+                <DetailItem label="Investor-facing description" full>
                   <span className="review-description-text">
                     {tokenInformation.description || 'No description provided.'}
                   </span>
@@ -332,7 +347,7 @@ export default function ReviewDeployPage() {
             </ReviewCard>
 
             <ReviewCard
-              title="Investor Verification"
+              title="Who Can Invest"
               stepKey="identity-claims"
               icon={BadgeCheck}
               className="review-identity-card"
@@ -342,18 +357,24 @@ export default function ReviewDeployPage() {
                   <BadgeCheck size={19} />
                 </span>
                 <div>
-                  <strong>On-chain identity ready</strong>
-                  <small>Approved investor list ready</small>
+                  <strong>Investor approval setup ready</strong>
+                  <small>Your selected investor checks will be enforced</small>
                 </div>
-                <StatusBadge status="valid">Verified</StatusBadge>
+                <StatusBadge status="valid">Ready</StatusBadge>
               </div>
 
               <div className="review-claims-block">
-                <span>Required Verification</span>
+                <span>Checks investors must pass</span>
                 <div className="review-claim-tags">
                   {enabledClaims.length ? (
                     enabledClaims.map((topic) => (
-                      <span key={topic.id}>{topic.shortName || topic.name}</span>
+                      <span key={topic.id}>
+                        {topic.id === 'kyc'
+                          ? 'Identity verification'
+                          : topic.id === 'accredited'
+                            ? 'Accredited investor status'
+                            : topic.shortName || topic.name}
+                      </span>
                     ))
                   ) : (
                     <small>No verification requirements enabled</small>
@@ -363,23 +384,23 @@ export default function ReviewDeployPage() {
 
               <dl className="review-identity-list">
                 <div>
-                  <dt>KYC verification</dt>
+                  <dt>Identity verification</dt>
                   <dd>
                     <StatusBadge status={kyc?.enabled ? 'valid' : 'error'}>
-                      {kyc?.enabled ? 'Enabled' : 'Disabled'}
+                      {kyc?.enabled ? 'Required' : 'Not required'}
                     </StatusBadge>
                   </dd>
                 </div>
                 <div>
-                  <dt>Accredited investor</dt>
+                  <dt>Accredited investor status</dt>
                   <dd>
                     <StatusBadge status={accredited?.enabled ? 'valid' : 'neutral'}>
-                      {accredited?.enabled ? 'Enabled' : 'Optional'}
+                      {accredited?.enabled ? 'Required' : 'Not required'}
                     </StatusBadge>
                   </dd>
                 </div>
                 <div>
-                  <dt>Verification provider</dt>
+                  <dt>Who approves investors</dt>
                   <dd>
                     {identityClaims.trustedIssuer.mode === 'organization'
                       ? 'My organization'
@@ -391,10 +412,10 @@ export default function ReviewDeployPage() {
           </div>
 
           <div className="review-dashboard__middle-grid">
-            <ReviewCard title="Validation Checklist" icon={ShieldCheck} className="review-validation-card">
+            <ReviewCard title="Ready-to-create checks" icon={ShieldCheck} className="review-validation-card">
               <div className="review-validation-summary">
                 <strong>{validChecks}/{checks.length}</strong>
-                <span>validation checks passed</span>
+                <span>setup checks passed</span>
               </div>
               <div className="review-checklist">
                 {checks.map((check) => {
@@ -406,25 +427,33 @@ export default function ReviewDeployPage() {
                     >
                       <Icon size={18} />
                       <span>{check.label}</span>
-                      <StatusBadge status={check.status}>{check.status}</StatusBadge>
+                      <StatusBadge status={check.status}>
+                        {check.status === 'valid'
+                          ? 'Ready'
+                          : check.status === 'pending'
+                            ? 'Waiting'
+                            : check.status === 'warning'
+                              ? 'Review'
+                              : 'Action needed'}
+                      </StatusBadge>
                     </div>
                   );
                 })}
               </div>
             </ReviewCard>
 
-            <ReviewCard title="Platform Permissions & Transfer Rules" icon={Gavel} className="review-execution-card">
+            <ReviewCard title="Management & Investment Rules" icon={Gavel} className="review-execution-card">
               <div className="review-execution-grid">
                 <section className="review-rule-panel">
                   <header>
                     <div>
                       <UsersRound size={18} />
-                      <h3>Authorized Roles</h3>
+                      <h3>Who manages the asset</h3>
                     </div>
                     <button
                       type="button"
                       onClick={() => navigate(ROUTES.tokenIssuanceStep('agents'))}
-                      aria-label="Edit platform permissions"
+                      aria-label="Edit asset management roles"
                     >
                       <Edit3 size={14} /> Edit
                     </button>
@@ -445,19 +474,19 @@ export default function ReviewDeployPage() {
                   <header>
                     <div>
                       <Landmark size={18} />
-                      <h3>Transfer Rules</h3>
+                      <h3>Investment rules</h3>
                     </div>
                     <button
                       type="button"
                       onClick={() => navigate(ROUTES.tokenIssuanceStep('compliance'))}
-                      aria-label="Edit transfer rules"
+                      aria-label="Edit investment rules"
                     >
                       <Edit3 size={14} /> Edit
                     </button>
                   </header>
                   <dl className="review-transfer-list">
                     <div>
-                      <dt>Maximum Investors</dt>
+                      <dt>Maximum number of investors</dt>
                       <dd>
                         {compliance.maximumInvestors
                           ? formatNumber(compliance.maximumInvestors)
@@ -465,7 +494,7 @@ export default function ReviewDeployPage() {
                       </dd>
                     </div>
                     <div>
-                      <dt>Maximum Holding per Investor</dt>
+                      <dt>Maximum amount one investor can hold</dt>
                       <dd>
                         {compliance.maximumBalance
                           ? formatNumber(compliance.maximumBalance)
@@ -473,7 +502,7 @@ export default function ReviewDeployPage() {
                       </dd>
                     </div>
                     <div className="review-transfer-jurisdictions">
-                      <dt>Restricted Countries</dt>
+                      <dt>Countries blocked</dt>
                       <dd className="review-transfer-jurisdictions__count">
                         <StatusBadge status={compliance.countries.length ? 'warning' : 'valid'}>
                           {compliance.countries.length
@@ -498,8 +527,7 @@ export default function ReviewDeployPage() {
                           </div>
                         ) : (
                           <p className="review-jurisdiction-empty">
-                            No country restrictions are configured. Eligible investors may proceed
-                            from any country, as long as they meet the verification and transfer requirements.
+                            No countries are blocked. Investors may participate from any country if they meet your other investor checks and limits.
                           </p>
                         )}
                       </dd>
@@ -517,28 +545,28 @@ export default function ReviewDeployPage() {
             <div className="review-deployment-panel__heading">
               <span>
                 {isDeploymentPending
-                  ? 'Token creation in progress'
+                  ? 'Asset creation in progress'
                   : isDeploymentFailed
-                    ? 'Token creation retry available'
+                    ? 'Asset creation retry available'
                     : isReadyToDeploy
-                      ? 'Proposal validated'
+                      ? 'Setup validated'
                       : 'Ready to create'}
               </span>
-              <h2>{`Create your token on ${networkLabel}`}</h2>
+              <h2>Create your investment asset</h2>
               <p>
                 {isDeploymentPending
-                  ? 'A token-creation attempt already exists. Continue to resume the submitted transaction or pending wallet approval safely.'
+                  ? 'An asset-creation attempt already exists. Continue to safely resume the submitted action or pending account approval.'
                   : isDeploymentFailed
-                    ? 'The previous blockchain transaction did not finish. Continue to check its status and start a new authorized attempt only when allowed.'
+                    ? 'The previous creation action did not finish. Continue to check its status and retry only when the platform allows it.'
                     : isReadyToDeploy
-                      ? 'Your setup is ready. Confirm with your Organization Wallet to create the token on-chain.'
-                      : 'We will check the setup first, then your Organization Wallet will ask you to approve the blockchain transaction.'}
+                      ? 'Your setup is ready. Your approved organization account will ask you to confirm the actions needed to create the asset.'
+                      : 'We will check the setup first, then your approved organization account will ask you to confirm the actions needed to create the asset.'}
               </p>
             </div>
 
             <div className="review-deployment-wallet">
               <div className="review-deployment-wallet__control">
-                <span className="review-deployment-wallet__label">Organization Wallet</span>
+                <span className="review-deployment-wallet__label">Approved organization account</span>
                 <WalletControl expanded />
               </div>
 
@@ -561,9 +589,9 @@ export default function ReviewDeployPage() {
                   <span>
                     {wallet.isConnected
                       ? wallet.isCorrectNetwork
-                        ? `Ready to create on ${networkLabel}`
-                        : `${networkLabel} is required to create the token`
-                      : `Connect your wallet to ${networkLabel}`}
+                        ? 'Account and network are ready'
+                        : `${networkLabel} is required to create the asset`
+                      : `Connect your approved account to ${networkLabel}`}
                   </span>
                 </div>
                 {wallet.isConnected && !wallet.isCorrectNetwork ? (
@@ -592,8 +620,7 @@ export default function ReviewDeployPage() {
             tokenInformation.treasuryWallet &&
             wallet.address?.toLowerCase() !== tokenInformation.treasuryWallet.toLowerCase() ? (
               <InfoCallout title="Authorized wallet required" tone="warning" icon={ShieldCheck}>
-                Reconnect with the approved Organization Wallet shown in Token Information before
-                creating this token.
+                Reconnect with the approved organization account shown in Asset Details before creating this asset.
               </InfoCallout>
             ) : null}
 
@@ -610,8 +637,7 @@ export default function ReviewDeployPage() {
               <div>
                 <strong>Review before creating</strong>
                 <p>
-                  Creating the token publishes its core settings to Sepolia. Token name, symbol, decimals
-                  and some technical settings cannot be changed after confirmation.
+                  Creating the asset records its core settings on the network. The asset name, symbol, decimal places, and some technical settings may not be changeable after confirmation.
                 </p>
               </div>
             </div>
@@ -622,7 +648,7 @@ export default function ReviewDeployPage() {
                 icon={ArrowLeft}
                 onClick={() => navigate(ROUTES.tokenIssuanceStep('agents'))}
               >
-                Back to Permissions
+                Back to Management
               </Button>
               <Button
                 icon={Rocket}
@@ -633,14 +659,14 @@ export default function ReviewDeployPage() {
                 {isDeploymentPending
                   ? 'Continue Creation'
                   : isDeploymentFailed
-                    ? 'Retry Token Creation'
+                    ? 'Retry Asset Creation'
                     : isReadyToDeploy
-                      ? 'Sign and Create Token'
-                      : 'Review and Create Token'}
+                      ? 'Confirm and Create Asset'
+                      : 'Review and Create Asset'}
               </Button>
             </div>
             <small className="review-deployment-panel__note">
-              Your Organization Wallet will approve the blockchain transaction. MetaMask will show any Sepolia network fee before you confirm.
+              Your approved organization account will ask you to confirm the required creation actions. MetaMask will show any network fee before you approve them.
             </small>
           </section>
         </div>

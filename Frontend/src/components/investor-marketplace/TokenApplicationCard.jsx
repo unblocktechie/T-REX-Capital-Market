@@ -158,12 +158,12 @@ export function TokenApplicationCard({
   const StatusIcon = STATUS_ICON[card.status] || LockKeyhole;
   const accentHue = deriveAccentHue(token);
   const maxBalanceMetric = {
-    label: 'Max Balance / Holder',
+    label: 'Maximum you can hold',
     value: card.maxBalance == null ? '—' : card.maxBalance.toLocaleString(),
     icon: Landmark,
   };
   const maxHoldersMetric = {
-    label: 'Max Holders',
+    label: 'Investor limit',
     value: card.maxHolders == null ? '—' : card.maxHolders.toLocaleString(),
     icon: UsersRound,
   };
@@ -193,7 +193,6 @@ export function TokenApplicationCard({
           </div>
 
           <div className="token-application-card__badges">
-            <span className="token-application-card__standard"><ShieldCheck size={13} /> {card.standard}</span>
             <MarketplaceStatusBadge status={card.status} compact />
           </div>
         </header>
@@ -205,7 +204,7 @@ export function TokenApplicationCard({
             </div>
           ) : null}
           <div className="token-application-card__metric token-application-card__metric--primary token-application-card__metric--top-left">
-            <span>Current Price</span>
+            <span>Price per unit</span>
             <strong><Coins size={19} /> {moneyLabel(card.price, card.currency)}</strong>
           </div>
           <div className="token-application-card__metric token-application-card__metric--primary token-application-card__metric--top-right">
@@ -213,7 +212,7 @@ export function TokenApplicationCard({
             <strong><MaxBalanceIcon size={19} /> {maxBalanceMetric.value}</strong>
           </div>
           <div className="token-application-card__metric token-application-card__metric--bottom-left">
-            <span>Country</span>
+            <span>Issuer country</span>
             <strong className="token-application-card__country">
               <CountryFlagIcon countryCode={card.countryCode} countryName={card.countryName} />
               <em>{card.countryName}</em>
@@ -231,7 +230,7 @@ export function TokenApplicationCard({
             <ArrowRight size={19} />
           </button>
           <button type="button" className="token-application-card__secondary" onClick={viewDetails}>
-            <span>View Token Details</span>
+            <span>View details</span>
             <ArrowRight size={16} />
           </button>
         </div>

@@ -58,6 +58,27 @@ const getRequestEmail = (config = {}) => {
   return '';
 };
 
+const getResponseMessage = (error) => {
+  const payload = error?.response?.data;
+  return String(
+    payload?.message ||
+      (typeof payload?.error === 'string' ? payload.error : payload?.error?.message) ||
+      '',
+  );
+};
+
+const isEmailVerificationRequiredLoginError = (error) => {
+  const isLoginRequest = String(error?.config?.url || '').includes('/auth/login');
+  const isForbidden = error?.response?.status === HTTP_STATUS.forbidden;
+  const message = getResponseMessage(error);
+
+  return (
+    isLoginRequest &&
+    isForbidden &&
+    /(?:verify|verification).*email|email.*(?:verify|verification)/i.test(message)
+  );
+};
+
 const finishTrackedRequest = (config) => {
   if (config?.__tracksGlobalLoader) useUiStore.getState().endRequest();
 };
@@ -105,6 +126,13 @@ export const setupAxiosInterceptors = () => {
       const isNotFound = status === HTTP_STATUS.notFound;
       const isPublicRequest = isPublicAuthRequest(error.config?.url);
       const accountLookupSource = getAccountLookupSource(error.config?.url);
+      const emailVerificationRequired = isEmailVerificationRequiredLoginError(error);
+
+      if (emailVerificationRequired) {
+        // The login page redirects to the verification screen and owns the user-facing recovery UI.
+        // Suppress the generic red error toast for this expected account state.
+        error.__skipGlobalErrorToast = true;
+      }
 
       if (
         isNotFound &&

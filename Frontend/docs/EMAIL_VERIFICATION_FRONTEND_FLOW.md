@@ -1,60 +1,69 @@
 # Frontend email-verification flow
 
-The verification button inside the email must open the React application, not the backend API response page.
+The verification button inside the email must open the React application only. Opening the email URL must not verify the account or create a login session.
 
 ## Required verification URL
 
-For local LAN development, generate this link in the backend email template:
+Use the public frontend origin:
 
 ```text
-http://192.168.29.90:5173/verify-email?token=<verification-token>
+https://your-frontend-domain.com/verify-email?token=<64-character-verification-token>
 ```
 
-For deployment, replace the origin with the public HTTPS frontend origin:
+For local/LAN development, use the matching frontend development origin instead.
 
-```text
-https://your-frontend-domain.com/verify-email?token=<verification-token>
-```
-
-Do **not** use this URL in the email:
-
-```text
-http://192.168.29.90:3000/api/v1/auth/verify-email?token=<verification-token>
-```
-
-That URL is the JSON API called by the React verification page after it opens.
+Do **not** place the API endpoint in the email button. The frontend sends the verification request only after the user explicitly selects **Verify and continue**.
 
 ## Backend link-generation pattern
 
-Use the actual configuration name used by the backend project. The implementation should follow this pattern:
+Use the actual frontend-origin configuration used by the backend project:
 
 ```js
 const frontendOrigin = process.env.FRONTEND_URL;
 const verificationUrl = `${frontendOrigin}/verify-email?token=${encodeURIComponent(token)}`;
 ```
 
-Recommended development configuration:
+The same frontend-origin rule applies to password-reset links.
 
-```env
-FRONTEND_URL=http://192.168.29.90:5173
+## Verification API contract
+
+After the user clicks **Verify and continue**, the frontend sends:
+
+```http
+POST /api/v1/auth/verify-email
+Content-Type: application/json
 ```
 
-The same rule should be used for password-reset emails:
-
-```js
-const resetUrl = `${frontendOrigin}/reset-password?token=${encodeURIComponent(token)}`;
+```json
+{
+  "token": "<64-character-verification-token>"
+}
 ```
+
+The old `GET /api/v1/auth/verify-email?token=...` contract is not used.
+
+A successful response returns the same session structure as password login. The frontend normalizes and stores the returned access token and user through the shared authentication session action.
 
 ## Runtime sequence
 
-1. The user clicks the email button.
-2. The browser opens `/verify-email?token=...` in the React application.
-3. The page displays the responsive T-REX secure loader.
-4. React calls `GET http://192.168.29.90:3000/api/v1/auth/verify-email?token=...`.
-5. On success, the page displays a confirmation animation briefly.
-6. The browser automatically redirects to `/login?verified=true`.
-7. The sign-in page confirms that the email is verified.
+1. The user opens `/verify-email?token=...` from the email.
+2. React reads the token from `URLSearchParams` and validates it locally as exactly 64 hexadecimal characters.
+3. No verification API request is made on page load.
+4. The page displays **Verify and continue**.
+5. The user clicks the button; duplicate clicks are blocked while the request is in progress.
+6. React sends `POST /api/v1/auth/verify-email` with only `{ "token": "..." }`.
+7. On success, the returned login session is stored using the same session path as password login.
+8. The token query string is removed from visible history.
+9. The page briefly shows **Email verified — redirecting…** and navigates with `replace` to the authenticated role landing route.
+10. Issuer/investor route guards continue to enforce any required onboarding before the workspace is opened.
 
-## LAN access
+## UI state mapping
 
-Vite is configured with `host: true`, so the development application can be opened by other devices on the same network at `http://192.168.29.90:5173`, provided the machine firewall allows port `5173`.
+- `READY` — valid local token; show **Verify and continue**.
+- `VERIFYING` — disable the CTA and show **Verifying email…**.
+- `SUCCESS` — session stored; show **Email verified — redirecting…**.
+- `INVALID` — malformed token or HTTP `400`/`422`; offer resend verification and sign in.
+- `INACTIVE` — HTTP `403`; show an inactive-account message and do not retry automatically.
+- `FAILED` — temporary/unexpected failure; show a generic retry action.
+
+The verification token is never written to local storage, session storage, or the authentication store.

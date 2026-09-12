@@ -28,7 +28,12 @@ export const mockAuthApi = {
   },
   async verifyEmail() {
     await wait();
-    return { message: 'Email verified successfully.' };
+    return {
+      accessToken: 'mock-access-token',
+      tokenType: 'Bearer',
+      expiresIn: '1h',
+      user: { ...mockUser, emailVerified: true },
+    };
   },
   async resendOtp() {
     await wait(450);

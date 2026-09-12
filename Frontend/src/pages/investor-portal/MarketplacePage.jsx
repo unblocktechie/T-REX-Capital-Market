@@ -23,19 +23,19 @@ const PAGE_SIZE = 6;
 const MARKETPLACE_CATALOGUE_STATUS = 'deployed';
 
 const APPLICATION_OPTIONS = [
-  { value: 'all', label: 'Application: All', description: 'Show every application state' },
-  { value: 'available', label: 'Not applied', description: 'Tokens you have not applied for' },
-  { value: 'action', label: 'Action required', description: 'Show applications that need an investor action' },
-  { value: 'review', label: 'Pending review', description: 'Interests currently under issuer review' },
-  { value: 'approved', label: 'Approved', description: 'Approved investment interests' },
+  { value: 'all', label: 'My status: All', description: 'Show all available investments' },
+  { value: 'available', label: 'Not requested', description: 'Investments you have not requested access to' },
+  { value: 'action', label: 'Action needed', description: 'Applications that need something from you' },
+  { value: 'review', label: 'Waiting for issuer', description: 'Applications currently being reviewed by the issuer' },
+  { value: 'approved', label: 'Approved / ready', description: 'Investments approved for you' },
   { value: 'rejected', label: 'Rejected', description: 'Requests not approved by the issuer' },
 ];
 
 const SORT_OPTIONS = [
   { value: 'featured', label: 'Recommended', description: 'Prioritize items that need your attention' },
   { value: 'name', label: 'Name', description: 'Sort alphabetically by token name' },
-  { value: 'price-high', label: 'Price: High to Low', description: 'Highest token price first' },
-  { value: 'price-low', label: 'Price: Low to High', description: 'Lowest token price first' },
+  { value: 'price-high', label: 'Price: High to Low', description: 'Highest price per unit first' },
+  { value: 'price-low', label: 'Price: Low to High', description: 'Lowest price per unit first' },
 ];
 
 function matchesApplicationStatus(token, filter) {
@@ -163,8 +163,8 @@ export default function MarketplacePage() {
       <header className="marketplace-page-header">
         <div>
           <span className="eyebrow">Investor marketplace</span>
-          <h1>Explore compliant tokenized investments</h1>
-          <p>Browse available security tokens and request to invest when your investor profile and required documents are ready.</p>
+          <h1>Explore investments</h1>
+          <p>Compare available investments, review the requirements, and request access when you are ready.</p>
         </div>
         <label className="marketplace-header-search">
           <Search size={17} aria-hidden="true" />
@@ -172,8 +172,8 @@ export default function MarketplacePage() {
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search token name or symbol…"
-            aria-label="Search marketplace offerings"
+            placeholder="Search investment name or symbol…"
+            aria-label="Search investments"
           />
         </label>
       </header>
@@ -203,7 +203,7 @@ export default function MarketplacePage() {
         <div className="marketplace-detail-loading" aria-label="Loading marketplace offerings"><div /><div /><div /></div>
       ) : filteredTokens.length ? (
         <>
-          <section className="marketplace-token-grid" aria-label="Available tokenized offerings">
+          <section className="marketplace-token-grid" aria-label="Available investments">
             {filteredTokens.map((token) => (
               <TokenApplicationCard
                 key={token.id}
@@ -217,14 +217,14 @@ export default function MarketplacePage() {
             {hasMore ? (
               <Button variant="secondary" loading={loadingMore} onClick={loadMore}>Load More Assets <ChevronDown size={16} /></Button>
             ) : meta?.total ? (
-              <span className="marketplace-results-caption">Showing {tokens.length} of {meta.total} marketplace assets.</span>
+              <span className="marketplace-results-caption">Showing {tokens.length} of {meta.total} investments.</span>
             ) : null}
           </div>
         </>
       ) : (
         <Card className="marketplace-empty-state">
           <span><Store size={28} /></span>
-          <h2>No offerings match these filters</h2>
+          <h2>No investments match these filters</h2>
           <p>Try a different application status or search term.</p>
           <Button variant="secondary" onClick={() => { setQuery(''); setApplicationStatus('all'); }}>Clear filters</Button>
         </Card>

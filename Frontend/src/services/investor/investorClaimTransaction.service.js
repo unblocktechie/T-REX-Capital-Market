@@ -1,6 +1,5 @@
 import {
-  createWalletClient,
-  custom,
+  encodeFunctionData,
   getAddress,
   isAddress,
   isHex,
@@ -37,6 +36,43 @@ export const isInvestorClaimWalletRejection = (error) =>
   walletErrorCode(error) === 4001 ||
   /user rejected|user denied|request rejected|rejected the request/.test(walletErrorText(error));
 
+export const getInvestorClaimWalletErrorMessage = (error) => {
+  const code = walletErrorCode(error);
+  const text = walletErrorText(error);
+
+  if (
+    code === -32002 ||
+    /already pending|request of type.*already pending|wallet request.*pending/.test(text)
+  ) {
+    return 'A wallet request is already open. Complete or close it in MetaMask, then try again.';
+  }
+
+  if (/insufficient funds|insufficient balance/.test(text)) {
+    return 'Your registered wallet needs a small amount of Sepolia ETH to pay the network fee.';
+  }
+
+  if (
+    /eth_sendrawtransaction/.test(text) &&
+    /method not found|method not supported|custom/.test(text)
+  ) {
+    return 'Your wallet network connection could not send the approval. No changes were made. Please try again.';
+  }
+
+  if (/nonce too low|already known transaction|replacement transaction underpriced/.test(text)) {
+    return 'Your wallet is still processing a recent transaction. Wait a moment, then check the verification status again.';
+  }
+
+  if (/execution reverted|contract function.*reverted|reverted with/.test(text)) {
+    return 'The verification approval could not be completed on the network. Refresh the page and try again.';
+  }
+
+  if (/network|rpc|transport|failed to fetch|disconnected/.test(text)) {
+    return 'Your wallet temporarily lost its network connection. No changes were made. Please try again.';
+  }
+
+  return 'We could not send the verification approval through your wallet. No changes were made. Please try again.';
+};
+
 const parseChainId = (value) => {
   if (typeof value === 'number') return value;
   if (typeof value === 'bigint') return Number(value);
@@ -55,6 +91,8 @@ const requiredHex = (value, label) => {
   if (!isHex(normalized)) throw new Error(`${label} was not returned in a valid format.`);
   return normalized;
 };
+
+const validTransactionHash = (value) => /^0x[0-9a-fA-F]{64}$/.test(String(value || '').trim());
 
 export async function submitInvestorClaimTransaction({
   connector,
@@ -122,20 +160,9 @@ export async function submitInvestorClaimTransaction({
     throw error;
   }
 
-  const account = getAddress(connectedAddress);
-  const walletClient = createWalletClient({
-    account,
-    chain: web3Config.requiredChain,
-    transport: custom(provider),
-  });
-
-  // Transaction-critical claim values come from POST /investor/claims/:claimId/prepare.
-  // Do not derive or reuse potentially stale topic/identity/data/signature values from
-  // catalogue metadata or the previously rendered claim list.
-  return walletClient.writeContract({
-    account,
-    chain: web3Config.requiredChain,
-    address: getAddress(investorIdentityAddress),
+  const account = getAddress(activeProviderAddress);
+  const identityAddress = getAddress(investorIdentityAddress);
+  const transactionData = encodeFunctionData({
     abi: IDENTITY_ADD_CLAIM_ABI,
     functionName: 'addClaim',
     args: [
@@ -147,4 +174,29 @@ export async function submitInvestorClaimTransaction({
       uri,
     ],
   });
+
+  // Use the injected wallet's EIP-1193 eth_sendTransaction method directly.
+  // This keeps signing and broadcasting inside MetaMask and avoids the intermittent
+  // custom-provider path that was surfacing an eth_sendRawTransaction "Method not found"
+  // error on the first attempt for some accounts. No raw signed transaction is created
+  // or sent by the application.
+  const txHash = await provider.request({
+    method: 'eth_sendTransaction',
+    params: [
+      {
+        from: account,
+        to: identityAddress,
+        data: transactionData,
+        value: '0x0',
+      },
+    ],
+  });
+
+  if (!validTransactionHash(txHash)) {
+    const error = new Error('Your wallet did not return a valid transaction ID. Please check MetaMask and try again.');
+    error.code = 'INVALID_WALLET_TRANSACTION_HASH';
+    throw error;
+  }
+
+  return txHash;
 }

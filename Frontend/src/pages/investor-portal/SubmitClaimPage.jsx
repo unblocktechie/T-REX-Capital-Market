@@ -17,6 +17,7 @@ import {
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { investorApi } from '@/api/investor';
+import { InvestmentJourneyTracker } from '@/components/application-history/InvestmentJourneyTracker';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ROUTES } from '@/config/routes';
@@ -26,11 +27,13 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useWalletConnection } from '@/hooks/useWalletConnection';
 import { investorClaimRecoveryStore } from '@/services/investor/investorClaimRecoveryStore';
 import {
+  getInvestorClaimWalletErrorMessage,
   isInvestorClaimWalletRejection,
   submitInvestorClaimTransaction,
 } from '@/services/investor/investorClaimTransaction.service';
 import { investorMarketplaceService } from '@/services/investor/investorMarketplaceService';
 import { getErrorMessage } from '@/utils/error';
+import { getInvestmentJourney } from '@/utils/investmentJourney';
 
 const CLAIM_SCREEN_STATUSES = new Set([
   'verifiedbyissuer',
@@ -59,7 +62,7 @@ const SYNC_POLL_INTERVAL_MS = 5_000;
 const CONFIRMATION_POLL_DELAYS_MS = [5_000, 10_000, 15_000];
 const MAX_AUTO_POLL_DURATION_MS = 90_000;
 const PENDING_VERIFICATION_MESSAGE =
-  'Your transaction is being confirmed. This may take a few moments.';
+  'Your wallet approval is being confirmed. Nothing else is needed from you right now.';
 const PENDING_GATHERING_MESSAGE =
   'Your verification is being processed. No action is needed right now.';
 const WALLET_MISMATCH_MESSAGE =
@@ -74,6 +77,30 @@ const normalizeStatus = (value) =>
     .replace(/[\s_-]+/g, '');
 
 const validTransactionHash = (value) => /^0x[0-9a-fA-F]{64}$/.test(String(value || '').trim());
+
+
+const compactDiagnosticCode = (value) => {
+  const normalized = String(value || '').trim().toUpperCase();
+  return /^[A-Z0-9][A-Z0-9_:-]{0,47}$/.test(normalized) ? normalized : '';
+};
+
+const friendlyStoredClaimFailure = (value) => {
+  const message = String(value || '').trim();
+  if (!message) return 'The previous verification submission couldn’t be confirmed. Please try again.';
+
+  if (
+    message.length > 220 ||
+    /contract function|contract call|eth_sendrawtransaction|rpc\s+0x|docs:\s*https?:|viem@|execution reverted/i.test(message)
+  ) {
+    return 'The previous verification approval could not be confirmed. Please try again.';
+  }
+
+  return message;
+};
+
+
+const getClaimWorkflowErrorMessage = (error, fallback) =>
+  friendlyStoredClaimFailure(getErrorMessage(error, fallback));
 
 const backendClaimStatus = (claim) => {
   const status = normalizeStatus(claim?.status);
@@ -138,18 +165,33 @@ const claimTopicMetadata = (token, claim) => {
   }) || null;
 };
 
-const claimTopicLabel = (claim, metadata, index) =>
-  claim?.label ||
-  metadata?.label ||
-  metadata?.claimTopicCode ||
-  (claimTopicNumber(claim) !== null
-    ? `Verification Requirement ${claimTopicNumber(claim)}`
-    : `Verification Requirement ${index + 1}`);
+const friendlyVerificationLabel = (value, index = 0) => {
+  const text = String(value || '').trim();
+  const normalized = text.toUpperCase();
+  if (normalized.includes('KYC') || normalized.includes('IDENTITY')) return 'Identity check';
+  if (normalized.includes('ACCREDIT')) return 'Investor eligibility check';
+  if (normalized.includes('COUNTRY') || normalized.includes('JURISDICTION')) return 'Country eligibility check';
+  return text || `Required check ${index + 1}`;
+};
 
-const claimTopicDescription = (claim, metadata, label) =>
-  claim?.description ||
-  metadata?.description ||
-  `${label} has been approved by the issuer and is ready to submit.`;
+const claimTopicLabel = (claim, metadata, index) => friendlyVerificationLabel(
+  claim?.label || metadata?.label || metadata?.claimTopicCode,
+  index,
+);
+
+const claimTopicDescription = (claim, metadata, label) => {
+  const normalized = String(metadata?.claimTopicCode || claim?.claimTopicCode || label || '').toUpperCase();
+  if (normalized.includes('KYC') || normalized.includes('IDENTITY')) {
+    return 'Confirm your identity so the issuer can give you investment access.';
+  }
+  if (normalized.includes('ACCREDIT')) {
+    return 'Confirm that you meet the investor eligibility requirements for this offering.';
+  }
+  if (normalized.includes('COUNTRY') || normalized.includes('JURISDICTION')) {
+    return 'Confirm that your country is eligible for this offering.';
+  }
+  return claim?.description || metadata?.description || `Complete ${label.toLowerCase()} to continue.`;
+};
 
 const claimTopicIcon = (claim, metadata) => {
   const code = String(metadata?.claimTopicCode || claim?.claimTopicCode || claim?.label || '').toUpperCase();
@@ -162,21 +204,21 @@ const claimTopicIcon = (claim, metadata) => {
 const claimStateMeta = (status, stage = '') => {
   switch (status) {
     case CLAIM_UI_STATUS.CONFIRMED:
-      return { label: 'Confirmed', tone: 'confirmed', Icon: CheckCircle2 };
+      return { label: 'Completed', tone: 'confirmed', Icon: CheckCircle2 };
     case CLAIM_UI_STATUS.SUBMITTING:
       return {
-        label: stage === 'PREPARING' ? 'Preparing verification' : 'Waiting for your confirmation',
+        label: stage === 'PREPARING' ? 'Getting ready' : 'Approve in your wallet',
         tone: 'submitting',
         Icon: WalletCards,
       };
     case CLAIM_UI_STATUS.VERIFYING:
-      return { label: 'Confirming', tone: 'verifying', Icon: Clock3 };
+      return { label: 'Checking approval', tone: 'verifying', Icon: Clock3 };
     case CLAIM_UI_STATUS.WAITING:
       return { label: 'Processing', tone: 'waiting', Icon: Clock3 };
     case CLAIM_UI_STATUS.FAILED:
-      return { label: 'Verification failed', tone: 'failed', Icon: XCircle };
+      return { label: 'Needs attention', tone: 'failed', Icon: XCircle };
     default:
-      return { label: 'Approved by Issuer', tone: 'pending', Icon: CheckCircle2 };
+      return { label: 'Ready to complete', tone: 'pending', Icon: CheckCircle2 };
   }
 };
 
@@ -265,7 +307,7 @@ export default function SubmitClaimPage() {
         errorCode: '',
         requestId: response?.requestId || '',
         pollingTimedOut: false,
-        noticeTitle: 'Transaction is confirming',
+        noticeTitle: 'Checking your approval',
         message: PENDING_VERIFICATION_MESSAGE,
         noticeTone: 'warning',
       });
@@ -337,7 +379,7 @@ export default function SubmitClaimPage() {
       stage: '',
       txHash,
       errorCode: '',
-      noticeTitle: 'Confirming transaction',
+      noticeTitle: 'Checking your approval',
       message: PENDING_VERIFICATION_MESSAGE,
       noticeTone: 'info',
     });
@@ -373,7 +415,7 @@ export default function SubmitClaimPage() {
         }
         return CLAIM_WORKFLOW_STATUS.PENDING_CONFIRMATION;
       } else {
-        const message = getErrorMessage(error, 'We couldn’t confirm this verification. Please try again.');
+        const message = getClaimWorkflowErrorMessage(error, 'We couldn’t confirm this verification. Please try again.');
         const code = backendErrorCode(error);
         updateClaimUi(claimId, {
           status: CLAIM_UI_STATUS.FAILED,
@@ -421,7 +463,7 @@ export default function SubmitClaimPage() {
           errorCode: backendErrorCode(error),
           requestId: backendRequestId(error),
           noticeTitle: 'Status check unavailable',
-          message: getErrorMessage(error, 'We couldn’t check your transaction right now. Please try again shortly.'),
+          message: getClaimWorkflowErrorMessage(error, 'We couldn’t check your approval right now. Please try again shortly.'),
           noticeTone: 'warning',
         });
       } finally {
@@ -449,7 +491,7 @@ export default function SubmitClaimPage() {
         nextApplication.id ||
         nextApplication.tokenUid ||
         nextApplication.interest?.tokenUid;
-      if (!tokenUid) throw new Error('The selected application does not include a token identifier.');
+      if (!tokenUid) throw new Error('The asset details for this application are incomplete. Please return to your application and try again.');
 
       let offering = nextApplication;
       try {
@@ -498,9 +540,9 @@ export default function SubmitClaimPage() {
               status: CLAIM_UI_STATUS.FAILED,
               stage: '',
               txHash: claim?.txHash || '',
-              errorCode: claim?.failureReason || '',
+              errorCode: compactDiagnosticCode(claim?.failureCode),
               noticeTitle: 'Verification failed',
-              message: claim?.failureReason || 'The previous verification submission couldn’t be confirmed. Please try again.',
+              message: friendlyStoredClaimFailure(claim?.failureReason),
               noticeTone: 'error',
             };
             return;
@@ -583,7 +625,7 @@ export default function SubmitClaimPage() {
       );
     } catch (error) {
       if (!silent) {
-        toast.error(getErrorMessage(error, 'Unable to load the verification requirements for this application.'));
+        toast.error(getClaimWorkflowErrorMessage(error, 'Unable to load the verification requirements for this application.'));
       }
     } finally {
       if (silent) setRefreshing(false);
@@ -708,11 +750,13 @@ export default function SubmitClaimPage() {
               updateClaimUi(claimId, {
                 status: CLAIM_UI_STATUS.FAILED,
                 txHash: refreshedClaim?.txHash || ui.txHash || '',
-                errorCode: refreshedClaim?.failureReason || '',
+                errorCode: compactDiagnosticCode(refreshedClaim?.failureCode),
                 requestId: response?.requestId || '',
                 pollingTimedOut: false,
                 noticeTitle: 'Verification failed',
-                message: refreshedClaim?.failureReason || 'We couldn’t finish processing this verification. Please try again.',
+                message: friendlyStoredClaimFailure(
+                  refreshedClaim?.failureReason || 'We couldn’t finish processing this verification. Please try again.',
+                ),
                 noticeTone: 'error',
               });
               return;
@@ -724,7 +768,7 @@ export default function SubmitClaimPage() {
                 txHash: refreshedClaim?.txHash || ui.txHash || '',
                 requestId: response?.requestId || '',
                 pollingTimedOut: false,
-                noticeTitle: 'Transaction is confirming',
+                noticeTitle: 'Checking your approval',
                 message: PENDING_VERIFICATION_MESSAGE,
                 noticeTone: 'warning',
               });
@@ -772,7 +816,7 @@ export default function SubmitClaimPage() {
             errorCode: code,
             requestId: backendRequestId(error),
             noticeTitle: code === 'RPC_UNAVAILABLE' ? 'Check unavailable' : 'Status check unavailable',
-            message: getErrorMessage(
+            message: getClaimWorkflowErrorMessage(
               error,
               code === 'RPC_UNAVAILABLE'
                 ? 'We couldn’t check the latest status right now. Please try again in a few moments.'
@@ -803,7 +847,6 @@ export default function SubmitClaimPage() {
           claim,
           metadata,
           claimId: claimIdOf(claim),
-          topicNumber: claimTopicNumber(claim),
           label: claimTopicLabel(claim, metadata, index),
         };
       }),
@@ -855,7 +898,7 @@ export default function SubmitClaimPage() {
         status: CLAIM_UI_STATUS.VERIFYING,
         stage: '',
         txHash: recoveryRecord.txHash,
-        noticeTitle: 'Transaction is confirming',
+        noticeTitle: 'Checking your approval',
         message: PENDING_VERIFICATION_MESSAGE,
         noticeTone: 'warning',
         pollingTimedOut: false,
@@ -966,11 +1009,11 @@ export default function SubmitClaimPage() {
         errorCode: '',
         requestId: prepareResponse?.requestId || '',
         noticeTitle: 'Awaiting signature',
-        message: 'Confirm the transaction in your wallet.',
+        message: 'Approve the secure action in your wallet to continue.',
         noticeTone: 'info',
       });
     } catch (error) {
-      const message = getErrorMessage(error, 'We couldn’t prepare this verification.');
+      const message = getClaimWorkflowErrorMessage(error, 'We couldn’t prepare this verification.');
       const code = backendErrorCode(error) || String(error?.code || '');
       updateClaimUi(claimId, {
         status: CLAIM_UI_STATUS.PENDING,
@@ -1010,7 +1053,7 @@ export default function SubmitClaimPage() {
         txHash,
         errorCode: '',
         requestId: '',
-        noticeTitle: 'Transaction submitted',
+        noticeTitle: 'Approval submitted',
         message: PENDING_VERIFICATION_MESSAGE,
         noticeTone: 'info',
       });
@@ -1026,12 +1069,12 @@ export default function SubmitClaimPage() {
           stage: '',
           txHash: '',
           errorCode: '',
-          noticeTitle: 'Transaction cancelled',
-          message: 'You cancelled the verification transaction in your wallet.',
+          noticeTitle: 'Approval cancelled',
+          message: 'You cancelled the verification approval in your wallet.',
           noticeTone: 'neutral',
         });
-        toast.info('Transaction cancelled', {
-          description: 'You cancelled the verification transaction in your wallet.',
+        toast.info('Approval cancelled', {
+          description: 'You cancelled the verification approval in your wallet.',
         });
       } else {
         const message =
@@ -1039,22 +1082,22 @@ export default function SubmitClaimPage() {
             ? WRONG_NETWORK_MESSAGE
             : error?.code === 'WALLET_MISMATCH'
               ? WALLET_MISMATCH_MESSAGE
-              : getErrorMessage(error, 'Unable to submit the verification transaction through your wallet.');
+              : getInvestorClaimWalletErrorMessage(error);
         updateClaimUi(claimId, {
           status: CLAIM_UI_STATUS.PENDING,
           stage: '',
           txHash: '',
-          errorCode: String(error?.code || ''),
+          errorCode: compactDiagnosticCode(error?.code),
           noticeTitle:
             error?.code === 'WRONG_WALLET_NETWORK'
               ? 'Wrong network'
               : error?.code === 'WALLET_MISMATCH'
                 ? 'Registered wallet required'
-                : 'Transaction not submitted',
+                : 'Approval not submitted',
           message,
           noticeTone: 'error',
         });
-        toast.error('Verification transaction not submitted', { description: message });
+        toast.error('Verification approval not submitted', { description: message });
       }
     } finally {
       submissionLocksRef.current.delete(claimId);
@@ -1110,7 +1153,7 @@ export default function SubmitClaimPage() {
           return;
 
         case CLAIM_WORKFLOW_STATUS.PENDING_CONFIRMATION:
-          toast.info('Transaction is confirming', {
+          toast.info('Approval is being confirmed', {
             description: PENDING_VERIFICATION_MESSAGE,
           });
           return;
@@ -1141,7 +1184,7 @@ export default function SubmitClaimPage() {
       const httpStatus = Number(error?.response?.status || 0);
       const code = backendErrorCode(error) || String(error?.code || '');
       const requestId = backendRequestId(error);
-      const message = getErrorMessage(error, 'We could not check the verification status right now.');
+      const message = getClaimWorkflowErrorMessage(error, 'We could not check the verification status right now.');
 
       if (httpStatus === 404 && code === 'CLAIM_SUBMISSION_NOT_PREPARED') {
         updateClaimUi(claimId, {
@@ -1258,6 +1301,13 @@ export default function SubmitClaimPage() {
     updateClaimUi,
   ]);
 
+  const verificationJourney = getInvestmentJourney({
+    status: allClaimsConfirmed
+      ? 'claimSubmitted'
+      : application?.interest?.status || claimContext?.application?.status || 'verifiedByIssuer',
+    viewerRole: 'investor',
+  });
+
   if (loading) {
     return (
       <div className="page-stack investor-submit-claim-page">
@@ -1331,29 +1381,31 @@ export default function SubmitClaimPage() {
       <header className="submit-claim-header">
         <div>
           <div className="submit-claim-title-line">
-            <h1>Complete Investor Verification</h1>
+            <h1>Complete Your Verification</h1>
             {allClaimsConfirmed ? (
-              <span className="submit-claim-complete-badge"><CheckCircle2 size={13} /> Verification Complete</span>
+              <span className="submit-claim-complete-badge"><CheckCircle2 size={13} /> Complete</span>
             ) : processingClaimCount > 0 ? (
-              <span className="submit-claim-processing-badge"><Clock3 size={13} /> In Progress</span>
+              <span className="submit-claim-processing-badge"><Clock3 size={13} /> Processing</span>
             ) : (
-              <span className="submit-claim-action-badge"><Circle size={8} fill="currentColor" /> Action Required</span>
+              <span className="submit-claim-action-badge"><Circle size={8} fill="currentColor" /> Your Action</span>
             )}
           </div>
           <p>
             {allClaimsConfirmed ? (
-              <>All required verification for <strong>{token.name} ({token.symbol})</strong> is complete and ready for issuer approval.</>
+              <>You completed all required checks for <strong>{token.name} ({token.symbol})</strong>. Nothing else is needed from you while the issuer completes final approval.</>
             ) : processingClaimCount > 0 ? (
-              <>Your verification for <strong>{token.name} ({token.symbol})</strong> is being processed. No action is needed right now.</>
+              <>Your verification for <strong>{token.name} ({token.symbol})</strong> is being processed. Nothing is needed from you right now.</>
             ) : (
-              <>Your application has been approved. Complete the required verification for <strong>{token.name} ({token.symbol})</strong> to continue.</>
+              <>The issuer approved your application. Complete the required checks for <strong>{token.name} ({token.symbol})</strong> to continue.</>
             )}
           </p>
         </div>
         <Button variant="secondary" icon={RefreshCw} loading={refreshing} onClick={() => void loadClaimContext({ silent: true })}>
-          Refresh Verification
+          Refresh Status
         </Button>
       </header>
+
+      <InvestmentJourneyTracker journey={verificationJourney} />
 
       <Card className="submit-claim-context-card">
         <div>
@@ -1361,7 +1413,7 @@ export default function SubmitClaimPage() {
           <strong>{user?.name || user?.fullName || 'Current investor'}</strong>
         </div>
         <div>
-          <span>Token</span>
+          <span>Asset</span>
           <strong>{token.name} ({token.symbol})</strong>
         </div>
         <div>
@@ -1378,17 +1430,17 @@ export default function SubmitClaimPage() {
         <main className="submit-claim-main">
           <div className="submit-claim-section-heading">
             <div>
-              <span className="eyebrow">Required verification</span>
-              <h2>Complete each verification requirement</h2>
+              <span className="eyebrow">Required checks</span>
+              <h2>Finish these checks</h2>
             </div>
             <span className={`submit-claim-count${allClaimsConfirmed ? ' is-complete' : ''}`}>
-              {confirmedClaimCount}/{displayClaims.length} confirmed
+              {confirmedClaimCount}/{displayClaims.length} completed
             </span>
           </div>
 
           {displayClaims.length ? (
             <div className="submit-claim-topic-list">
-              {displayClaims.map(({ claim, metadata, claimId, topicNumber, label }, index) => {
+              {displayClaims.map(({ claim, metadata, claimId, label }, index) => {
                 const Icon = claimTopicIcon(claim, metadata);
                 const ui = claimUi[claimId] || { status: backendClaimStatus(claim) };
                 const status = ui.status || CLAIM_UI_STATUS.PENDING;
@@ -1413,7 +1465,7 @@ export default function SubmitClaimPage() {
                     <div className="submit-claim-topic-card__content">
                       <div className="submit-claim-topic-card__title">
                         <h3>{label}</h3>
-                        {topicNumber !== null ? <span title="ERC-3643 technical requirement identifier">Verification ID {topicNumber}</span> : null}
+
                       </div>
                       <span className={`submit-claim-topic-card__state is-${stateMeta.tone}`}>
                         <StateIcon size={14} />
@@ -1429,11 +1481,9 @@ export default function SubmitClaimPage() {
                         <div className={`submit-claim-notice is-${ui.noticeTone || 'info'}`} role={ui.noticeTone === 'error' ? 'alert' : 'status'}>
                           <strong>{ui.noticeTitle}</strong>
                           <span>{ui.message}</span>
-                          {ui.errorCode || ui.requestId ? (
+                          {ui.requestId ? (
                             <small className="submit-claim-diagnostics">
-                              {ui.errorCode ? `Code: ${ui.errorCode}` : ''}
-                              {ui.errorCode && ui.requestId ? ' · ' : ''}
-                              {ui.requestId ? `Request ID: ${ui.requestId}` : ''}
+                              Support reference: {ui.requestId}
                             </small>
                           ) : null}
                         </div>
@@ -1454,16 +1504,16 @@ export default function SubmitClaimPage() {
                           variant={shouldRetryBeforeWallet ? 'secondary' : 'primary'}
                         >
                           {isConfirmed
-                            ? <><CheckCircle2 size={16} /> Verified</>
+                            ? <><CheckCircle2 size={16} /> Completed</>
                             : isWaiting
                               ? <><Clock3 size={16} /> Processing</>
                               : isSubmitting
-                                ? ui.stage === 'PREPARING' ? 'Preparing Verification' : 'Confirm in Wallet'
+                                ? ui.stage === 'PREPARING' ? 'Getting Ready' : 'Approve in Wallet'
                                 : isConfirming
-                                  ? <><Clock3 size={16} /> Confirming</>
+                                  ? <><Clock3 size={16} /> Checking Approval</>
                                   : shouldRetryBeforeWallet
-                                    ? <><RefreshCw size={16} /> Retry Verification</>
-                                    : <>Complete Verification <WalletCards size={16} /></>}
+                                    ? <><RefreshCw size={16} /> Try Again</>
+                                    : <>Complete Check <WalletCards size={16} /></>}
                         </Button>
                         {isConfirming && !missingClaimId ? (
                           <Button
@@ -1494,10 +1544,10 @@ export default function SubmitClaimPage() {
                           : isWaiting
                             ? 'Your verification is being processed. No action is needed right now.'
                             : isConfirming
-                              ? 'Your transaction is being confirmed. You can check the status again at any time.'
+                              ? 'Your wallet approval is being confirmed. You can check the status again at any time.'
                               : shouldRetryBeforeWallet
                                 ? 'Try again to continue this verification.'
-                                : `Ready to submit · ${web3Config.requiredChain.name}`}
+                                : 'Ready when you are'}
                       </small>
                       {explorerUrl ? (
                         <a
@@ -1506,7 +1556,7 @@ export default function SubmitClaimPage() {
                           target="_blank"
                           rel="noreferrer"
                         >
-                          View transaction on block explorer
+                          View technical transaction details
                         </a>
                       ) : null}
                     </div>
@@ -1527,9 +1577,9 @@ export default function SubmitClaimPage() {
 
         <aside className="submit-claim-aside">
           <Card className="submit-claim-progress-card">
-            <span className="submit-claim-aside-label">Submission Progress</span>
+            <span className="submit-claim-aside-label">Verification progress</span>
             <div className="submit-claim-progress-summary">
-              <strong>{confirmedClaimCount} of {displayClaims.length} confirmed</strong>
+              <strong>{confirmedClaimCount} of {displayClaims.length} completed</strong>
               <span>
                 {allClaimsConfirmed
                   ? 'All required verification is complete.'
@@ -1558,16 +1608,16 @@ export default function SubmitClaimPage() {
                       <strong>{label}</strong>
                       <small>
                         {confirmed
-                          ? 'Confirmed'
+                          ? 'Completed'
                           : waiting
                             ? 'Processing'
                           : submitting
-                            ? preparing ? 'Preparing verification' : 'Waiting for your confirmation'
+                            ? preparing ? 'Getting ready' : 'Waiting for your wallet approval'
                             : verifying
-                              ? 'Confirming transaction'
+                              ? 'Checking wallet approval'
                               : failed
-                                ? 'Verification failed — retry available'
-                                : 'Ready to submit'}
+                                ? 'Needs attention — try again'
+                                : 'Ready to complete'}
                       </small>
                     </div>
                   </div>
@@ -1578,13 +1628,13 @@ export default function SubmitClaimPage() {
                   {allClaimsConfirmed ? <CheckCircle2 size={11} /> : <Circle size={7} fill="currentColor" />}
                 </span>
                 <div>
-                  <strong>Next Step</strong>
+                  <strong>What happens next</strong>
                   <small>
                     {allClaimsConfirmed
-                      ? 'Ready for issuer approval'
+                      ? 'Waiting for issuer final approval'
                       : processingClaimCount
                         ? 'Waiting for verification processing'
-                        : 'Waiting for all required verification'}
+                        : 'Complete all required checks first'}
                   </small>
                 </div>
               </div>
@@ -1592,10 +1642,9 @@ export default function SubmitClaimPage() {
           </Card>
 
           <Card className="submit-claim-network-card">
-            <div className="submit-claim-network-card__title"><Info size={18} /><strong>Network Information</strong></div>
+            <div className="submit-claim-network-card__title"><Info size={18} /><strong>About wallet approval</strong></div>
             <p>
-              Verification is submitted using your registered investor wallet on <strong>{web3Config.requiredChain.name}</strong>.
-              When a transaction is required, simply follow the prompt in your wallet to continue.
+              Some verification checks may ask you to approve a secure action in your registered wallet. Simply follow the wallet prompt to continue. <small>Technical network: {web3Config.requiredChain.name}</small>
             </p>
           </Card>
 

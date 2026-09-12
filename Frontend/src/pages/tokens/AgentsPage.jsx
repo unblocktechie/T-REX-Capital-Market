@@ -6,6 +6,8 @@ import { tokenApi } from '@/api/tokens';
 import { toGovernancePayload } from '@/api/tokens/token.mapper';
 import {
   AddressDisplay,
+  HelpDetails,
+  ImpactNote,
   SectionCard,
   StatusBadge,
 } from '@/components/token-issuance/IssuancePrimitives';
@@ -28,6 +30,24 @@ const GOVERNANCE_FIELD_MAP = {
   identityManagerWalletAddress: 'identityRegistryAgent',
 };
 
+const PERMISSION_LABELS = {
+  'Issue tokens': 'Create additional asset units',
+  'Remove tokens': 'Remove asset units',
+  'Pause transfers': 'Temporarily stop transfers',
+  'Resume transfers': 'Restart transfers',
+  'Freeze wallet': 'Temporarily stop an investor account',
+  'Unfreeze wallet': 'Restore an investor account',
+  'Approve investor': 'Approve investors',
+  'Remove investor': 'Remove investor approval',
+  'Update country': 'Update an investor country',
+  'Manage verification': 'Manage investor verification status',
+};
+
+const ROLE_TECHNICAL_NAMES = {
+  tokenAgent: 'Token Agent',
+  identityRegistryAgent: 'Identity Manager',
+};
+
 export default function AgentsPage() {
   const navigate = useNavigate();
   const { organization, isLoading: organizationLoading } = useOrganization();
@@ -43,7 +63,7 @@ export default function AgentsPage() {
   const [serverErrors, setServerErrors] = useState({});
   const organizationWallet = organization?.walletAddress || '';
   const errors = validateAgents(agents, organizationWallet);
-  useDocumentTitle('Platform Permissions');
+  useDocumentTitle('Who Manages This Asset');
 
   useEffect(() => {
     hydrateWalletDefaults(organizationWallet);
@@ -70,14 +90,14 @@ export default function AgentsPage() {
       const response = await tokenApi.saveGovernance(toGovernancePayload(agents, false));
       recordBackendSave('agents', response);
       markStepCompleted('agents');
-      toast.success('Platform permissions saved.');
+      toast.success('Asset management access saved.');
       navigate(ROUTES.tokenIssuanceStep('review'));
     } catch (error) {
       setServerErrors(mapTokenApiFieldErrors(error, GOVERNANCE_FIELD_MAP));
-      toast.error('Platform permissions were not saved.', {
+      toast.error('Asset management access was not saved.', {
         description: getTokenApiErrorMessage(
           error,
-          'Confirm the approved organization wallet and try again.',
+          'Confirm the approved organization account and try again.',
         ),
       });
     } finally {
@@ -95,8 +115,8 @@ export default function AgentsPage() {
   return (
     <IssuanceLayout
       stepKey="agents"
-      title="Platform Permissions"
-      description="Review the authorized wallets that can manage token operations and investor access."
+      title="Who Manages This Asset"
+      description="Review the approved organization account that will manage the asset and investor approvals."
       onBack={() => navigate(ROUTES.tokenIssuanceStep('compliance'))}
       onContinue={continueStep}
       continueLabel="Save and Continue to Review"
@@ -110,14 +130,17 @@ export default function AgentsPage() {
           <Lock size={18} />
         </span>
         <div className="agent-readonly-notice__content">
-          <strong>Authorized roles use your approved Organization Wallet</strong>
+          <strong>Managed by your approved organization account</strong>
           <p>
-            For security, use the same wallet that was registered during organization
-            onboarding. These assignments are read-only while the token is being created.
+            For security, the management roles below use the organization account you approved during onboarding. You do not need to enter another address here.
           </p>
         </div>
         <StatusBadge status="valid">Read only</StatusBadge>
       </div>
+
+      <ImpactNote title="Why these roles are here" tone="positive">
+        These roles let your approved organization account operate the asset after creation. They do not give access to unrelated accounts or change your investor rules.
+      </ImpactNote>
 
       <div className="agent-card-list agent-card-list--two">
         {TOKEN_CREATION_AGENT_ROLES.map((role) => {
@@ -148,16 +171,15 @@ export default function AgentsPage() {
 
               <div className="agent-readonly-wallet">
                 <div className="agent-readonly-wallet__label-row">
-                  <span>{role.name}</span>
+                  <span>Approved organization account</span>
                   <span className="agent-readonly-wallet__locked">
-                    <Lock size={12} /> Not editable
+                    <Lock size={12} /> Not editable during setup
                   </span>
                 </div>
                 <AddressDisplay
                   address={agent?.address}
-                  label="Approved organization wallet"
-                  emptyLabel="Wallet assignment pending"
-                  showFullAddress
+                  label="Account address"
+                  emptyLabel="Account assignment pending"
                   className={error ? 'agent-readonly-address agent-readonly-address--error' : 'agent-readonly-address'}
                 />
                 {error ? (
@@ -166,23 +188,27 @@ export default function AgentsPage() {
                   </p>
                 ) : (
                   <p className="agent-readonly-wallet__hint">
-                    This wallet will receive the permissions listed below when the token is created.
+                    This account will receive the management permissions listed below when the asset is created.
                   </p>
                 )}
               </div>
 
               <div className="agent-permission-summary agent-permission-summary--readonly">
                 <h3>
-                  <ShieldCheck size={17} /> Assigned permissions
+                  <ShieldCheck size={17} /> What this role can do
                 </h3>
                 <ul>
                   {role.permissions.map((permission) => (
                     <li key={permission}>
-                      <CheckCircle2 size={15} /> {permission}
+                      <CheckCircle2 size={15} /> {PERMISSION_LABELS[permission] || permission}
                     </li>
                   ))}
                 </ul>
               </div>
+
+              <HelpDetails title="View technical role name">
+                Technical role: {ROLE_TECHNICAL_NAMES[role.key] || role.name}. The underlying wallet assignment and deployment permissions are unchanged.
+              </HelpDetails>
             </SectionCard>
           );
         })}

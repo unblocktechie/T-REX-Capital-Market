@@ -279,9 +279,9 @@ function InvestorProfilePage() {
         <div>
           <span className="eyebrow">Investor identity</span>
           <h1>Your investor profile</h1>
-          <p>Review your submitted identity, suitability information, verification documents, and linked wallet.</p>
+          <p>Review the information issuers use to confirm your identity and investment eligibility. You can also check your registered wallet and documents here.</p>
         </div>
-        <span className="investor-profile-status"><CheckCircle2 size={16} /> Profile created</span>
+        <span className="investor-profile-status"><CheckCircle2 size={16} /> Profile ready</span>
       </header>
 
       <Card className="investor-profile-hero-card">
@@ -300,40 +300,49 @@ function InvestorProfilePage() {
           <p><Mail size={15} /> {user?.email || 'Email not available'}</p>
           <p><MapPin size={15} /> {address || 'Residential address not provided'}</p>
         </div>
-        <div className="investor-profile-reference-grid">
+        <div className="investor-profile-reference-grid investor-profile-reference-grid--friendly">
           <div>
-            <span><UserRoundCheck size={17} /> Profile Reference</span>
+            <span><UserRoundCheck size={17} /> Profile reference</span>
             <strong>{profile.profileId || 'Created'}</strong>
           </div>
           <div>
-            <span><ShieldCheck size={17} /> On-chain Identity</span>
-            {profile.onchainId && isAddress(profile.onchainId, { strict: false }) ? (
-              <CompactAddress value={profile.onchainId} label="On-chain identity address" leading={5} trailing={5} />
-            ) : (
-              <strong>{profile.onchainId || 'Created'}</strong>
-            )}
-          </div>
-          <div>
-            <span><WalletCards size={17} /> Primary Wallet</span>
+            <span><WalletCards size={17} /> Registered investment wallet</span>
             {isAddress(walletAddress, { strict: false }) ? (
-              <CompactAddress value={walletAddress} label="Primary wallet address" leading={5} trailing={5} />
+              <CompactAddress value={walletAddress} label="Registered investment wallet" leading={5} trailing={5} />
             ) : (
               <strong>{walletAddress}</strong>
             )}
           </div>
           <div>
-            <span><WalletCards size={17} /> Wallet Network</span>
-            <strong>{walletNetwork}</strong>
+            <span><FileCheck2 size={17} /> Documents provided</span>
+            <strong>{identityDocuments.length + accreditationDocuments.length}</strong>
           </div>
           <div>
-            <span><WalletCards size={17} /> Wallet Balance</span>
-            <strong>{walletBalance}</strong>
-          </div>
-          <div>
-            <span><CalendarDays size={17} /> Created</span>
+            <span><CalendarDays size={17} /> Profile submitted</span>
             <strong>{submittedLabel}</strong>
           </div>
+          <details className="investor-technical-details investor-profile-technical-details">
+            <summary>Technical wallet details</summary>
+            <div className="investor-profile-technical-grid">
+              <span>Blockchain identity</span>
+              {profile.onchainId && isAddress(profile.onchainId, { strict: false }) ? (
+                <CompactAddress value={profile.onchainId} label="Blockchain identity address" leading={5} trailing={5} />
+              ) : (
+                <strong>{profile.onchainId || 'Not available'}</strong>
+              )}
+              <span>Connected network</span><strong>{walletNetwork}</strong>
+              <span>Wallet balance</span><strong>{walletBalance}</strong>
+            </div>
+          </details>
         </div>
+      </Card>
+
+      <Card className="investor-profile-purpose-card">
+        <div>
+          <ShieldCheck size={18} />
+          <div><strong>What this profile is used for</strong><span>Issuers use this information to check whether you can invest. You normally only need to update it when information changes or an issuer asks for a new document.</span></div>
+        </div>
+        <div><strong>Next:</strong> Browse investments or open an existing application. If more information is needed, the application will tell you exactly what to provide.</div>
       </Card>
 
       <MarketplaceEligibilityUploadCard
@@ -349,7 +358,7 @@ function InvestorProfilePage() {
           <header>
             <div>
               <span className="eyebrow">Identity details</span>
-              <h2>Personal Information</h2>
+              <h2>Personal information</h2>
             </div>
             <span className="investor-profile-section-icon"><UserRoundCheck size={19} /></span>
           </header>
@@ -357,7 +366,7 @@ function InvestorProfilePage() {
             ['Full Legal Name', fullName],
             ['Date of Birth', displayDate(identity.dateOfBirth)],
             ['Gender', displayLabel(options.genders || [], identity.gender)],
-            ['Tax Residency / Country of Residence', country],
+            ['Country of residence', country],
             ['Residential Address', address || 'Not provided'],
           ]} />
         </Card>
@@ -365,19 +374,19 @@ function InvestorProfilePage() {
         <Card className="investor-profile-section-card">
           <header>
             <div>
-              <span className="eyebrow">Suitability profile</span>
-              <h2>Investor Profile</h2>
+              <span className="eyebrow">Investment information</span>
+              <h2>Your investment background</h2>
             </div>
             <span className="investor-profile-section-icon"><FileCheck2 size={19} /></span>
           </header>
           <ProfileDetailList items={[
-            ['Primary Source of Wealth', compliance.sourceOfWealth],
-            ['Estimated Net Worth', compliance.estimatedNetWorth],
-            ['Annual Investment Capacity', compliance.annualInvestmentCapacity],
-            ['Investment Experience Categories', categories || 'Not provided'],
-            ['Years of Investment Experience', compliance.yearsOfExperience],
-            ['Previous RWA Experience', compliance.previousRwaExperience === 'yes' ? 'Yes' : 'No'],
-            ['RWA Experience Description', compliance.rwaExperienceDescription || 'Not provided'],
+            ['Main source of funds', compliance.sourceOfWealth],
+            ['Estimated net worth', compliance.estimatedNetWorth],
+            ['Approximate yearly investment amount', compliance.annualInvestmentCapacity],
+            ['Investment experience', categories || 'Not provided'],
+            ['Years of investing experience', compliance.yearsOfExperience],
+            ['Experience with similar investments', compliance.previousRwaExperience === 'yes' ? 'Yes' : 'No'],
+            ['Experience details', compliance.rwaExperienceDescription || 'Not provided'],
           ]} />
         </Card>
 
@@ -385,13 +394,13 @@ function InvestorProfilePage() {
           <header>
             <div>
               <span className="eyebrow">Verification documents</span>
-              <h2>Identity Verification</h2>
+              <h2>Identity documents</h2>
             </div>
             <span className="investor-profile-document-count">{identityDocuments.length}</span>
           </header>
           <InvestorDocumentList
             documents={identityDocuments}
-            title="Uploaded Identity Documents"
+            title="Documents used to verify your identity"
             categoryLabel="Identity"
             downloadDocument={investorApi.downloadDocument}
           />
@@ -400,28 +409,24 @@ function InvestorProfilePage() {
         <Card className="investor-profile-section-card investor-profile-document-card">
           <header>
             <div>
-              <span className="eyebrow">Accreditation</span>
-              <h2>Accredited Investor Status</h2>
+              <span className="eyebrow">Investment eligibility</span>
+              <h2>Eligibility documents</h2>
             </div>
             <span className="investor-profile-document-count">{accreditationDocuments.length}</span>
           </header>
           <ProfileDetailList items={[
-            ['Accreditation Type', displayLabel(options.accreditationTypes || [], compliance.accreditationType)],
-            ['Profile Status', 'Created'],
+            ['Eligibility type', displayLabel(options.accreditationTypes || [], compliance.accreditationType)],
+            ['Information status', 'Submitted'],
           ]} />
           <InvestorDocumentList
             documents={accreditationDocuments}
-            title="Uploaded Accreditation Documents"
-            categoryLabel="Accreditation"
+            title="Documents used to confirm eligibility"
+            categoryLabel="Eligibility"
             downloadDocument={investorApi.downloadDocument}
           />
         </Card>
       </div>
 
-      <div className="investor-profile-security-note">
-        <ShieldCheck size={18} />
-        <p><strong>Protected investor record</strong><span>Your profile and documents are loaded through authenticated investor APIs. Sensitive fields are displayed only inside your signed-in workspace.</span></p>
-      </div>
     </div>
   );
 }

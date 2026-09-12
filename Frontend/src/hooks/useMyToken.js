@@ -17,9 +17,18 @@ export const getTokenRecordUid = (token) =>
 export const getTokenRecordStatus = (token) => firstText(token?.status, 'draft');
 
 export const isTokenRecordLocked = (token) =>
-  ['readytodeploy', 'deploymentpending', 'deploymentfailed', 'deployed'].includes(
-    normalizeStatus(getTokenRecordStatus(token)),
-  );
+  [
+    'readytodeploy',
+    'deploymentpending',
+    'deploymentconfirmed',
+    'deploymentfailed',
+    'configurationpending',
+    'configurationfailed',
+    'priceconfirmationrequired',
+    'deployed',
+    'completed',
+    'active',
+  ].includes(normalizeStatus(getTokenRecordStatus(token)));
 
 export const getTokenRecordName = (token) => {
   const information = token?.tokenInformation || token?.information || token || {};
@@ -71,6 +80,7 @@ export function useMyToken({ enabled = true } = {}) {
   const tokenUid = getTokenRecordUid(token);
   const status = getTokenRecordStatus(token);
   const isLocked = isTokenRecordLocked(token);
+  const normalizedStatus = normalizeStatus(status);
 
   return {
     ...query,
@@ -78,10 +88,19 @@ export function useMyToken({ enabled = true } = {}) {
     tokenUid,
     status,
     isLocked,
-    isReadyToDeploy: normalizeStatus(status) === 'readytodeploy',
-    isDeploymentPending: normalizeStatus(status) === 'deploymentpending',
-    isDeploymentFailed: normalizeStatus(status) === 'deploymentfailed',
-    isDeployed: normalizeStatus(status) === 'deployed',
+    isReadyToDeploy: normalizedStatus === 'readytodeploy',
+    isDeploymentPending: [
+      'deploymentpending',
+      'deploymentconfirmed',
+      'configurationpending',
+      'priceconfirmationrequired',
+    ].includes(normalizedStatus),
+    isDeploymentConfirmed: normalizedStatus === 'deploymentconfirmed',
+    isConfigurationPending: normalizedStatus === 'configurationpending',
+    isConfigurationFailed: normalizedStatus === 'configurationfailed',
+    isPriceConfirmationRequired: normalizedStatus === 'priceconfirmationrequired',
+    isDeploymentFailed: normalizedStatus === 'deploymentfailed',
+    isDeployed: ['deployed', 'completed', 'active'].includes(normalizedStatus),
     hasToken: Boolean(tokenUid || getTokenRecordName(token)),
     userKey,
   };

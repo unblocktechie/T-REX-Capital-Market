@@ -269,9 +269,18 @@ const normalizeCurrentStep = (value) => normalize(value).replace(/\s+/g, '-');
 const completedFromStep = (currentStep, status) => {
   const normalizedStatus = normalize(status).replace(/\s+/g, '');
   if (
-    ['readytodeploy', 'deploymentpending', 'deploymentfailed', 'deployed'].includes(
-      normalizedStatus,
-    )
+    [
+      'readytodeploy',
+      'deploymentpending',
+      'deploymentconfirmed',
+      'deploymentfailed',
+      'configurationpending',
+      'configurationfailed',
+      'priceconfirmationrequired',
+      'deployed',
+      'completed',
+      'active',
+    ].includes(normalizedStatus)
   ) {
     return TOKEN_ISSUANCE_STEPS.map((step) => step.key);
   }

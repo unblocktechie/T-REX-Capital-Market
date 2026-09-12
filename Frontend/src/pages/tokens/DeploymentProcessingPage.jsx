@@ -18,7 +18,17 @@ import { useTokenIssuanceBootstrap } from '@/hooks/useTokenIssuanceBootstrap';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useWalletConnection } from '@/hooks/useWalletConnection';
 import { pendingDeploymentService } from '@/services/pendingDeployment.service';
-import { deployTrexSuite } from '@/services/trexDeployment.service';
+import {
+  activateTrexTransfers,
+  deployTrexSuite,
+  readTrexTokenPaused,
+  recoverTrexDeploymentState,
+} from '@/services/trexDeployment.service';
+import {
+  getPlatformTokenPrice,
+  setPlatformTokenPrice,
+  waitForPlatformTransactionReceipt,
+} from '@/services/blockchain/trexPlatformController.service';
 import { useAuthStore } from '@/store/auth.store';
 import { useTokenIssuanceStore } from '@/store/tokenIssuance.store';
 import { getTokenApiErrorMessage } from '@/utils/tokenApiValidation';
@@ -38,6 +48,38 @@ const wait = (milliseconds) =>
   new Promise((resolve) => {
     window.setTimeout(resolve, milliseconds);
   });
+
+const canonicalDecimal = (value) => {
+  const normalized = String(value ?? '').trim();
+  if (!/^\d+(?:\.\d+)?$/.test(normalized)) return normalized;
+  const [wholeRaw = '0', fractionRaw = ''] = normalized.split('.');
+  const whole = wholeRaw.replace(/^0+(?=\d)/, '') || '0';
+  const fraction = fractionRaw.replace(/0+$/, '');
+  return fraction ? `${whole}.${fraction}` : whole;
+};
+
+const mandatoryStepError = ({
+  message,
+  code,
+  failedStep,
+  deploymentTransactionHash,
+  failedTransactionHash = '',
+  tokenAddress = '',
+  onChainPaused,
+  cause,
+}) => {
+  const error = new Error(message, cause ? { cause } : undefined);
+  error.code = code;
+  error.failedStep = failedStep;
+  error.transactionHash = deploymentTransactionHash;
+  error.failedTransactionHash = failedTransactionHash;
+  error.tokenAddress = tokenAddress;
+  error.onChainPaused = onChainPaused;
+  error.transactionSubmitted = true;
+  error.deploymentConfirmed = true;
+  error.mandatoryStepPending = true;
+  return error;
+};
 
 const getBackendErrorCode = (error) =>
   String(
@@ -130,6 +172,42 @@ const isWalletTransportFailure = (error) =>
 
 const deploymentErrorPresentation = (error, transactionSubmitted) => {
   const backendCode = getBackendErrorCode(error);
+
+  if (error?.code === 'TOKEN_CONFIGURATION_PENDING') {
+    return {
+      title: 'Transfer activation is still confirming',
+      message: error.message,
+      canRetry: true,
+      retryMode: 'configuration',
+    };
+  }
+
+  if (error?.code === 'TOKEN_CONFIGURATION_FAILED') {
+    return {
+      title: 'Token created — transfer activation needs attention',
+      message: error.message,
+      canRetry: true,
+      retryMode: 'configuration',
+    };
+  }
+
+  if (['TOKEN_PRICE_CONFIRMATION_REQUIRED', 'PRICE_CONFIRMATION_PENDING'].includes(error?.code)) {
+    return {
+      title: 'Token created — price confirmation needs attention',
+      message: error.message,
+      canRetry: true,
+      retryMode: 'price-confirmation',
+    };
+  }
+
+  if (error?.code === 'DEPLOYMENT_CONFIRMATION_PENDING') {
+    return {
+      title: 'Token creation is still confirming',
+      message: error.message,
+      canRetry: true,
+      retryMode: 'configuration',
+    };
+  }
 
   if (backendCode === 'TOKEN_DEPLOYMENT_VERIFICATION_FAILED') {
     return {
@@ -367,6 +445,7 @@ export default function DeploymentProcessingPage() {
   const wallet = useWalletConnection();
   const authUser = useAuthStore((state) => state.user);
   const tokenInformation = useTokenIssuanceStore((state) => state.tokenInformation);
+  const supplyPricing = useTokenIssuanceStore((state) => state.supplyPricing);
   const identityClaims = useTokenIssuanceStore((state) => state.identityClaims);
   const compliance = useTokenIssuanceStore((state) => state.compliance);
   const agents = useTokenIssuanceStore((state) => state.agents);
@@ -377,6 +456,7 @@ export default function DeploymentProcessingPage() {
   const markStepCompleted = useTokenIssuanceStore((state) => state.markStepCompleted);
   const startedRef = useRef(false);
   const attemptInFlightRef = useRef(false);
+  const retryInFlightRef = useRef(false);
   const idempotencyKeyRef = useRef(
     normalizeDeploymentIdempotencyKey(deployment.idempotencyKey),
   );
@@ -385,6 +465,31 @@ export default function DeploymentProcessingPage() {
   const completeBackendDeployment = useCallback(
     async ({ transactionHash, deploymentAttemptUid, metadata = {} }) => {
       const confirmedHash = assertValidTransactionHash(transactionHash);
+      const configuredTokenPrice = String(supplyPricing?.initialPrice || '').trim();
+      const priceConfirmed = !configuredTokenPrice ||
+        ['success', 'already-confirmed'].includes(String(metadata?.priceSetup?.status || ''));
+      if (
+        metadata?.configurationStatus !== 'ready_to_finalize' ||
+        metadata?.onChainPaused !== false ||
+        !priceConfirmed
+      ) {
+        throw mandatoryStepError({
+          message:
+            'The token record cannot be finalized until transfer activation and the required price confirmation are verified on-chain.',
+          code: !priceConfirmed
+            ? 'TOKEN_PRICE_CONFIRMATION_REQUIRED'
+            : 'TOKEN_CONFIGURATION_FAILED',
+          failedStep: !priceConfirmed ? 'price-confirmation' : 'activate-transfers',
+          deploymentTransactionHash: confirmedHash,
+          failedTransactionHash:
+            metadata?.failedTransactionHash ||
+            metadata?.priceSetup?.transactionHash ||
+            metadata?.unpauseTransactionHash ||
+            '',
+          tokenAddress: metadata?.tokenAddress || metadata?.contracts?.token || '',
+          onChainPaused: metadata?.onChainPaused,
+        });
+      }
       let persisted = null;
 
       for (let pollIndex = 0; pollIndex < FINALIZATION_MAX_POLLS; pollIndex += 1) {
@@ -518,10 +623,10 @@ export default function DeploymentProcessingPage() {
         updatedAt: deployedAt,
       }));
 
-      toast.success('Token created successfully', {
+      toast.success('Asset setup completed', {
         id: 'token-deployment-recorded',
         description:
-          'The Sepolia transaction was independently verified and the token was finalized.',
+          'All required blockchain steps were confirmed and the final live state was verified.',
       });
 
       navigate(ROUTES.tokenSuccess(tokenUid || confirmedHash), { replace: true });
@@ -533,8 +638,450 @@ export default function DeploymentProcessingPage() {
       queryClient,
       setBackendState,
       setDeployment,
+      supplyPricing?.initialPrice,
       tokenRecord.tokenUid,
       tokenRecord.userKey,
+    ],
+  );
+
+  const completeMandatoryConfiguration = useCallback(
+    async ({ transactionHash, deploymentAttemptUid, metadata = {} }) => {
+      const deployHash = assertValidTransactionHash(transactionHash);
+      const approvedWallet = organization.walletAddress || tokenInformation.treasuryWallet;
+      if (!approvedWallet) {
+        throw new Error('The approved organization wallet could not be loaded.');
+      }
+
+      setDeployment({
+        status: 'processing',
+        activeStage: 3,
+        deploymentAttemptUid,
+        transactionHash: deployHash,
+        canRetry: false,
+        retryMode: 'configuration',
+        walletAction: {
+          key: 'configuration-reconcile',
+          status: 'syncing',
+          title: 'Checking the confirmed token state',
+          description:
+            'We are reading the token contract before deciding whether another wallet action is needed.',
+        },
+      });
+
+      const recovered = await recoverTrexDeploymentState({
+        transactionHash: deployHash,
+        deploymentConfig: env.trex,
+      });
+      const tokenAddress = recovered.tokenAddress;
+      let nextMetadata = {
+        ...metadata,
+        tokenAddress,
+        contracts: recovered.contracts,
+        blockNumber: recovered.blockNumber || metadata.blockNumber,
+        deploymentAttemptUid,
+        attemptStatus: 'confirmed',
+        configurationStatus: 'configuration_pending',
+        onChainPaused: recovered.paused,
+      };
+
+      saveRecoveryRecordSafely('confirmed', {
+        transactionHash: deployHash,
+        user: authUser,
+        issuerWallet: approvedWallet,
+        tokenUid: metadata.tokenUid || backend.tokenUid || tokenRecord.tokenUid,
+        metadata: nextMetadata,
+      });
+
+      const previousUnpauseHash =
+        nextMetadata.unpauseTransactionHash ||
+        (nextMetadata.failedStep === 'activate-transfers'
+          ? nextMetadata.failedTransactionHash
+          : '');
+
+      let transferResult;
+      try {
+        transferResult = await activateTrexTransfers({
+          connector: wallet.connector,
+          connectedAddress: wallet.address,
+          issuerWalletAddress: approvedWallet,
+          tokenAddress,
+          deploymentTransactionHash: deployHash,
+          contracts: recovered.contracts,
+          previousTransactionHash: previousUnpauseHash,
+          onWalletAction: (walletAction) => setDeployment({ walletAction }),
+        });
+      } catch (error) {
+        const paused =
+          typeof error?.onChainPaused === 'boolean'
+            ? error.onChainPaused
+            : await readTrexTokenPaused({ tokenAddress }).catch(() => null);
+        nextMetadata = {
+          ...nextMetadata,
+          configurationStatus:
+            error?.code === 'TOKEN_CONFIGURATION_PENDING'
+              ? 'configuration_pending'
+              : 'configuration_failed',
+          onChainPaused: paused,
+          failedStep: 'activate-transfers',
+          failedTransactionHash:
+            error?.failedTransactionHash || previousUnpauseHash || '',
+          unpauseTransactionHash:
+            error?.failedTransactionHash || previousUnpauseHash || '',
+          configurationError: error?.message || 'Transfer activation did not complete.',
+        };
+        saveRecoveryRecordSafely('confirmed', {
+          transactionHash: deployHash,
+          user: authUser,
+          issuerWallet: approvedWallet,
+          tokenUid: nextMetadata.tokenUid,
+          metadata: nextMetadata,
+        });
+        throw error;
+      }
+
+      const pausedAfterActivation = await readTrexTokenPaused({ tokenAddress });
+      if (pausedAfterActivation) {
+        const error = mandatoryStepError({
+          message:
+            'The transfer activation could not be verified. The token still reports paused, so it has not been finalized.',
+          code: 'TOKEN_CONFIGURATION_FAILED',
+          failedStep: 'activate-transfers',
+          deploymentTransactionHash: deployHash,
+          failedTransactionHash: transferResult?.transactionHash || previousUnpauseHash,
+          tokenAddress,
+          onChainPaused: true,
+        });
+        nextMetadata = {
+          ...nextMetadata,
+          configurationStatus: 'configuration_failed',
+          onChainPaused: true,
+          failedStep: 'activate-transfers',
+          failedTransactionHash: error.failedTransactionHash,
+          unpauseTransactionHash: error.failedTransactionHash,
+          configurationError: error.message,
+        };
+        saveRecoveryRecordSafely('confirmed', {
+          transactionHash: deployHash,
+          user: authUser,
+          issuerWallet: approvedWallet,
+          tokenUid: nextMetadata.tokenUid,
+          metadata: nextMetadata,
+        });
+        throw error;
+      }
+
+      nextMetadata = {
+        ...nextMetadata,
+        configurationStatus: 'configuration_confirmed',
+        onChainPaused: false,
+        unpauseTransactionHash:
+          transferResult?.transactionHash || previousUnpauseHash || '',
+        failedStep: '',
+        failedTransactionHash: '',
+        configurationError: '',
+      };
+      saveRecoveryRecordSafely('confirmed', {
+        transactionHash: deployHash,
+        user: authUser,
+        issuerWallet: approvedWallet,
+        tokenUid: nextMetadata.tokenUid,
+        metadata: nextMetadata,
+      });
+
+      const configuredTokenPrice = String(
+        supplyPricing?.initialPrice ||
+          tokenRecord.token?.currentTokenPrice ||
+          tokenRecord.token?.initialTokenPrice ||
+          '',
+      ).trim();
+
+      if (configuredTokenPrice) {
+        setDeployment({
+          activeStage: 3,
+          walletAction: {
+            key: 'activate-token-price',
+            step: 3,
+            total: 3,
+            status: 'syncing',
+            title: 'Checking the current token price',
+            description:
+              'We are reading the live contract price first so a retry never sends a duplicate transaction.',
+            gasRequired: false,
+          },
+        });
+
+        let livePrice;
+        try {
+          livePrice = await getPlatformTokenPrice({
+            tokenAddress,
+            chainId: wallet.requiredChain.id,
+          });
+        } catch (cause) {
+          const error = mandatoryStepError({
+            message:
+              'The token was created and transfers are active, but the current price could not be verified. Retry the status check before sending another transaction.',
+            code: 'TOKEN_PRICE_CONFIRMATION_REQUIRED',
+            failedStep: 'price-confirmation',
+            deploymentTransactionHash: deployHash,
+            tokenAddress,
+            onChainPaused: false,
+            cause,
+          });
+          nextMetadata = {
+            ...nextMetadata,
+            configurationStatus: 'price_confirmation_required',
+            failedStep: 'price-confirmation',
+            configurationError: error.message,
+            priceSetup: {
+              ...(nextMetadata.priceSetup || {}),
+              status: 'verification-pending',
+              error: error.message,
+            },
+          };
+          saveRecoveryRecordSafely('confirmed', {
+            transactionHash: deployHash,
+            user: authUser,
+            issuerWallet: approvedWallet,
+            tokenUid: nextMetadata.tokenUid,
+            metadata: nextMetadata,
+          });
+          throw error;
+        }
+
+        const desiredPrice = canonicalDecimal(configuredTokenPrice);
+        let livePriceValue = canonicalDecimal(livePrice.currentTokenPrice);
+        const previousPriceHash =
+          nextMetadata.priceSetup?.transactionHash ||
+          (nextMetadata.failedStep === 'price-confirmation'
+            ? nextMetadata.failedTransactionHash
+            : '');
+
+        if (livePriceValue !== desiredPrice && /^0x[a-fA-F0-9]{64}$/.test(previousPriceHash)) {
+          try {
+            await waitForPlatformTransactionReceipt({
+              txHash: previousPriceHash,
+              chainId: wallet.requiredChain.id,
+              timeout: 45_000,
+            });
+            livePrice = await getPlatformTokenPrice({
+              tokenAddress,
+              chainId: wallet.requiredChain.id,
+            });
+            livePriceValue = canonicalDecimal(livePrice.currentTokenPrice);
+            if (livePriceValue !== desiredPrice) {
+              throw mandatoryStepError({
+                message:
+                  'The previous price transaction succeeded, but the live token price does not match the configured price. No new transaction was sent.',
+                code: 'TOKEN_PRICE_CONFIRMATION_REQUIRED',
+                failedStep: 'price-confirmation',
+                deploymentTransactionHash: deployHash,
+                failedTransactionHash: previousPriceHash,
+                tokenAddress,
+                onChainPaused: false,
+              });
+            }
+          } catch (cause) {
+            if (cause?.code === 'TOKEN_PRICE_CONFIRMATION_REQUIRED') throw cause;
+            if (!cause?.confirmedRevert) {
+              const error = mandatoryStepError({
+                message:
+                  'The previous price transaction is still being confirmed. Wait for it before retrying; no new transaction was sent.',
+                code: 'PRICE_CONFIRMATION_PENDING',
+                failedStep: 'price-confirmation',
+                deploymentTransactionHash: deployHash,
+                failedTransactionHash: previousPriceHash,
+                tokenAddress,
+                onChainPaused: false,
+                cause,
+              });
+              nextMetadata = {
+                ...nextMetadata,
+                configurationStatus: 'price_confirmation_required',
+                failedStep: 'price-confirmation',
+                failedTransactionHash: previousPriceHash,
+                configurationError: error.message,
+                priceSetup: {
+                  ...(nextMetadata.priceSetup || {}),
+                  status: 'pending',
+                  transactionHash: previousPriceHash,
+                  error: error.message,
+                },
+              };
+              saveRecoveryRecordSafely('confirmed', {
+                transactionHash: deployHash,
+                user: authUser,
+                issuerWallet: approvedWallet,
+                tokenUid: nextMetadata.tokenUid,
+                metadata: nextMetadata,
+              });
+              throw error;
+            }
+            // A confirmed revert is safe to retry with a new wallet transaction below.
+          }
+        }
+
+        if (livePriceValue !== desiredPrice) {
+          let priceResult;
+          try {
+            priceResult = await setPlatformTokenPrice({
+              connector: wallet.connector,
+              connectedAddress: wallet.address,
+              issuerWalletAddress: approvedWallet,
+              tokenAddress,
+              currentTokenPrice: configuredTokenPrice,
+              chainId: wallet.requiredChain.id,
+              onStep: ({ stage, txHash }) => {
+                setDeployment({
+                  walletAction: {
+                    key: 'activate-token-price',
+                    step: 3,
+                    total: 3,
+                    status:
+                      stage === 'price-confirmed'
+                        ? 'confirmed'
+                        : stage === 'price-confirming'
+                          ? 'confirming'
+                          : 'awaiting-signature',
+                    title:
+                      stage === 'price-confirmed'
+                        ? 'Token price confirmed'
+                        : stage === 'price-confirming'
+                          ? 'Confirming token price'
+                          : 'Transaction 3 of 3: Confirm token price',
+                    description:
+                      stage === 'price-confirmed'
+                        ? 'The configured price is confirmed on-chain.'
+                        : stage === 'price-confirming'
+                          ? 'Waiting for network confirmation.'
+                          : 'Approve this transaction to make the configured price active for purchases and redemptions.',
+                    transactionHash: txHash || '',
+                    gasRequired: true,
+                  },
+                });
+              },
+            });
+          } catch (cause) {
+            const failedHash = cause?.transactionHash || '';
+            const error = mandatoryStepError({
+              message:
+                cause?.code === 'PRICE_CONFIRMATION_PENDING'
+                  ? 'The price transaction was submitted and is still confirming. Do not submit another one yet.'
+                  : 'The token was created, but the required price confirmation did not complete. Retry this step before the token is finalized.',
+              code:
+                cause?.code === 'PRICE_CONFIRMATION_PENDING'
+                  ? 'PRICE_CONFIRMATION_PENDING'
+                  : 'TOKEN_PRICE_CONFIRMATION_REQUIRED',
+              failedStep: 'price-confirmation',
+              deploymentTransactionHash: deployHash,
+              failedTransactionHash: failedHash,
+              tokenAddress,
+              onChainPaused: false,
+              cause,
+            });
+            nextMetadata = {
+              ...nextMetadata,
+              configurationStatus: 'price_confirmation_required',
+              failedStep: 'price-confirmation',
+              failedTransactionHash: failedHash,
+              configurationError: error.message,
+              priceSetup: {
+                status: cause?.confirmedRevert ? 'failed' : failedHash ? 'pending' : 'failed',
+                transactionHash: failedHash,
+                currentTokenPrice: configuredTokenPrice,
+                error: cause?.shortMessage || cause?.message || error.message,
+              },
+            };
+            saveRecoveryRecordSafely('confirmed', {
+              transactionHash: deployHash,
+              user: authUser,
+              issuerWallet: approvedWallet,
+              tokenUid: nextMetadata.tokenUid,
+              metadata: nextMetadata,
+            });
+            throw error;
+          }
+
+          nextMetadata = {
+            ...nextMetadata,
+            priceSetup: {
+              status: 'success',
+              transactionHash: priceResult.txHash,
+              priceRaw: priceResult.priceRaw.toString(),
+              currentTokenPrice: priceResult.currentTokenPrice,
+              paymentToken: priceResult.paymentToken,
+              error: '',
+            },
+          };
+        } else {
+          nextMetadata = {
+            ...nextMetadata,
+            priceSetup: {
+              status: 'already-confirmed',
+              transactionHash: previousPriceHash || '',
+              priceRaw: livePrice.priceRaw?.toString?.() || '',
+              currentTokenPrice: livePrice.currentTokenPrice,
+              paymentToken: livePrice.paymentToken,
+              error: '',
+            },
+          };
+        }
+      }
+
+      nextMetadata = {
+        ...nextMetadata,
+        configurationStatus: 'ready_to_finalize',
+        onChainPaused: false,
+        failedStep: '',
+        failedTransactionHash: '',
+        configurationError: '',
+      };
+      saveRecoveryRecordSafely('confirmed', {
+        transactionHash: deployHash,
+        user: authUser,
+        issuerWallet: approvedWallet,
+        tokenUid: nextMetadata.tokenUid,
+        metadata: nextMetadata,
+      });
+
+      setDeployment({
+        activeStage: 4,
+        deploymentAttemptUid,
+        attemptStatus: 'confirming',
+        transactionHash: deployHash,
+        retryMode: 'backend-sync',
+        pendingSync: {
+          transactionHash: deployHash,
+          deploymentAttemptUid,
+          metadata: nextMetadata,
+        },
+        walletAction: {
+          key: 'backend-sync',
+          status: 'syncing',
+          title: 'All required transactions are confirmed',
+          description:
+            'Transfers are active and the configured price is confirmed. We are now finalizing the token record.',
+        },
+      });
+
+      await completeBackendDeployment({
+        transactionHash: deployHash,
+        deploymentAttemptUid,
+        metadata: nextMetadata,
+      });
+    },
+    [
+      authUser,
+      backend.tokenUid,
+      completeBackendDeployment,
+      organization.walletAddress,
+      setDeployment,
+      supplyPricing?.initialPrice,
+      tokenInformation.treasuryWallet,
+      tokenRecord.token,
+      tokenRecord.tokenUid,
+      wallet.address,
+      wallet.connector,
+      wallet.requiredChain.id,
     ],
   );
 
@@ -643,6 +1190,49 @@ export default function DeploymentProcessingPage() {
               !cachedTokenUid ||
               localRecovery.tokenUid === cachedTokenUid),
         );
+        const cachedDeploymentHash = getDeploymentTransactionHash(cachedToken);
+        const cachedStatus = String(cachedToken?.status || backend.status || '')
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z]/g, '');
+        const isExistingFinalizedRecord = ['deployed', 'completed', 'active'].includes(cachedStatus);
+        const requiresMandatoryRecovery = [
+          'deploymentconfirmed',
+          'configurationpending',
+          'configurationfailed',
+          'priceconfirmationrequired',
+        ].includes(cachedStatus);
+
+        if (cachedDeploymentHash && requiresMandatoryRecovery) {
+          await completeMandatoryConfiguration({
+            transactionHash: cachedDeploymentHash,
+            deploymentAttemptUid: getAttemptUid(activeAttempt),
+            metadata: {
+              ...recoveryMetadata,
+              ...(localRecoveryMatchesToken ? localRecovery?.metadata || {} : {}),
+            },
+          });
+          return;
+        }
+
+        // A previously finalized database record can still be repaired safely if an older
+        // frontend version finalized after transaction #1. Never create a second token: use
+        // the recorded deployment receipt and reconcile the live contract state first.
+        if (
+          cachedDeploymentHash &&
+          isExistingFinalizedRecord &&
+          ['configuration', 'price-confirmation'].includes(deployment.retryMode)
+        ) {
+          await completeMandatoryConfiguration({
+            transactionHash: cachedDeploymentHash,
+            deploymentAttemptUid: getAttemptUid(activeAttempt),
+            metadata: {
+              ...recoveryMetadata,
+              ...(localRecoveryMatchesToken ? localRecovery?.metadata || {} : {}),
+            },
+          });
+          return;
+        }
 
         if (activeState?.tokenDeployed) {
           const deployedHash =
@@ -652,10 +1242,12 @@ export default function DeploymentProcessingPage() {
             getDeploymentTransactionHash(cachedToken);
 
           if (deployedHash) {
-            await completeBackendDeployment({
+            await completeMandatoryConfiguration({
               transactionHash: deployedHash,
               deploymentAttemptUid: getAttemptUid(activeAttempt),
-              metadata: recoveryMetadata,
+              metadata: localRecoveryMatchesToken
+                ? { ...recoveryMetadata, ...(localRecovery?.metadata || {}) }
+                : recoveryMetadata,
             });
             return;
           }
@@ -743,10 +1335,12 @@ export default function DeploymentProcessingPage() {
               },
             });
 
-            await completeBackendDeployment({
+            await completeMandatoryConfiguration({
               transactionHash,
               deploymentAttemptUid,
-              metadata: recoveryMetadata,
+              metadata: localMatchesAttempt
+                ? { ...recoveryMetadata, ...(localRecovery?.metadata || {}) }
+                : recoveryMetadata,
             });
             return;
           }
@@ -760,10 +1354,12 @@ export default function DeploymentProcessingPage() {
               walletAddress: approvedWallet,
             });
 
-            await completeBackendDeployment({
+            await completeMandatoryConfiguration({
               transactionHash,
               deploymentAttemptUid,
-              metadata: recoveryMetadata,
+              metadata: localMatchesAttempt
+                ? { ...recoveryMetadata, ...(localRecovery?.metadata || {}) }
+                : recoveryMetadata,
             });
             return;
           }
@@ -828,10 +1424,10 @@ export default function DeploymentProcessingPage() {
             },
           });
 
-          await completeBackendDeployment({
+          await completeMandatoryConfiguration({
             transactionHash,
             deploymentAttemptUid,
-            metadata: localRecovery.metadata || recoveryMetadata,
+            metadata: { ...recoveryMetadata, ...(localRecovery.metadata || {}) },
           });
           return;
         }
@@ -986,6 +1582,7 @@ export default function DeploymentProcessingPage() {
             network,
             chainId,
             blockNumber,
+            contracts,
           }) => {
             const confirmedHash = assertValidTransactionHash(confirmedTransactionHash);
             transactionSubmitted = true;
@@ -999,6 +1596,10 @@ export default function DeploymentProcessingPage() {
               deploymentAttemptUid,
               idempotencyKey: idempotencyKeyRef.current,
               attemptStatus: 'confirming',
+              tokenAddress: contracts?.token || '',
+              contracts: contracts || {},
+              configurationStatus: 'deployment_confirmed',
+              onChainPaused: null,
             };
             const recoveryRecord = saveRecoveryRecordSafely('confirmed', {
               transactionHash: confirmedHash,
@@ -1030,9 +1631,14 @@ export default function DeploymentProcessingPage() {
           chainId: chainResult.chainId,
           blockNumber: chainResult.blockNumber,
           deployedAt: chainResult.deployedAt,
+          tokenAddress: chainResult.tokenAddress,
+          contracts: chainResult.contracts,
           deploymentAttemptUid,
           idempotencyKey: idempotencyKeyRef.current,
-          attemptStatus: 'confirming',
+          attemptStatus: 'confirmed',
+          configurationStatus: 'configuration_confirmed',
+          onChainPaused: false,
+          unpauseTransactionHash: chainResult.unpause?.transactionHash || '',
         };
 
         const recoveryRecord = saveRecoveryRecordSafely('confirmed', {
@@ -1042,62 +1648,112 @@ export default function DeploymentProcessingPage() {
           tokenUid: cachedTokenUid,
           metadata,
         });
-        const pendingSync = {
+
+        await completeMandatoryConfiguration({
           transactionHash,
           deploymentAttemptUid,
           metadata: recoveryRecord?.metadata || metadata,
-        };
-
-        const transfersActivated = ['success', 'already-unpaused'].includes(
-          chainResult.unpause?.status,
-        );
-        setDeployment({
-          activeStage: 4,
-          deploymentAttemptUid,
-          attemptStatus: 'confirming',
-          transactionHash,
-          pendingSync,
-          retryMode: 'backend-sync',
-          walletAction: {
-            key: 'backend-sync',
-            status: 'syncing',
-            title: transfersActivated
-              ? 'Both wallet confirmations are complete'
-              : 'Token created — transfer activation is still pending',
-            description: transfersActivated
-              ? 'The confirmed token-creation transaction is being verified before your token is finalized.'
-              : 'The token-creation transaction is confirmed, but transfers remain paused while the final checks are completed.',
-          },
         });
-
-        if (!transfersActivated) {
-          toast.warning('Token created, but transfers are still paused', {
-            id: 'token-transfer-activation-pending',
-            description:
-              'The token will be finalized, but an authorized Token Operations Wallet must enable transfers before investors can send it.',
-            duration: 10_000,
-          });
-        }
-
-        await completeBackendDeployment(pendingSync);
       } catch (caughtError) {
         let error = caughtError;
         console.error('Token deployment failed', error);
         const hash = error?.transactionHash || transactionHash;
         const submitted = Boolean(error?.transactionSubmitted || transactionSubmitted || hash);
 
-        // After broadcast, the backend owns the final receipt decision. This also handles
-        // local receipt timeouts and reverted transactions without allowing a duplicate send.
-        if (submitted && hash && deploymentAttemptUid && !error?.syncOnly) {
+        if (error?.mandatoryStepPending && hash) {
+          const existingRecovery = pendingDeploymentService.getForUser(authUser);
+          const failedStep = error?.failedStep || existingRecovery?.metadata?.failedStep || '';
+          const failedTransactionHash =
+            error?.failedTransactionHash ||
+            existingRecovery?.metadata?.failedTransactionHash ||
+            '';
+          saveRecoveryRecordSafely('confirmed', {
+            transactionHash: hash,
+            user: authUser,
+            issuerWallet: approvedWallet,
+            tokenUid: cachedTokenUid,
+            metadata: {
+              ...recoveryMetadata,
+              ...(existingRecovery?.metadata || {}),
+              deploymentAttemptUid,
+              tokenAddress:
+                error?.tokenAddress || existingRecovery?.metadata?.tokenAddress || '',
+              contracts: error?.contracts || existingRecovery?.metadata?.contracts || {},
+              configurationStatus:
+                failedStep === 'price-confirmation'
+                  ? 'price_confirmation_required'
+                  : error?.code === 'TOKEN_CONFIGURATION_PENDING'
+                    ? 'configuration_pending'
+                    : 'configuration_failed',
+              onChainPaused:
+                typeof error?.onChainPaused === 'boolean'
+                  ? error.onChainPaused
+                  : existingRecovery?.metadata?.onChainPaused,
+              failedStep,
+              failedTransactionHash,
+              unpauseTransactionHash:
+                failedStep === 'activate-transfers'
+                  ? failedTransactionHash
+                  : existingRecovery?.metadata?.unpauseTransactionHash || '',
+              configurationError: error?.message || '',
+              priceSetup:
+                failedStep === 'price-confirmation'
+                  ? {
+                      ...(existingRecovery?.metadata?.priceSetup || {}),
+                      status:
+                        error?.code === 'PRICE_CONFIRMATION_PENDING' ? 'pending' : 'failed',
+                      transactionHash: failedTransactionHash,
+                      error: error?.message || '',
+                    }
+                  : existingRecovery?.metadata?.priceSetup || {},
+            },
+          });
+        }
+
+        // Never finalize the backend merely because transaction #1 was broadcast. First
+        // reconcile the deployment receipt and every mandatory post-deployment transaction.
+        // Configuration/price failures are intentionally left for an explicit retry so the
+        // same failed step is not reopened automatically from this catch block.
+        if (
+          submitted &&
+          hash &&
+          deploymentAttemptUid &&
+          !error?.syncOnly &&
+          !error?.mandatoryStepPending &&
+          error?.code !== 'DEPLOYMENT_TRANSACTION_REVERTED'
+        ) {
           try {
-            await completeBackendDeployment({
+            const savedRecovery = pendingDeploymentService.getForUser(authUser);
+            await completeMandatoryConfiguration({
               transactionHash: hash,
               deploymentAttemptUid,
-              metadata: recoveryMetadata,
+              metadata: {
+                ...recoveryMetadata,
+                ...(savedRecovery?.metadata || {}),
+              },
             });
             return;
           } catch (verificationError) {
             error = verificationError;
+          }
+        }
+
+        if (deploymentAttemptUid && error?.code === 'DEPLOYMENT_TRANSACTION_REVERTED') {
+          try {
+            await tokenApi.failDeploymentAttempt(deploymentAttemptUid, {
+              status: 'failed',
+              errorCode: 'DEPLOYMENT_TRANSACTION_REVERTED',
+              errorMessage: error.message,
+            });
+            attemptStatus = 'failed';
+            setBackendState({
+              status: 'deploymentFailed',
+              isDraft: false,
+              isLocked: true,
+            });
+            queryClient.invalidateQueries({ queryKey: myTokenQueryKey(tokenRecord.userKey) });
+          } catch (closeError) {
+            console.error('Unable to record the reverted deployment transaction', closeError);
           }
         }
 
@@ -1145,37 +1801,47 @@ export default function DeploymentProcessingPage() {
         const existingDeploymentSync =
           presentation.retryMode === EXISTING_DEPLOYMENT_SYNC_RETRY_MODE;
         const canRetry = presentation.canRetry ?? (!submitted || Boolean(error?.confirmedRevert));
+        const retryMode = existingDeploymentSync
+          ? EXISTING_DEPLOYMENT_SYNC_RETRY_MODE
+          : presentation.retryMode || (syncOnly ? 'backend-sync' : 'deployment');
+        const savedRecovery = hash ? pendingDeploymentService.getForUser(authUser) : null;
+        const failedAttemptStatus =
+          error?.failedStep === 'price-confirmation'
+            ? 'price_confirmation_required'
+            : error?.failedStep === 'activate-transfers'
+              ? error?.code === 'TOKEN_CONFIGURATION_PENDING'
+                ? 'configuration_pending'
+                : 'configuration_failed'
+              : terminalVerificationFailure || error?.code === 'DEPLOYMENT_TRANSACTION_REVERTED'
+                ? 'failed'
+                : submitted
+                  ? 'deployment_confirmed'
+                  : attemptStatus;
 
         setDeployment({
           status: existingDeploymentSync ? 'processing' : 'error',
-          activeStage: existingDeploymentSync ? 4 : submitted ? 4 : deployment.activeStage,
+          activeStage: existingDeploymentSync ? 4 : submitted ? 3 : deployment.activeStage,
           deploymentAttemptUid,
-          attemptStatus: terminalVerificationFailure
-            ? 'failed'
-            : submitted
-              ? 'submitted'
-              : attemptStatus,
+          attemptStatus: failedAttemptStatus,
           error: presentation.message,
           transactionHash: hash || '',
           canRetry,
-          retryMode: existingDeploymentSync
-            ? EXISTING_DEPLOYMENT_SYNC_RETRY_MODE
-            : syncOnly
-              ? 'backend-sync'
-              : 'deployment',
+          retryMode,
           pendingSync:
-            syncOnly && hash
+            hash
               ? {
                   transactionHash: hash,
                   deploymentAttemptUid,
                   metadata: {
                     ...recoveryMetadata,
+                    ...(savedRecovery?.metadata || {}),
                     deploymentAttemptUid,
                   },
                 }
               : null,
           requestStartedAt: submitted || existingDeploymentSync ? new Date().toISOString() : null,
-          walletAction: existingDeploymentSync || syncOnly ? null : deployment.walletAction,
+          walletAction:
+            existingDeploymentSync || syncOnly ? null : deployment.walletAction,
         });
 
         toast.dismiss('token-deployment-error');
@@ -1204,6 +1870,7 @@ export default function DeploymentProcessingPage() {
     backend.hydrated,
     backend.tokenUid,
     completeBackendDeployment,
+    completeMandatoryConfiguration,
     compliance,
     deployment.activeStage,
     deployment.attemptStatus,
@@ -1220,6 +1887,7 @@ export default function DeploymentProcessingPage() {
     setDeployment,
     tokenBootstrap.isLoading,
     tokenInformation,
+    supplyPricing,
     tokenRecord.token,
     tokenRecord.tokenUid,
     tokenRecord.userKey,
@@ -1288,7 +1956,8 @@ export default function DeploymentProcessingPage() {
         );
 
         if (transactionHash) {
-          await completeBackendDeployment({
+          const localRecovery = pendingDeploymentService.getForUser(authUser);
+          await completeMandatoryConfiguration({
             transactionHash,
             deploymentAttemptUid,
             metadata: {
@@ -1299,15 +1968,16 @@ export default function DeploymentProcessingPage() {
                 latestToken?.tokenSymbol || latestToken?.symbol || tokenInformation.symbol,
               network: wallet.requiredChain.name,
               chainId: wallet.requiredChain.id,
+              ...(localRecovery?.metadata || {}),
             },
           });
           return;
         }
 
         if (deploymentDetected && tokenUid) {
-          queryClient.setQueryData(myTokenQueryKey(tokenRecord.userKey), latestToken);
-          navigate(ROUTES.tokenDetails(tokenUid), { replace: true });
-          return;
+          throw new Error(
+            'A token record was found, but its confirmed creation transaction ID is unavailable. The token will not be treated as complete until the on-chain state can be reconciled.',
+          );
         }
       } catch (error) {
         console.warn('Existing deployment synchronization check failed.', error);
@@ -1337,8 +2007,9 @@ export default function DeploymentProcessingPage() {
       if (timerId) window.clearTimeout(timerId);
     };
   }, [
+    authUser,
     backend.tokenUid,
-    completeBackendDeployment,
+    completeMandatoryConfiguration,
     deployment.retryMode,
     deployment.status,
     navigate,
@@ -1353,168 +2024,248 @@ export default function DeploymentProcessingPage() {
   ]);
 
   const retry = async () => {
-    if (!deployment.canRetry) return;
+    if (!deployment.canRetry || retryInFlightRef.current) return;
+    retryInFlightRef.current = true;
 
-    if (deployment.retryMode === EXISTING_DEPLOYMENT_SYNC_RETRY_MODE) {
-      setDeployment({
-        status: 'processing',
-        activeStage: 4,
-        error: EXISTING_DEPLOYMENT_SYNC_MESSAGE,
-        canRetry: false,
-        retryMode: EXISTING_DEPLOYMENT_SYNC_RETRY_MODE,
-        walletAction: null,
-      });
-      return;
-    }
-
-    if (deployment.retryMode === 'bootstrap') {
-      setDeployment({
-        status: 'processing',
-        activeStage: 0,
-        error: '',
-        canRetry: false,
-        walletAction: {
-          key: 'deployment-bootstrap',
-          status: 'syncing',
-          title: 'Reloading token setup',
-          description:
-            'Your token, organization and creation status are being restored before any wallet request can open.',
-        },
-      });
-
-      const result = await tokenBootstrap.refresh();
-      if (result.error) {
+    try {
+        if (deployment.retryMode === EXISTING_DEPLOYMENT_SYNC_RETRY_MODE) {
         setDeployment({
-          status: 'error',
-          activeStage: 0,
-          error: getTokenApiErrorMessage(
-            result.error,
-            'The token-creation status could not be restored. Please refresh and try again.',
-          ),
-          canRetry: true,
-          retryMode: 'bootstrap',
+          status: 'processing',
+          activeStage: 4,
+          error: EXISTING_DEPLOYMENT_SYNC_MESSAGE,
+          canRetry: false,
+          retryMode: EXISTING_DEPLOYMENT_SYNC_RETRY_MODE,
           walletAction: null,
         });
         return;
       }
 
-      startedRef.current = false;
-      return;
-    }
-
-    if (deployment.retryMode === 'backend-sync') {
-      const pending = deployment.pendingSync || {
-        transactionHash: deployment.transactionHash,
-        deploymentAttemptUid: deployment.deploymentAttemptUid,
-        metadata: {},
-      };
-
-      try {
-        const transactionHash = assertValidTransactionHash(pending.transactionHash);
-        let deploymentAttemptUid =
-          pending.deploymentAttemptUid || deployment.deploymentAttemptUid || '';
-        const approvedWallet = organization.walletAddress || tokenInformation.treasuryWallet;
-
+      if (deployment.retryMode === 'bootstrap') {
         setDeployment({
           status: 'processing',
-          activeStage: 4,
+          activeStage: 0,
           error: '',
           canRetry: false,
           walletAction: {
-            key: 'backend-sync',
+            key: 'deployment-bootstrap',
             status: 'syncing',
-            title: 'Checking token status again',
+            title: 'Reloading token setup',
             description:
-              'Verification will resume from the existing transaction ID. MetaMask will not open and no additional network fee will be charged.',
+              'Your token, organization and creation status are being restored before any wallet request can open.',
           },
         });
 
-        const activeState = await tokenApi.getActiveDeploymentAttempt();
-        const activeAttempt = activeState?.attempt || null;
-        deploymentAttemptUid = getAttemptUid(activeAttempt) || deploymentAttemptUid;
-        const activeStatus = normalizeAttemptStatus(activeAttempt);
-        const backendHash = activeAttempt?.transactionHash
-          ? assertValidTransactionHash(activeAttempt.transactionHash)
-          : transactionHash;
+        const result = await tokenBootstrap.refresh();
+        if (result.error) {
+          setDeployment({
+            status: 'error',
+            activeStage: 0,
+            error: getTokenApiErrorMessage(
+              result.error,
+              'The token-creation status could not be restored. Please refresh and try again.',
+            ),
+            canRetry: true,
+            retryMode: 'bootstrap',
+            walletAction: null,
+          });
+          return;
+        }
 
-        if (activeAttempt && activeStatus === 'pending') {
-          await tokenApi.markDeploymentAttemptSubmitted(deploymentAttemptUid, {
+        startedRef.current = false;
+        return;
+      }
+
+      if (['configuration', 'price-confirmation'].includes(deployment.retryMode)) {
+        const pending = deployment.pendingSync || {
+          transactionHash: deployment.transactionHash,
+          deploymentAttemptUid: deployment.deploymentAttemptUid,
+          metadata: pendingDeploymentService.getForUser(authUser)?.metadata || {},
+        };
+
+        try {
+          setDeployment({
+            status: 'processing',
+            activeStage: 3,
+            error: '',
+            canRetry: false,
+            walletAction: {
+              key: 'configuration-retry',
+              status: 'syncing',
+              title:
+                deployment.retryMode === 'price-confirmation'
+                  ? 'Checking the price confirmation'
+                  : 'Checking transfer activation',
+              description:
+                'The live contract state is checked first. A new wallet transaction is requested only if the previous one is no longer pending and the required state is still incomplete.',
+            },
+          });
+          await completeMandatoryConfiguration({
+            transactionHash: pending.transactionHash,
+            deploymentAttemptUid:
+              pending.deploymentAttemptUid || deployment.deploymentAttemptUid || '',
+            metadata: pending.metadata || {},
+          });
+        } catch (error) {
+          const presentation = deploymentErrorPresentation(error, true);
+          const recovery = pendingDeploymentService.getForUser(authUser);
+          toast.error(presentation.title, {
+            id: 'token-configuration-retry-error',
+            description: presentation.message,
+            duration: 8_000,
+          });
+          setDeployment({
+            status: 'error',
+            activeStage: 3,
+            error: presentation.message,
+            transactionHash: pending.transactionHash,
+            deploymentAttemptUid:
+              pending.deploymentAttemptUid || deployment.deploymentAttemptUid || '',
+            attemptStatus:
+              error?.failedStep === 'price-confirmation'
+                ? 'price_confirmation_required'
+                : error?.code === 'TOKEN_CONFIGURATION_PENDING'
+                  ? 'configuration_pending'
+                  : 'configuration_failed',
+            requestStartedAt: new Date().toISOString(),
+            canRetry: presentation.canRetry !== false,
+            retryMode: presentation.retryMode || deployment.retryMode,
+            pendingSync: {
+              ...pending,
+              metadata: recovery?.metadata || pending.metadata || {},
+            },
+            walletAction: null,
+          });
+        }
+        return;
+      }
+
+      if (deployment.retryMode === 'backend-sync') {
+        const pending = deployment.pendingSync || {
+          transactionHash: deployment.transactionHash,
+          deploymentAttemptUid: deployment.deploymentAttemptUid,
+          metadata: {},
+        };
+
+        try {
+          const transactionHash = assertValidTransactionHash(pending.transactionHash);
+          let deploymentAttemptUid =
+            pending.deploymentAttemptUid || deployment.deploymentAttemptUid || '';
+          const approvedWallet = organization.walletAddress || tokenInformation.treasuryWallet;
+
+          setDeployment({
+            status: 'processing',
+            activeStage: 4,
+            error: '',
+            canRetry: false,
+            walletAction: {
+              key: 'backend-sync',
+              status: 'syncing',
+              title: 'Checking token status again',
+              description:
+                'Verification will resume from the existing transaction ID. MetaMask will not open and no additional network fee will be charged.',
+            },
+          });
+
+          const activeState = await tokenApi.getActiveDeploymentAttempt();
+          const activeAttempt = activeState?.attempt || null;
+          deploymentAttemptUid = getAttemptUid(activeAttempt) || deploymentAttemptUid;
+          const activeStatus = normalizeAttemptStatus(activeAttempt);
+          const backendHash = activeAttempt?.transactionHash
+            ? assertValidTransactionHash(activeAttempt.transactionHash)
+            : transactionHash;
+
+          if (activeAttempt && activeStatus === 'pending') {
+            await tokenApi.markDeploymentAttemptSubmitted(deploymentAttemptUid, {
+              transactionHash: backendHash,
+              chainId: wallet.requiredChain.id,
+              walletAddress: approvedWallet,
+            });
+          }
+
+          const recoveryRecord = saveRecoveryRecordSafely('submitted', {
             transactionHash: backendHash,
-            chainId: wallet.requiredChain.id,
-            walletAddress: approvedWallet,
+            user: authUser,
+            issuerWallet: approvedWallet,
+            tokenUid: pending.metadata?.tokenUid || backend.tokenUid,
+            metadata: {
+              ...(pending.metadata || {}),
+              deploymentAttemptUid,
+              attemptStatus: activeStatus || 'submitted',
+            },
           });
-        }
 
-        const recoveryRecord = saveRecoveryRecordSafely('submitted', {
-          transactionHash: backendHash,
-          user: authUser,
-          issuerWallet: approvedWallet,
-          tokenUid: pending.metadata?.tokenUid || backend.tokenUid,
-          metadata: {
-            ...(pending.metadata || {}),
+          await completeMandatoryConfiguration({
+            transactionHash: recoveryRecord.transactionHash,
             deploymentAttemptUid,
-            attemptStatus: activeStatus || 'submitted',
-          },
-        });
-
-        await completeBackendDeployment({
-          transactionHash: recoveryRecord.transactionHash,
-          deploymentAttemptUid,
-          metadata: recoveryRecord.metadata,
-        });
-      } catch (error) {
-        console.error('Backend deployment synchronization failed', error);
-        const terminalVerificationFailure =
-          getBackendErrorCode(error) === 'TOKEN_DEPLOYMENT_VERIFICATION_FAILED';
-        if (terminalVerificationFailure) {
-          pendingDeploymentService.clear(pending.transactionHash);
-          setBackendState({
-            status: 'deploymentFailed',
-            isDraft: false,
-            isLocked: true,
+            metadata: recoveryRecord.metadata,
           });
-          queryClient.invalidateQueries({ queryKey: myTokenQueryKey(tokenRecord.userKey) });
+        } catch (error) {
+          console.error('Backend deployment synchronization failed', error);
+          const terminalVerificationFailure =
+            getBackendErrorCode(error) === 'TOKEN_DEPLOYMENT_VERIFICATION_FAILED';
+          if (terminalVerificationFailure) {
+            pendingDeploymentService.clear(pending.transactionHash);
+            setBackendState({
+              status: 'deploymentFailed',
+              isDraft: false,
+              isLocked: true,
+            });
+            queryClient.invalidateQueries({ queryKey: myTokenQueryKey(tokenRecord.userKey) });
+          }
+          const presentation = deploymentErrorPresentation(error, true);
+          toast.error(presentation.title, {
+            id: 'token-deployment-sync-error',
+            description: presentation.message,
+            duration: 8_000,
+          });
+          const recovery = pendingDeploymentService.getForUser(authUser);
+          const retryMode = presentation.retryMode || 'backend-sync';
+          setDeployment({
+            status: 'error',
+            activeStage: ['configuration', 'price-confirmation'].includes(retryMode) ? 3 : 4,
+            error: presentation.message,
+            transactionHash: pending.transactionHash,
+            deploymentAttemptUid:
+              pending.deploymentAttemptUid || deployment.deploymentAttemptUid || '',
+            attemptStatus: terminalVerificationFailure
+              ? 'failed'
+              : error?.failedStep === 'price-confirmation'
+                ? 'price_confirmation_required'
+                : error?.failedStep === 'activate-transfers'
+                  ? 'configuration_failed'
+                  : deployment.attemptStatus,
+            requestStartedAt: new Date().toISOString(),
+            canRetry: presentation.canRetry !== false,
+            retryMode,
+            pendingSync: {
+              ...pending,
+              metadata: recovery?.metadata || pending.metadata || {},
+            },
+            walletAction: null,
+          });
         }
-        const presentation = deploymentErrorPresentation(error, true);
-        toast.error(presentation.title, {
-          id: 'token-deployment-sync-error',
-          description: presentation.message,
-          duration: 8_000,
-        });
+        return;
+      }
+
+      startedRef.current = false;
+      idempotencyKeyRef.current = '';
         setDeployment({
-          status: 'error',
-          activeStage: 4,
-          error: presentation.message,
-          transactionHash: pending.transactionHash,
-          deploymentAttemptUid:
-            pending.deploymentAttemptUid || deployment.deploymentAttemptUid || '',
-          attemptStatus: terminalVerificationFailure ? 'failed' : deployment.attemptStatus,
-          requestStartedAt: new Date().toISOString(),
-          canRetry: presentation.canRetry !== false,
-          retryMode: 'backend-sync',
-          pendingSync: pending,
+          status: 'processing',
+          activeStage: 0,
+          deploymentAttemptUid: '',
+          attemptStatus: '',
+          idempotencyKey: '',
+          error: '',
+          transactionHash: '',
+          requestStartedAt: null,
+          canRetry: false,
+          retryMode: '',
+          pendingSync: null,
           walletAction: null,
         });
-      }
-      return;
+    } finally {
+      retryInFlightRef.current = false;
     }
-
-    startedRef.current = false;
-    idempotencyKeyRef.current = '';
-    setDeployment({
-      status: 'processing',
-      activeStage: 0,
-      deploymentAttemptUid: '',
-      attemptStatus: '',
-      idempotencyKey: '',
-      error: '',
-      transactionHash: '',
-      requestStartedAt: null,
-      canRetry: false,
-      retryMode: '',
-      pendingSync: null,
-      walletAction: null,
-    });
   };
 
   const walletActionStatus = {
@@ -1532,9 +2283,18 @@ export default function DeploymentProcessingPage() {
       : undefined;
   const backendSyncPending =
     deployment.retryMode === 'backend-sync' && Boolean(deployment.transactionHash);
+  const configurationRetryPending = deployment.retryMode === 'configuration';
+  const priceRetryPending = deployment.retryMode === 'price-confirmation';
   const existingDeploymentSyncPending =
     deployment.retryMode === EXISTING_DEPLOYMENT_SYNC_RETRY_MODE;
   const showDeploymentError = deployment.status === 'error' && !existingDeploymentSyncPending;
+  const configuredInitialPrice = String(
+    supplyPricing?.initialPrice ||
+      tokenRecord.token?.currentTokenPrice ||
+      tokenRecord.token?.initialTokenPrice ||
+      '',
+  ).trim();
+  const walletActionCount = configuredInitialPrice ? 3 : 2;
 
   return (
     <div className="deployment-page">
@@ -1560,7 +2320,11 @@ export default function DeploymentProcessingPage() {
               : deployment.status === 'error'
                 ? backendSyncPending
                   ? 'Transaction submitted — verification pending'
-                  : 'Token creation needs attention'
+                  : configurationRetryPending
+                    ? 'Token created — transfer activation needs attention'
+                    : priceRetryPending
+                      ? 'Token created — price confirmation needs attention'
+                      : 'Token creation needs attention'
                 : backendSyncPending
                   ? 'Verifying token creation'
                   : 'Creating your security token'}
@@ -1571,10 +2335,14 @@ export default function DeploymentProcessingPage() {
               : deployment.status === 'error'
                 ? backendSyncPending
                   ? 'The blockchain transaction already exists. Retry only the status check; another wallet transaction will not be sent.'
-                  : 'Review the message below before retrying. Never send a duplicate transaction when a hash is already pending.'
+                  : configurationRetryPending
+                    ? 'The asset already exists. We will check the live transfer state first and retry only the missing activation step when needed.'
+                    : priceRetryPending
+                      ? 'The asset already exists. We will check the live price first and retry only the missing price confirmation when needed.'
+                      : 'Review the message below before retrying. Never send a duplicate transaction when a hash is already pending.'
                 : backendSyncPending
                   ? 'The submitted transaction and token-creation result are being checked before your token is marked ready.'
-                  : 'MetaMask will request two approvals: first to create your token, then to activate token transfers. Keep this page open until Sepolia confirms both actions.'}
+                  : `MetaMask may request ${walletActionCount} approvals: create the asset, activate approved transfers${configuredInitialPrice ? ', and confirm the asset price' : ''}. Keep this page open until Sepolia confirms every required action.`}
           </p>
         </div>
 
@@ -1641,7 +2409,13 @@ export default function DeploymentProcessingPage() {
               </Button>
               {deployment.canRetry ? (
                 <Button icon={RefreshCcw} onClick={retry}>
-                  {backendSyncPending ? 'Check token status' : 'Try token creation again'}
+                  {backendSyncPending
+                    ? 'Check token status'
+                    : configurationRetryPending
+                      ? 'Retry transfer activation'
+                      : priceRetryPending
+                        ? 'Retry price confirmation'
+                        : 'Try token creation again'}
                 </Button>
               ) : null}
             </>

@@ -44,6 +44,20 @@ const number = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
 const displayNumber = (value) => value == null ? '—' : number.format(value);
 const displayPrice = (value, currency) => value == null ? '—' : `$${number.format(value)}${currency ? ` ${currency}` : ''}`;
 
+const friendlyEligibilityLabel = (topic = {}) => {
+  const code = String(topic.claimTopicCode || topic.code || topic.label || '').toUpperCase();
+  if (code.includes('ACCREDIT')) return 'Investment eligibility check';
+  if (code.includes('KYC') || code.includes('IDENTITY')) return 'Identity verification';
+  return topic.label || 'Investor requirement';
+};
+
+const friendlyEligibilityDescription = (topic = {}) => {
+  const code = String(topic.claimTopicCode || topic.code || topic.label || '').toUpperCase();
+  if (code.includes('ACCREDIT')) return 'Confirms that you meet the eligibility rules set for this investment.';
+  if (code.includes('KYC') || code.includes('IDENTITY')) return 'Confirms your identity before you can invest or receive this asset.';
+  return topic.description || 'This requirement must be completed before you can invest.';
+};
+
 function SnapshotCard({ label, children }) {
   return <div className="marketplace-snapshot-card"><span>{label}</span><strong>{children}</strong></div>;
 }
@@ -78,11 +92,11 @@ function ComplianceStatus({ token }) {
   if (!topics.length) return null;
   return (
     <div className="marketplace-compliance-status">
-      <span className="marketplace-side-section-label">Required Verification</span>
+      <span className="marketplace-side-section-label">Required checks</span>
       {topics.map((topic) => (
         <div key={topic.id || topic.claimTopicCode}>
-          <span><UserRoundCheck size={15} /> {topic.label || topic.claimTopicCode}</span>
-          <strong>{topic.rejected ? 'Re-upload' : topic.satisfied ? 'Ready' : 'Missing'}</strong>
+          <span><UserRoundCheck size={15} /> {friendlyEligibilityLabel(topic)}</span>
+          <strong>{topic.rejected ? 'Update needed' : topic.satisfied ? 'Ready' : 'Needed'}</strong>
         </div>
       ))}
     </div>
@@ -97,20 +111,20 @@ function OfferingStatusPanel({ token, onPrimaryAction, onSecondaryAction, onInve
 
   return (
     <Card className="marketplace-status-panel">
-      <div className="marketplace-status-panel__topline"><span>Investment Status</span><small>{token.interest?.interestUid ? `Request: ${token.interest.interestUid.slice(0, 12)}…` : 'No active request'}</small></div>
+      <div className="marketplace-status-panel__topline"><span>Your investment progress</span><small>{token.interest?.interestUid ? `Request: ${token.interest.interestUid.slice(0, 12)}…` : 'No active request'}</small></div>
 
       {token.status === MARKETPLACE_STATUS.NOT_APPLIED ? (
         <>
-          <div className="marketplace-status-callout marketplace-status-callout--neutral"><Info size={19} /><div><strong>Not Applied</strong><span>Your required verification documents are complete. You can request to invest for issuer review.</span></div></div>
+          <div className="marketplace-status-callout marketplace-status-callout--neutral"><Info size={19} /><div><strong>Ready to request access</strong><span>Your profile is ready. Send a request to the issuer when you want to invest.</span></div></div>
           <Button className="marketplace-status-panel__primary" onClick={onPrimaryAction} loading={actionLoading}>Request to Invest</Button>
         </>
       ) : null}
 
       {token.status === MARKETPLACE_STATUS.READY_TO_INVEST ? (
         <>
-          <div className="marketplace-status-callout marketplace-status-callout--warning"><CheckCircle2 size={19} /><div><strong>Action Required</strong><span>You are eligible to invest in this token. Choose Invest to continue.</span></div></div>
+          <div className="marketplace-status-callout marketplace-status-callout--warning"><CheckCircle2 size={19} /><div><strong>Ready to invest</strong><span>All required checks and approvals are complete. Choose Invest when you are ready.</span></div></div>
           <Button className="marketplace-status-panel__primary" icon={ShoppingCart} onClick={onInvest}>Invest</Button>
-          <div className="marketplace-status-panel__asset-actions" aria-label="Token actions">
+          <div className="marketplace-status-panel__asset-actions" aria-label="Asset actions">
             <Button variant="secondary" icon={Send} onClick={onSend}>Send</Button>
             <Button variant="secondary" icon={RotateCcw} onClick={onRedeem}>Redeem</Button>
           </div>
@@ -119,14 +133,14 @@ function OfferingStatusPanel({ token, onPrimaryAction, onSecondaryAction, onInve
 
       {token.status === MARKETPLACE_STATUS.ACTION_REQUIRED ? (
         <>
-          <div className="marketplace-status-callout marketplace-status-callout--warning"><LockKeyhole size={19} /><div><strong>Documents Required</strong><span>Upload the missing verification documents requested for this offering.</span></div></div>
-          <Button className="marketplace-status-panel__primary" onClick={onPrimaryAction} loading={actionLoading}>Upload Missing Documents</Button>
+          <div className="marketplace-status-callout marketplace-status-callout--warning"><LockKeyhole size={19} /><div><strong>Action needed from you</strong><span>Upload the missing information or documents requested for this offering.</span></div></div>
+          <Button className="marketplace-status-panel__primary" onClick={onPrimaryAction} loading={actionLoading}>Upload Required Documents</Button>
         </>
       ) : null}
 
       {token.status === MARKETPLACE_STATUS.PENDING_REVIEW ? (
         <>
-          <div className="marketplace-status-callout marketplace-status-callout--pending"><Clock3 size={19} /><div><strong>Pending Review</strong><span>Your investment request was submitted and is being reviewed by the issuer.</span></div></div>
+          <div className="marketplace-status-callout marketplace-status-callout--pending"><Clock3 size={19} /><div><strong>Waiting for issuer</strong><span>Your application was submitted. Nothing is needed from you while the issuer reviews it.</span></div></div>
           <p className="marketplace-status-panel__estimate">Submitted {token.interest?.submittedAt ? new Date(token.interest.submittedAt).toLocaleString() : 'recently'}.</p>
           <Button className="marketplace-status-panel__primary" onClick={onSecondaryAction}>View Application</Button>
         </>
@@ -134,29 +148,29 @@ function OfferingStatusPanel({ token, onPrimaryAction, onSecondaryAction, onInve
 
       {token.status === MARKETPLACE_STATUS.CLAIM_REQUIRED ? (
         <>
-          <div className="marketplace-status-callout marketplace-status-callout--warning"><LockKeyhole size={19} /><div><strong>Action Required</strong><span>Your application has been approved. Complete the required verification to unlock investing in this token.</span></div></div>
+          <div className="marketplace-status-callout marketplace-status-callout--warning"><LockKeyhole size={19} /><div><strong>Your action is required</strong><span>The issuer approved your application. Complete the required verification to continue.</span></div></div>
           <Button className="marketplace-status-panel__primary" onClick={onSecondaryAction}>Complete Verification</Button>
         </>
       ) : null}
 
       {token.status === MARKETPLACE_STATUS.CLAIMS_SUBMITTED ? (
         <>
-          <div className="marketplace-status-callout marketplace-status-callout--pending"><Clock3 size={19} /><div><strong>Verification Submitted</strong><span>Your required verification has been submitted successfully. The issuer is completing the final approval step.</span></div></div>
+          <div className="marketplace-status-callout marketplace-status-callout--pending"><Clock3 size={19} /><div><strong>Waiting for issuer</strong><span>Your verification is complete. Nothing is needed from you while the issuer finishes final approval.</span></div></div>
           <Button className="marketplace-status-panel__primary" onClick={onSecondaryAction}>View Application</Button>
         </>
       ) : null}
 
       {token.status === MARKETPLACE_STATUS.APPROVED ? (
         <>
-          <div className="marketplace-status-callout marketplace-status-callout--success"><CheckCircle2 size={19} /><div><strong>Approved</strong><span>The issuer approved your investment request.</span></div></div>
-          <p className="marketplace-status-panel__estimate">Settlement and token purchase are not available from this page yet.</p>
+          <div className="marketplace-status-callout marketplace-status-callout--success"><CheckCircle2 size={19} /><div><strong>Almost ready</strong><span>Your request is approved. The issuer is completing the final access step.</span></div></div>
+          <p className="marketplace-status-panel__estimate">You will be able to invest once final access is enabled.</p>
           <Button className="marketplace-status-panel__primary" onClick={onSecondaryAction}>View Application</Button>
         </>
       ) : null}
 
       {token.status === MARKETPLACE_STATUS.REJECTED ? (
         <>
-          <div className="marketplace-status-callout marketplace-status-callout--rejected"><XCircle size={19} /><div><strong>Rejected</strong><span>{rejection.rejectReason || 'The issuer rejected this investment request.'}</span></div></div>
+          <div className="marketplace-status-callout marketplace-status-callout--rejected"><XCircle size={19} /><div><strong>Application not approved</strong><span>{rejection.rejectReason || 'The issuer did not approve this application. Review the reason for more information.'}</span></div></div>
           {canResubmitDocuments ? (
             <>
               {rejection.resubmitRemaining != null ? <p className="marketplace-status-panel__estimate">Resubmission attempts remaining: {rejection.resubmitRemaining}</p> : null}
@@ -174,7 +188,7 @@ function OfferingStatusPanel({ token, onPrimaryAction, onSecondaryAction, onInve
       ) : null}
 
       {token.status === MARKETPLACE_STATUS.VERIFIED_HOLDER ? (
-        <div className="marketplace-status-callout marketplace-status-callout--success"><CheckCircle2 size={19} /><div><strong>Approved Investor</strong><span>Your verified profile is approved to hold and receive this token.</span></div></div>
+        <div className="marketplace-status-callout marketplace-status-callout--success"><CheckCircle2 size={19} /><div><strong>Ready to invest</strong><span>Your investor access is enabled for this asset.</span></div></div>
       ) : null}
 
       <ComplianceStatus token={token} />
@@ -363,7 +377,7 @@ export default function MarketplaceTokenDetailsPage() {
           <span className="marketplace-token-detail-header__logo">{tokenDisplayImage ? <img src={tokenDisplayImage} alt={`${token.name} token`} /> : <ShieldCheck size={20} />}</span>
           <div>
             <div className="marketplace-token-detail-header__name-line"><h1>{token.name}</h1><MarketplaceStatusBadge status={token.status} compact /></div>
-            <p><strong>Symbol: {token.symbol}</strong><span>•</span><span>Standard: {token.standard}</span>{token.assetClass ? <><span>•</span><span>Asset: {token.assetClass}</span></> : null}</p>
+            <p><strong>{token.symbol}</strong><span>•</span><span>Issued by {token.issuer}</span>{token.assetClass ? <><span>•</span><span>{token.assetClass}</span></> : null}</p>
           </div>
         </div>
       </header>
@@ -371,52 +385,53 @@ export default function MarketplaceTokenDetailsPage() {
       <div className="marketplace-token-detail-layout">
         <main className="marketplace-token-detail-main">
           <section className="marketplace-detail-section">
-            <span className="marketplace-detail-section-label">Investment snapshot</span>
-            <div className="marketplace-snapshot-grid">
-              <SnapshotCard label="Current Price">{displayPrice(token.price, token.currency)}</SnapshotCard>
-              <SnapshotCard label="Decimals">{displayNumber(token.decimals)}</SnapshotCard>
-              <SnapshotCard label="Max Investors">{displayNumber(token.maxInvestors)}</SnapshotCard>
-              <SnapshotCard label="Current Investors">{displayNumber(token.currentInvestors)}</SnapshotCard>
-              <SnapshotCard label="Max Balance / Holder">{token.maxBalance == null ? '—' : `${displayNumber(token.maxBalance)} ${token.symbol}`}</SnapshotCard>
+            <span className="marketplace-detail-section-label">Key investment details</span>
+            <div className="marketplace-snapshot-grid marketplace-snapshot-grid--friendly">
+              <SnapshotCard label="Price per unit">{displayPrice(token.price, token.currency)}</SnapshotCard>
+              <SnapshotCard label="Investor limit">{displayNumber(token.maxInvestors)}</SnapshotCard>
+              <SnapshotCard label="Current investors">{displayNumber(token.currentInvestors)}</SnapshotCard>
+              <SnapshotCard label="Maximum you can hold">{token.maxBalance == null ? '—' : `${displayNumber(token.maxBalance)} ${token.symbol}`}</SnapshotCard>
             </div>
+            <p className="marketplace-section-helper">These limits are applied automatically when you invest or receive this asset.</p>
           </section>
 
           <Card className="marketplace-about-card">
-            <span className="marketplace-detail-card-title">About Asset</span>
-            {(token.description.length ? token.description : ['No additional offering description is available for this token.']).map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+            <span className="marketplace-detail-card-title">About this investment</span>
+            {(token.description.length ? token.description : ['The issuer has not added a description for this investment yet.']).map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
             <div className="marketplace-asset-meta">
-              {token.assetClass ? <div><span>Asset Class</span><strong>{token.assetClass}</strong></div> : null}
+              {token.assetClass ? <div><span>Investment type</span><strong>{token.assetClass}</strong></div> : null}
               <div><span>Issuer</span><strong>{token.issuer}</strong></div>
-              {token.expectedApy ? <div><span>Expected APY</span><strong>{token.expectedApy}</strong></div> : null}
-              {token.liquidity ? <div><span>Liquidity</span><strong>{token.liquidity}</strong></div> : null}
+              {token.expectedApy ? <div><span>Expected yearly return</span><strong>{token.expectedApy}</strong></div> : null}
+              {token.liquidity ? <div><span>Resale availability</span><strong>{token.liquidity}</strong></div> : null}
             </div>
           </Card>
 
-          {(token.onchainId || token.registryAddress) ? (
-            <Card className="marketplace-registry-card">
-              <span className="marketplace-detail-card-title"><Landmark size={15} /> Technical Identity Details</span>
-              <div className="marketplace-registry-grid">
-                {token.onchainId ? <div><span>On-chain Identity (ONCHAINID)</span><strong>{token.onchainId}</strong><button type="button" aria-label="Copy ONCHAINID" onClick={() => copyValue(token.onchainId, 'ONCHAINID')}><Copy size={14} /></button></div> : null}
-                {token.registryAddress ? <div><span>Approved Investor List (Registry)</span><strong>{token.registryAddress}</strong><button type="button" aria-label="Copy registry address" onClick={() => copyValue(token.registryAddress, 'Approved investor list registry address')}><Copy size={14} /></button></div> : null}
-              </div>
-            </Card>
-          ) : null}
+          <details className="investor-technical-details marketplace-technical-details">
+            <summary><Landmark size={15} /> Technical details</summary>
+            <p>These details are mainly for technical or compliance teams. You do not need them to request or make an investment.</p>
+            <div className="marketplace-registry-grid">
+              <div><span>Token standard</span><strong>{token.standard || '—'}</strong></div>
+              <div><span>Decimal precision</span><strong>{displayNumber(token.decimals)}</strong></div>
+              {token.onchainId ? <div><span>Blockchain identity</span><strong>{token.onchainId}</strong><button type="button" aria-label="Copy blockchain identity" onClick={() => copyValue(token.onchainId, 'Blockchain identity')}><Copy size={14} /></button></div> : null}
+              {token.registryAddress ? <div><span>Approved investor registry</span><strong>{token.registryAddress}</strong><button type="button" aria-label="Copy registry address" onClick={() => copyValue(token.registryAddress, 'Approved investor registry address')}><Copy size={14} /></button></div> : null}
+            </div>
+          </details>
 
           <Card className="marketplace-compliance-card">
-            <span className="marketplace-detail-card-title">Investor Eligibility</span>
+            <span className="marketplace-detail-card-title">What you need before investing</span>
             <div className="marketplace-compliance-rules">
               {eligibilityTopics.length ? eligibilityTopics.map((topic) => (
                 <ComplianceRule
                   key={topic.id || topic.claimTopicCode}
                   icon={topic.claimTopicCode === 'ACCREDITED_INVESTOR' ? BadgeCheck : UserRoundCheck}
-                  title={topic.label || topic.claimTopicCode}
-                  status={topic.satisfied == null ? null : topic.rejected ? { label: 'Re-upload', tone: 'danger' } : { label: topic.satisfied ? 'Satisfied' : 'Missing', tone: topic.satisfied ? 'success' : 'warning' }}
+                  title={friendlyEligibilityLabel(topic)}
+                  status={topic.satisfied == null ? null : topic.rejected ? { label: 'Update needed', tone: 'danger' } : { label: topic.satisfied ? 'Complete' : 'Needed', tone: topic.satisfied ? 'success' : 'warning' }}
                 >
-                  {topic.description || `This verification requirement must be completed before you can request to invest.`}
+                  {friendlyEligibilityDescription(topic)}
                 </ComplianceRule>
-              )) : <ComplianceRule icon={ShieldCheck} title="No Additional Verification">No additional investor verification is required for this token.</ComplianceRule>}
-              {token.maxBalance != null ? <ComplianceRule icon={Scale} title="Holding Limit">Maximum balance configured for a holder: {number.format(token.maxBalance)} {token.symbol}.</ComplianceRule> : null}
-              {token.transferRestriction ? <ComplianceRule icon={LockKeyhole} title="Transfer Restrictions">{token.transferRestriction}</ComplianceRule> : null}
+              )) : <ComplianceRule icon={ShieldCheck} title="No extra checks">No additional investor checks are required for this investment.</ComplianceRule>}
+              {token.maxBalance != null ? <ComplianceRule icon={Scale} title="Maximum holding">You can hold up to: {number.format(token.maxBalance)} {token.symbol}.</ComplianceRule> : null}
+              {token.transferRestriction ? <ComplianceRule icon={LockKeyhole} title="Transfer rules">{token.transferRestriction}</ComplianceRule> : null}
             </div>
           </Card>
 
@@ -454,8 +469,8 @@ export default function MarketplaceTokenDetailsPage() {
             }}
             actionLoading={actionLoading}
           />
-          <Card className="marketplace-help-card"><span className="marketplace-help-card__icon"><HelpCircle size={18} /></span><div><strong>Need Help?</strong><p>Missing or rejected verification documents can be uploaded directly from this offering. Your investor profile contains the rest of your verification details.</p><button type="button" onClick={() => navigate(`${ROUTES.profile}?token=${encodeURIComponent(token.id)}`)}><Mail size={14} /> Open Investor Profile</button></div></Card>
-          <Card className="marketplace-network-card"><span><Building2 size={16} /> Permissioned security token</span><strong>{token.standard}</strong>{token.currentInvestors != null ? <p><UsersRound size={14} /> {number.format(token.currentInvestors)} current investors</p> : null}<p><Banknote size={14} /> {token.currency || 'Token'} pricing</p><p><WalletCards size={14} /> Investor eligibility checked before transfers</p></Card>
+          <Card className="marketplace-help-card"><span className="marketplace-help-card__icon"><HelpCircle size={18} /></span><div><strong>Need to update your information?</strong><p>Open your profile to review your identity, eligibility information, registered wallet, and documents.</p><button type="button" onClick={() => navigate(`${ROUTES.profile}?token=${encodeURIComponent(token.id)}`)}><Mail size={14} /> View my profile</button></div></Card>
+          <Card className="marketplace-network-card marketplace-network-card--friendly"><span><Building2 size={16} /> How this investment is protected</span>{token.currentInvestors != null ? <p><UsersRound size={14} /> {number.format(token.currentInvestors)} investors currently registered</p> : null}<p><Banknote size={14} /> Purchases are priced in {token.currency || 'USDT'}</p><p><WalletCards size={14} /> Investor approval is checked before transfers</p></Card>
         </aside>
       </div>
 

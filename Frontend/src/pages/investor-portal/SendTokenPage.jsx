@@ -35,10 +35,10 @@ import { useRegisteredInvestorWalletGuard } from '@/hooks/useRegisteredInvestorW
 import { useInvestorTokenWalletBalance } from '@/hooks/useInvestorTokenWalletBalance';
 import { investorPortfolioService } from '@/services/investor/investorPortfolioService';
 import {
-  clearInvestorTokenTransferRecovery,
-  loadInvestorTokenTransferRecovery,
-  saveInvestorTokenTransferRecovery,
-} from '@/services/investor/investorTokenTransferRecoveryStore';
+  clearObservedWalletTransaction,
+  listObservedWalletTransactions,
+  saveObservedWalletTransaction,
+} from '@/services/investor/observedWalletTransactionStore';
 import {
   isInvestorTokenTransferWalletRejection,
   submitInvestorTokenTransfer,
@@ -80,11 +80,10 @@ const HISTORY_POLL_INTERVAL_MS = 7_000;
 const TRANSFER_POLL_INTERVAL_MS = 5_000;
 
 const HISTORY_STATUS_OPTIONS = Object.freeze([
-  { value: 'all', label: 'All statuses', description: 'Show every transfer' },
-  { value: TRANSFER_STATUS.PENDING_TRANSFER, label: 'Pending', description: 'Transfer is still being finalized' },
-  { value: TRANSFER_STATUS.COMPLETED, label: 'Completed', description: 'Transfer finalized successfully' },
-  { value: TRANSFER_STATUS.EXPIRED, label: 'Expired', description: 'Transfer intent expired' },
-  { value: TRANSFER_STATUS.MANUAL_REVIEW, label: 'Needs review', description: 'Transfer requires review' },
+  { value: 'all', label: 'All statuses', description: 'Show every token transfer' },
+  { value: 'SUBMITTED', label: 'Submitted', description: 'Sent to the network and waiting for confirmation' },
+  { value: 'CONFIRMED', label: 'Confirmed', description: 'Confirmed successfully on the blockchain' },
+  { value: 'FAILED', label: 'Failed', description: 'The blockchain transaction reverted' },
 ]);
 
 const HISTORY_DIRECTION_OPTIONS = Object.freeze([
@@ -149,16 +148,28 @@ const shortAddress = (value) => {
   return address.length > 18 ? `${address.slice(0, 8)}…${address.slice(-6)}` : address;
 };
 
+const canonicalTransactionAsTransfer = (row = {}) => {
+  const txHash = clean(row?.transactionHash || row?.txHash);
+  const canonicalStatus = normalizeStatus(row?.status);
+  return {
+    ...row,
+    canonicalStatus,
+    transferUid: txHash || clean(row?.id),
+    txHash,
+    status: canonicalStatus,
+    tokenAmount: clean(row?.tokenAmountFormatted || row?.tokenAmount || row?.amountFormatted),
+    senderWalletAddress: clean(row?.fromWallet || row?.from || row?.initiatedByWallet),
+    recipientWalletAddress: clean(row?.toWallet || row?.to || row?.recipientWalletAddress),
+    completedAt: row?.blockTimestamp || row?.confirmedAt || row?.createdAt,
+    createdAt: row?.createdAt || row?.blockTimestamp,
+  };
+};
+
 const transferUidOf = (transfer) => clean(
   transfer?.transferUid
   || transfer?.uid
   || transfer?.id,
 );
-
-const transactionRequestOf = (transfer) => {
-  const request = transfer?.transactionRequest || transfer?.transaction?.request || transfer?.preparedTransaction;
-  return request && typeof request === 'object' && !Array.isArray(request) ? request : null;
-};
 
 const txHashOf = (transfer) => {
   const direct = clean(
@@ -186,8 +197,7 @@ const tokenUidOf = (token) => clean(token?.tokenUid || token?.id);
 const recipientOf = (transfer) => clean(
   transfer?.recipientWalletAddress
   || transfer?.recipient?.walletAddress
-  || transfer?.recipientAddress
-  || transactionRequestOf(transfer)?.args?.[0],
+  || transfer?.recipientAddress,
 );
 
 const tokenAmountOf = (transfer) => clean(
@@ -230,6 +240,9 @@ const formatHistoryDate = (value) => {
 };
 
 const historyStatusMeta = (status) => {
+  if (normalizeStatus(status) === 'SUBMITTED') return { label: 'Submitted', tone: 'pending' };
+  if (normalizeStatus(status) === 'CONFIRMED') return { label: 'Confirmed', tone: 'success' };
+  if (normalizeStatus(status) === 'FAILED') return { label: 'Failed', tone: 'error' };
   switch (normalizeStatus(status)) {
     case TRANSFER_STATUS.PENDING_TRANSFER:
       return { label: 'Pending', tone: 'pending' };
@@ -368,7 +381,6 @@ export default function SendTokenPage({
   const [addressChecked, setAddressChecked] = useState(false);
   const [transferState, setTransferState] = useState(TRANSFER_STATE.READY);
   const [transferRecord, setTransferRecord] = useState(null);
-  const [recovery, setRecovery] = useState(null);
   const [txHash, setTxHash] = useState('');
   const [transferError, setTransferError] = useState('');
   const [replacementAllowed, setReplacementAllowed] = useState(false);
@@ -385,15 +397,15 @@ export default function SendTokenPage({
   const [historyRefreshing, setHistoryRefreshing] = useState(false);
   const [historyError, setHistoryError] = useState('');
 
-  const recoveryLoadKeyRef = useRef('');
   const completionRef = useRef('');
 
   useDocumentTitle(
-    embedded ? 'Manage Tokens' : token ? `${token.name} · Send Tokens` : 'Send Tokens',
+    embedded ? 'Manage Investments' : token ? `${token.name} · Send Tokens` : 'Send Tokens',
   );
 
   const context = useMemo(() => getInvestmentActionContext(token || application), [application, token]);
   const walletGuard = useRegisteredInvestorWalletGuard(context.investorWalletAddress, context.chainId);
+
   const {
     balance: tokenWalletBalance,
     rawBalance: tokenWalletRawBalance,
@@ -419,7 +431,7 @@ export default function SendTokenPage({
   const balanceAvailable = typeof tokenWalletRawBalance === 'bigint';
   const transferBusy = BUSY_TRANSFER_STATES.has(transferState);
 
-  const activeTransferUid = transferUidOf(transferRecord) || clean(recovery?.transferUid);
+  const activeTransferUid = transferUidOf(transferRecord);
   const transferPriceExact = canonicalDecimal(
     (activeTransferUid && (
       transferRecord?.tokenPriceSnapshot
@@ -435,11 +447,11 @@ export default function SendTokenPage({
     && Number(normalizedAmount) > 0
     ? Number(normalizedAmount) * transferPriceNumber
     : null;
-  const serverStatus = normalizeStatus(transferRecord?.status || recovery?.status);
-  const preparedTransactionRequest = transactionRequestOf(transferRecord) || recovery?.transactionRequest || null;
-  const knownHash = txHashOf(transferRecord) || txHash || clean(recovery?.txHash);
-  const pendingIntent = Boolean(activeTransferUid && serverStatus === TRANSFER_STATUS.PENDING_TRANSFER);
-  const hasPreparedIntent = Boolean(pendingIntent && preparedTransactionRequest && !knownHash);
+  const serverStatus = normalizeStatus(transferRecord?.status);
+  const preparedTransactionRequest = null;
+  const knownHash = txHashOf(transferRecord) || txHash;
+  const pendingIntent = Boolean(knownHash && (serverStatus === TRANSFER_STATUS.PENDING_TRANSFER || serverStatus === 'SUBMITTED'));
+  const hasPreparedIntent = false;
   const formLocked = transferBusy || pendingIntent;
 
   const recipientError = useMemo(() => {
@@ -468,81 +480,18 @@ export default function SendTokenPage({
     return '';
   }, [amount, amountRaw, balanceAvailable, normalizedAmount, token?.symbol, tokenDecimals, tokenWalletBalance, tokenWalletRawBalance]);
 
-  const persistRecovery = useCallback((patch = {}) => {
-    const next = saveInvestorTokenTransferRecovery(resolvedInterestUid, patch);
-    setRecovery(next);
-    return next;
-  }, [resolvedInterestUid]);
-
-  const applyTransfer = useCallback((next, fallback = {}) => {
-    if (!next || typeof next !== 'object') return next;
-    const uid = transferUidOf(next) || clean(fallback.transferUid);
-    const status = normalizeStatus(next?.status || fallback.status);
-    const request = transactionRequestOf(next) || fallback.transactionRequest || null;
-    const hash = txHashOf(next) || clean(fallback.txHash);
-    const nextRecipient = recipientOf(next) || clean(fallback.recipientWalletAddress);
-    const nextAmount = tokenAmountOf(next) || clean(fallback.tokenAmount);
-
-    setTransferRecord(next);
-    if (nextRecipient) {
-      setRecipient(nextRecipient);
-      setAddressChecked(isAddress(nextRecipient));
+  const resetTransferComposer = useCallback(({ clearFields = true } = {}) => {
+    setTransferState(TRANSFER_STATE.READY);
+    setTransferRecord(null);
+    setTxHash('');
+    setTransferError('');
+    setReplacementAllowed(false);
+    if (clearFields) {
+      setRecipient('');
+      setAmount('');
+      setAddressChecked(false);
     }
-    if (nextAmount) setAmount(nextAmount);
-    if (hash) setTxHash(hash);
-
-    if (status === TRANSFER_STATUS.COMPLETED) {
-      setTransferState(TRANSFER_STATE.COMPLETED);
-      setTransferError('');
-      setReplacementAllowed(false);
-      clearInvestorTokenTransferRecovery(resolvedInterestUid);
-      setRecovery(null);
-      return next;
-    }
-
-    if (status === TRANSFER_STATUS.EXPIRED) {
-      setTransferState(TRANSFER_STATE.EXPIRED);
-      setTransferError('');
-      setReplacementAllowed(false);
-      clearInvestorTokenTransferRecovery(resolvedInterestUid);
-      setRecovery(null);
-      return next;
-    }
-
-    if (status === TRANSFER_STATUS.MANUAL_REVIEW) {
-      setTransferState(TRANSFER_STATE.MANUAL_REVIEW);
-      setReplacementAllowed(false);
-      clearInvestorTokenTransferRecovery(resolvedInterestUid);
-      setRecovery(null);
-      return next;
-    }
-
-    if (uid && status === TRANSFER_STATUS.PENDING_TRANSFER) {
-      persistRecovery({
-        tokenUid: tokenUidOf(token) || clean(fallback.tokenUid),
-        transferUid: uid,
-        recipientWalletAddress: nextRecipient,
-        tokenAmount: nextAmount,
-        ...(clean(next?.idempotencyKey || fallback.idempotencyKey)
-          ? { idempotencyKey: clean(next?.idempotencyKey || fallback.idempotencyKey) }
-          : {}),
-        txHash: hash,
-        status,
-        transactionRequest: request,
-      });
-      if (hash) {
-        setTransferState(TRANSFER_STATE.CONFIRMING);
-      } else {
-        setTransferState((current) => (
-          [TRANSFER_STATE.CANCELLED, TRANSFER_STATE.FAILED].includes(current)
-            ? current
-            : TRANSFER_STATE.READY
-        ));
-      }
-    }
-
-    return next;
-  }, [persistRecovery, resolvedInterestUid, token]);
+  }, []);
 
   const loadHistory = useCallback(async ({ quiet = false } = {}) => {
     const tokenUid = tokenUidOf(token);
@@ -550,14 +499,22 @@ export default function SendTokenPage({
     quiet ? setHistoryRefreshing(true) : setHistoryLoading(true);
     setHistoryError('');
     try {
-      const response = await investmentApi.listTokenTransfers(tokenUid, {
+      const response = await investmentApi.listTransactions({
         page: historyPage,
         limit: HISTORY_LIMIT,
+        tokenUid,
+        type: 'TRANSFER',
         search: historySearchDebounced,
         status: historyStatus,
-        direction: historyDirection,
       });
-      const rows = Array.isArray(response?.data) ? response.data : [];
+      let rows = (Array.isArray(response?.data) ? response.data : []).map(canonicalTransactionAsTransfer);
+      if (historyDirection !== 'all') {
+        rows = rows.filter((row) => transferDirectionOf(row, context.investorWalletAddress) === historyDirection);
+      }
+      const canonicalHashes = new Set(rows.map((row) => clean(row.txHash).toLowerCase()).filter(Boolean));
+      listObservedWalletTransactions({ tokenUid, expectedAction: 'TRANSFER' }).forEach((observed) => {
+        if (canonicalHashes.has(clean(observed.txHash).toLowerCase())) clearObservedWalletTransaction(observed);
+      });
       const meta = response?.meta || {};
       const total = Number(meta?.total ?? meta?.totalItems ?? meta?.count ?? rows.length) || 0;
       const totalPages = Math.max(1, Number(meta?.totalPages ?? meta?.pages ?? Math.ceil(total / HISTORY_LIMIT)) || 1);
@@ -570,7 +527,57 @@ export default function SendTokenPage({
       setHistoryLoading(false);
       setHistoryRefreshing(false);
     }
-  }, [historyDirection, historyPage, historySearchDebounced, historyStatus, token]);
+  }, [context.investorWalletAddress, historyDirection, historyPage, historySearchDebounced, historyStatus, token]);
+
+  useEffect(() => {
+    const tokenUid = tokenUidOf(token);
+    if (!tokenUid) return undefined;
+    const observed = listObservedWalletTransactions({ tokenUid, expectedAction: 'TRANSFER', interestUid: resolvedInterestUid })
+      .sort((a, b) => String(b.observedAt).localeCompare(String(a.observedAt)))[0];
+    if (!observed) return undefined;
+    setTxHash(observed.txHash);
+    setTransferState(TRANSFER_STATE.CONFIRMING);
+    setTransferRecord(canonicalTransactionAsTransfer({
+      chainId: observed.chainId,
+      transactionHash: observed.txHash,
+      status: 'SUBMITTED',
+      createdAt: observed.observedAt,
+    }));
+
+    let active = true;
+    const sync = async () => {
+      try {
+        const next = await investmentApi.confirmObservedTransaction({
+          chainId: observed.chainId,
+          txHash: observed.txHash,
+          tokenUid,
+          expectedAction: 'TRANSFER',
+        });
+        if (!active) return;
+        const status = normalizeStatus(next?.status);
+        setTransferRecord(canonicalTransactionAsTransfer({ ...next, transactionHash: next?.transactionHash || observed.txHash }));
+        if (status === 'CONFIRMED') {
+          clearObservedWalletTransaction(observed);
+          resetTransferComposer();
+          refreshTokenWalletBalance?.();
+          investorPortfolioService.refreshAfterCompletedActivity().catch(() => {});
+          loadHistory({ quiet: true });
+        } else if (status === 'FAILED') {
+          clearObservedWalletTransaction(observed);
+          setTxHash('');
+          setTransferState(TRANSFER_STATE.FAILED);
+          setTransferError('The blockchain transfer reverted. You can submit a new transfer when ready.');
+        }
+      } catch {
+        // Keep the local hash. The indexer can recover it later without another
+        // wallet transaction.
+      }
+    };
+    void sync();
+    const onFocus = () => void sync();
+    window.addEventListener('focus', onFocus);
+    return () => { active = false; window.removeEventListener('focus', onFocus); };
+  }, [loadHistory, refreshTokenWalletBalance, resetTransferComposer, resolvedInterestUid, token]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setHistorySearchDebounced(clean(historySearch)), 350);
@@ -588,7 +595,7 @@ export default function SendTokenPage({
   }, [loadHistory, ready, token]);
 
   useEffect(() => {
-    const hasPendingHistory = history.some((row) => normalizeStatus(row?.status) === TRANSFER_STATUS.PENDING_TRANSFER);
+    const hasPendingHistory = history.some((row) => normalizeStatus(row?.canonicalStatus || row?.status) === 'SUBMITTED');
     if (!hasPendingHistory) return undefined;
     const timer = window.setInterval(() => loadHistory({ quiet: true }), HISTORY_POLL_INTERVAL_MS);
     return () => window.clearInterval(timer);
@@ -597,6 +604,122 @@ export default function SendTokenPage({
   useEffect(() => {
     if (historyPage > historyMeta.totalPages) setHistoryPage(Math.max(historyMeta.totalPages, 1));
   }, [historyMeta.totalPages, historyPage]);
+
+  useEffect(() => {
+    if (!knownHash || ![TRANSFER_STATE.TRANSACTION_SUBMITTED, TRANSFER_STATE.CONFIRMING].includes(transferState)) return;
+    const normalizedHash = clean(knownHash).toLowerCase();
+    const canonicalMatch = history.find((row) => clean(row?.txHash || row?.transactionHash).toLowerCase() === normalizedHash);
+    if (!canonicalMatch) return;
+
+    const status = normalizeStatus(canonicalMatch?.canonicalStatus || canonicalMatch?.status);
+    if (status === 'CONFIRMED') {
+      clearObservedWalletTransaction({
+        chainId: canonicalMatch?.chainId || context.chainId || walletGuard.targetChainId,
+        txHash: knownHash,
+        expectedAction: 'TRANSFER',
+      });
+      resetTransferComposer();
+      refreshTokenWalletBalance?.();
+      investorPortfolioService.refreshAfterCompletedActivity().catch(() => {});
+    } else if (status === 'FAILED') {
+      clearObservedWalletTransaction({
+        chainId: canonicalMatch?.chainId || context.chainId || walletGuard.targetChainId,
+        txHash: knownHash,
+        expectedAction: 'TRANSFER',
+      });
+      setTransferRecord(canonicalMatch);
+      setTransferState(TRANSFER_STATE.FAILED);
+      setTxHash('');
+      setTransferError('The blockchain transfer reverted. Review the recipient and amount, then send a new transfer when ready.');
+    }
+  }, [
+    context.chainId,
+    history,
+    knownHash,
+    refreshTokenWalletBalance,
+    resetTransferComposer,
+    transferState,
+    walletGuard.targetChainId,
+  ]);
+
+  useEffect(() => {
+    if (!knownHash || ![TRANSFER_STATE.TRANSACTION_SUBMITTED, TRANSFER_STATE.CONFIRMING].includes(transferState)) return undefined;
+
+    const tokenUid = tokenUidOf(token);
+    const chainId = Number(transferRecord?.chainId || context.chainId || walletGuard.targetChainId);
+    if (!tokenUid || !chainId || !validTransactionHash(knownHash)) return undefined;
+
+    let cancelled = false;
+    let timer = null;
+    let inFlight = false;
+
+    const synchronize = async () => {
+      if (cancelled || inFlight || document.hidden) return;
+      inFlight = true;
+      try {
+        const next = await investmentApi.confirmObservedTransaction({
+          chainId,
+          txHash: knownHash,
+          tokenUid,
+          expectedAction: 'TRANSFER',
+        });
+        if (cancelled) return;
+        const status = normalizeStatus(next?.status);
+        if (status === 'CONFIRMED') {
+          clearObservedWalletTransaction({ chainId, txHash: knownHash, expectedAction: 'TRANSFER' });
+          resetTransferComposer();
+          refreshTokenWalletBalance?.();
+          investorPortfolioService.refreshAfterCompletedActivity().catch(() => {});
+          loadHistory({ quiet: true });
+          return;
+        }
+        if (status === 'FAILED') {
+          clearObservedWalletTransaction({ chainId, txHash: knownHash, expectedAction: 'TRANSFER' });
+          setTransferRecord(canonicalTransactionAsTransfer({ ...next, transactionHash: next?.transactionHash || knownHash }));
+          setTxHash('');
+          setTransferState(TRANSFER_STATE.FAILED);
+          setTransferError('The blockchain transfer reverted. Review the details and submit a new transfer when ready.');
+          loadHistory({ quiet: true });
+          return;
+        }
+      } catch (syncError) {
+        const statusCode = Number(syncError?.response?.status);
+        if (!cancelled && statusCode >= 400 && statusCode < 500) {
+          clearObservedWalletTransaction({ chainId, txHash: knownHash, expectedAction: 'TRANSFER' });
+          setTransferRecord(null);
+          setTxHash('');
+          setTransferState(TRANSFER_STATE.FAILED);
+          setTransferError('This transaction could not be verified for the selected transfer. Review the details and try a new transfer when ready.');
+          return;
+        }
+      } finally {
+        inFlight = false;
+      }
+      if (!cancelled) timer = window.setTimeout(synchronize, HISTORY_POLL_INTERVAL_MS);
+    };
+
+    timer = window.setTimeout(synchronize, HISTORY_POLL_INTERVAL_MS);
+    const onFocus = () => {
+      if (timer) window.clearTimeout(timer);
+      void synchronize();
+    };
+    window.addEventListener('focus', onFocus);
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [
+    context.chainId,
+    knownHash,
+    loadHistory,
+    refreshTokenWalletBalance,
+    resetTransferComposer,
+    token,
+    transferRecord?.chainId,
+    transferState,
+    walletGuard.targetChainId,
+  ]);
 
   useEffect(() => {
     if (serverStatus !== TRANSFER_STATUS.COMPLETED || !activeTransferUid) return;
@@ -609,96 +732,6 @@ export default function SendTokenPage({
       description: 'The transfer has been fully verified and your balances have been updated.',
     });
   }, [activeTransferUid, loadHistory, refreshTokenWalletBalance, serverStatus]);
-
-  useEffect(() => {
-    if (!ready || !resolvedInterestUid || !tokenUidOf(token)) return undefined;
-    const loadKey = `${resolvedInterestUid}:${tokenUidOf(token)}`;
-    if (recoveryLoadKeyRef.current === loadKey) return undefined;
-    recoveryLoadKeyRef.current = loadKey;
-
-    let cancelled = false;
-    const restore = async () => {
-      const stored = loadInvestorTokenTransferRecovery(resolvedInterestUid);
-      if (!stored) return;
-      if (stored.tokenUid && stored.tokenUid !== tokenUidOf(token)) {
-        clearInvestorTokenTransferRecovery(resolvedInterestUid);
-        return;
-      }
-
-      setRecovery(stored);
-      if (stored.recipientWalletAddress) {
-        setRecipient(stored.recipientWalletAddress);
-        setAddressChecked(isAddress(stored.recipientWalletAddress));
-      }
-      if (stored.tokenAmount) setAmount(stored.tokenAmount);
-      if (stored.txHash) setTxHash(stored.txHash);
-
-      try {
-        let next;
-        if (stored.transferUid) {
-          next = await investmentApi.getTokenTransfer(stored.transferUid);
-        } else if (stored.idempotencyKey && stored.recipientWalletAddress && stored.tokenAmount) {
-          next = await investmentApi.createTokenTransfer(tokenUidOf(token), {
-            recipientWalletAddress: stored.recipientWalletAddress,
-            tokenAmount: stored.tokenAmount,
-            idempotencyKey: stored.idempotencyKey,
-          });
-        }
-        if (!cancelled && next) applyTransfer(next, stored);
-      } catch {
-        if (cancelled) return;
-        if (stored.transferUid) {
-          setTransferRecord({
-            transferUid: stored.transferUid,
-            status: stored.status || TRANSFER_STATUS.PENDING_TRANSFER,
-            transactionRequest: stored.transactionRequest,
-            txHash: stored.txHash,
-          });
-          setTransferState(stored.txHash ? TRANSFER_STATE.CONFIRMING : TRANSFER_STATE.READY);
-        }
-      }
-    };
-
-    restore();
-    return () => {
-      cancelled = true;
-    };
-  }, [applyTransfer, ready, resolvedInterestUid, token]);
-
-  useEffect(() => {
-    if (!activeTransferUid || serverStatus !== TRANSFER_STATUS.PENDING_TRANSFER || replacementAllowed) return undefined;
-    let cancelled = false;
-    let timer;
-    let inFlight = false;
-
-    const poll = async () => {
-      if (cancelled || inFlight) return;
-      inFlight = true;
-      try {
-        const next = await investmentApi.getTokenTransfer(activeTransferUid);
-        if (!cancelled) {
-          applyTransfer(next, {
-            transferUid: activeTransferUid,
-            txHash: knownHash,
-            transactionRequest: preparedTransactionRequest,
-            recipientWalletAddress: recipient,
-            tokenAmount: normalizedAmount,
-          });
-        }
-      } catch {
-        // Temporary connectivity/RPC verification issues must not be treated as a failed transfer.
-      } finally {
-        inFlight = false;
-        if (!cancelled) timer = window.setTimeout(poll, TRANSFER_POLL_INTERVAL_MS);
-      }
-    };
-
-    timer = window.setTimeout(poll, TRANSFER_POLL_INTERVAL_MS);
-    return () => {
-      cancelled = true;
-      if (timer) window.clearTimeout(timer);
-    };
-  }, [activeTransferUid, applyTransfer, knownHash, normalizedAmount, preparedTransactionRequest, recipient, replacementAllowed, serverStatus]);
 
   const handleRecipientChange = (event) => {
     if (formLocked) return;
@@ -729,90 +762,6 @@ export default function SendTokenPage({
     });
   };
 
-  const confirmKnownHash = useCallback(async (transferUid, hash, fallback = {}) => {
-    if (!transferUid || !validTransactionHash(hash)) return null;
-    setTransferState(TRANSFER_STATE.CONFIRMING);
-    try {
-      const next = await investmentApi.confirmTokenTransfer(transferUid, hash);
-      setTransferError('');
-      setReplacementAllowed(false);
-      applyTransfer(next, { ...fallback, transferUid, txHash: hash });
-      loadHistory({ quiet: true });
-      return next;
-    } catch (confirmError) {
-      const message = getErrorMessage(
-        confirmError,
-        'Your transaction was submitted, but its transfer status could not be verified yet.',
-      );
-      if (replacementTransactionRequired(confirmError)) {
-        setReplacementAllowed(true);
-        setTransferState(TRANSFER_STATE.FAILED);
-        setTransferError(message);
-        toast.error('A new wallet transaction is required', { description: message });
-      } else {
-        setTransferState(TRANSFER_STATE.CONFIRMING);
-        setTransferError('Your transaction is submitted and verification is still in progress. No additional wallet transaction is required.');
-      }
-      loadHistory({ quiet: true });
-      return null;
-    }
-  }, [applyTransfer, loadHistory]);
-
-  const broadcastPreparedTransfer = useCallback(async (record, fallback = {}) => {
-    const transferUid = transferUidOf(record) || clean(fallback.transferUid);
-    const request = transactionRequestOf(record) || fallback.transactionRequest;
-    if (!transferUid || !request) {
-      throw new Error('The prepared transfer details are unavailable. Refresh the transfer status and try again.');
-    }
-
-    setTransferError('');
-    setReplacementAllowed(false);
-    setTransferState(TRANSFER_STATE.WALLET_CONFIRMATION);
-
-    try {
-      const hash = await submitInvestorTokenTransfer({
-        connector: walletGuard.wallet.connector,
-        connectedAddress: walletGuard.wallet.address,
-        investorWalletAddress: context.investorWalletAddress,
-        transactionRequest: request,
-      });
-
-      setTxHash(hash);
-      setTransferState(TRANSFER_STATE.TRANSACTION_SUBMITTED);
-      persistRecovery({
-        tokenUid: tokenUidOf(token),
-        transferUid,
-        recipientWalletAddress: recipientOf(record) || recipient,
-        tokenAmount: tokenAmountOf(record) || normalizedAmount,
-        idempotencyKey: clean(record?.idempotencyKey || fallback.idempotencyKey || recovery?.idempotencyKey),
-        txHash: hash,
-        status: TRANSFER_STATUS.PENDING_TRANSFER,
-        transactionRequest: request,
-      });
-      toast.info('Transfer submitted', {
-        description: 'Your transfer is being finalized. No additional wallet transaction is required.',
-      });
-      await confirmKnownHash(transferUid, hash, {
-        transactionRequest: request,
-        recipientWalletAddress: recipientOf(record) || recipient,
-        tokenAmount: tokenAmountOf(record) || normalizedAmount,
-      });
-    } catch (sendError) {
-      if (isInvestorTokenTransferWalletRejection(sendError)) {
-        setTransferState(TRANSFER_STATE.CANCELLED);
-        setTransferError('');
-        toast.info('Wallet request cancelled', {
-          description: 'Your prepared transfer is still saved. You can continue it when ready.',
-        });
-        return;
-      }
-      setTransferState(TRANSFER_STATE.FAILED);
-      const message = getErrorMessage(sendError, 'The transfer could not be submitted from your wallet.');
-      setTransferError(message);
-      toast.error('Transfer needs attention', { description: message });
-    }
-  }, [confirmKnownHash, context.investorWalletAddress, normalizedAmount, persistRecovery, recipient, recovery?.idempotencyKey, token, walletGuard.wallet.address, walletGuard.wallet.connector]);
-
   const validateFormForNewIntent = () => {
     if (!walletGuard.ready) {
       toast.error('Connect the investor wallet linked to your profile on the required network to continue.');
@@ -830,131 +779,146 @@ export default function SendTokenPage({
   };
 
   const handleSend = async () => {
-    if (!walletGuard.ready) {
-      toast.error('Connect the investor wallet linked to your profile on the required network to continue.');
-      return;
-    }
-
-    if (transferState === TRANSFER_STATE.MANUAL_REVIEW || transferState === TRANSFER_STATE.COMPLETED) return;
-
-    if (transferState === TRANSFER_STATE.EXPIRED) {
-      setTransferRecord(null);
-      setRecovery(null);
-      setTxHash('');
-      setTransferError('');
-      setReplacementAllowed(false);
-      setTransferState(TRANSFER_STATE.READY);
-    }
-
-    if (pendingIntent && preparedTransactionRequest) {
-      if (knownHash && !replacementAllowed) {
-        toast.info('Transfer already submitted', {
-          description: 'Verification is still in progress. No additional wallet transaction is required.',
-        });
-        return;
-      }
-      await broadcastPreparedTransfer(transferRecord || { transferUid: activeTransferUid, transactionRequest: preparedTransactionRequest }, {
-        transferUid: activeTransferUid,
-        transactionRequest: preparedTransactionRequest,
-        idempotencyKey: recovery?.idempotencyKey,
-      });
-      return;
-    }
-
+    if (transferBusy) return;
     if (!validateFormForNewIntent()) return;
+
     const tokenUid = tokenUidOf(token);
-    if (!tokenUid) {
-      toast.error('The token identifier is unavailable. Refresh the page and try again.');
+    const chainId = Number(context.chainId || walletGuard.targetChainId);
+    if (!tokenUid || !context.tokenAddress || !chainId || tokenDecimals === null) {
+      toast.error('The investment details are incomplete. Refresh the page and try again.');
       return;
     }
 
-    const canResumePrepareRequest = Boolean(
-      recovery?.idempotencyKey
-      && !recovery?.transferUid
-      && sameAddress(recovery?.recipientWalletAddress, recipient.trim())
-      && canonicalDecimal(recovery?.tokenAmount) === normalizedAmount,
-    );
-    const idempotencyKey = canResumePrepareRequest ? recovery.idempotencyKey : createTransferKey();
-    setTransferState(TRANSFER_STATE.PREPARING);
+    setTransferState(TRANSFER_STATE.WALLET_CONFIRMATION);
     setTransferError('');
-    setTxHash('');
-    if (!canResumePrepareRequest) {
-      clearInvestorTokenTransferRecovery(resolvedInterestUid);
-      setRecovery(null);
-    }
-    persistRecovery({
-      tokenUid,
-      transferUid: '',
-      recipientWalletAddress: recipient.trim(),
-      tokenAmount: normalizedAmount,
-      idempotencyKey,
-      txHash: '',
-      status: TRANSFER_STATUS.PENDING_TRANSFER,
-      transactionRequest: null,
-    });
-
+    setReplacementAllowed(false);
     try {
-      const prepared = await investmentApi.createTokenTransfer(tokenUid, {
+      const hash = await submitInvestorTokenTransfer({
+        connector: walletGuard.wallet.connector,
+        connectedAddress: walletGuard.wallet.address,
+        investorWalletAddress: context.investorWalletAddress,
+        chainId,
+        tokenAddress: context.tokenAddress,
         recipientWalletAddress: recipient.trim(),
         tokenAmount: normalizedAmount,
-        idempotencyKey,
+        tokenAmountRaw: amountRaw?.toString?.(),
+        tokenDecimals,
       });
-      applyTransfer(prepared, {
-        tokenUid,
-        recipientWalletAddress: recipient.trim(),
-        tokenAmount: normalizedAmount,
-        idempotencyKey,
-      });
-      loadHistory({ quiet: true });
+      if (!validTransactionHash(hash)) throw new Error('Your wallet did not return a valid transaction ID. Check wallet activity before trying again.');
 
-      const preparedStatus = normalizeStatus(prepared?.status);
-      const preparedHash = txHashOf(prepared);
-      if (preparedStatus === TRANSFER_STATUS.COMPLETED) return;
-      if (preparedStatus !== TRANSFER_STATUS.PENDING_TRANSFER) return;
-      if (preparedHash) {
-        await confirmKnownHash(transferUidOf(prepared), preparedHash, {
-          transactionRequest: transactionRequestOf(prepared),
-          recipientWalletAddress: recipientOf(prepared) || recipient.trim(),
-          tokenAmount: tokenAmountOf(prepared) || normalizedAmount,
-          idempotencyKey,
+      saveObservedWalletTransaction({
+        chainId,
+        txHash: hash,
+        tokenUid,
+        expectedAction: 'TRANSFER',
+        interestUid: resolvedInterestUid,
+      });
+      setTxHash(hash);
+      setTransferState(TRANSFER_STATE.CONFIRMING);
+      setTransferRecord(canonicalTransactionAsTransfer({
+        chainId,
+        transactionHash: hash,
+        status: 'SUBMITTED',
+        tokenAmountFormatted: normalizedAmount,
+        fromWallet: context.investorWalletAddress,
+        toWallet: recipient.trim(),
+        createdAt: new Date().toISOString(),
+      }));
+      toast.success('Transfer submitted', {
+        description: 'Your wallet sent the transfer. No additional wallet action is needed while history synchronizes.',
+      });
+
+      try {
+        const observed = await investmentApi.confirmObservedTransaction({
+          chainId,
+          txHash: hash,
+          tokenUid,
+          expectedAction: 'TRANSFER',
         });
-        return;
+        const status = normalizeStatus(observed?.status);
+        setTransferRecord(canonicalTransactionAsTransfer({ ...observed, transactionHash: observed?.transactionHash || hash }));
+        if (status === 'CONFIRMED') {
+          clearObservedWalletTransaction({ chainId, txHash: hash, expectedAction: 'TRANSFER' });
+          resetTransferComposer();
+          refreshTokenWalletBalance?.();
+          investorPortfolioService.refreshAfterCompletedActivity().catch(() => {});
+          toast.success('Transfer confirmed', { description: 'The transfer is in your history. You can send another transfer now.' });
+        } else if (status === 'FAILED') {
+          clearObservedWalletTransaction({ chainId, txHash: hash, expectedAction: 'TRANSFER' });
+          setTransferState(TRANSFER_STATE.FAILED);
+          setTransferError('The blockchain transfer reverted. You can review the details and submit a new transfer.');
+          toast.error('Transfer failed', { description: 'The blockchain transaction reverted. No automatic retry was sent.' });
+        }
+      } catch (syncError) {
+        const statusCode = Number(syncError?.response?.status);
+        if (statusCode >= 400 && statusCode < 500) {
+          clearObservedWalletTransaction({ chainId, txHash: hash, expectedAction: 'TRANSFER' });
+          setTransferRecord(null);
+          setTxHash('');
+          setTransferState(TRANSFER_STATE.FAILED);
+          setTransferError(getErrorMessage(syncError, 'The submitted transaction does not match this transfer.'));
+          toast.error('Transaction could not be matched', { description: getErrorMessage(syncError, 'The submitted transaction does not match this transfer.') });
+        } else {
+          setTransferState(TRANSFER_STATE.CONFIRMING);
+          setTransferError('Your transfer is on the blockchain and history is still synchronizing. Do not send it again.');
+          toast.info('Transfer sent — history is still syncing', { description: 'The backend/indexer can recover this transaction automatically.' });
+        }
       }
-      await broadcastPreparedTransfer(prepared, { idempotencyKey });
-    } catch (prepareError) {
-      setTransferState(TRANSFER_STATE.FAILED);
-      const message = getErrorMessage(
-        prepareError,
-        'This transfer could not be prepared. Review the recipient and amount, then try again.',
-      );
-      setTransferError(message);
-      toast.error('Unable to prepare transfer', { description: message });
+      loadHistory({ quiet: true });
+    } catch (sendError) {
+      if (isInvestorTokenTransferWalletRejection(sendError)) {
+        setTransferState(TRANSFER_STATE.CANCELLED);
+        setTransferError('');
+        toast.info('Wallet request cancelled. No transfer was submitted.');
+      } else {
+        setTransferState(TRANSFER_STATE.FAILED);
+        const message = getErrorMessage(sendError, 'The wallet could not submit this transfer.');
+        setTransferError(message);
+        toast.error('Unable to send', { description: message });
+      }
     }
   };
 
   const handleRetryVerification = async () => {
-    if (!activeTransferUid || retryingVerification) return;
+    if (!knownHash || retryingVerification) return;
+    const tokenUid = tokenUidOf(token);
+    const chainId = Number(context.chainId || walletGuard.targetChainId);
+    if (!tokenUid || !chainId) return;
     setRetryingVerification(true);
     try {
-      const next = await investmentApi.retryTokenTransfer(activeTransferUid);
-      setTransferError('');
-      applyTransfer(next, {
-        transferUid: activeTransferUid,
+      const next = await investmentApi.confirmObservedTransaction({
+        chainId,
         txHash: knownHash,
-        transactionRequest: preparedTransactionRequest,
-        recipientWalletAddress: recipient,
-        tokenAmount: normalizedAmount,
+        tokenUid,
+        expectedAction: 'TRANSFER',
       });
+      const status = normalizeStatus(next?.status);
+      setTransferRecord(canonicalTransactionAsTransfer({ ...next, transactionHash: next?.transactionHash || knownHash }));
+      if (status === 'CONFIRMED') {
+        clearObservedWalletTransaction({ chainId, txHash: knownHash, expectedAction: 'TRANSFER' });
+        resetTransferComposer();
+      } else if (status === 'FAILED') {
+        clearObservedWalletTransaction({ chainId, txHash: knownHash, expectedAction: 'TRANSFER' });
+        setTxHash('');
+        setTransferState(TRANSFER_STATE.FAILED);
+        setTransferError('The blockchain transfer reverted.');
+      } else {
+        setTransferState(TRANSFER_STATE.CONFIRMING);
+        setTransferError('The transaction is submitted and is still waiting for canonical confirmation. No new wallet action is required.');
+      }
       loadHistory({ quiet: true });
-      toast.info('Transfer status refreshed', {
-        description: normalizeStatus(next?.status) === TRANSFER_STATUS.COMPLETED
-          ? 'The transfer is complete.'
-          : 'Verification will continue without submitting another wallet transaction.',
-      });
     } catch (retryError) {
-      const message = getErrorMessage(retryError, 'The transfer status could not be refreshed right now.');
-      setTransferError(message);
-      toast.error('Unable to refresh transfer status', { description: message });
+      const statusCode = Number(retryError?.response?.status);
+      if (statusCode >= 400 && statusCode < 500) {
+        clearObservedWalletTransaction({ chainId, txHash: knownHash, expectedAction: 'TRANSFER' });
+        setTransferRecord(null);
+        setTxHash('');
+        setTransferState(TRANSFER_STATE.FAILED);
+        setTransferError('This transaction could not be verified for the selected transfer. You can submit a new transfer when ready.');
+      } else {
+        setTransferError('The transaction is already submitted, but synchronization is temporarily unavailable. Do not send it again.');
+        toast.info('Still synchronizing', { description: 'No new wallet transaction is required.' });
+      }
     } finally {
       setRetryingVerification(false);
     }
@@ -1047,8 +1011,8 @@ export default function SendTokenPage({
       {!embedded ? (
         <InvestorTokenActionHeader
           eyebrow="Token action"
-          title="Send Tokens"
-          description="Send tokens to another wallet that is approved to receive this security token."
+          title="Send your investment"
+          description="Send units to another approved investor. We check the recipient before your wallet asks you to confirm."
         />
       ) : null}
 
@@ -1058,15 +1022,15 @@ export default function SendTokenPage({
 
           <Card className="investor-token-action-card">
             <div className="investor-token-action-card__heading">
-              <div><span>Selected token</span><h2>Transfer from your registered wallet</h2></div>
+              <div><span>From</span><h2>Your registered investment wallet</h2></div>
               <WalletCards size={19} />
             </div>
-            <LockedAddressField label="Primary Investment Wallet" value={context.investorWalletAddress} />
+            <LockedAddressField label="Registered investment wallet" value={context.investorWalletAddress} />
           </Card>
 
           <Card className="investor-token-action-card">
             <div className="investor-token-action-card__heading">
-              <div><span>Recipient</span><h2>Where are you sending tokens?</h2></div>
+              <div><span>Recipient</span><h2>Who are you sending to?</h2></div>
               <Send size={19} />
             </div>
             <div className="investor-token-action-recipient-row">
@@ -1075,7 +1039,7 @@ export default function SendTokenPage({
                 <input
                   value={recipient}
                   onChange={handleRecipientChange}
-                  placeholder="0x… recipient wallet address"
+                  placeholder="Recipient investment wallet (0x…)"
                   spellCheck="false"
                   autoComplete="off"
                   aria-invalid={Boolean(recipientError)}
@@ -1088,22 +1052,22 @@ export default function SendTokenPage({
                 onClick={checkRecipient}
                 disabled={formLocked || !recipient.trim() || Boolean(recipientError)}
               >
-                Validate Address
+                Check recipient
               </Button>
             </div>
             {recipientError ? <p className="investor-token-action-field-error">{recipientError}</p> : null}
-            <p className="investor-token-action-helper">The recipient wallet and transfer eligibility are verified before your wallet opens.</p>
+            <p className="investor-token-action-helper">Enter the recipient’s approved investment wallet. We check that they can receive this asset before you continue.</p>
           </Card>
 
           <Card className="investor-token-action-card">
             <div className="investor-token-action-card__heading investor-token-action-card__heading--with-meta">
-              <div><span>Amount to transfer</span><h2>Enter the token amount</h2></div>
+              <div><span>Amount</span><h2>How many units would you like to send?</h2></div>
               <small>
                 {tokenWalletBalanceLoading
-                  ? 'Available to send: Loading…'
+                  ? 'You can send up to: Loading…'
                   : balanceAvailable
-                    ? `Available to send: ${tokenWalletBalance} ${token.symbol}`
-                    : 'Balance will be verified before sending'}
+                    ? `You can send up to: ${tokenWalletBalance} ${token.symbol}`
+                    : 'Your available amount will be checked'}
               </small>
             </div>
             <label className={`investor-token-action-amount-field ${amountError ? 'is-invalid' : ''} ${formLocked ? 'is-locked' : ''}`}>
@@ -1120,31 +1084,31 @@ export default function SendTokenPage({
               <strong>{token.symbol}</strong>
             </label>
             {amountError ? <p className="investor-token-action-field-error">{amountError}</p> : null}
-            <p className="investor-token-action-field-hint">Enter the amount you want to send. Your available transferable balance is verified before the wallet transaction is prepared.</p>
+            <p className="investor-token-action-field-hint">Enter the number of units to send. We check your available balance again before your wallet asks you to confirm.</p>
           </Card>
 
           <Card className="investor-token-action-card">
-            <div className="investor-token-action-card__heading"><div><span>Transfer checks</span><h2>Ready for wallet confirmation</h2></div><ShieldCheck size={19} /></div>
+            <div className="investor-token-action-card__heading"><div><span>Before you send</span><h2>We check these automatically</h2></div><ShieldCheck size={19} /></div>
             <div className="investor-token-action-checks">
               <TokenActionCheck
                 icon={UserRoundCheck}
-                label="Recipient address"
-                detail="The wallet address format is checked before the transfer is prepared."
-                status={addressChecked && !recipientError ? 'Address ready' : 'Check required'}
+                label="Recipient wallet"
+                detail="We first check that the wallet address is valid."
+                status={addressChecked && !recipientError ? 'Ready' : 'Check needed'}
                 tone={addressChecked && !recipientError ? 'success' : 'neutral'}
               />
               <TokenActionCheck
                 icon={WalletCards}
-                label="Transfer amount"
-                detail="Your amount is checked before the transfer is prepared for your wallet."
-                status={amountWithinBalance ? 'Amount ready' : 'Check required'}
+                label="Amount available"
+                detail="We make sure you have enough available units to send."
+                status={amountWithinBalance ? 'Ready' : 'Check needed'}
                 tone={amountWithinBalance ? 'success' : 'neutral'}
               />
               <TokenActionCheck
                 icon={ShieldCheck}
-                label="Transfer eligibility"
-                detail="Investor eligibility, token restrictions and available transferable balance are verified before your wallet opens."
-                status={pendingIntent || transferCompleted ? 'Verified' : 'Checked on Send'}
+                label="Recipient eligibility"
+                detail="We confirm the recipient is approved and that the transfer follows the investment rules."
+                status={pendingIntent || transferCompleted ? 'Ready' : 'Checked when you send'}
                 tone={pendingIntent || transferCompleted ? 'success' : 'neutral'}
               />
             </div>
@@ -1153,14 +1117,14 @@ export default function SendTokenPage({
 
         <aside className="investor-token-action-aside">
           <Card className="investor-token-order-card">
-            <div className="investor-token-order-card__title"><span>Transfer summary</span><Send size={18} /></div>
-            <div className="investor-token-order-row"><span>Send Amount</span><strong>{formattedAmount ? `${formattedAmount} ${token.symbol}` : '—'}</strong></div>
-            <div className="investor-token-order-row"><span>{activeTransferUid ? 'Transfer Price' : 'Current Token Price'}</span><strong>{transferPriceExact ? `${formatExactAmount(transferPriceExact)} ${token.currency || 'USDT'}` : '—'}</strong></div>
-            <div className="investor-token-order-row investor-token-order-row--primary"><span>Estimated Value</span><strong>{estimatedTransferValue === null ? '—' : `${estimatedTransferValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${token.currency || 'USDT'}`}</strong></div>
+            <div className="investor-token-order-card__title"><span>Send summary</span><Send size={18} /></div>
+            <div className="investor-token-order-row"><span>Amount to send</span><strong>{formattedAmount ? `${formattedAmount} ${token.symbol}` : '—'}</strong></div>
+            <div className="investor-token-order-row"><span>{activeTransferUid ? 'Price used' : 'Current price per unit'}</span><strong>{transferPriceExact ? `${formatExactAmount(transferPriceExact)} ${token.currency || 'USDT'}` : '—'}</strong></div>
+            <div className="investor-token-order-row investor-token-order-row--primary"><span>Estimated value</span><strong>{estimatedTransferValue === null ? '—' : `${estimatedTransferValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${token.currency || 'USDT'}`}</strong></div>
             <div className="investor-token-order-row"><span>Recipient</span><strong className="investor-token-order-address">{recipient || 'Not entered'}</strong></div>
             <div className="investor-token-order-row"><span>Network</span><strong>{walletGuard.targetNetworkLabel}</strong></div>
             <div className="investor-token-order-row">
-              <span>Wallet Balance</span>
+              <span>Your current holding</span>
               <strong>
                 {tokenWalletBalanceLoading
                   ? 'Loading…'
@@ -1175,7 +1139,7 @@ export default function SendTokenPage({
             </div>
             {knownHash ? (
               <div className="investor-token-order-row investor-token-transfer-hash-row">
-                <span>Transaction</span>
+                <span>Confirmation reference</span>
                 <strong>
                   {explorerUrl ? (
                     <a href={explorerUrl} target="_blank" rel="noopener noreferrer" title={`View transaction on ${explorerName}`}>
@@ -1208,7 +1172,7 @@ export default function SendTokenPage({
               </Button>
             ) : null}
 
-            <RegisteredInvestorWalletGate guard={walletGuard} actionLabel="send tokens" />
+            <RegisteredInvestorWalletGate guard={walletGuard} actionLabel="send this investment" />
             <Button
               className="investor-token-order-card__cta"
               icon={transferCompleted ? CheckCircle2 : Send}
@@ -1233,8 +1197,8 @@ export default function SendTokenPage({
           <div className="investor-token-purchase-history__heading">
             <span className="investor-token-purchase-history__icon"><History size={18} /></span>
             <div>
-              <h2>Transfer History</h2>
-              <p>Track sent and received {token.symbol} transfers. Pending transfers update automatically.</p>
+              <h2>Send history</h2>
+              <p>See what you sent or received and whether each transfer is complete.</p>
             </div>
           </div>
           <Button
@@ -1258,7 +1222,7 @@ export default function SendTokenPage({
               value={historySearch}
               onChange={(event) => setHistorySearch(event.target.value)}
               maxLength={100}
-              placeholder="Search transfer or wallet address"
+              placeholder="Search by reference or wallet"
             />
           </label>
           <div className="investor-token-transfer-history__filters">
@@ -1322,7 +1286,7 @@ export default function SendTokenPage({
               const direction = transferDirectionOf(row, context.investorWalletAddress);
               const counterparty = counterpartOf(row, context.investorWalletAddress);
               const rowHash = txHashOf(row);
-              const rowChainId = row?.chainId || row?.transactionRequest?.chainId || context.chainId || walletGuard.targetChainId;
+              const rowChainId = row?.chainId || context.chainId || walletGuard.targetChainId;
               const rowExplorerUrl = transactionExplorerUrl(rowHash, rowChainId);
               return (
                 <div className="investor-token-purchase-history__row" key={rowUid} role="row">

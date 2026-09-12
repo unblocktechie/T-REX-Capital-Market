@@ -28,9 +28,9 @@ const PAGE_SIZE = 5;
 
 const FILTERS = [
   { value: 'all', label: 'All redemptions', description: 'Show every redemption request' },
-  { value: 'PENDING_ISSUER_APPROVAL', label: 'Awaiting approval', description: 'Requests waiting for your review' },
-  { value: 'TOKENS_LOCKED', label: 'Payment required', description: 'Approved requests ready for payment' },
-  { value: 'PAYMENT_SUBMITTED', label: 'Payment sent', description: 'Payment is being confirmed' },
+  { value: 'PENDING_ISSUER_APPROVAL', label: 'Needs your review', description: 'Requests waiting for your approve or reject decision' },
+  { value: 'TOKENS_LOCKED', label: 'Waiting for investor', description: 'Issuer checks are ready and the investor must sign Redeem' },
+  { value: 'PAYMENT_SUBMITTED', label: 'Investor transaction submitted', description: 'The investor redemption transaction is confirming' },
   { value: 'BURN_SUBMITTED', label: 'Finalizing redemption', description: 'Redemption is being completed' },
   { value: 'COMPLETED', label: 'Completed', description: 'Finished redemptions' },
   { value: 'MANUAL_REVIEW', label: 'Support review required', description: 'Requests that need additional support' },
@@ -161,9 +161,9 @@ export default function IssuerRedemptionsPage() {
         <div>
           <span className="issuer-redemptions-eyebrow">Investor redemption requests</span>
           <h1>Redemptions</h1>
-          <p>Review requests from investors who want to redeem tokens, then approve, reject or complete payment when appropriate.</p>
+          <p>Review investor redemption requests, approve or reject each request, and track progress until the investor completes the final redemption.</p>
         </div>
-        <Button variant="secondary" icon={RefreshCw} loading={refreshing} onClick={() => load({ quiet: true })}>Refresh</Button>
+        <Button variant="secondary" size="sm" icon={RefreshCw} loading={refreshing} onClick={() => load({ quiet: true })}>Refresh</Button>
       </header>
 
       <Card className="issuer-redemptions-toolbar-card">

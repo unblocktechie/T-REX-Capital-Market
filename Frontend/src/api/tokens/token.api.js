@@ -178,8 +178,9 @@ export const tokenApi = Object.freeze({
       .then(unwrap);
   },
 
-  // Finalize only after broadcast. The backend independently verifies the receipt and
-  // can return HTTP 202 while the transaction is still confirming.
+  // The caller invokes finalization only after the deployment receipt, transfer activation,
+  // and any required price transaction are confirmed and re-read on-chain. The backend must
+  // independently verify those authoritative states and may return HTTP 202 while checking.
   submit: (values) => {
     const payload =
       values && typeof values === 'object'

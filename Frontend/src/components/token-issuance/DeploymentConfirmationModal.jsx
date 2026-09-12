@@ -1,8 +1,8 @@
-import { AlertTriangle, Rocket } from 'lucide-react';
+import { AlertTriangle, ArrowRight, ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { AddressDisplay, InfoCallout } from './IssuancePrimitives';
+import { AddressDisplay, HelpDetails, InfoCallout } from './IssuancePrimitives';
 
 export function DeploymentConfirmationModal({ open, onClose, onConfirm, data, wallet, loading }) {
   const [acknowledged, setAcknowledged] = useState(false);
@@ -17,11 +17,26 @@ export function DeploymentConfirmationModal({ open, onClose, onConfirm, data, wa
     onClose();
   };
 
+  const requiredChecks = (data.identityClaims?.claimTopics || [])
+    .filter((topic) => topic.enabled)
+    .map((topic) => {
+      if (topic.id === 'kyc') return 'Identity verification';
+      if (topic.id === 'accredited') return 'Accredited investor status';
+      return topic.shortName || topic.name;
+    })
+    .filter(Boolean);
+
+  const blockedCountries = (data.compliance?.countries || [])
+    .map((country) => country?.countryName || country?.label || String(country || ''))
+    .filter(Boolean);
+  const requiresPriceConfirmation = Boolean(String(data.supplyPricing?.initialPrice || '').trim());
+  const walletActionCount = requiresPriceConfirmation ? 3 : 2;
+
   return (
     <Modal
       open={open}
       onClose={close}
-      title="Confirm token creation"
+      title="Create your investment asset"
       className="issuance-confirmation-modal"
       bodyClassName="issuance-confirmation-modal__body"
       footer={
@@ -30,75 +45,103 @@ export function DeploymentConfirmationModal({ open, onClose, onConfirm, data, wa
             Cancel
           </Button>
           <Button
-            icon={Rocket}
+            icon={ArrowRight}
             onClick={onConfirm}
             disabled={!acknowledged}
             loading={loading}
           >
-            Start Wallet Confirmations
+            Continue to Wallet
           </Button>
         </>
       }
     >
       <div className="issuance-modal-stack">
-        <InfoCallout title="Two wallet confirmations are required" tone="warning" icon={AlertTriangle}>
-          These are two separate blockchain actions. MetaMask will show one confirmation at a time,
-          and each confirmed transaction may have its own Sepolia network fee.
+        <InfoCallout title="You are creating one asset" tone="warning" icon={AlertTriangle}>
+          Your wallet will ask you to approve {walletActionCount} separate setup actions, one at a time. These do not create multiple assets. Each approved action may have its own network fee.
         </InfoCallout>
-        <div className="issuance-wallet-transactions" aria-label="Required wallet transactions">
-          <strong>What you will approve</strong>
+
+        <div className="issuance-wallet-transactions" aria-label="Actions you will approve">
+          <strong>What will happen next</strong>
           <ol>
             <li>
               <span aria-hidden="true">1</span>
               <div>
-                <b>Create your security token</b>
+                <b>Create the asset</b>
                 <p>
-                  Creates the token and the verification and transfer controls needed for
-                  your regulated offering.
+                  Creates the asset using the investor requirements and investment rules you reviewed.
                 </p>
               </div>
             </li>
             <li>
               <span aria-hidden="true">2</span>
               <div>
-                <b>Activate token transfers</b>
+                <b>Turn on approved transfers</b>
                 <p>
-                  Enables transfers so approved investors can receive and send the token after
-                  creation.
+                  Allows approved investors to receive and transfer the asset according to your rules.
                 </p>
               </div>
             </li>
+            {requiresPriceConfirmation ? (
+              <li>
+                <span aria-hidden="true">3</span>
+                <div>
+                  <b>Confirm the asset price</b>
+                  <p>
+                    Makes the price you reviewed available for purchases and redemptions.
+                  </p>
+                </div>
+              </li>
+            ) : null}
           </ol>
         </div>
-        <dl className="issuance-review-list">
+
+        <section className="issuance-confirmation-summary" aria-label="Asset summary">
           <div>
-            <dt>Token</dt>
-            <dd>
+            <small>Asset</small>
+            <strong>
               {data.tokenInformation.name || '—'} ({data.tokenInformation.symbol || '—'})
-            </dd>
+            </strong>
           </div>
           <div>
-            <dt>Network</dt>
-            <dd>{wallet.chain?.name || data.tokenInformation.network || '—'}</dd>
+            <small>Investor checks</small>
+            <strong>{requiredChecks.length ? requiredChecks.join(', ') : 'None selected'}</strong>
           </div>
           <div>
-            <dt>Decimals</dt>
-            <dd>{data.tokenInformation.decimals || '—'}</dd>
+            <small>Maximum investors</small>
+            <strong>{data.compliance.maximumInvestors || 'Not configured'}</strong>
           </div>
           <div>
-            <dt>Maximum holder balance</dt>
-            <dd>
+            <small>Maximum amount per investor</small>
+            <strong>
               {data.compliance.maximumBalance
-                ? `${data.compliance.maximumBalance} tokens (${data.tokenInformation.decimals || 0} decimals)`
+                ? `${data.compliance.maximumBalance} units`
                 : 'Not configured'}
-            </dd>
+            </strong>
           </div>
-        </dl>
-        <AddressDisplay
-          label="Approved organization wallet"
-          address={data.tokenInformation.treasuryWallet}
-        />
-        <AddressDisplay label="Connected wallet" address={wallet.address} />
+          <div>
+            <small>Countries blocked</small>
+            <strong>{blockedCountries.length ? blockedCountries.join(', ') : 'None'}</strong>
+          </div>
+        </section>
+
+        <HelpDetails title="View technical details">
+          <dl className="issuance-review-list issuance-review-list--technical">
+            <div>
+              <dt>Network</dt>
+              <dd>{wallet.chain?.name || data.tokenInformation.network || '—'}</dd>
+            </div>
+            <div>
+              <dt>Decimal places</dt>
+              <dd>{data.tokenInformation.decimals || '—'}</dd>
+            </div>
+          </dl>
+          <AddressDisplay
+            label="Approved organization account"
+            address={data.tokenInformation.treasuryWallet}
+          />
+          <AddressDisplay label="Connected account" address={wallet.address} />
+        </HelpDetails>
+
         <label className="issuance-acknowledgement">
           <input
             type="checkbox"
@@ -106,10 +149,17 @@ export function DeploymentConfirmationModal({ open, onClose, onConfirm, data, wa
             onChange={(event) => setAcknowledged(event.target.checked)}
           />
           <span>
-            I confirm the connected wallet is the approved Organization Wallet and understand that
-            MetaMask will request two separate transaction approvals.
+            <strong>I have reviewed these settings and confirm this is the approved organization account.</strong>
+            <small>
+              My wallet will ask me to approve {walletActionCount} setup actions. I can review any network fee before confirming each action.
+            </small>
           </span>
         </label>
+
+        <div className="issuance-confirmation-security-note">
+          <ShieldCheck size={16} aria-hidden="true" />
+          <span>Each step is recorded only after the blockchain confirms it successfully.</span>
+        </div>
       </div>
     </Modal>
   );

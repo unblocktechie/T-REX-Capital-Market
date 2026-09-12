@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, ClipboardList, Eye, Search, ShieldCheck, Store } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { MarketplaceStatusBadge } from '@/components/investor-marketplace/MarketplaceStatusBadge';
+import { AppStatusBadge } from '@/components/common/AppStatusBadge';
 import { MarketplaceTokenImage } from '@/components/investor-marketplace/MarketplaceTokenImage';
 import { DataTable } from '@/components/tables/DataTable';
 import { Button } from '@/components/ui/Button';
@@ -11,9 +11,7 @@ import { ROUTES } from '@/config/routes';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { investorMarketplaceService } from '@/services/investor/investorMarketplaceService';
 import { getErrorMessage } from '@/utils/error';
-
-const formatNumber = (value) => value == null ? '—' : Number(value).toLocaleString();
-const formatPrice = (value, currency) => value == null ? '—' : `$${Number(value).toLocaleString()}${currency ? ` ${currency}` : ''}`;
+import { getInvestmentJourney } from '@/utils/investmentJourney';
 
 export default function MyApplicationsPage() {
   useDocumentTitle('My Applications');
@@ -41,13 +39,14 @@ export default function MyApplicationsPage() {
       application.symbol,
       application.issuer,
       application.statusMeta?.label,
+      getInvestmentJourney({ status: application.interest?.status || application.status, viewerRole: 'investor', canResubmit: application.interest?.canResubmit, rejectReasonType: application.interest?.rejectReasonType }).statusLabel,
     ].join(' ').toLowerCase().includes(search));
   }, [applications, query]);
 
   const columns = useMemo(() => [
     {
       key: 'name',
-      header: 'Token',
+      header: 'Asset',
       render: (_value, application) => (
         <div className="marketplace-application-token">
           <MarketplaceTokenImage token={application} size="sm" />
@@ -58,16 +57,28 @@ export default function MyApplicationsPage() {
         </div>
       ),
     },
-    { key: 'status', header: 'Status', render: (value) => <MarketplaceStatusBadge status={value} /> },
-    { key: 'price', header: 'Current Price', render: (value, application) => <strong>{formatPrice(value, application.currency)}</strong> },
+    {
+      key: 'status',
+      header: 'Where you are',
+      render: (_value, application) => {
+        const journey = getInvestmentJourney({ status: application.interest?.status || application.status, viewerRole: 'investor', canResubmit: application.interest?.canResubmit, rejectReasonType: application.interest?.rejectReasonType });
+        return <AppStatusBadge status={application.interest?.status || application.status} label={journey.statusLabel} tone={journey.tone} />;
+      },
+    },
+    {
+      key: 'nextStep',
+      header: 'What happens now',
+      render: (_value, application) => {
+        const journey = getInvestmentJourney({ status: application.interest?.status || application.status, viewerRole: 'investor', canResubmit: application.interest?.canResubmit, rejectReasonType: application.interest?.rejectReasonType });
+        return <div className="application-journey-table-copy"><strong>{journey.title}</strong><small>Next action: {journey.owner}</small></div>;
+      },
+    },
     { key: 'submittedAt', header: 'Submitted', render: (value) => <strong>{value ? new Date(value).toLocaleDateString() : '—'}</strong> },
-    { key: 'maxBalance', header: 'Max Balance / Holder', render: (value, application) => <strong>{value == null ? '—' : `${formatNumber(value)} ${application.symbol}`}</strong> },
-    { key: 'maxInvestors', header: 'Max Holders', render: (value) => <strong>{value == null ? '—' : formatNumber(value)}</strong> },
     {
       key: 'action',
       header: 'Action',
       align: 'end',
-      render: (_value, application) => <Button variant="secondary" icon={Eye} onClick={() => navigate(ROUTES.applicationDetail(application.interestUid || application.interest?.interestUid || application.id))}>View Details</Button>,
+      render: (_value, application) => <Button variant="secondary" icon={Eye} onClick={() => navigate(ROUTES.applicationDetail(application.interestUid || application.interest?.interestUid || application.id))}>View Progress</Button>,
     },
   ], [navigate]);
 
@@ -75,9 +86,9 @@ export default function MyApplicationsPage() {
     <div className="page-stack investor-applications-page marketplace-applications-workspace">
       <header className="marketplace-page-header marketplace-applications-header">
         <div>
-          <span className="eyebrow">Application tracking</span>
+          <span className="eyebrow">Your investment progress</span>
           <h1>My Applications</h1>
-          <p>Track every request to invest and follow the issuer&apos;s current decision status.</p>
+          <p>See what is happening with each application, who needs to act next, and when you are ready to invest.</p>
         </div>
         <Button icon={Store} onClick={() => navigate(ROUTES.marketplace)}>Explore Marketplace <ArrowRight size={17} /></Button>
       </header>
@@ -86,7 +97,7 @@ export default function MyApplicationsPage() {
         <>
           <Card className="marketplace-application-toolbar">
             <label className="marketplace-application-search"><Search size={16} /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search applications" aria-label="Search investment applications" /></label>
-            <span><ShieldCheck size={15} /> {applications.length} investment application{applications.length === 1 ? '' : 's'}</span>
+            <span><ShieldCheck size={15} /> Open an application to see its full 5-step journey.</span>
           </Card>
 
           <Card className="marketplace-application-table-card common-table-card">
@@ -105,7 +116,7 @@ export default function MyApplicationsPage() {
         <Card className="investor-portal-empty-card">
           <span className="investor-portal-empty-icon"><ClipboardList size={30} /></span>
           <h2>No applications yet</h2>
-          <p>Requests to invest will appear here with the issuer&apos;s current status.</p>
+          <p>Your investment applications will appear here with a clear next step and who needs to act.</p>
           <Button variant="secondary" icon={Store} onClick={() => navigate(ROUTES.marketplace)}>Browse available offerings</Button>
         </Card>
       )}

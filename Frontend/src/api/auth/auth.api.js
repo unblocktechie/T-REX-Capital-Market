@@ -18,7 +18,7 @@ export const authApi = {
 
   verifyEmail: ({ token }) =>
     apiClient
-      .get(AUTH_ENDPOINTS.verifyEmail, { params: { token }, skipGlobalLoader: true })
+      .post(AUTH_ENDPOINTS.verifyEmail, { token }, { skipGlobalLoader: true })
       .then(unwrap),
 
   resendVerification: ({ email }) =>

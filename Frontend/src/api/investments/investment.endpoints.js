@@ -4,17 +4,16 @@ export const INVESTMENT_ENDPOINTS = Object.freeze({
   tokens: '/investments/tokens',
   token: (tokenUid) => `/investments/tokens/${segment(tokenUid)}`,
   tokenImage: (tokenUid) => `/investments/tokens/${segment(tokenUid)}/image`,
+  transactions: '/investments/transactions',
+  confirmTransaction: '/investments/transactions/confirm',
+  exportTransactions: '/investments/transactions/export',
   requiredDocuments: (tokenUid) =>
     `/investments/tokens/${segment(tokenUid)}/required-documents`,
   submitInterest: (tokenUid) => `/investments/tokens/${segment(tokenUid)}/interest`,
   tokenPurchases: (tokenUid) => `/investments/tokens/${segment(tokenUid)}/purchases`,
   purchase: (purchaseUid) => `/investments/purchases/${segment(purchaseUid)}`,
-  confirmPurchase: (purchaseUid) => `/investments/purchases/${segment(purchaseUid)}/confirm`,
-  retryPurchase: (purchaseUid) => `/investments/purchases/${segment(purchaseUid)}/retry`,
   tokenTransfers: (tokenUid) => `/investments/tokens/${segment(tokenUid)}/transfers`,
   transfer: (transferUid) => `/investments/transfers/${segment(transferUid)}`,
-  confirmTransfer: (transferUid) => `/investments/transfers/${segment(transferUid)}/confirm`,
-  retryTransfer: (transferUid) => `/investments/transfers/${segment(transferUid)}/retry`,
   tokenRedemptions: (tokenUid) => `/investments/tokens/${segment(tokenUid)}/redemptions`,
   redemption: (redemptionUid) => `/investments/redemptions/${segment(redemptionUid)}`,
   authorizeRedemption: (redemptionUid) =>
@@ -27,8 +26,6 @@ export const INVESTMENT_ENDPOINTS = Object.freeze({
     `/investments/issuer/redemptions/${segment(redemptionUid)}/approve`,
   rejectIssuerRedemption: (redemptionUid) =>
     `/investments/issuer/redemptions/${segment(redemptionUid)}/reject`,
-  confirmIssuerRedemptionPayment: (redemptionUid) =>
-    `/investments/issuer/redemptions/${segment(redemptionUid)}/payment/confirm`,
   myInterests: '/investments/me/interests',
   myPortfolio: '/investments/me/portfolio',
   myInterestHistory: (interestUid) => `/investments/me/interests/${segment(interestUid)}/history`,

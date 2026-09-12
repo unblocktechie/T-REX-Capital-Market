@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -23,23 +23,17 @@ import { ROUTES } from '@/config/routes';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useWalletConnection } from '@/hooks/useWalletConnection';
 import {
-  isIssuerRedemptionWalletRejection,
-  submitIssuerRedemptionPayment,
-} from '@/services/issuer/issuerTokenRedemptionPayment.service';
-import {
-  clearIssuerRedemptionPaymentRecovery,
-  loadIssuerRedemptionPaymentRecovery,
-  saveIssuerRedemptionPaymentRecovery,
-} from '@/services/issuer/issuerTokenRedemptionRecoveryStore';
+  approvePlatformRedemptionFunding,
+  getPlatformRedemptionFunding,
+  isPlatformWalletRejection,
+} from '@/services/blockchain/trexPlatformController.service';
 import { formatDate } from '@/utils/date';
 import { getApiFieldErrors, getErrorMessage } from '@/utils/error';
 import { transactionExplorerName, transactionExplorerUrl } from '@/utils/blockExplorer';
 import {
   cleanRedemptionText,
   issuerBurnHash,
-  issuerLockHash,
   issuerPaymentHash,
-  issuerPaymentStatus,
   issuerRedemptionAmountLabel,
   redemptionRejectionReason,
   issuerRedemptionInvestorLabel,
@@ -50,6 +44,13 @@ import {
 
 const TERMINAL = new Set(['COMPLETED', 'ISSUER_REJECTED', 'CANCELLED', 'EXPIRED', 'MANUAL_REVIEW']);
 const POLL_MS = 7000;
+const REDEMPTION_FUNDING_STATUSES = new Set([
+  'ISSUER_APPROVED',
+  'TOKENS_LOCKED',
+  'READY_TO_REDEEM',
+  'APPROVED',
+  'AWAITING_INVESTOR_REDEMPTION',
+]);
 
 const addressesEqual = (left, right) => {
   if (!isAddress(left || '') || !isAddress(right || '')) return false;
@@ -78,6 +79,9 @@ export default function IssuerRedemptionDetailPage() {
   const [rejectReason, setRejectReason] = useState('');
   const [rejectReasonError, setRejectReasonError] = useState('');
   const [error, setError] = useState('');
+  const [funding, setFunding] = useState(null);
+  const [fundingLoading, setFundingLoading] = useState(false);
+  const [fundingError, setFundingError] = useState('');
   const mounted = useRef(true);
 
   useDocumentTitle('Redemption Details');
@@ -90,9 +94,6 @@ export default function IssuerRedemptionDetailPage() {
       if (!mounted.current) return;
       setRedemption(data || null);
       setError('');
-      if (issuerPaymentHash(data) || ['PAYMENT_SUBMITTED', 'BURN_SUBMITTED', 'COMPLETED'].includes(issuerRedemptionStatus(data))) {
-        clearIssuerRedemptionPaymentRecovery(redemptionUid);
-      }
     } catch (loadError) {
       if (!mounted.current) return;
       setError(getErrorMessage(loadError, 'Unable to load this redemption.'));
@@ -108,12 +109,18 @@ export default function IssuerRedemptionDetailPage() {
   }, [loadDetail]);
 
   const status = issuerRedemptionStatus(redemption);
-  const paymentStatus = issuerPaymentStatus(redemption);
   const terminal = TERMINAL.has(status);
   const awaitingDecision = status === 'PENDING_ISSUER_APPROVAL';
-  const paymentReady = status === 'TOKENS_LOCKED' && paymentStatus === 'AWAITING_ISSUER';
-  const recovery = useMemo(() => loadIssuerRedemptionPaymentRecovery(redemptionUid), [redemptionUid, redemption]);
-  const savedPaymentHash = recovery?.txHash || '';
+  const fundingPhase = REDEMPTION_FUNDING_STATUSES.has(status);
+  const fundingCheckPending = fundingPhase && !funding && !fundingError;
+  const issuerAllowanceReady = Boolean(funding?.issuerAllowanceSufficient);
+  const issuerBalanceReady = Boolean(funding?.issuerBalanceSufficient);
+  const paymentReady = fundingPhase && issuerAllowanceReady && issuerBalanceReady;
+  const approvalNeeded = fundingPhase
+    && Boolean(funding)
+    && !fundingLoading
+    && !fundingError
+    && !issuerAllowanceReady;
 
   useEffect(() => {
     if (!redemptionUid || loading || terminal || document.visibilityState !== 'visible') return undefined;
@@ -133,9 +140,6 @@ export default function IssuerRedemptionDetailPage() {
         setRedemption(data || null);
         setError('');
         delay = POLL_MS;
-        if (issuerPaymentHash(data) || ['PAYMENT_SUBMITTED', 'BURN_SUBMITTED', 'COMPLETED'].includes(issuerRedemptionStatus(data))) {
-          clearIssuerRedemptionPaymentRecovery(redemptionUid);
-        }
         if (!TERMINAL.has(issuerRedemptionStatus(data))) timer = window.setTimeout(poll, delay);
       } catch {
         delay = Math.min(delay * 2, 60_000);
@@ -159,9 +163,38 @@ export default function IssuerRedemptionDetailPage() {
     };
   }, [loadDetail, terminal]);
 
+  useEffect(() => {
+    if (!fundingPhase || terminal || !redemption) {
+      setFunding(null);
+      setFundingError('');
+      setFundingLoading(false);
+      return undefined;
+    }
+
+    const chainId = Number(redemption?.chainId);
+    const tokenAddress = cleanRedemptionText(redemption?.tokenAddress || redemption?.token?.tokenAddress || redemption?.token?.address);
+    const tokenAmountRaw = cleanRedemptionText(redemption?.tokenAmountRaw);
+    const tokenAmount = cleanRedemptionText(redemption?.tokenAmount || redemption?.amount);
+    if (!Number.isSafeInteger(chainId) || !tokenAddress || (!tokenAmountRaw && !tokenAmount)) return undefined;
+
+    let active = true;
+    setFundingLoading(true);
+    setFundingError('');
+    getPlatformRedemptionFunding({ chainId, tokenAddress, tokenAmountRaw, tokenAmount })
+      .then((next) => { if (active) setFunding(next); })
+      .catch((fundingLoadError) => {
+        if (!active) return;
+        setFunding(null);
+        setFundingError(getErrorMessage(fundingLoadError, 'Unable to verify redemption funding right now.'));
+      })
+      .finally(() => { if (active) setFundingLoading(false); });
+
+    return () => { active = false; };
+  }, [fundingPhase, redemption, status, terminal]);
+
   const statusMeta = issuerRedemptionStatusMeta(status);
   const chainId = Number(redemption?.chainId);
-  const expectedIssuerWallet = cleanRedemptionText(redemption?.issuerPaymentWalletAddress);
+  const expectedIssuerWallet = cleanRedemptionText(funding?.issuer || redemption?.issuerPaymentWalletAddress || redemption?.issuerWalletAddress);
   const correctIssuerWallet = Boolean(wallet.address && expectedIssuerWallet && addressesEqual(wallet.address, expectedIssuerWallet));
   const correctChain = Number.isSafeInteger(chainId) && wallet.chainId === chainId;
   const canSwitchChain = Number.isSafeInteger(chainId) && wallet.supportedChains.some((chain) => chain.id === chainId);
@@ -212,49 +245,50 @@ export default function IssuerRedemptionDetailPage() {
     }
   };
 
-  const confirmKnownPaymentHash = async (txHash) => {
-    const data = await investmentApi.confirmIssuerRedemptionPayment(redemptionUid, txHash);
-    setRedemption(data || redemption);
-    if (issuerPaymentHash(data) || ['PAYMENT_SUBMITTED', 'BURN_SUBMITTED', 'COMPLETED'].includes(issuerRedemptionStatus(data))) {
-      clearIssuerRedemptionPaymentRecovery(redemptionUid);
-    }
-    return data;
-  };
-
-  const handlePayment = async () => {
-    if (!redemptionUid || !paymentReady) return;
-    setAction('payment');
+  const handleFundingApproval = async () => {
+    if (!redemptionUid || !fundingPhase || fundingLoading) return;
+    setAction('funding');
     try {
-      if (savedPaymentHash) {
-        await confirmKnownPaymentHash(savedPaymentHash);
-        toast.success('Existing payment is being confirmed.');
-        return;
-      }
-
       if (!wallet.isConnected || !wallet.connector || !wallet.address) {
-        throw new Error('Connect the payment wallet in the header before continuing.');
+        throw new Error('Connect the organization wallet in the header before continuing.');
       }
+      if (fundingError) throw new Error(fundingError);
+
+      const chainId = Number(redemption?.chainId);
+      if (!Number.isSafeInteger(chainId)) throw new Error('The redemption network is unavailable. Refresh and try again.');
       if (!correctIssuerWallet) {
-        throw new Error('The connected account does not match the payment wallet assigned to this redemption.');
+        throw new Error('Switch to the organization wallet that owns this token before continuing.');
       }
       if (!correctChain) {
         if (canSwitchChain) await wallet.switchChain(chainId);
         else throw new Error('The required redemption network is not configured in this application.');
       }
 
-      const txHash = await submitIssuerRedemptionPayment({
+      const result = await approvePlatformRedemptionFunding({
         connector: wallet.connector,
         connectedAddress: wallet.address,
-        redemption,
+        chainId,
+        tokenAddress: cleanRedemptionText(redemption?.tokenAddress || redemption?.token?.tokenAddress || redemption?.token?.address),
+        tokenAmountRaw: cleanRedemptionText(redemption?.tokenAmountRaw),
+        tokenAmount: cleanRedemptionText(redemption?.tokenAmount || redemption?.amount),
+        onStep: ({ stage }) => {
+          if (stage === 'approval-signature') {
+            toast.info('Approve USDT spending', { description: 'This is a separate one-time approval. It does not redeem tokens or send a redemption payment.' });
+          }
+        },
       });
-      saveIssuerRedemptionPaymentRecovery(redemptionUid, txHash);
-      await confirmKnownPaymentHash(txHash);
-      toast.success('USDT payment sent successfully.');
-    } catch (paymentError) {
-      if (isIssuerRedemptionWalletRejection(paymentError)) {
-        toast.error('Payment was cancelled in your wallet. No payment was sent.');
+      setFunding(result.funding);
+      if (result.alreadyApproved) {
+        toast.success('Payment setup is ready', { description: 'The investor can sign Redeem when the organization wallet has enough USDT.' });
       } else {
-        toast.error(getErrorMessage(paymentError, 'Unable to complete the payment.'));
+        toast.success('Payment setup complete', { description: 'No further setup is needed for future redemptions while this permission remains available.' });
+      }
+      await loadDetail({ quiet: true });
+    } catch (fundingApprovalError) {
+      if (isPlatformWalletRejection(fundingApprovalError)) {
+        toast.info('USDT approval cancelled', { description: 'No changes were made. You can complete the one-time approval later.' });
+      } else {
+        toast.error(getErrorMessage(fundingApprovalError, 'Unable to approve USDT spending.'));
       }
     } finally {
       setAction('');
@@ -279,20 +313,32 @@ export default function IssuerRedemptionDetailPage() {
   }
 
   const created = cleanRedemptionText(redemption?.createdAt || redemption?.requestedAt || redemption?.submittedAt);
-  const paymentAmount = detailValue(redemption?.usdtAmount || redemption?.usdtAmountFormatted || redemption?.payment?.amount);
-  const lockHash = issuerLockHash(redemption);
+  const paymentAmount = detailValue(funding?.paymentAmountFormatted || redemption?.usdtAmount || redemption?.usdtAmountFormatted || redemption?.payment?.amount);
   const paymentHash = issuerPaymentHash(redemption);
   const burnHash = issuerBurnHash(redemption);
   const explorerName = transactionExplorerName(redemption?.chainId);
   const paymentHashUrl = transactionExplorerUrl(paymentHash, redemption?.chainId);
   const burnHashUrl = transactionExplorerUrl(burnHash, redemption?.chainId);
-  const savedPaymentHashUrl = transactionExplorerUrl(savedPaymentHash, redemption?.chainId);
-  const securedComplete = Boolean(lockHash) || ['TOKENS_LOCKED', 'PAYMENT_SUBMITTED', 'BURN_SUBMITTED', 'COMPLETED'].includes(status);
-  const paymentComplete = Boolean(paymentHash) || ['PAYMENT_SUBMITTED', 'BURN_SUBMITTED', 'COMPLETED'].includes(status);
+  const requestApprovedComplete = !['PENDING_INVESTOR_AUTHORIZATION', 'PENDING_ISSUER_APPROVAL'].includes(status)
+    && status !== 'ISSUER_REJECTED';
+  const redemptionSubmitted = Boolean(paymentHash) || ['PAYMENT_SUBMITTED', 'PAYMENT_CONFIRMED', 'BURN_SUBMITTED', 'COMPLETED'].includes(status);
   const redemptionComplete = Boolean(burnHash) || status === 'COMPLETED';
-  const tokensSecuredStatus = securedComplete ? 'Completed' : awaitingDecision ? 'Waiting for approval' : 'In progress';
-  const paymentSentStatus = paymentComplete ? 'Completed' : paymentReady ? 'Ready to send' : 'Waiting';
-  const tokensRedeemedStatus = redemptionComplete ? 'Completed' : status === 'BURN_SUBMITTED' ? 'In progress' : 'Waiting';
+  const requestReviewStatus = status === 'ISSUER_REJECTED'
+    ? 'Rejected'
+    : requestApprovedComplete
+      ? 'Completed'
+      : awaitingDecision
+        ? 'Action needed'
+        : 'Waiting';
+  const investorRedeemStatus = redemptionComplete
+    ? 'Completed'
+    : redemptionSubmitted
+      ? 'In progress'
+      : paymentReady
+        ? 'Waiting for investor'
+        : requestApprovedComplete
+          ? 'Preparing'
+          : 'Waiting';
   const rejectionReason = redemptionRejectionReason(redemption);
   const issuerProgressMessage = (() => {
     const baseMessage = 'No action is required right now. This page updates automatically as the redemption progresses.';
@@ -310,15 +356,19 @@ export default function IssuerRedemptionDetailPage() {
     }
 
     if (redemptionComplete) {
-      return `${baseMessage} Please wait while we Finalizing Redemption.`;
+      return `${baseMessage} The investor redemption transaction is being finalized.`;
     }
 
-    if (paymentComplete) {
-      return `${baseMessage} Please wait while we confirm the payment.`;
+    if (redemptionSubmitted) {
+      return `${baseMessage} The investor has submitted the Redeem transaction and it is being confirmed.`;
     }
 
-    if (securedComplete) {
-      return `${baseMessage} Please wait while we confirm the redemption. Payment will be available once this is complete.`;
+    if (paymentReady) {
+      return 'Nothing else is required from you. The investor must now sign the Redeem transaction.';
+    }
+
+    if (issuerAllowanceReady && !issuerBalanceReady) {
+      return 'The organization wallet needs enough USDT before the investor can redeem.';
     }
 
     return baseMessage;
@@ -330,13 +380,13 @@ export default function IssuerRedemptionDetailPage() {
         <div>
           <span className="issuer-redemptions-eyebrow">Redemption review</span>
           <h1>{issuerRedemptionTokenLabel(redemption)}</h1>
-          <p>Review the investor’s redemption request, confirm the settlement details, and complete the required payment to the investor.</p>
+          <p>Review the request. Once it is ready, the investor—not the issuer—signs the final Redeem transaction.</p>
         </div>
         <AppStatusBadge status={status} label={statusMeta.label} tone={statusMeta.tone} />
       </header>
 
       {error ? <div className="issuer-redemption-inline-alert is-warning"><AlertTriangle size={18} /><span>{error}</span></div> : null}
-      {status === 'MANUAL_REVIEW' ? <div className="issuer-redemption-inline-alert is-danger"><AlertTriangle size={18} /><span>This redemption requires manual review. Do not submit another payment. Contact your support team.</span></div> : null}
+      {status === 'MANUAL_REVIEW' ? <div className="issuer-redemption-inline-alert is-danger"><AlertTriangle size={18} /><span>This redemption requires manual review. Do not start another settlement transaction. Contact your support team.</span></div> : null}
 
       <div className="issuer-redemption-detail-grid">
         <div className="issuer-redemption-detail-main">
@@ -354,14 +404,23 @@ export default function IssuerRedemptionDetailPage() {
           <Card className="issuer-redemption-card">
             <div className="issuer-redemption-card__heading"><div><span>Redemption status</span><h2>Redemption progress</h2></div><Clock3 size={21} /></div>
             <div className="issuer-redemption-status-steps">
-              <StatusStep icon={ShieldCheck} label="Tokens Secured" value={tokensSecuredStatus} complete={Boolean(lockHash) || ['TOKENS_LOCKED', 'PAYMENT_SUBMITTED', 'BURN_SUBMITTED', 'COMPLETED'].includes(status)} />
-              <StatusStep icon={CreditCard} label="Payment Sent" value={paymentSentStatus} active={paymentReady} complete={Boolean(paymentHash) || ['PAYMENT_SUBMITTED', 'BURN_SUBMITTED', 'COMPLETED'].includes(status)} />
-              <StatusStep icon={CheckCircle2} label="Tokens Redeemed" value={tokensRedeemedStatus} active={status === 'BURN_SUBMITTED'} complete={Boolean(burnHash) || status === 'COMPLETED'} />
+              <StatusStep icon={ShieldCheck} label="Review request" value={requestReviewStatus} active={awaitingDecision} complete={requestApprovedComplete} />
+              {approvalNeeded ? (
+                <StatusStep icon={CreditCard} label="One-time payment setup" value="Action needed" active complete={false} />
+              ) : null}
+              <StatusStep
+                icon={WalletCards}
+                label="Investor redeems"
+                value={investorRedeemStatus}
+                active={requestApprovedComplete && !redemptionSubmitted && !approvalNeeded}
+                complete={redemptionComplete}
+              />
+              <StatusStep icon={CheckCircle2} label="Redemption completed" value={redemptionComplete ? 'Completed' : 'Waiting'} active={redemptionSubmitted && !redemptionComplete} complete={redemptionComplete} />
             </div>
             {(paymentHash || burnHash) ? (
               <div className="issuer-redemption-proof-list">
-                {paymentHash ? <div><span>Payment Sent Hash</span><CompactAddress value={paymentHash} label="Payment Sent Hash" leading={8} trailing={8} href={paymentHashUrl} linkLabel={`View Payment Sent Hash on ${explorerName}`} /></div> : null}
-                {burnHash ? <div><span>Tokens Redeemed Hash</span><CompactAddress value={burnHash} label="Tokens Redeemed Hash" leading={8} trailing={8} href={burnHashUrl} linkLabel={`View Tokens Redeemed Hash on ${explorerName}`} /></div> : null}
+                {paymentHash ? <div><span>Redemption Transaction ID</span><CompactAddress value={paymentHash} label="Redemption Transaction ID" leading={8} trailing={8} href={paymentHashUrl} linkLabel={`View Redemption Transaction on ${explorerName}`} /></div> : null}
+                {burnHash && burnHash !== paymentHash ? <div><span>Completion Transaction ID</span><CompactAddress value={burnHash} label="Completion Transaction ID" leading={8} trailing={8} href={burnHashUrl} linkLabel={`View Completion Transaction on ${explorerName}`} /></div> : null}
               </div>
             ) : null}
           </Card>
@@ -369,43 +428,60 @@ export default function IssuerRedemptionDetailPage() {
 
         <aside className="issuer-redemption-detail-side">
           <Card className="issuer-redemption-card issuer-redemption-action-card">
-            <div className="issuer-redemption-card__heading"><div><span>Required action</span><h2>{awaitingDecision ? 'Review request' : paymentReady ? 'Send payment' : status === 'ISSUER_REJECTED' ? 'Redemption outcome' : 'Redemption progress'}</h2></div><WalletCards size={21} /></div>
+            <div className="issuer-redemption-card__heading"><div><span>Required action</span><h2>{awaitingDecision ? 'Review request' : fundingPhase ? fundingCheckPending || fundingLoading ? 'Preparing redemption' : fundingError ? 'Unable to check readiness' : approvalNeeded ? 'One-time payment setup' : !issuerBalanceReady ? 'Add USDT for this redemption' : 'Waiting for investor' : status === 'ISSUER_REJECTED' ? 'Redemption outcome' : 'Redemption progress'}</h2></div><WalletCards size={21} /></div>
 
             {awaitingDecision ? (
               <>
-                <p>Review the investor’s request and settlement details, then approve or reject the redemption.</p>
+                <p>Review the investor’s request, then approve or reject it. If approved, the investor completes the final redemption from their wallet.</p>
                 <div className="issuer-redemption-action-stack">
                   <Button loading={action === 'approve'} disabled={Boolean(action)} onClick={() => openDecisionModal('approve')} icon={CheckCircle2}>Approve redemption</Button>
                   <Button variant="danger" loading={action === 'reject'} disabled={Boolean(action)} onClick={() => openDecisionModal('reject')} icon={XCircle}>Reject redemption</Button>
                 </div>
               </>
-            ) : paymentReady ? (
+            ) : fundingPhase ? (
               <>
-                <div className="issuer-redemption-payment-summary">
-                  <div><span>USDT amount</span><strong>{paymentAmount !== '—' ? `${paymentAmount} USDT` : 'Payment amount unavailable'}</strong></div>
-                  <div><span>Required network</span><strong>{Number.isSafeInteger(chainId) ? wallet.supportedChains.find((chain) => chain.id === chainId)?.name || `Chain ${chainId}` : '—'}</strong></div>
-                  <div><span>Payment wallet</span>{expectedIssuerWallet ? <CompactAddress value={expectedIssuerWallet} label="Payment wallet" /> : <strong>—</strong>}</div>
-                </div>
-
-                {!wallet.isConnected ? <div className="issuer-redemption-inline-alert is-warning"><AlertTriangle size={17} /><span>Connect the payment wallet from the header.</span></div> : !correctIssuerWallet ? <div className="issuer-redemption-inline-alert is-danger"><AlertTriangle size={17} /><span>The connected account does not match the payment wallet assigned to this redemption.</span></div> : !correctChain ? <div className="issuer-redemption-inline-alert is-warning"><AlertTriangle size={17} /><span>Your wallet is on the wrong network. The payment action will request the required network before submission.</span></div> : <div className="issuer-redemption-inline-alert is-success"><CheckCircle2 size={17} /><span>Wallet and network are ready for this payment.</span></div>}
-
-                {savedPaymentHash ? (
-                  <div className="issuer-redemption-recovery-note">
-                    <strong>Existing payment found</strong>
-                    <p>A previous payment hash was saved. Continue with that payment instead of sending USDT again.</p>
-                    <CompactAddress value={savedPaymentHash} label="Saved payment hash" leading={8} trailing={8} href={savedPaymentHashUrl} linkLabel={`View saved payment hash on ${explorerName}`} />
-                  </div>
+                {fundingCheckPending || fundingLoading ? (
+                  <div className="issuer-redemption-live"><RefreshCw size={16} className="issuer-redemption-spin" /><span>Checking that this redemption is ready…</span></div>
                 ) : null}
 
-                <Button
-                  loading={action === 'payment'}
-                  disabled={Boolean(action) || (!savedPaymentHash && (!wallet.isConnected || !correctIssuerWallet))}
-                  onClick={handlePayment}
-                  icon={CreditCard}
-                >
-                  {savedPaymentHash ? 'Continue payment' : 'Send USDT payment'}
-                </Button>
-                <small className="issuer-redemption-action-note">Payment details come from the approved redemption request and cannot be changed here.</small>
+                {fundingError ? (
+                  <div className="issuer-redemption-inline-alert is-warning"><AlertTriangle size={17} /><span>{fundingError}</span></div>
+                ) : null}
+
+                {approvalNeeded ? (
+                  <>
+                    <p>This organization needs a one-time payment setup before redemptions can be processed. Complete it once from the approved organization wallet.</p>
+                    <div className="issuer-redemption-payment-summary">
+                      <div><span>Current redemption</span><strong>{paymentAmount !== '—' ? `${paymentAmount} USDT` : 'Unavailable'}</strong></div>
+                      <div><span>Required network</span><strong>{Number.isSafeInteger(chainId) ? wallet.supportedChains.find((chain) => chain.id === chainId)?.name || `Chain ${chainId}` : '—'}</strong></div>
+                      <div><span>Organization wallet</span>{expectedIssuerWallet ? <CompactAddress value={expectedIssuerWallet} label="Organization wallet" /> : <strong>—</strong>}</div>
+                    </div>
+                    {!wallet.isConnected ? <div className="issuer-redemption-inline-alert is-warning"><AlertTriangle size={17} /><span>Connect the organization wallet to complete the one-time setup.</span></div> : !correctIssuerWallet ? <div className="issuer-redemption-inline-alert is-danger"><AlertTriangle size={17} /><span>Switch to the approved organization wallet before continuing.</span></div> : !correctChain ? <div className="issuer-redemption-inline-alert is-warning"><AlertTriangle size={17} /><span>Your wallet is on the wrong network. We will ask you to switch before continuing.</span></div> : <div className="issuer-redemption-inline-alert is-success"><CheckCircle2 size={17} /><span>Organization wallet and network are ready.</span></div>}
+                    <Button
+                      loading={action === 'funding'}
+                      disabled={Boolean(action) || Boolean(fundingError) || !wallet.isConnected || !correctIssuerWallet}
+                      onClick={handleFundingApproval}
+                      icon={CreditCard}
+                    >
+                      Approve USDT
+                    </Button>
+                    <small className="issuer-redemption-action-note">This is required only for the first redemption setup. It does not complete the investor’s redemption.</small>
+                  </>
+                ) : null}
+
+                {!approvalNeeded && issuerAllowanceReady && funding?.issuerBalanceSufficient === false ? (
+                  <>
+                    <div className="issuer-redemption-payment-summary">
+                      <div><span>USDT needed</span><strong>{paymentAmount !== '—' ? `${paymentAmount} USDT` : 'Unavailable'}</strong></div>
+                      <div><span>Organization wallet</span>{expectedIssuerWallet ? <CompactAddress value={expectedIssuerWallet} label="Organization wallet" /> : <strong>—</strong>}</div>
+                    </div>
+                    <div className="issuer-redemption-inline-alert is-danger"><AlertTriangle size={17} /><span>Add enough USDT to the organization wallet for this redemption, then refresh. The investor will be able to redeem once funds are available.</span></div>
+                  </>
+                ) : null}
+
+                {paymentReady ? (
+                  <div className="issuer-redemption-inline-alert is-success"><CheckCircle2 size={17} /><span>No action is needed from you. The investor can now choose Redeem and sign the redemption transaction.</span></div>
+                ) : null}
               </>
             ) : status === 'ISSUER_REJECTED' ? (
               <>
@@ -454,7 +530,7 @@ export default function IssuerRedemptionDetailPage() {
             {decision === 'approve' ? <CheckCircle2 size={24} /> : <XCircle size={24} />}
             <div>
               <strong>{decision === 'approve' ? 'Approve this redemption request' : 'End this redemption request'}</strong>
-              <p>{decision === 'approve' ? 'Approval moves the request to the next step. You will be prompted for payment only when it is ready.' : 'Reject only if this investor redemption should not proceed. No payment will be sent.'}</p>
+              <p>{decision === 'approve' ? 'This accepts the investor’s request. Once the redemption is ready, the investor signs the final Redeem transaction.' : 'Reject only if this investor redemption should not proceed. No settlement will be processed.'}</p>
             </div>
           </div>
 

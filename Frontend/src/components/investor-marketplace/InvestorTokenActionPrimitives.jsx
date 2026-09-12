@@ -33,7 +33,7 @@ export function InvestorTokenIdentityCard({ token, readyLabel = 'Registered inve
         <MarketplaceTokenImage token={token} size="md" />
         <div>
           <h2>{token?.name || 'Token'}{token?.symbol ? ` (${token.symbol})` : ''}</h2>
-          <p>{[token?.issuer, token?.standard || 'ERC-3643'].filter(Boolean).join(' · ')}</p>
+          <p>{token?.issuer ? `Issued by ${token.issuer}` : 'Approved investment'}</p>
         </div>
       </div>
       <span className="investor-token-action-ready"><CheckCircle2 size={15} /> {readyLabel}</span>
@@ -107,8 +107,8 @@ export function RegisteredInvestorWalletGate({ guard, actionLabel = 'continue' }
       <div className="investor-token-wallet-gate is-warning">
         <ShieldAlert size={18} />
         <div>
-          <strong>Registered wallet unavailable</strong>
-          <p>Your registered investment wallet could not be loaded. Refresh the application before you {actionLabel}.</p>
+          <strong>We could not load your registered wallet</strong>
+          <p>Refresh this page before you {actionLabel}. Your registered wallet is required to protect this action.</p>
         </div>
       </div>
     );
@@ -134,8 +134,8 @@ export function RegisteredInvestorWalletGate({ guard, actionLabel = 'continue' }
       <div className="investor-token-wallet-gate is-error">
         <ShieldAlert size={18} />
         <div className="investor-token-wallet-gate__content">
-          <strong>Switch to your registered wallet</strong>
-          <p>The connected wallet does not match {shortenWalletAddress(registeredAddress, 6, 5)}. Open the wallet control below to reconnect with the registered investor wallet.</p>
+          <strong>Use your registered investment wallet</strong>
+          <p>The wallet currently connected is not the wallet approved for this investment ({shortenWalletAddress(registeredAddress, 6, 5)}). Choose the registered wallet below to continue.</p>
           <div className="investor-token-wallet-gate__control">
             <WalletControl expanded context="investor" purpose="registered-action" />
           </div>
@@ -161,8 +161,8 @@ export function RegisteredInvestorWalletGate({ guard, actionLabel = 'continue' }
       <div className="investor-token-wallet-gate is-warning">
         <Network size={18} />
         <div className="investor-token-wallet-gate__content">
-          <strong>Switch network to continue</strong>
-          <p>Your registered wallet is connected. Switch it to {targetNetworkLabel} before you {actionLabel}.</p>
+          <strong>One wallet setting needs to change</strong>
+          <p>Your registered wallet is connected, but it needs to use {targetNetworkLabel} before you {actionLabel}.</p>
           <Button
             variant="secondary"
             className="investor-token-wallet-gate__switch"
@@ -171,7 +171,7 @@ export function RegisteredInvestorWalletGate({ guard, actionLabel = 'continue' }
             disabled={wallet.isBusy}
             onClick={handleSwitchNetwork}
           >
-            Switch Network
+            Switch network
           </Button>
         </div>
       </div>

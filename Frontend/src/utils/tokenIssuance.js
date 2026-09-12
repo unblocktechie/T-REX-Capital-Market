@@ -43,16 +43,16 @@ export const validateTokenInformation = (data, supplyPricing = {}, options = {})
   if (logoError) errors.logo = logoError;
 
   if (!tokenName) {
-    errors.name = 'Token name is required.';
+    errors.name = 'Enter an asset name.';
   } else if (tokenName.length < 3 || tokenName.length > 50) {
-    errors.name = 'Token name must contain 3–50 characters.';
+    errors.name = 'Use 3–50 characters for the asset name.';
   } else if (/\s{2,}/.test(tokenName)) {
     errors.name = 'Token name cannot contain consecutive spaces.';
   } else if (!/^[A-Za-z0-9][A-Za-z0-9 .'-]{1,48}[A-Za-z0-9]$/.test(tokenName)) {
     errors.name = "Use letters, numbers, spaces, hyphens, periods, or apostrophes, and begin and end with a letter or number.";
   }
 
-  if (!data.symbol.trim()) errors.symbol = 'Token symbol is required.';
+  if (!data.symbol.trim()) errors.symbol = 'Enter a short symbol for the asset.';
   else if (!/^[A-Z0-9]{2,10}$/.test(data.symbol)) {
     errors.symbol = 'Use 2–10 uppercase letters or numbers.';
   }
@@ -62,18 +62,18 @@ export const validateTokenInformation = (data, supplyPricing = {}, options = {})
   }
 
   if (!positiveNumber(supplyPricing.initialPrice)) {
-    errors.initialPrice = 'Initial token price must be greater than zero.';
+    errors.initialPrice = 'Enter a starting price greater than zero.';
   }
-  if (!data.treasuryWallet.trim()) errors.treasuryWallet = 'Treasury wallet is required.';
+  if (!data.treasuryWallet.trim()) errors.treasuryWallet = 'An approved organization account is required.';
   else if (!isAddress(data.treasuryWallet.trim())) {
-    errors.treasuryWallet = 'Enter a valid wallet address.';
+    errors.treasuryWallet = 'The approved organization account address is not valid.';
   } else if (
     options.requiredTreasuryWallet &&
     data.treasuryWallet.trim().toLowerCase() !== options.requiredTreasuryWallet.trim().toLowerCase()
   ) {
-    errors.treasuryWallet = 'Use the approved organization wallet registered during onboarding.';
+    errors.treasuryWallet = 'Use the approved organization account registered during onboarding.';
   }
-  if (!data.description.trim()) errors.description = 'Token description is required.';
+  if (!data.description.trim()) errors.description = 'Add a short investor-facing description.';
   return errors;
 };
 
@@ -126,11 +126,11 @@ export const validateIdentityClaims = (data) => {
     errors.claimTopics = 'The selected claim is not available for this token.';
   }
   if (data.trustedIssuer.mode !== 'organization') {
-    errors.trustedIssuer = 'Confirm that your organization will act as the trusted claim issuer.';
+    errors.trustedIssuer = 'Confirm that your organization will review and approve investors.';
   } else if (!data.trustedIssuer.address.trim()) {
-    errors.trustedIssuer = 'Connect or verify the organization wallet before continuing.';
+    errors.trustedIssuer = 'Connect or verify the approved organization account before continuing.';
   } else if (!isAddress(data.trustedIssuer.address.trim())) {
-    errors.trustedIssuer = 'The organization trusted issuer wallet is invalid.';
+    errors.trustedIssuer = 'The approved organization account address is not valid.';
   }
   return errors;
 };
@@ -139,23 +139,23 @@ export const validateCompliance = (data) => {
   const errors = {};
   const maximumInvestors = Number(data.maximumInvestors);
   if (!data.maximumInvestors) {
-    errors.maximumInvestors = 'Maximum investors is required.';
+    errors.maximumInvestors = 'Enter the maximum number of investors.';
   } else if (!Number.isInteger(maximumInvestors) || maximumInvestors < 1) {
-    errors.maximumInvestors = 'Enter a positive whole number. Decimal values are not allowed.';
+    errors.maximumInvestors = 'Use a whole number greater than zero, such as 500 or 2,000.';
   }
 
   const maximumBalance = Number(data.maximumBalance);
   if (!data.maximumBalance) {
-    errors.maximumBalance = 'Maximum balance per investor is required.';
+    errors.maximumBalance = 'Enter the maximum amount one investor can hold.';
   } else if (!Number.isInteger(maximumBalance) || maximumBalance < 1) {
-    errors.maximumBalance = 'Enter a positive whole number. Decimal values are not allowed.';
+    errors.maximumBalance = 'Use a whole number greater than zero, such as 100 or 500.';
   }
 
   const invalidCountry = (data.countries || []).find(
     (country) => typeof country === 'string' || !country?.countryUid,
   );
   if (invalidCountry) {
-    errors.countries = 'Reload the country options and reselect every restricted country.';
+    errors.countries = 'Reload the country list and select the blocked countries again.';
   }
   return errors;
 };
@@ -214,42 +214,42 @@ export const buildReviewChecklist = (state, wallet, expectedWallet = '') => {
   return [
     {
       id: 'token-metadata',
-      label: 'Token metadata',
+      label: 'Asset details complete',
       status: tokenValid ? 'valid' : 'error',
     },
     {
       id: 'identity-claims',
-      label: 'Required identity claims',
+      label: 'Investor checks complete',
       status: claimsValid ? 'valid' : 'error',
     },
     {
       id: 'compliance-parameters',
-      label: 'Compliance module parameters',
+      label: 'Investment rules complete',
       status: complianceValid ? 'valid' : 'error',
     },
     {
       id: 'agent-wallets',
-      label: 'Agent wallet addresses',
+      label: 'Management roles assigned',
       status: agentsValid ? 'valid' : 'error',
     },
     {
       id: 'wallet',
-      label: 'Wallet connection',
+      label: 'Organization account connected',
       status: wallet.isConnected ? 'valid' : 'error',
     },
     {
       id: 'authorized-wallet',
-      label: 'Authorized organization wallet',
+      label: 'Correct organization account connected',
       status: !wallet.isConnected ? 'pending' : walletAuthorized ? 'valid' : 'error',
     },
     {
       id: 'network',
-      label: 'Network connection',
+      label: 'Required network connected',
       status: !wallet.isConnected ? 'pending' : wallet.isCorrectNetwork ? 'valid' : 'error',
     },
     {
       id: 'contract-configuration',
-      label: 'Smart contract configuration',
+      label: 'Technical setup ready',
       status:
         tokenValid && claimsValid && complianceValid && agentsValid && walletAuthorized
           ? 'valid'

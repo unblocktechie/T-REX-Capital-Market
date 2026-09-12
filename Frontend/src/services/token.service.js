@@ -77,14 +77,14 @@ export const tokenService = {
     return null;
   },
 
-  setSession({ accessToken, user, remember = false }) {
+  setSession({ accessToken, user, tokenType = 'Bearer', expiresIn = null, remember = false }) {
     if (!canUseWindow() || !accessToken) return;
 
     this.clear();
     const storage = remember ? window.localStorage : window.sessionStorage;
     storage.setItem(
       STORAGE_KEYS.authSession,
-      JSON.stringify({ accessToken, user, remember, savedAt: Date.now() }),
+      JSON.stringify({ accessToken, tokenType, expiresIn, user, remember, savedAt: Date.now() }),
     );
   },
 

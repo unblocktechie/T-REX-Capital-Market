@@ -18,6 +18,7 @@ import { formatUnits, parseUnits } from 'viem';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { investmentApi } from '@/api/investments';
+import { env } from '@/config/env';
 import {
   InvestorTokenActionHeader,
   InvestorTokenIdentityCard,
@@ -27,6 +28,7 @@ import {
   TokenActionUnavailable,
 } from '@/components/investor-marketplace/InvestorTokenActionPrimitives';
 import { MarketplaceDropdown } from '@/components/investor-marketplace/MarketplaceDropdown';
+import { InvestmentJourneyTracker } from '@/components/application-history/InvestmentJourneyTracker';
 import { InvestorHistoryPagination } from '@/components/investor-marketplace/InvestorHistoryPagination';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -37,20 +39,23 @@ import { useRegisteredInvestmentAction } from '@/hooks/useRegisteredInvestmentAc
 import { useRegisteredInvestorWalletGuard } from '@/hooks/useRegisteredInvestorWalletGuard';
 import { investorPortfolioService } from '@/services/investor/investorPortfolioService';
 import {
-  clearInvestorTokenPurchaseRecovery,
-  loadInvestorTokenPurchaseRecovery,
-  saveInvestorTokenPurchaseRecovery,
-} from '@/services/investor/investorTokenPurchaseRecoveryStore';
+  clearObservedWalletTransaction,
+  listObservedWalletTransactions,
+  saveObservedWalletTransaction,
+} from '@/services/investor/observedWalletTransactionStore';
+import { quotePlatformPurchase } from '@/services/blockchain/trexPlatformController.service';
 import {
   addInvestorPurchaseTokenToWallet,
+  approveInvestorUsdtSpending,
   getInvestorPurchaseTokenBalance,
+  getInvestorUsdtSpendingApproval,
   isInvestorPurchaseWalletRejection,
   submitInvestorPurchasePayment,
-  waitForInvestorPurchasePaymentReceipt,
 } from '@/services/investor/investorTokenPurchaseTransaction.service';
 import { getErrorMessage, sanitizeUserFacingMessage } from '@/utils/error';
 import { getWalletErrorMessage } from '@/utils/wallet';
 import { getInvestmentActionContext } from '@/utils/investmentPurchase';
+import { getInvestmentJourney } from '@/utils/investmentJourney';
 import { resolveCurrentTokenPriceExact } from '@/utils/tokenPrice';
 
 const money = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
@@ -63,56 +68,26 @@ const PURCHASE_STATUS = Object.freeze({
   EXPIRED: 'EXPIRED',
 });
 
-const POLL_INTERVAL_MS = 5_000;
-const POLL_LONG_RUNNING_MS = 180_000;
 const HISTORY_POLL_INTERVAL_MS = 7_000;
 const HISTORY_SEARCH_DEBOUNCE_MS = 400;
 const HISTORY_LIMIT = 5;
 
 const PURCHASE_HISTORY_FILTERS = Object.freeze([
-  { value: 'all', label: 'All statuses', description: 'Show every purchase' },
-  { value: PURCHASE_STATUS.PENDING_PAYMENT, label: 'Pending', description: 'Payment is still pending' },
-  { value: PURCHASE_STATUS.PAYMENT_CONFIRMED, label: 'Payment Received', description: 'USDT payment received' },
-  { value: PURCHASE_STATUS.MINT_SUBMITTED, label: 'Tokens Issued', description: 'Token issuance is in progress' },
-  { value: PURCHASE_STATUS.COMPLETED, label: 'Completed', description: 'Purchase finalized' },
-  { value: PURCHASE_STATUS.EXPIRED, label: 'Expired', description: 'Checkout expired before payment' },
-]);
-
-const PROCESSING_PURCHASE_STATUSES = new Set([
-  PURCHASE_STATUS.PENDING_PAYMENT,
-  PURCHASE_STATUS.PAYMENT_CONFIRMED,
-  PURCHASE_STATUS.MINT_SUBMITTED,
+  { value: 'all', label: 'All statuses', description: 'Show every investment transaction' },
+  { value: 'SUBMITTED', label: 'Submitted', description: 'Sent to the network and waiting for confirmation' },
+  { value: 'CONFIRMED', label: 'Confirmed', description: 'Confirmed successfully on the blockchain' },
+  { value: 'FAILED', label: 'Failed', description: 'The blockchain transaction reverted' },
 ]);
 
 const clean = (value) => String(value ?? '').trim();
 const normalizeStatus = (value) => clean(value).toUpperCase();
 const validTransactionHash = (value) => /^0x[a-fA-F0-9]{64}$/.test(clean(value));
-
 const purchaseUidOf = (purchase) => clean(purchase?.purchaseUid || purchase?.uid || purchase?.id);
 const paymentHashOf = (purchase) => clean(
   purchase?.paymentTxHash
   || purchase?.txHash
   || purchase?.payment?.txHash
   || purchase?.paymentTransaction?.txHash,
-);
-const mintHashOf = (purchase) => clean(
-  // The purchase APIs return the backend-generated mint hash at data.mint.txHash.
-  purchase?.mint?.txHash
-  || purchase?.mintTxHash
-  || purchase?.mintTransaction?.txHash,
-);
-
-const synchronizationStatusOf = (purchase) => normalizeStatus(purchase?.synchronization?.status);
-
-const hasPendingTransactionHistory = (purchase) => (
-  Array.isArray(purchase?.transactionHistory)
-  && purchase.transactionHistory.some((entry) => normalizeStatus(entry?.status) === 'PENDING')
-);
-
-const isPurchaseProcessing = (purchase) => (
-  PROCESSING_PURCHASE_STATUSES.has(normalizeStatus(purchase?.status))
-  || synchronizationStatusOf(purchase) === 'QUEUED'
-  || hasPendingTransactionHistory(purchase)
 );
 
 const purchaseDataError = (purchase) => {
@@ -196,8 +171,37 @@ const displayServerAmount = (value, fallback = '—') => {
   return normalized || fallback;
 };
 
-const purchaseHistoryStatusMeta = (status) => {
-  switch (normalizeStatus(status)) {
+const canonicalTransactionAsPurchase = (row = {}) => {
+  const canonicalStatus = normalizeStatus(row?.status);
+  const legacyStatus = canonicalStatus === 'CONFIRMED'
+    ? PURCHASE_STATUS.COMPLETED
+    : canonicalStatus === 'FAILED'
+      ? PURCHASE_STATUS.EXPIRED
+      : PURCHASE_STATUS.PENDING_PAYMENT;
+  const txHash = clean(row?.transactionHash || row?.txHash);
+  return {
+    ...row,
+    canonicalStatus,
+    status: legacyStatus,
+    purchaseUid: txHash || clean(row?.id),
+    paymentTxHash: txHash,
+    txHash,
+    tokenAmount: clean(row?.tokenAmountFormatted || row?.tokenAmount || row?.amountFormatted),
+    usdtAmount: clean(row?.usdtAmountFormatted || row?.usdtAmount || row?.paymentAmountFormatted),
+    tokenPriceSnapshot: clean(row?.priceFormatted || row?.tokenPriceFormatted || row?.price),
+    createdAt: row?.blockTimestamp || row?.createdAt || row?.timestamp,
+    chainId: row?.chainId,
+  };
+};
+
+const purchaseHistoryStatusMeta = (status, canonicalStatus = '') => {
+  switch (normalizeStatus(canonicalStatus || status)) {
+    case 'SUBMITTED':
+      return { label: 'Submitted', tone: 'pending', tooltip: 'Your wallet submitted this investment. No additional wallet action is needed while it confirms.' };
+    case 'CONFIRMED':
+      return { label: 'Confirmed', tone: 'confirmed', tooltip: 'This investment was independently verified from the confirmed blockchain transaction.' };
+    case 'FAILED':
+      return { label: 'Failed', tone: 'expired', tooltip: 'The blockchain transaction reverted. You may start a new investment when you are ready.' };
     case PURCHASE_STATUS.PENDING_PAYMENT:
       return { label: 'Pending', tone: 'pending', tooltip: '' };
     case PURCHASE_STATUS.PAYMENT_CONFIRMED:
@@ -255,56 +259,10 @@ const shortHash = (value) => {
   return hash.length > 14 ? `${hash.slice(0, 8)}…${hash.slice(-5)}` : hash;
 };
 
-const historyExpirationReason = (row) => sanitizeUserFacingMessage(clean(
-  row?.expiration?.reason
-  || row?.expirationReason
-  || row?.error?.message
-  || row?.errorMessage,
-));
-
-const historyExpirationReasonLabel = (row) => {
-  const reason = historyExpirationReason(row);
-  if (!reason) return '—';
-  if (reason === 'PAYMENT_NOT_SUBMITTED') return 'Payment not submitted';
-  return reason.replaceAll('_', ' ').toLowerCase().replace(/^./, (letter) => letter.toUpperCase());
-};
-
 const historyHasActiveRows = (rows) => (
   Array.isArray(rows)
-  && rows.some((row) => PROCESSING_PURCHASE_STATUSES.has(normalizeStatus(row?.status)))
+  && rows.some((row) => normalizeStatus(row?.canonicalStatus) === 'SUBMITTED')
 );
-
-const isPurchaseBlockingNewCheckout = (purchase) => (
-  PROCESSING_PURCHASE_STATUSES.has(normalizeStatus(purchase?.status))
-);
-
-const isPaymentAcceptedStatus = (purchase) => {
-  const status = normalizeStatus(purchase?.status);
-  return [
-    PURCHASE_STATUS.PAYMENT_CONFIRMED,
-    PURCHASE_STATUS.MINT_SUBMITTED,
-    PURCHASE_STATUS.COMPLETED,
-  ].includes(status);
-};
-
-const isPurchaseStateAdvanceResponse = (error) => {
-  const code = clean(
-    error?.response?.data?.error?.code
-    || error?.response?.data?.code,
-  ).toUpperCase();
-  const message = clean(
-    error?.response?.data?.error?.message
-    || error?.response?.data?.message
-    || error?.message,
-  ).toLowerCase();
-
-  return [
-    'PURCHASE_STATE_CHANGED',
-    'PURCHASE_STATUS_CHANGED',
-    'PURCHASE_ALREADY_CONFIRMED',
-    'PAYMENT_ALREADY_CONFIRMED',
-  ].includes(code) || /purchase changed while payment was being verified|payment (?:is |was )?already confirmed|purchase (?:is |was )?already being finalized/.test(message);
-};
 
 export default function PurchaseTokenPage({
   interestUid: interestUidOverride,
@@ -316,7 +274,6 @@ export default function PurchaseTokenPage({
   const { application, token, loading, error, ready } = useRegisteredInvestmentAction(interestUid);
   const [tokenAmountInput, setTokenAmountInput] = useState('');
   const [purchase, setPurchase] = useState(null);
-  const [recovery, setRecovery] = useState(null);
   const [broadcastTxHash, setBroadcastTxHash] = useState('');
   const [, setPurchaseError] = useState('');
   const [, setPurchaseErrorCode] = useState('');
@@ -324,12 +281,14 @@ export default function PurchaseTokenPage({
   const [busyAction, setBusyAction] = useState('');
   const [, setPollingTimedOut] = useState(false);
   const [verificationBlocked, setVerificationBlocked] = useState(false);
-  const [paymentReceiptConfirmed, setPaymentReceiptConfirmed] = useState(false);
   const [wasFirstTokenPurchase, setWasFirstTokenPurchase] = useState(false);
   const [addingWalletToken, setAddingWalletToken] = useState(false);
   const [walletTokenAdded, setWalletTokenAdded] = useState(false);
   const [tokenWalletBalanceRaw, setTokenWalletBalanceRaw] = useState(null);
   const [tokenWalletBalanceLoading, setTokenWalletBalanceLoading] = useState(false);
+  const [usdtSpendingApproved, setUsdtSpendingApproved] = useState(false);
+  const [usdtApprovalLoading, setUsdtApprovalLoading] = useState(true);
+  const [usdtApprovalError, setUsdtApprovalError] = useState('');
   const [purchaseHistory, setPurchaseHistory] = useState([]);
   const [purchaseHistoryMeta, setPurchaseHistoryMeta] = useState({});
   const [purchaseHistoryPage, setPurchaseHistoryPage] = useState(1);
@@ -340,27 +299,70 @@ export default function PurchaseTokenPage({
   const [purchaseHistoryRefreshing, setPurchaseHistoryRefreshing] = useState(false);
   const [purchaseHistoryError, setPurchaseHistoryError] = useState('');
   const [purchaseHistoryRefreshVersion, setPurchaseHistoryRefreshVersion] = useState(0);
-  const [latestPurchase, setLatestPurchase] = useState(null);
-  const [purchaseGateTokenUid, setPurchaseGateTokenUid] = useState('');
-  const [purchaseGateLoading, setPurchaseGateLoading] = useState(true);
-  const [purchaseGateError, setPurchaseGateError] = useState('');
-  const [purchaseGateRefreshVersion, setPurchaseGateRefreshVersion] = useState(0);
+  const [platformQuote, setPlatformQuote] = useState(null);
+  const [platformQuoteLoading, setPlatformQuoteLoading] = useState(false);
+  const [platformQuoteError, setPlatformQuoteError] = useState('');
   const operationLockRef = useRef(false);
-  const recoveryLoadKeyRef = useRef('');
-  const pollStartedAtRef = useRef({ purchaseUid: '', startedAt: 0 });
   const completedToastRef = useRef('');
   const walletTokenAutoPromptRef = useRef(false);
   const purchaseHistoryRequestRef = useRef({ controller: null, inFlight: false });
   const purchaseHistoryLoadedVersionRef = useRef(0);
-  const purchaseGateRequestRef = useRef({ controller: null, inFlight: false });
+  const usdtApprovalRequestRef = useRef(0);
 
   useDocumentTitle(
-    embedded ? 'Manage Tokens' : token ? `${token.name} · Purchase Token` : 'Purchase Token',
+    embedded ? 'Manage Investments' : token ? `${token.name} · Purchase Token` : 'Purchase Token',
   );
 
   const applicationRoute = ROUTES.applicationDetail(interestUid);
   const context = useMemo(() => getInvestmentActionContext(token || application), [application, token]);
   const historyTokenUid = clean(token?.id || token?.tokenUid);
+  useEffect(() => {
+    if (!historyTokenUid) return undefined;
+    const observed = listObservedWalletTransactions({
+      tokenUid: historyTokenUid,
+      expectedAction: 'INVEST',
+      interestUid,
+    }).sort((a, b) => String(b.observedAt).localeCompare(String(a.observedAt)))[0];
+    if (!observed) return undefined;
+    setBroadcastTxHash(observed.txHash);
+    setPurchase(canonicalTransactionAsPurchase({
+      chainId: observed.chainId,
+      transactionHash: observed.txHash,
+      status: 'SUBMITTED',
+      createdAt: observed.observedAt,
+    }));
+
+    let active = true;
+    const sync = async () => {
+      try {
+        const next = await investmentApi.confirmObservedTransaction({
+          chainId: observed.chainId,
+          txHash: observed.txHash,
+          tokenUid: historyTokenUid,
+          expectedAction: 'INVEST',
+        });
+        if (!active) return;
+        const status = normalizeStatus(next?.status);
+        setPurchase(canonicalTransactionAsPurchase({ ...next, transactionHash: next?.transactionHash || observed.txHash }));
+        if (status === 'CONFIRMED' || status === 'FAILED') {
+          clearObservedWalletTransaction(observed);
+          setBroadcastTxHash('');
+          if (status === 'CONFIRMED') investorPortfolioService.refreshAfterCompletedActivity().catch(() => {});
+        }
+        setPurchaseHistoryRefreshVersion((value) => value + 1);
+      } catch {
+        // Backend/indexer synchronization is best effort. The locally observed
+        // hash prevents accidental resubmission and can be recovered later.
+      }
+    };
+    void sync();
+    const onFocus = () => void sync();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      active = false;
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [historyTokenUid, interestUid]);
   const preparedInvestorWallet = clean(purchase?.investorWalletAddress) || context.investorWalletAddress;
   const preparedChainId = purchase?.chainId || context.chainId;
   const walletGuard = useRegisteredInvestorWalletGuard(preparedInvestorWallet, preparedChainId);
@@ -368,28 +370,40 @@ export default function PurchaseTokenPage({
   const tokenBalanceChainId = preparedChainId || walletGuard.targetChainId;
 
   const tokenDecimals = supportedTokenDecimals(token?.decimals);
-  const tokenPriceExact = clean(
-    purchase?.tokenPriceSnapshot
-    || purchase?.tokenPrice
-    || purchase?.currentTokenPrice
-    || purchase?.pricePerToken
-    || resolveCurrentTokenPriceExact(token || {}),
-  );
-  const tokenPrice = Number(tokenPriceExact);
   const maxTokenBalanceExact = canonicalDecimal(
     token?.maxBalancePerInvestorExact || token?.maxBalancePerInvestor || token?.maxBalance,
   );
   const normalizedTokenAmount = canonicalDecimal(tokenAmountInput);
+  const activePurchasePrice = clean(
+    purchase?.tokenPriceSnapshot
+    || purchase?.tokenPrice
+    || purchase?.currentTokenPrice
+    || purchase?.pricePerToken,
+  );
+  const tokenPriceExact = activePurchasePrice
+    || clean(platformQuote?.priceFormatted)
+    || resolveCurrentTokenPriceExact(token || {});
+  const tokenPrice = Number(tokenPriceExact);
   const preparedPayment = Number(clean(purchase?.usdtAmount || purchase?.paymentAmount || purchase?.totalUsdtAmount));
+  const quotedPayment = Number(clean(platformQuote?.paymentAmountFormatted));
   const estimatedPayment = Number.isFinite(preparedPayment) && preparedPayment > 0
     ? preparedPayment
-    : Number.isFinite(tokenPrice) && tokenPrice > 0 && Number(normalizedTokenAmount) > 0
-      ? Number(normalizedTokenAmount) * tokenPrice
-      : 0;
+    : Number.isFinite(quotedPayment) && quotedPayment > 0
+      ? quotedPayment
+      : Number.isFinite(tokenPrice) && tokenPrice > 0 && Number(normalizedTokenAmount) > 0
+        ? Number(normalizedTokenAmount) * tokenPrice
+        : 0;
+  const requiredPaymentAmountRaw = clean(
+    purchase?.usdtAmountRaw
+    || purchase?.paymentAmountRaw
+    || purchase?.totalUsdtAmountRaw
+    || platformQuote?.paymentAmount?.toString?.(),
+  );
   const topics = token?.eligibility?.topics || [];
   const allRequiredClaimsReady = topics.length
     ? topics.every((topic) => topic.satisfied && !topic.rejected)
     : ready;
+
 
   const tokenWalletBalance = useMemo(() => {
     if (typeof tokenWalletBalanceRaw !== 'bigint') return '';
@@ -428,6 +442,48 @@ export default function PurchaseTokenPage({
     void refreshTokenWalletBalance();
   }, [refreshTokenWalletBalance, purchase?.status, purchase?.mint?.txHash]);
 
+  const refreshUsdtSpendingApproval = useCallback(async ({ silent = false } = {}) => {
+    const investorWalletAddress = clean(preparedInvestorWallet);
+    const chainId = preparedChainId || walletGuard.targetChainId;
+    const requestId = usdtApprovalRequestRef.current + 1;
+    usdtApprovalRequestRef.current = requestId;
+
+    if (!investorWalletAddress || !chainId) {
+      setUsdtSpendingApproved(false);
+      setUsdtApprovalLoading(false);
+      setUsdtApprovalError('USDT spending approval cannot be checked until your verified wallet and network are available.');
+      return false;
+    }
+
+    if (!silent) setUsdtApprovalLoading(true);
+    setUsdtApprovalError('');
+    try {
+      const approval = await getInvestorUsdtSpendingApproval({
+        investorWalletAddress,
+        chainId,
+        // If the purchase amount is known, any existing allowance that covers
+        // this exact purchase is sufficient. We only ask for a new approval
+        // when the current allowance is actually too small.
+        requiredPaymentAmountRaw: requiredPaymentAmountRaw || undefined,
+      });
+      if (usdtApprovalRequestRef.current !== requestId) return Boolean(approval?.spendingApproved);
+      const approved = Boolean(approval?.spendingApproved);
+      setUsdtSpendingApproved(approved);
+      return approved;
+    } catch (approvalError) {
+      if (usdtApprovalRequestRef.current !== requestId) return false;
+      setUsdtSpendingApproved(false);
+      setUsdtApprovalError(getErrorMessage(approvalError, 'We could not check your USDT spending approval. Please try again.'));
+      return false;
+    } finally {
+      if (usdtApprovalRequestRef.current === requestId) setUsdtApprovalLoading(false);
+    }
+  }, [preparedChainId, preparedInvestorWallet, requiredPaymentAmountRaw, walletGuard.targetChainId]);
+
+  useEffect(() => {
+    void refreshUsdtSpendingApproval();
+  }, [refreshUsdtSpendingApproval]);
+
   const tokenAmountError = useMemo(() => {
     if (!clean(tokenAmountInput)) return '';
     const normalized = canonicalDecimal(tokenAmountInput);
@@ -452,16 +508,47 @@ export default function PurchaseTokenPage({
     return '';
   }, [maxTokenBalanceExact, token?.symbol, tokenAmountInput, tokenDecimals]);
 
-  const purchaseUid = purchaseUidOf(purchase) || clean(recovery?.purchaseUid);
-  const paymentTxHash = paymentHashOf(purchase) || broadcastTxHash || clean(recovery?.txHash);
+  useEffect(() => {
+    if (!tokenContractAddress || !tokenBalanceChainId || !normalizedTokenAmount || tokenAmountError) {
+      setPlatformQuote(null);
+      setPlatformQuoteError('');
+      setPlatformQuoteLoading(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setPlatformQuoteLoading(true);
+      quotePlatformPurchase({
+        chainId: tokenBalanceChainId,
+        tokenAddress: tokenContractAddress,
+        tokenAmount: normalizedTokenAmount,
+      })
+        .then((quote) => {
+          if (cancelled) return;
+          setPlatformQuote(quote);
+          setPlatformQuoteError('');
+        })
+        .catch((quoteError) => {
+          if (cancelled) return;
+          setPlatformQuote(null);
+          setPlatformQuoteError(getErrorMessage(quoteError, 'The live purchase price is temporarily unavailable.'));
+        })
+        .finally(() => {
+          if (!cancelled) setPlatformQuoteLoading(false);
+        });
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [normalizedTokenAmount, purchase, tokenAmountError, tokenBalanceChainId, tokenContractAddress]);
+
+  const purchaseUid = purchaseUidOf(purchase);
+  const paymentTxHash = paymentHashOf(purchase) || broadcastTxHash;
   const purchaseStatus = normalizeStatus(purchase?.status);
   const isCompleted = purchaseStatus === PURCHASE_STATUS.COMPLETED;
-  const recoveryUncertain = Boolean(
-    recovery?.paymentAttemptStarted
-    && purchaseUid
-    && purchaseStatus === PURCHASE_STATUS.PENDING_PAYMENT
-    && !paymentTxHash,
-  );
   const explorerUrlFor = useCallback((txHash, chainIdOverride) => {
     if (!validTransactionHash(txHash)) return '';
     const chainId = Number(chainIdOverride || purchase?.chainId || context.chainId);
@@ -480,71 +567,7 @@ export default function PurchaseTokenPage({
 
   const refreshPurchaseHistory = useCallback(() => {
     setPurchaseHistoryRefreshVersion((current) => current + 1);
-    setPurchaseGateRefreshVersion((current) => current + 1);
   }, []);
-
-  const loadLatestPurchaseForGate = useCallback(async ({ mode = 'load' } = {}) => {
-    if (!historyTokenUid) return;
-    if (mode === 'poll' && purchaseGateRequestRef.current.inFlight) return;
-
-    if (mode !== 'poll' && purchaseGateRequestRef.current.controller) {
-      purchaseGateRequestRef.current.controller.abort();
-    }
-
-    const controller = new AbortController();
-    purchaseGateRequestRef.current = { controller, inFlight: true };
-    if (mode !== 'poll') setPurchaseGateLoading(true);
-    setPurchaseGateError('');
-
-    try {
-      const result = await investmentApi.listTokenPurchases(historyTokenUid, {
-        page: 1,
-        limit: 1,
-        search: '',
-        status: 'all',
-        signal: controller.signal,
-      });
-      if (controller.signal.aborted) return;
-      const rows = Array.isArray(result?.data) ? result.data : [];
-      setLatestPurchase(rows[0] || null);
-      setPurchaseGateTokenUid(historyTokenUid);
-    } catch (gateError) {
-      if (controller.signal.aborted || gateError?.code === 'ERR_CANCELED' || gateError?.name === 'CanceledError') return;
-      setPurchaseGateTokenUid(historyTokenUid);
-      setPurchaseGateError(getErrorMessage(gateError, 'Your latest purchase status could not be verified right now.'));
-    } finally {
-      if (purchaseGateRequestRef.current.controller === controller) {
-        purchaseGateRequestRef.current = { controller: null, inFlight: false };
-        setPurchaseGateLoading(false);
-      }
-    }
-  }, [historyTokenUid]);
-
-  useEffect(() => {
-    if (!ready || !historyTokenUid) return undefined;
-    void loadLatestPurchaseForGate({ mode: 'load' });
-    return () => {
-      purchaseGateRequestRef.current.controller?.abort();
-    };
-  }, [historyTokenUid, loadLatestPurchaseForGate, purchaseGateRefreshVersion, ready]);
-
-  useEffect(() => {
-    if (!ready || !historyTokenUid || !isPurchaseBlockingNewCheckout(latestPurchase)) return undefined;
-
-    const poll = () => {
-      if (!document.hidden) void loadLatestPurchaseForGate({ mode: 'poll' });
-    };
-    const timer = window.setInterval(poll, HISTORY_POLL_INTERVAL_MS);
-    const handleVisibilityChange = () => {
-      if (!document.hidden) poll();
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      window.clearInterval(timer);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [historyTokenUid, latestPurchase, loadLatestPurchaseForGate, ready]);
 
   const loadPurchaseHistory = useCallback(async ({ mode = 'load' } = {}) => {
     if (!historyTokenUid) return;
@@ -561,15 +584,24 @@ export default function PurchaseTokenPage({
     setPurchaseHistoryError('');
 
     try {
-      const result = await investmentApi.listTokenPurchases(historyTokenUid, {
+      const result = await investmentApi.listTransactions({
         page: purchaseHistoryPage,
         limit: HISTORY_LIMIT,
+        tokenUid: historyTokenUid,
+        type: 'INVEST',
         search: purchaseHistorySearchDebounced,
         status: purchaseHistoryStatus,
         signal: controller.signal,
       });
       if (controller.signal.aborted) return;
-      setPurchaseHistory(Array.isArray(result?.data) ? result.data : []);
+      const rows = (Array.isArray(result?.data) ? result.data : []).map(canonicalTransactionAsPurchase);
+      setPurchaseHistory(rows);
+      const canonicalHashes = new Set(rows.map((row) => clean(row.paymentTxHash).toLowerCase()).filter(Boolean));
+      listObservedWalletTransactions({ tokenUid: historyTokenUid, expectedAction: 'INVEST' }).forEach((observed) => {
+        if (canonicalHashes.has(clean(observed.txHash).toLowerCase())) {
+          clearObservedWalletTransaction(observed);
+        }
+      });
       setPurchaseHistoryMeta(result?.meta && typeof result.meta === 'object' ? result.meta : {});
     } catch (historyError) {
       if (controller.signal.aborted || historyError?.code === 'ERR_CANCELED' || historyError?.name === 'CanceledError') return;
@@ -597,6 +629,102 @@ export default function PurchaseTokenPage({
       purchaseHistoryRequestRef.current.controller?.abort();
     };
   }, [historyTokenUid, loadPurchaseHistory, purchaseHistoryRefreshVersion, ready]);
+
+  useEffect(() => {
+    const txHash = clean(broadcastTxHash || paymentHashOf(purchase));
+    const chainId = Number(purchase?.chainId || context.chainId || walletGuard.targetChainId);
+    if (!historyTokenUid || !validTransactionHash(txHash) || !chainId || normalizeStatus(purchase?.canonicalStatus) !== 'SUBMITTED') return undefined;
+
+    let cancelled = false;
+    let timer = null;
+    let inFlight = false;
+
+    const sync = async () => {
+      if (cancelled || inFlight || document.hidden) return;
+      inFlight = true;
+      try {
+        const observed = await investmentApi.confirmObservedTransaction({
+          chainId,
+          txHash,
+          tokenUid: historyTokenUid,
+          expectedAction: 'INVEST',
+        });
+        if (cancelled) return;
+        const status = normalizeStatus(observed?.status);
+        if (status === 'CONFIRMED' || status === 'FAILED') {
+          clearObservedWalletTransaction({ chainId, txHash, expectedAction: 'INVEST' });
+          setBroadcastTxHash('');
+          setPurchase(canonicalTransactionAsPurchase({ ...observed, transactionHash: observed?.transactionHash || txHash }));
+          setPurchaseHistoryRefreshVersion((value) => value + 1);
+          if (status === 'CONFIRMED') investorPortfolioService.refreshAfterCompletedActivity().catch(() => {});
+          return;
+        }
+      } catch (syncError) {
+        const statusCode = Number(syncError?.response?.status);
+        if (!cancelled && statusCode >= 400 && statusCode < 500) {
+          clearObservedWalletTransaction({ chainId, txHash, expectedAction: 'INVEST' });
+          setBroadcastTxHash('');
+          setPurchase(canonicalTransactionAsPurchase({ chainId, transactionHash: txHash, status: 'FAILED', createdAt: new Date().toISOString() }));
+          return;
+        }
+      } finally {
+        inFlight = false;
+      }
+      if (!cancelled) timer = window.setTimeout(sync, HISTORY_POLL_INTERVAL_MS);
+    };
+
+    timer = window.setTimeout(sync, HISTORY_POLL_INTERVAL_MS);
+    const onFocus = () => {
+      if (timer) window.clearTimeout(timer);
+      void sync();
+    };
+    window.addEventListener('focus', onFocus);
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [
+    broadcastTxHash,
+    context.chainId,
+    historyTokenUid,
+    purchase?.canonicalStatus,
+    purchase?.chainId,
+    purchase?.paymentTxHash,
+    walletGuard.targetChainId,
+  ]);
+
+  useEffect(() => {
+    const currentHash = clean(broadcastTxHash || paymentHashOf(purchase)).toLowerCase();
+    if (!currentHash || normalizeStatus(purchase?.canonicalStatus) !== 'SUBMITTED') return;
+
+    const canonicalMatch = purchaseHistory.find((row) => (
+      clean(paymentHashOf(row)).toLowerCase() === currentHash
+    ));
+    if (!canonicalMatch) return;
+
+    const canonicalStatus = normalizeStatus(canonicalMatch?.canonicalStatus || canonicalMatch?.status);
+    if (canonicalStatus !== 'CONFIRMED' && canonicalStatus !== 'FAILED') return;
+
+    setPurchase(canonicalMatch);
+    setBroadcastTxHash('');
+    clearObservedWalletTransaction({
+      chainId: canonicalMatch?.chainId || purchase?.chainId || context.chainId,
+      txHash: currentHash,
+      expectedAction: 'INVEST',
+    });
+
+    if (canonicalStatus === 'CONFIRMED') {
+      setPurchaseError('');
+      setPurchaseErrorCode('');
+      investorPortfolioService.refreshAfterCompletedActivity().catch(() => {});
+    }
+  }, [
+    broadcastTxHash,
+    context.chainId,
+    purchase,
+    purchaseHistory,
+  ]);
 
   useEffect(() => {
     if (!ready || !historyTokenUid || !historyHasActiveRows(purchaseHistory)) return undefined;
@@ -636,480 +764,106 @@ export default function PurchaseTokenPage({
 
 
 
-  const persistRecovery = useCallback((patch) => {
-    const next = saveInvestorTokenPurchaseRecovery(interestUid, patch);
-    setRecovery(next);
-    return next;
-  }, [interestUid]);
-
-  const applyPurchase = useCallback((nextPurchase, fallbackTxHash = '') => {
-    if (!nextPurchase || typeof nextPurchase !== 'object') return;
-    const stored = loadInvestorTokenPurchaseRecovery(interestUid);
-    const nextUid = purchaseUidOf(nextPurchase) || clean(stored?.purchaseUid);
-    const nextHash = paymentHashOf(nextPurchase) || clean(fallbackTxHash) || clean(stored?.txHash);
-    const nextTokenAmount = clean(nextPurchase.tokenAmount) || clean(stored?.tokenAmount) || normalizedTokenAmount;
-
-    setPurchase((current) => ({
-      ...(current || {}),
-      ...nextPurchase,
-      ...(nextUid ? { purchaseUid: nextUid } : {}),
-      ...(nextHash ? { paymentTxHash: nextHash } : {}),
-      ...(nextTokenAmount ? { tokenAmount: nextTokenAmount } : {}),
-    }));
-    if (nextHash) setBroadcastTxHash(nextHash);
-    setPurchaseRequestId(clean(nextPurchase.requestId));
-    if (nextUid) {
-      setLatestPurchase((current) => ({ ...(current || {}), ...nextPurchase, purchaseUid: nextUid }));
-      setPurchaseGateTokenUid(clean(token?.id || token?.tokenUid));
-      setPurchaseGateError('');
-      setPurchaseGateLoading(false);
-    }
-
-    const status = normalizeStatus(nextPurchase.status);
-    const serverError = purchaseDataError(nextPurchase);
-
-    if (serverError) {
-      setPurchaseError(serverError.message);
-      setPurchaseErrorCode(serverError.code);
-      setVerificationBlocked(true);
-    } else if (isPurchaseProcessing(nextPurchase) || status === PURCHASE_STATUS.COMPLETED || status === PURCHASE_STATUS.EXPIRED) {
-      // PENDING_PAYMENT, PAYMENT_CONFIRMED, MINT_SUBMITTED, queued synchronization,
-      // transaction-history PENDING, and HTTP 202 responses are normal processing states.
-      setPurchaseError('');
-      setPurchaseErrorCode('');
-      setVerificationBlocked(false);
-    }
-
-    if (
-      status === PURCHASE_STATUS.PAYMENT_CONFIRMED
-      || status === PURCHASE_STATUS.MINT_SUBMITTED
-      || status === PURCHASE_STATUS.COMPLETED
-    ) {
-      setPaymentReceiptConfirmed(true);
-    }
-    if (status === PURCHASE_STATUS.COMPLETED) {
-      clearInvestorTokenPurchaseRecovery(interestUid);
-      setRecovery(null);
-      setPollingTimedOut(false);
-      setVerificationBlocked(false);
-      setPurchaseError('');
-      setPurchaseErrorCode('');
-      if (nextUid && completedToastRef.current !== nextUid) {
-        completedToastRef.current = nextUid;
-        investorPortfolioService.refreshAfterCompletedActivity().catch(() => {});
-        toast.success('Purchase complete. Your portfolio has been updated.');
-      }
-      return;
-    }
-
-    if (status === PURCHASE_STATUS.EXPIRED) {
-      clearInvestorTokenPurchaseRecovery(interestUid);
-      setRecovery(null);
-      setBroadcastTxHash('');
-      setPaymentReceiptConfirmed(false);
-      setPollingTimedOut(false);
-      setVerificationBlocked(false);
-      setPurchaseError('');
-      setPurchaseErrorCode('');
-      return;
-    }
-
-    persistRecovery({
-      tokenUid: token?.id || token?.tokenUid || '',
-      purchaseUid: nextUid,
-      tokenAmount: nextTokenAmount,
-      txHash: nextHash,
-    });
-  }, [interestUid, normalizedTokenAmount, persistRecovery, token?.id, token?.tokenUid]);
-
-  const recordError = useCallback((nextError, fallback) => {
-    const message = getErrorMessage(nextError, fallback);
-    const code = backendErrorCode(nextError);
-    const requestId = backendRequestId(nextError);
-    setPurchaseError(message);
-    setPurchaseErrorCode(code);
-    setPurchaseRequestId(requestId);
-    return { message, code, requestId };
-  }, []);
-
-  useEffect(() => {
-    const tokenUid = clean(token?.id || token?.tokenUid);
-    if (!interestUid || !tokenUid) return undefined;
-    const loadKey = `${interestUid}:${tokenUid}`;
-    if (recoveryLoadKeyRef.current === loadKey) return undefined;
-    recoveryLoadKeyRef.current = loadKey;
-
-    const stored = loadInvestorTokenPurchaseRecovery(interestUid);
-    if (!stored || (stored.tokenUid && stored.tokenUid !== tokenUid)) {
-      if (stored?.tokenUid && stored.tokenUid !== tokenUid) {
-        clearInvestorTokenPurchaseRecovery(interestUid);
-      }
-      setRecovery(null);
-      return undefined;
-    }
-
-    setRecovery(stored);
-    if (stored.txHash) setBroadcastTxHash(stored.txHash);
-    if (stored.paymentReceiptConfirmed) setPaymentReceiptConfirmed(true);
-    if (stored.hadTokenBalanceBeforePurchase === false) setWasFirstTokenPurchase(true);
-    if (!stored.purchaseUid) return undefined;
-
-    let cancelled = false;
-    const resume = async () => {
-      try {
-        // Refresh server state first. A locally stored wallet hash is never shared
-        // with the confirm API until its blockchain receipt is successful.
-        let next = await investmentApi.getTokenPurchase(stored.purchaseUid);
-        if (!cancelled) applyPurchase(next, stored.txHash);
-
-        const nextStatus = normalizeStatus(next?.status);
-        const resumeServerError = purchaseDataError(next);
-        if (
-          !resumeServerError
-          && stored.txHash
-          && nextStatus === PURCHASE_STATUS.PENDING_PAYMENT
-        ) {
-          if (!stored.paymentReceiptConfirmed) {
-            await waitForInvestorPurchasePaymentReceipt({
-              txHash: stored.txHash,
-              chainId: next?.chainId || context.chainId,
-            });
-            if (cancelled) return;
-            setPaymentReceiptConfirmed(true);
-            persistRecovery({ paymentReceiptConfirmed: true });
-          }
-
-          next = await investmentApi.confirmTokenPurchase(stored.purchaseUid, stored.txHash);
-          if (!cancelled) applyPurchase(next, stored.txHash);
-        }
-
-        // If the page disappeared before a hash was captured, ask backend recovery
-        // to reconcile the existing intent before another wallet payment is allowed.
-        if (
-          !stored.txHash
-          && stored.paymentAttemptStarted
-          && normalizeStatus(next?.status) === PURCHASE_STATUS.PENDING_PAYMENT
-        ) {
-          await investmentApi.retryTokenPurchase(stored.purchaseUid);
-          refreshPurchaseHistory();
-          pollStartedAtRef.current = { purchaseUid: stored.purchaseUid, startedAt: Date.now() };
-        }
-      } catch (resumeError) {
-        if (resumeError?.confirmedRevert) {
-          if (!cancelled) {
-            setBroadcastTxHash('');
-            setPaymentReceiptConfirmed(false);
-            persistRecovery({ txHash: '', paymentAttemptStarted: false, paymentReceiptConfirmed: false });
-            setPurchase((current) => current ? { ...current, paymentTxHash: '', txHash: '' } : current);
-            recordError(resumeError, 'The previous payment did not complete successfully. You can try the payment again.');
-          }
-          return;
-        }
-
-        try {
-          const next = await investmentApi.getTokenPurchase(stored.purchaseUid);
-          if (!cancelled) {
-            applyPurchase(next, stored.txHash);
-            if (stored.txHash && !stored.paymentReceiptConfirmed) {
-              setPurchaseError('');
-              setPurchaseErrorCode('');
-            }
-          }
-        } catch (statusError) {
-          if (!cancelled && isDefinitiveApiFailure(statusError)) {
-            recordError(statusError, 'We could not refresh this purchase right now. Please try again.');
-          }
-          // Temporary/network/5xx status failures do not turn an in-progress purchase into an error.
-        }
-      } finally {
-        // Recovery is background-only; Purchase History is the visible lifecycle UI.
-      }
-    };
-
-    void resume();
-    return () => {
-      cancelled = true;
-    };
-  }, [applyPurchase, context.chainId, interestUid, persistRecovery, recordError, refreshPurchaseHistory, token?.id, token?.tokenUid]);
-
-  const shouldPoll = Boolean(
-    purchaseUid
-    && !isCompleted
-    && !verificationBlocked
-    && (
-      purchaseStatus === PURCHASE_STATUS.PAYMENT_CONFIRMED
-      || purchaseStatus === PURCHASE_STATUS.MINT_SUBMITTED
-      || (purchaseStatus === PURCHASE_STATUS.PENDING_PAYMENT && (paymentTxHash || recoveryUncertain))
-      || synchronizationStatusOf(purchase) === 'QUEUED'
-      || hasPendingTransactionHistory(purchase)
-    ),
-  );
-
-  useEffect(() => {
-    if (!shouldPoll) return undefined;
-
-    if (pollStartedAtRef.current.purchaseUid !== purchaseUid) {
-      pollStartedAtRef.current = { purchaseUid, startedAt: Date.now() };
-    }
-
-    let cancelled = false;
-    let timer;
-    let inFlight = false;
-
-    const poll = async () => {
-      if (cancelled || inFlight) return;
-      const elapsed = Date.now() - pollStartedAtRef.current.startedAt;
-      if (elapsed >= POLL_LONG_RUNNING_MS) {
-        // Keep polling until COMPLETED; this flag only changes the helper copy so a
-        // long-running backend verification/mint is never mistaken for a failure.
-        setPollingTimedOut(true);
-      }
-
-      inFlight = true;
-      try {
-        let next = await investmentApi.getTokenPurchase(purchaseUid);
-        if (cancelled) return;
-
-        let nextStatus = normalizeStatus(next?.status);
-        const responseServerError = purchaseDataError(next);
-        const receiptAlreadyConfirmed = paymentReceiptConfirmed || recovery?.paymentReceiptConfirmed;
-        if (
-          !responseServerError
-          && nextStatus === PURCHASE_STATUS.PENDING_PAYMENT
-          && paymentTxHash
-          && !receiptAlreadyConfirmed
-        ) {
-          try {
-            await waitForInvestorPurchasePaymentReceipt({
-              txHash: paymentTxHash,
-              chainId: next?.chainId || preparedChainId,
-              timeout: 1_500,
-            });
-            if (cancelled) return;
-            setPaymentReceiptConfirmed(true);
-            persistRecovery({ paymentReceiptConfirmed: true });
-            next = await investmentApi.confirmTokenPurchase(purchaseUid, paymentTxHash);
-            nextStatus = normalizeStatus(next?.status);
-          } catch (receiptError) {
-            if (receiptError?.confirmedRevert) {
-              setBroadcastTxHash('');
-              setPaymentReceiptConfirmed(false);
-              persistRecovery({ txHash: '', paymentAttemptStarted: false, paymentReceiptConfirmed: false });
-              setPurchase((current) => current ? { ...current, paymentTxHash: '', txHash: '' } : current);
-              setPurchaseError('The payment did not complete successfully. You can try the payment again.');
-              setPurchaseErrorCode('PAYMENT_REVERTED');
-              return;
-            }
-            // Still pending on-chain. Do not send the hash to the backend yet.
-          }
-        }
-
-        applyPurchase(next, paymentTxHash);
-        const serverError = purchaseDataError(next);
-        if (!serverError && (isPurchaseProcessing(next) || nextStatus === PURCHASE_STATUS.COMPLETED)) {
-          setPurchaseError('');
-          setPurchaseErrorCode('');
-        }
-        if (nextStatus !== PURCHASE_STATUS.COMPLETED && !serverError) {
-          // HTTP 202 and all documented processing states continue through GET polling.
-          timer = window.setTimeout(poll, POLL_INTERVAL_MS);
-        }
-      } catch (pollError) {
-        if (cancelled) return;
-        if (isDefinitiveApiFailure(pollError)) {
-          recordError(pollError, 'We could not continue this purchase. Please check the details and try again.');
-          return;
-        }
-        // Temporary provider/server failures are not purchase failures. Keep polling.
-        timer = window.setTimeout(poll, POLL_INTERVAL_MS);
-      } finally {
-        inFlight = false;
-      }
-    };
-
-    timer = window.setTimeout(poll, POLL_INTERVAL_MS);
-    return () => {
-      cancelled = true;
-      if (timer) window.clearTimeout(timer);
-    };
-  }, [applyPurchase, paymentReceiptConfirmed, paymentTxHash, persistRecovery, preparedChainId, purchaseUid, recordError, recovery?.paymentReceiptConfirmed, shouldPoll]);
-
-  const ensurePaymentIntent = useCallback(async () => {
-    const tokenUid = clean(token?.id || token?.tokenUid);
-    if (!tokenUid) throw new Error('The token identifier is unavailable. Refresh the page and try again.');
-    if (!normalizedTokenAmount || tokenAmountError) {
-      throw new Error(tokenAmountError || 'Enter a token amount greater than zero.');
-    }
-
-    // Each explicit Purchase click starts from the normal form flow. The backend
-    // remains authoritative and may return an already-active purchase when its
-    // single-unsettled-purchase rule applies.
-    const idempotencyKey = createCheckoutKey();
-    clearInvestorTokenPurchaseRecovery(interestUid);
-    setRecovery(null);
-    persistRecovery({
-      tokenUid,
-      purchaseUid: '',
-      tokenAmount: normalizedTokenAmount,
-      idempotencyKey,
-      txHash: '',
-      paymentAttemptStarted: false,
-      paymentReceiptConfirmed: false,
-    });
-
-    const prepared = await investmentApi.createTokenPurchase(tokenUid, {
-      tokenAmount: normalizedTokenAmount,
-      idempotencyKey,
-    });
-    applyPurchase(prepared);
-    refreshPurchaseHistory();
-    return prepared;
-  }, [applyPurchase, interestUid, normalizedTokenAmount, persistRecovery, refreshPurchaseHistory, token?.id, token?.tokenUid, tokenAmountError]);
-
-  const confirmKnownHash = useCallback(async (currentPurchaseUid, txHash) => {
-    if (!currentPurchaseUid || !validTransactionHash(txHash)) return null;
-    try {
-      // This API is reached only after the frontend has observed a successful
-      // blockchain receipt for this exact payment hash.
-      const next = await investmentApi.confirmTokenPurchase(currentPurchaseUid, txHash);
-      applyPurchase(next, txHash);
-      refreshPurchaseHistory();
-      const serverError = purchaseDataError(next);
-      if (serverError && !isPaymentAcceptedStatus(next)) {
-        setVerificationBlocked(true);
-        toast.error('Purchase needs attention', { description: serverError.message });
-      } else {
-        // PAYMENT_CONFIRMED / MINT_SUBMITTED (including HTTP 202) are normal
-        // progression states. The GET poll owns the flow from this point until
-        // the purchase reaches COMPLETED.
-        setVerificationBlocked(false);
-        setPurchaseError('');
-        setPurchaseErrorCode('');
-      }
-      return next;
-    } catch (confirmError) {
-      refreshPurchaseHistory();
-      if (isDefinitiveApiFailure(confirmError)) {
-        // Confirmation and the purchase worker can advance the same purchase at
-        // nearly the same time. If that happens, a stale Confirm response must
-        // not be presented as a payment failure. Re-read the authoritative
-        // purchase and treat PAYMENT_CONFIRMED/MINT_SUBMITTED/COMPLETED as a
-        // successful progression of the existing purchase.
-        try {
-          const reconciled = await investmentApi.getTokenPurchase(currentPurchaseUid);
-          if (!purchaseDataError(reconciled) && isPaymentAcceptedStatus(reconciled)) {
-            const reconciledStatus = normalizeStatus(reconciled?.status);
-            applyPurchase(reconciled, txHash);
-            refreshPurchaseHistory();
-            setVerificationBlocked(false);
-            setPurchaseError('');
-            setPurchaseErrorCode('');
-            if (reconciledStatus !== PURCHASE_STATUS.COMPLETED) {
-              toast.success('Payment received', {
-                description: 'Your payment is confirmed and your purchase is being finalized.',
-              });
-            }
-            return reconciled;
-          }
-        } catch {
-          // If reconciliation cannot be read, fall through to the original
-          // verification error so the investor still receives a clear message.
-        }
-
-        if (isPurchaseStateAdvanceResponse(confirmError)) {
-          setVerificationBlocked(false);
-          setPurchaseError('');
-          setPurchaseErrorCode('');
-          toast.info('Purchase is being finalized', {
-            description: 'Your purchase status was updated while payment verification was in progress. We will keep checking automatically.',
-          });
-          return null;
-        }
-
-        const { message } = recordError(confirmError, 'Your payment could not be verified. Please check the details before trying again.');
-        setVerificationBlocked(true);
-        toast.error('Payment needs attention', { description: message });
-        return null;
-      }
-
-      // A temporary response (including verification/mint recovery still in progress)
-      // is not a failure. The status poll will continue until COMPLETED.
-      setPurchaseError('');
-      setPurchaseErrorCode('');
-      setVerificationBlocked(false);
-      return null;
-    }
-  }, [applyPurchase, recordError, refreshPurchaseHistory]);
-
-  const confirmPaymentAfterSuccessfulReceipt = useCallback(async (currentPurchaseUid, txHash, chainId) => {
-    if (!currentPurchaseUid || !validTransactionHash(txHash)) return null;
-
-    try {
-      await waitForInvestorPurchasePaymentReceipt({ txHash, chainId });
-      setPaymentReceiptConfirmed(true);
-      persistRecovery({
-        purchaseUid: currentPurchaseUid,
-        txHash,
-        paymentAttemptStarted: false,
-        paymentReceiptConfirmed: true,
-      });
-      setPurchaseError('');
-      setPurchaseErrorCode('');
-      toast.success('Payment confirmed on the network. Verifying your purchase now.');
-      return await confirmKnownHash(currentPurchaseUid, txHash);
-    } catch (receiptError) {
-      if (receiptError?.confirmedRevert) {
-        setBroadcastTxHash('');
-        setPaymentReceiptConfirmed(false);
-        persistRecovery({
-          purchaseUid: currentPurchaseUid,
-          txHash: '',
-          paymentAttemptStarted: false,
-          paymentReceiptConfirmed: false,
-        });
-        setPurchase((current) => current ? { ...current, paymentTxHash: '', txHash: '' } : current);
-        const message = getErrorMessage(receiptError, 'The payment did not complete successfully. No confirmation was sent to the platform.');
-        setPurchaseError(message);
-        setPurchaseErrorCode(clean(receiptError?.code));
-        toast.error('Payment failed', { description: message });
-        return null;
-      }
-
-      const message = 'Your payment was sent and is waiting for network confirmation. We will continue checking automatically.';
-      setPurchaseError('');
-      setPurchaseErrorCode('');
-      toast.info('Waiting for network confirmation', { description: message });
-      return null;
-    }
-  }, [confirmKnownHash, persistRecovery]);
-
-  const handlePurchase = async () => {
+  const handleApproveUsdtSpending = async () => {
     if (operationLockRef.current) return;
-
-    const gateMatchesToken = Boolean(historyTokenUid) && purchaseGateTokenUid === historyTokenUid;
-    if (purchaseGateLoading || !gateMatchesToken) {
-      toast.info('Checking your latest purchase status. Please wait a moment.');
-      return;
-    }
-    if (purchaseGateError) {
-      toast.error('Purchase temporarily unavailable', {
-        description: 'We could not verify whether your previous purchase has finished. Refresh the purchase history and try again.',
-      });
-      return;
-    }
-    if (isPurchaseBlockingNewCheckout(latestPurchase)) {
-      toast.info('Your previous purchase is still being finalized.', {
-        description: 'You can start another purchase after the current purchase is completed.',
-      });
-      return;
-    }
-
     if (!walletGuard.ready) {
       toast.error('Connect the investor wallet linked to your profile on the required network to continue.');
       return;
     }
+    if (usdtApprovalLoading) {
+      toast.info('Checking your existing USDT spending approval. Please wait a moment.');
+      return;
+    }
+    if (usdtSpendingApproved) {
+      toast.success('Your existing USDT spending approval is sufficient. You can continue to Invest.');
+      return;
+    }
+
+    operationLockRef.current = true;
+    setBusyAction('APPROVAL');
+    setUsdtApprovalError('');
+
+    try {
+      const approval = await approveInvestorUsdtSpending({
+        connector: walletGuard.wallet.connector,
+        connectedAddress: walletGuard.wallet.address,
+        investorWalletAddress: preparedInvestorWallet,
+        chainId: preparedChainId || walletGuard.targetChainId,
+        onStep: ({ stage }) => {
+          if (stage === 'approval-signature') {
+            toast.info('Allow USDT spending first', {
+              id: 'purchase-usdt-approval-step',
+              description: 'Confirm this one-time spending permission in your wallet. This does not make a purchase.',
+            });
+          } else if (stage === 'approval-confirming') {
+            toast.info('USDT approval submitted', {
+              id: 'purchase-usdt-approval-step',
+              description: 'Waiting for the network to confirm your spending permission.',
+            });
+          }
+        },
+      });
+
+      const approved = Boolean(approval?.spendingApproved) || await refreshUsdtSpendingApproval({ silent: true });
+      if (!approved) {
+        throw new Error('USDT spending approval was submitted but could not be confirmed. Refresh and try again.');
+      }
+
+      setUsdtSpendingApproved(true);
+      setUsdtApprovalError('');
+      toast.success('USDT Spending Approved', {
+        id: 'purchase-usdt-approval-step',
+        description: approval?.alreadyApproved
+          ? 'Your existing USDT spending approval is sufficient. You can continue to Invest.'
+          : 'USDT spending is approved. You can now invest, and future investments can reuse this approval while it remains sufficient.',
+      });
+    } catch (approvalError) {
+      if (isInvestorPurchaseWalletRejection(approvalError)) {
+        toast.info('USDT spending approval cancelled. No purchase was submitted.');
+      } else {
+        const message = getWalletErrorMessage(approvalError, 'The wallet could not approve USDT spending. Please try again.');
+        setUsdtApprovalError(message);
+        toast.error('Unable to approve USDT spending', { description: message });
+      }
+    } finally {
+      setBusyAction('');
+      operationLockRef.current = false;
+    }
+  };
+
+  const handlePurchase = async () => {
+    if (operationLockRef.current) return;
+    if (!walletGuard.ready) {
+      toast.error('Connect the investor wallet linked to your profile on the required network to continue.');
+      return;
+    }
+    if (usdtApprovalLoading) {
+      toast.info('Checking your USDT spending approval. Please wait a moment.');
+      return;
+    }
+    if (!usdtSpendingApproved) {
+      toast.info('USDT spending approval is required', {
+        description: 'Choose Allow USDT Spending first. The approval is separate from the investment transaction.',
+      });
+      return;
+    }
     if (!normalizedTokenAmount || tokenAmountError) {
       toast.error(tokenAmountError || 'Enter a token amount greater than zero.');
+      return;
+    }
+    if (platformQuoteLoading) {
+      toast.info('Checking the latest on-chain price. Please wait a moment.');
+      return;
+    }
+    if (platformQuoteError || !platformQuote) {
+      toast.error('Investment temporarily unavailable', { description: platformQuoteError || 'The current on-chain quote could not be verified.' });
+      return;
+    }
+
+    const tokenUid = historyTokenUid;
+    const chainId = Number(tokenBalanceChainId || walletGuard.targetChainId);
+    if (!tokenUid || !tokenContractAddress || !chainId) {
+      toast.error('Investment details are incomplete. Refresh the page and try again.');
       return;
     }
 
@@ -1119,126 +873,122 @@ export default function PurchaseTokenPage({
     setPurchaseErrorCode('');
     setVerificationBlocked(false);
 
-    let prepared;
     try {
-      prepared = await ensurePaymentIntent();
-    } catch (intentError) {
-      const { message } = recordError(intentError, 'We could not prepare this purchase. Please try again.');
-      const statusCode = Number(intentError?.response?.status);
-      // A definitive validation response means no valid payment intent was created
-      // for this attempt, so the investor may correct the amount and retry.
-      if (statusCode >= 400 && statusCode < 500 && statusCode !== 409) {
-        clearInvestorTokenPurchaseRecovery(interestUid);
-        setRecovery(null);
-      }
-      toast.error('Unable to continue', { description: message });
-      setBusyAction('');
-      operationLockRef.current = false;
-      return;
-    }
-
-    const preparedStatus = normalizeStatus(prepared?.status);
-    const preparedUid = purchaseUidOf(prepared);
-    const recoveredHash = paymentHashOf(prepared);
-    const preparedServerError = purchaseDataError(prepared);
-
-    if (preparedServerError) {
-      toast.error('Purchase needs attention', { description: preparedServerError.message });
-      setBusyAction('');
-      operationLockRef.current = false;
-      return;
-    }
-
-    if (preparedStatus === PURCHASE_STATUS.COMPLETED) {
-      setBusyAction('');
-      operationLockRef.current = false;
-      return;
-    }
-
-    if (
-      preparedStatus === PURCHASE_STATUS.PAYMENT_CONFIRMED
-      || preparedStatus === PURCHASE_STATUS.MINT_SUBMITTED
-    ) {
-      toast.success('Payment already confirmed', {
-        description: 'Your purchase is being finalized. You can start another purchase after it is completed.',
-      });
-      setBusyAction('');
-      operationLockRef.current = false;
-      return;
-    }
-
-    if (recoveredHash) {
-      persistRecovery({ purchaseUid: preparedUid, txHash: recoveredHash });
-      setBroadcastTxHash(recoveredHash);
-      await confirmPaymentAfterSuccessfulReceipt(preparedUid, recoveredHash, prepared?.chainId || context.chainId);
-      setBusyAction('');
-      operationLockRef.current = false;
-      return;
-    }
-
-    try {
-      const storedBeforePayment = loadInvestorTokenPurchaseRecovery(interestUid);
-      if (typeof storedBeforePayment?.hadTokenBalanceBeforePurchase !== 'boolean') {
-        try {
-          const currentTokenBalance = await getInvestorPurchaseTokenBalance(prepared);
-          const hadTokenBalance = currentTokenBalance > 0n;
-          persistRecovery({ hadTokenBalanceBeforePurchase: hadTokenBalance });
-          setWasFirstTokenPurchase(!hadTokenBalance);
-        } catch {
-          // Balance detection is only used to decide whether to offer wallet token
-          // tracking after completion. It must never block a valid purchase.
-        }
-      } else {
-        setWasFirstTokenPurchase(storedBeforePayment.hadTokenBalanceBeforePurchase === false);
+      try {
+        const currentTokenBalance = await getInvestorPurchaseTokenBalance({
+          tokenAddress: tokenContractAddress,
+          investorWalletAddress: preparedInvestorWallet,
+          chainId,
+        });
+        setWasFirstTokenPurchase(currentTokenBalance === 0n);
+      } catch {
+        // Wallet token tracking is optional and never blocks the investment.
       }
 
-      // Mark the wallet attempt before opening the provider. If the page closes at
-      // the wrong moment, the next visit will reconcile status before allowing a
-      // second payment attempt.
-      persistRecovery({ purchaseUid: preparedUid, paymentAttemptStarted: true });
-
-      // This is the only point that opens the wallet for a purchase payment. The
-      // service consumes only backend-prepared transaction values.
-      const txHash = await submitInvestorPurchasePayment({
+      const result = await submitInvestorPurchasePayment({
         connector: walletGuard.wallet.connector,
         connectedAddress: walletGuard.wallet.address,
-        preparedPurchase: prepared,
+        investorWalletAddress: preparedInvestorWallet,
+        chainId,
+        tokenAddress: tokenContractAddress,
+        tokenAmount: normalizedTokenAmount,
+        tokenAmountRaw: platformQuote?.tokenAmountRaw?.toString?.(),
+        expectedPaymentAmountRaw: platformQuote?.paymentAmount?.toString?.(),
+        onStep: ({ stage }) => {
+          if (stage === 'purchase-signature') {
+            toast.info('Confirm investment in your wallet', {
+              id: 'purchase-platform-step',
+              description: 'This wallet transaction sends your investment directly to the smart contract.',
+            });
+          }
+        },
       });
 
-      // Keep the hash locally as soon as MetaMask broadcasts it, but do not share
-      // it with the backend yet. The confirm API is called only after a successful
-      // blockchain receipt is observed.
-      setBroadcastTxHash(txHash);
-      setPaymentReceiptConfirmed(false);
-      persistRecovery({
-        purchaseUid: preparedUid,
+      const txHash = clean(result?.txHash);
+      if (!validTransactionHash(txHash)) throw new Error('Your wallet did not return a valid transaction ID. Check your wallet activity before trying again.');
+
+      // Persist before contacting the backend. Backend availability must never be
+      // a prerequisite for, or cause a retry of, this wallet transaction.
+      saveObservedWalletTransaction({
+        chainId,
         txHash,
-        paymentAttemptStarted: false,
-        paymentReceiptConfirmed: false,
+        tokenUid,
+        expectedAction: 'INVEST',
+        interestUid,
       });
-      setPurchase((current) => ({ ...(current || prepared), paymentTxHash: txHash }));
-      toast.info('Payment sent. Waiting for network confirmation.');
-      await confirmPaymentAfterSuccessfulReceipt(preparedUid, txHash, prepared?.chainId || context.chainId);
+      setBroadcastTxHash(txHash);
+      setPurchase(canonicalTransactionAsPurchase({
+        chainId,
+        transactionHash: txHash,
+        status: 'SUBMITTED',
+        tokenAmountFormatted: result?.quote?.tokenAmount || normalizedTokenAmount,
+        usdtAmountFormatted: result?.quote?.paymentAmountFormatted || platformQuote?.paymentAmountFormatted,
+        priceFormatted: result?.quote?.priceFormatted || platformQuote?.priceFormatted,
+        createdAt: new Date().toISOString(),
+      }));
+      toast.success('Investment submitted', {
+        description: 'Your wallet transaction was sent. You do not need to send it again while the platform synchronizes the confirmed result.',
+      });
+
+      try {
+        const observed = await investmentApi.confirmObservedTransaction({
+          chainId,
+          txHash,
+          tokenUid,
+          expectedAction: 'INVEST',
+        });
+        const status = normalizeStatus(observed?.status);
+        if (status === 'CONFIRMED') {
+          clearObservedWalletTransaction({ chainId, txHash, expectedAction: 'INVEST' });
+          setBroadcastTxHash('');
+          setPurchase(canonicalTransactionAsPurchase({ ...observed, transactionHash: observed?.transactionHash || txHash }));
+          investorPortfolioService.refreshAfterCompletedActivity().catch(() => {});
+          toast.success('Investment confirmed', { description: 'The blockchain transaction was verified and added to your history.' });
+        } else if (status === 'FAILED') {
+          clearObservedWalletTransaction({ chainId, txHash, expectedAction: 'INVEST' });
+          setBroadcastTxHash('');
+          setPurchase(canonicalTransactionAsPurchase({ ...observed, transactionHash: observed?.transactionHash || txHash }));
+          toast.error('Investment failed', { description: 'The blockchain transaction reverted. No automatic retry was sent.' });
+        }
+      } catch (syncError) {
+        const statusCode = Number(syncError?.response?.status);
+        if (statusCode >= 400 && statusCode < 500) {
+          clearObservedWalletTransaction({ chainId, txHash, expectedAction: 'INVEST' });
+          setBroadcastTxHash('');
+          setPurchase(canonicalTransactionAsPurchase({
+            chainId,
+            transactionHash: txHash,
+            status: 'FAILED',
+            createdAt: new Date().toISOString(),
+          }));
+          toast.error('Transaction could not be matched', {
+            description: sanitizeUserFacingMessage(getErrorMessage(syncError, 'The submitted transaction does not match this investment.')),
+          });
+        } else {
+          toast.info('Transaction sent — history is still syncing', {
+            description: 'Your blockchain transaction is safe. The platform will recover it automatically; do not submit it again.',
+          });
+        }
+      }
+      refreshPurchaseHistory();
     } catch (walletError) {
       if (isInvestorPurchaseWalletRejection(walletError)) {
-        persistRecovery({ purchaseUid: preparedUid, paymentAttemptStarted: false });
-        setPurchaseError('');
-        setPurchaseErrorCode('');
-        toast.info('Transaction cancelled. No payment was sent.');
+        toast.info('Transaction cancelled. No investment was submitted.');
+      } else if (clean(walletError?.code) === 'PAYMENT_APPROVAL_REQUIRED') {
+        setUsdtSpendingApproved(false);
+        setUsdtApprovalError('Your current USDT allowance is no longer enough for this investment.');
+        toast.error('USDT spending approval required', {
+          description: 'Approve USDT spending, then choose Invest again.',
+        });
       } else {
-        const safePreBroadcastCodes = new Set(['WALLET_MISMATCH', 'WALLET_ACCOUNT_CHANGED', 'WRONG_WALLET_NETWORK']);
-        if (safePreBroadcastCodes.has(clean(walletError?.code))) {
-          persistRecovery({ purchaseUid: preparedUid, paymentAttemptStarted: false });
-        }
-        const message = getWalletErrorMessage(walletError, 'The wallet could not submit this payment. Please try again.');
+        const message = getWalletErrorMessage(walletError, 'The wallet could not submit this investment. Please try again.');
         setPurchaseError(message);
         setPurchaseErrorCode(clean(walletError?.code));
-        toast.error('Unable to submit payment', { description: message });
+        toast.error('Unable to submit investment', { description: message });
       }
     } finally {
       setBusyAction('');
       operationLockRef.current = false;
-      refreshPurchaseHistory();
     }
   };
 
@@ -1250,7 +1000,6 @@ export default function PurchaseTokenPage({
     if ([PURCHASE_STATUS.COMPLETED, PURCHASE_STATUS.EXPIRED].includes(purchaseStatus)) {
       setPurchase(null);
       setBroadcastTxHash('');
-      setPaymentReceiptConfirmed(false);
       setPollingTimedOut(false);
       setVerificationBlocked(false);
       setPurchaseError('');
@@ -1340,7 +1089,7 @@ export default function PurchaseTokenPage({
   if (error || !application || !token) {
     return (
       <TokenActionUnavailable
-        title="Purchase Token"
+        title="Make an Investment"
         description="This investment could not be loaded right now."
         onBack={embedded ? undefined : () => navigate(ROUTES.applications)}
       />
@@ -1350,8 +1099,8 @@ export default function PurchaseTokenPage({
   if (!ready) {
     return (
       <TokenActionUnavailable
-        title="Purchase Token"
-        description="Purchase is not available for this application yet."
+        title="Make an Investment"
+        description="Investment is not available for this application yet."
         onBack={embedded ? undefined : () => navigate(applicationRoute)}
         backLabel="Back to Application"
       />
@@ -1360,16 +1109,25 @@ export default function PurchaseTokenPage({
 
   const currentTokenAmount = normalizedTokenAmount;
   const exactTreasury = clean(purchase?.treasuryWalletAddress) || context.issuerTreasuryAddress;
-  const paymentContract = clean(purchase?.usdtContractAddress);
-  const purchaseGateMatchesToken = Boolean(historyTokenUid) && purchaseGateTokenUid === historyTokenUid;
-  const latestPurchaseStatus = normalizeStatus(latestPurchase?.status);
-  const purchaseBlockedByPrevious = purchaseGateMatchesToken && isPurchaseBlockingNewCheckout(latestPurchase);
-  const purchaseAvailabilityUnverified = purchaseGateLoading || !purchaseGateMatchesToken || Boolean(purchaseGateError);
-  const actionLabel = purchaseBlockedByPrevious ? 'Purchase processing' : 'Purchase';
+  const paymentContract = clean(purchase?.usdtContractAddress) || env.trex.paymentToken;
+  const purchaseBlockedByPrevious = normalizeStatus(purchase?.canonicalStatus) === 'SUBMITTED';
+  const purchaseAvailabilityUnverified = false;
+  const actionLabel = usdtSpendingApproved ? 'Invest' : 'Approve';
+  const approvalActionDisabled = Boolean(busyAction)
+    || !walletGuard.ready
+    || usdtApprovalLoading
+    || usdtSpendingApproved;
   const actionDisabled = Boolean(busyAction)
     || !walletGuard.ready
+    || usdtApprovalLoading
+    || !usdtSpendingApproved
+    || !normalizedTokenAmount
+    || Boolean(tokenAmountError)
+    || platformQuoteLoading
+    || Boolean(platformQuoteError)
     || purchaseAvailabilityUnverified
     || purchaseBlockedByPrevious;
+  const primaryActionDisabled = usdtSpendingApproved ? actionDisabled : approvalActionDisabled;
   const historyTotal = Number(
     purchaseHistoryMeta?.total
     ?? purchaseHistoryMeta?.totalCount
@@ -1392,46 +1150,58 @@ export default function PurchaseTokenPage({
     ?? (historyTotal ? Math.ceil(historyTotal / HISTORY_LIMIT) : 1),
   ) || 1);
   const historyIsActive = historyHasActiveRows(purchaseHistory);
+  const purchaseJourney = getInvestmentJourney({
+    status: 'ready_to_invest',
+    viewerRole: 'investor',
+    purchaseReady: true,
+  });
 
   return (
     <div className="page-stack investor-token-action-page investor-token-purchase-page">
       {!embedded ? (
-        <InvestorTokenActionHeader
-          eyebrow="Investment action"
-          title="Purchase Token"
-          description="Choose how many tokens you want to purchase. Your exact payment is calculated securely before your wallet is asked to confirm anything."
-        />
+        <>
+          <InvestorTokenActionHeader
+            eyebrow="Ready to invest"
+            title="Invest"
+            description="Choose how many units you want to buy. We will show the estimated USDT cost before your wallet asks you to confirm."
+          />
+          <InvestmentJourneyTracker journey={purchaseJourney} />
+        </>
       ) : null}
 
       <div className="investor-token-action-layout">
         <main className="investor-token-action-main">
           <InvestorTokenIdentityCard token={token} readyLabel="Eligible to invest" />
 
-          <Card className="investor-token-action-card">
+          <Card className="investor-token-action-card investor-token-action-card--setup">
             <div className="investor-token-action-card__heading">
               <div>
-                <span>Verified wallet &amp; payment</span>
-                <h2>Your verified investment details</h2>
+                <span>Payment setup</span>
+                <h2>Your registered wallet will be used</h2>
               </div>
               <ShieldCheck size={19} />
             </div>
-            <div className="investor-token-action-address-grid">
-              <LockedAddressField label="Primary Investment Wallet" value={preparedInvestorWallet} />
-              <LockedAddressField label="Issuer Treasury Wallet" value={exactTreasury} emptyLabel="Treasury wallet unavailable" />
-              {paymentContract ? <LockedAddressField label="USDT Contract Address" value={paymentContract} /> : null}
-            </div>
-            <p className="investor-token-action-helper">
-              These details are read from your verified application and the current purchase request. They cannot be edited here.
+            <p className="investor-token-action-helper investor-token-action-helper--prominent">
+              You will pay with USDT from your registered investment wallet. Payment goes to the issuer when you confirm the investment.
             </p>
+            <details className="investor-technical-details investor-token-technical-details">
+              <summary>View wallet &amp; payment details</summary>
+              <div className="investor-token-action-address-grid">
+                <LockedAddressField label="Your registered investment wallet" value={preparedInvestorWallet} />
+                <LockedAddressField label="Issuer payment wallet" value={exactTreasury} emptyLabel="Issuer payment wallet unavailable" />
+                {paymentContract ? <LockedAddressField label="USDT contract" value={paymentContract} /> : null}
+              </div>
+              <p>These values come from your approved application and cannot be edited here.</p>
+            </details>
           </Card>
 
           <Card className="investor-token-action-card">
             <div className="investor-token-action-card__heading investor-token-action-card__heading--with-meta">
               <div>
-                <span>Token amount</span>
-                <h2>How many tokens would you like to purchase?</h2>
+                <span>Investment amount</span>
+                <h2>How many units would you like to buy?</h2>
               </div>
-              {maxTokenBalanceExact ? <small>Max holder balance: {maxTokenBalanceExact} {token.symbol}</small> : null}
+              {maxTokenBalanceExact ? <small>Maximum you can hold: {maxTokenBalanceExact} {token.symbol}</small> : null}
             </div>
             <label className={`investor-token-action-amount-field ${tokenAmountError ? 'is-invalid' : ''}`}>
               <span className="sr-only">Token amount</span>
@@ -1442,7 +1212,7 @@ export default function PurchaseTokenPage({
                 onChange={handleTokenAmountChange}
                 placeholder="0.00"
                 aria-invalid={Boolean(tokenAmountError)}
-                disabled={Boolean(busyAction)}
+                disabled={Boolean(busyAction) || purchaseBlockedByPrevious}
                 autoComplete="off"
               />
               <strong>{token.symbol}</strong>
@@ -1450,45 +1220,47 @@ export default function PurchaseTokenPage({
             {tokenAmountError ? <p className="investor-token-action-field-error">{tokenAmountError}</p> : null}
             {maxTokenBalanceExact ? (
               <p className="investor-token-action-field-hint">
-                Your configured holder limit is <strong>{maxTokenBalanceExact} {token.symbol}</strong>. The platform validates the limit again before accepting the purchase.
+                You can hold up to <strong>{maxTokenBalanceExact} {token.symbol}</strong> in total. We check this limit automatically before your investment is accepted.
               </p>
             ) : null}
             <div className="investor-token-action-calculation">
-              <span>Estimated payment at current token price</span>
+              <span>Estimated USDT cost</span>
               <strong>
                 {estimatedPayment > 0
                   ? `${money.format(estimatedPayment)} ${token.currency || 'USDT'}`
                   : `0 ${token.currency || 'USDT'}`}
               </strong>
             </div>
+            {platformQuoteLoading ? <p className="investor-token-action-field-hint">Checking the latest price…</p> : null}
+            {platformQuoteError ? <p className="investor-token-action-field-error" role="alert">{platformQuoteError}</p> : null}
           </Card>
 
           <Card className="investor-token-action-card">
             <div className="investor-token-action-card__heading">
               <div>
-                <span>Purchase eligibility</span>
-                <h2>Investment eligibility</h2>
+                <span>Before you invest</span>
+                <h2>Your checks are ready</h2>
               </div>
               <CheckCircle2 size={19} />
             </div>
             <div className="investor-token-action-checks">
               <TokenActionCheck
                 icon={UserRoundCheck}
-                label="Approved investor"
-                detail="Your verified profile is approved to hold this token."
+                label="Issuer approval"
+                detail="The issuer has approved you to hold this investment."
                 status="Ready"
               />
               <TokenActionCheck
                 icon={ShieldCheck}
-                label="Verification complete"
-                detail={allRequiredClaimsReady ? 'You have completed the required investor verification.' : 'Eligibility is checked again before the purchase is accepted.'}
-                status={allRequiredClaimsReady ? 'Ready' : 'Verified at checkout'}
+                label="Required checks"
+                detail={allRequiredClaimsReady ? 'Your required identity and eligibility checks are complete.' : 'Your eligibility is checked again before the investment is accepted.'}
+                status={allRequiredClaimsReady ? 'Ready' : 'Checked before investing'}
                 tone={allRequiredClaimsReady ? 'success' : 'neutral'}
               />
               <TokenActionCheck
                 icon={Scale}
-                label="Holding limit"
-                detail={maxTokenBalanceExact ? `Maximum configured holder balance: ${maxTokenBalanceExact} ${token.symbol}.` : 'The configured holder limit is enforced when the purchase is created.'}
+                label="Maximum holding"
+                detail={maxTokenBalanceExact ? `You can hold up to ${maxTokenBalanceExact} ${token.symbol} in total.` : 'Your maximum allowed holding is checked automatically.'}
                 status="Enforced"
               />
             </div>
@@ -1498,19 +1270,19 @@ export default function PurchaseTokenPage({
         <aside className="investor-token-action-aside">
           <Card className="investor-token-order-card">
             <div className="investor-token-order-card__title">
-              <span>Order summary</span>
+              <span>Investment summary</span>
               <ShoppingCart size={18} />
             </div>
             <div className="investor-token-order-row">
-              <span>{purchaseUid ? 'Purchase Price' : 'Current Token Price'}</span>
+              <span>Price per unit</span>
               <strong>{tokenPriceExact ? `$${displayServerAmount(tokenPriceExact)} ${token.currency || 'USDT'}` : '—'}</strong>
             </div>
             <div className="investor-token-order-row investor-token-order-row--primary">
-              <span>Tokens to Receive</span>
+              <span>You will receive</span>
               <strong>{displayServerAmount(currentTokenAmount, '0')} <small>{token.symbol}</small></strong>
             </div>
             <div className="investor-token-order-row">
-              <span>Estimated Payment</span>
+              <span>Estimated USDT cost</span>
               <strong>
                 {estimatedPayment > 0
                   ? `$${money.format(estimatedPayment)} ${token.currency || 'USDT'}`
@@ -1518,7 +1290,7 @@ export default function PurchaseTokenPage({
               </strong>
             </div>
             <div className="investor-token-order-row">
-              <span>Wallet Balance</span>
+              <span>You currently hold</span>
               <strong>
                 {tokenWalletBalanceLoading
                   ? 'Loading…'
@@ -1528,60 +1300,120 @@ export default function PurchaseTokenPage({
               </strong>
             </div>
 
-            <div className="investor-token-purchase-status is-ready">
-              <WalletCards size={18} />
-              <div>
-                <strong>Payment ready</strong>
-                <p>Review the token amount and payment estimate, then choose Purchase. Your registered wallet will show the exact transfer for approval.</p>
-              </div>
-            </div>
-
             {!walletGuard.ready ? (
-              <RegisteredInvestorWalletGate guard={walletGuard} actionLabel="make this purchase" />
+              <RegisteredInvestorWalletGate guard={walletGuard} actionLabel="make this investment" />
             ) : null}
 
-            <Button
-              className="investor-token-order-card__cta"
-              icon={ShoppingCart}
-              onClick={handlePurchase}
-              disabled={actionDisabled}
-              loading={Boolean(busyAction)}
-            >
-              {actionLabel}
-            </Button>
-            <small className="investor-token-order-card__footnote">
-              {!walletGuard.ready
-                ? 'Connect the investor wallet linked to your profile on the required network to purchase.'
-                : purchaseGateLoading || !purchaseGateMatchesToken
-                  ? 'Checking your latest purchase status…'
-                  : purchaseGateError
-                    ? 'Purchase availability could not be verified. Refresh the purchase history and try again.'
-                    : purchaseBlockedByPrevious
-                      ? latestPurchaseStatus === PURCHASE_STATUS.PENDING_PAYMENT
-                        ? 'Your previous purchase is still awaiting payment confirmation. Another purchase will be available after it finishes.'
-                        : latestPurchaseStatus === PURCHASE_STATUS.PAYMENT_CONFIRMED
-                          ? 'Your payment has been received. Another purchase will be available after this purchase is completed.'
-                          : 'Your tokens are being finalized. Another purchase will be available after this purchase is completed.'
-                      : tokenAmountError
-                        ? tokenAmountError
-                        : busyAction
-                          ? 'Your current purchase action is in progress.'
-                          : 'Enter a token amount and choose Purchase.'}
-            </small>
+            <div className="investor-token-payment-flow investor-token-payment-flow--single" aria-label="Investment action">
+              <div className="investor-token-payment-flow__intro">
+                <strong>{usdtSpendingApproved ? 'Ready to invest' : 'Approve USDT spending'}</strong>
+                <span>
+                  {usdtSpendingApproved
+                    ? 'Your USDT spending approval is already in place. Enter the amount you want to buy and choose Invest.'
+                    : 'Approve USDT spending once. This only gives the investment contract permission to use USDT when you choose to invest.'}
+                </span>
+              </div>
+
+              <section className="investor-token-payment-step is-current">
+                <div className="investor-token-payment-step__top">
+                  <span className="investor-token-payment-step__number" aria-hidden="true">
+                    {usdtSpendingApproved ? <ShoppingCart size={16} /> : <ShieldCheck size={16} />}
+                  </span>
+                  <div className="investor-token-payment-step__heading">
+                    <small>{usdtSpendingApproved ? 'Investment' : 'One-time setup'}</small>
+                    <strong>{usdtSpendingApproved ? 'Invest' : 'USDT spending approval'}</strong>
+                  </div>
+                  <span className={`investor-token-payment-step__status ${usdtApprovalError && !usdtSpendingApproved ? 'is-attention' : ''}`}>
+                    {usdtApprovalLoading
+                      ? 'Checking…'
+                      : usdtSpendingApproved
+                        ? purchaseBlockedByPrevious
+                          ? 'Confirming current investment'
+                          : 'Ready'
+                        : usdtApprovalError
+                          ? 'Needs attention'
+                          : 'Approval required'}
+                  </span>
+                  <details className="investor-token-payment-step__help">
+                    <summary aria-label={usdtSpendingApproved ? 'About investing' : 'About USDT spending approval'} title="About this action">
+                      <Info size={15} />
+                    </summary>
+                    <div className="investor-token-payment-step__tooltip" role="note">
+                      <strong>{usdtSpendingApproved ? 'What happens when I invest?' : 'What does approval mean?'}</strong>
+                      {usdtSpendingApproved ? (
+                        <>
+                          <p>Your registered investor wallet signs the investment and the smart contract processes it on-chain.</p>
+                          <p>After this investment is confirmed, this same Invest action becomes available immediately for another investment.</p>
+                        </>
+                      ) : (
+                        <>
+                          <p>Approval does not buy anything or move USDT by itself. It only allows the investment contract to use USDT when you later choose Invest.</p>
+                          <p>We reuse the approval while your allowance is sufficient, so you do not need to approve every investment.</p>
+                        </>
+                      )}
+                    </div>
+                  </details>
+                </div>
+
+                <p className="investor-token-payment-step__copy">
+                  {usdtSpendingApproved
+                    ? purchaseBlockedByPrevious
+                      ? 'Your current investment is confirming on-chain. As soon as it is confirmed, Invest becomes available again automatically.'
+                      : 'Review the amount and estimated cost, then choose Invest. Your wallet will ask you to confirm the investment.'
+                    : 'Choose Approve and confirm the permission in your wallet. After it is confirmed, this button automatically changes to Invest.'}
+                </p>
+
+                {usdtApprovalError && !usdtSpendingApproved ? (
+                  <p className="investor-token-payment-step__error" role="alert">{usdtApprovalError}</p>
+                ) : null}
+
+                <Button
+                  className="investor-token-order-card__cta investor-token-payment-flow__primary-cta"
+                  icon={usdtSpendingApproved ? ShoppingCart : ShieldCheck}
+                  onClick={usdtSpendingApproved ? handlePurchase : handleApproveUsdtSpending}
+                  disabled={primaryActionDisabled}
+                  loading={busyAction === (usdtSpendingApproved ? 'PAYMENT' : 'APPROVAL')}
+                >
+                  {actionLabel}
+                </Button>
+
+                <small className="investor-token-order-card__footnote">
+                  {!walletGuard.ready
+                    ? 'Connect the investor wallet linked to your profile on the required network to continue.'
+                    : usdtApprovalLoading
+                      ? 'Checking your current USDT spending approval…'
+                      : !usdtSpendingApproved
+                        ? usdtApprovalError || 'Approve USDT spending once to enable investments.'
+                        : purchaseBlockedByPrevious
+                          ? 'Your submitted investment is still confirming. No new wallet action is needed until it is confirmed.'
+                          : tokenAmountError
+                            ? tokenAmountError
+                            : !normalizedTokenAmount
+                              ? 'Enter the number of units you want to buy.'
+                              : platformQuoteLoading
+                                ? 'Checking the latest on-chain price…'
+                                : platformQuoteError
+                                  ? platformQuoteError
+                                  : busyAction
+                                    ? 'Your current wallet action is in progress.'
+                                    : 'Choose Invest to open your registered wallet and confirm this investment.'}
+                </small>
+              </section>
+            </div>
           </Card>
 
           <Card className="investor-token-action-side-note">
             <WalletCards size={17} />
             <div>
-              <strong>Verified investment wallet</strong>
-              <p>Your payment can only be sent from the wallet linked to this registered investment.</p>
+              <strong>Your registered wallet protects this action</strong>
+              <p>Only the investment wallet linked to your approved profile can make this investment.</p>
             </div>
           </Card>
           <Card className="investor-token-action-side-note">
             <Banknote size={17} />
             <div>
-              <strong>Secure settlement</strong>
-              <p>Your payment and token delivery are checked before the purchase is shown as complete.</p>
+              <strong>You will see when it is complete</strong>
+              <p>The investment is complete only after the blockchain transaction is confirmed and recorded in your transaction history.</p>
             </div>
           </Card>
         </aside>
@@ -1611,13 +1443,13 @@ export default function PurchaseTokenPage({
         </Card>
       ) : null}
 
-      <Card className="investor-token-purchase-history">
+      <Card className="investor-token-purchase-history investor-token-purchase-history--investments">
         <div className="investor-token-purchase-history__header">
           <div className="investor-token-purchase-history__heading">
             <span className="investor-token-purchase-history__icon"><History size={18} /></span>
             <div>
-              <h2>Purchase History</h2>
-              <p>Track your payment and token delivery for {token.symbol}. Active purchases update automatically.</p>
+              <h2>Investment history</h2>
+              <p>Track your confirmed blockchain investments for {token.symbol}. Submitted transactions update automatically.</p>
             </div>
           </div>
           <Button
@@ -1635,7 +1467,7 @@ export default function PurchaseTokenPage({
         <div className="investor-token-purchase-history__toolbar">
           <label className="investor-token-purchase-history__search">
             <Search size={16} />
-            <span className="sr-only">Search purchase history</span>
+            <span className="sr-only">Search investment history</span>
             <input
               type="search"
               value={purchaseHistorySearch}
@@ -1645,12 +1477,12 @@ export default function PurchaseTokenPage({
             />
           </label>
           <div className="investor-token-purchase-history__filter">
-            <span className="sr-only">Filter purchase history by status</span>
+            <span className="sr-only">Filter investment history by status</span>
             <MarketplaceDropdown
               value={purchaseHistoryStatus}
               options={PURCHASE_HISTORY_FILTERS}
               onChange={handleHistoryStatusChange}
-              ariaLabel="Filter purchase history by status"
+              ariaLabel="Filter investment history by status"
               className="investor-token-purchase-history__filter-dropdown"
               menuClassName="investor-token-purchase-history__filter-menu"
               align="end"
@@ -1676,29 +1508,24 @@ export default function PurchaseTokenPage({
         ) : null}
 
         {purchaseHistoryLoading && !purchaseHistory.length ? (
-          <div className="investor-token-purchase-history__loading" aria-label="Loading purchase history">
+          <div className="investor-token-purchase-history__loading" aria-label="Loading investment history">
             <span /><span /><span />
           </div>
         ) : purchaseHistory.length ? (
-          <div className="investor-token-purchase-history__table" role="table" aria-label={`${token.symbol} purchase history`}>
+          <div className="investor-token-purchase-history__table" role="table" aria-label={`${token.symbol} investment history`}>
             <div className="investor-token-purchase-history__table-head" role="row">
               <span role="columnheader">Date</span>
               <span role="columnheader">Token amount</span>
               <span role="columnheader">USDT amount</span>
               <span role="columnheader">Status</span>
               <span role="columnheader">Payment</span>
-              <span role="columnheader">Token Issued</span>
-              <span role="columnheader">Expiration reason</span>
             </div>
 
             {purchaseHistory.map((row, index) => {
               const rowUid = purchaseUidOf(row) || `purchase-${index}`;
-              const rowStatus = purchaseHistoryStatusMeta(row?.status);
+              const rowStatus = purchaseHistoryStatusMeta(row?.status, row?.canonicalStatus);
               const rowPaymentHash = paymentHashOf(row);
-              const rowMintHash = mintHashOf(row);
               const rowPaymentUrl = explorerUrlFor(rowPaymentHash, row?.chainId);
-              const rowMintUrl = explorerUrlFor(rowMintHash, row?.chainId);
-              const expirationReason = historyExpirationReasonLabel(row);
 
               return (
                 <div className="investor-token-purchase-history__row" key={rowUid} role="row">
@@ -1728,16 +1555,6 @@ export default function PurchaseTokenPage({
                       </a>
                     ) : <span className="investor-token-purchase-history__muted">—</span>}
                   </span>
-                  <span className="investor-token-purchase-history__cell" data-label="Token Issued" role="cell">
-                    {rowMintUrl ? (
-                      <a href={rowMintUrl} target="_blank" rel="noreferrer" className="investor-token-purchase-history__hash" title="View token issuance transaction">
-                        {shortHash(rowMintHash)} <ExternalLink size={13} />
-                      </a>
-                    ) : <span className="investor-token-purchase-history__muted">—</span>}
-                  </span>
-                  <span className="investor-token-purchase-history__cell" data-label="Expiration reason" role="cell">
-                    <strong title={historyExpirationReason(row) || undefined}>{expirationReason}</strong>
-                  </span>
                 </div>
               );
             })}
@@ -1746,7 +1563,7 @@ export default function PurchaseTokenPage({
           <div className="investor-token-purchase-history__empty">
             <History size={24} />
             <strong>{purchaseHistorySearchDebounced || purchaseHistoryStatus !== 'all' ? 'No matching purchases' : 'No purchases yet'}</strong>
-            <p>{purchaseHistorySearchDebounced || purchaseHistoryStatus !== 'all' ? 'Try a different search or status filter.' : `Your ${token.symbol} purchase activity will appear here after you start a checkout.`}</p>
+            <p>{purchaseHistorySearchDebounced || purchaseHistoryStatus !== 'all' ? 'Try a different search or status filter.' : `Your ${token.symbol} investment transactions will appear here after your wallet submits an investment.`}</p>
           </div>
         )}
 

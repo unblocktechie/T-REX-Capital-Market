@@ -10,7 +10,7 @@ http://192.168.29.90:3000/api/v1
 
 - `POST /auth/signup`
 - `POST /auth/resend-verification`
-- `GET /auth/verify-email?token=...`
+- `POST /auth/verify-email` with `{ "token": "..." }`
 - `POST /auth/login`
 - `POST /auth/forgot-password`
 - `GET /auth/verify-reset-token?token=...`
@@ -65,11 +65,13 @@ Password-reset emails should open:
 https://your-frontend-domain/reset-password?token=TOKEN
 ```
 
-## Verification-page redirect update
+## Verification-page authentication flow
 
-The verification email must now open the frontend route `/verify-email?token=...`. The frontend validates the token through `GET /api/v1/auth/verify-email`, displays the branded secure loader, shows a short success confirmation, and automatically redirects to `/login?verified=true`.
+The verification email opens only the frontend route `/verify-email?token=...`. Opening the URL does not call the API. The page first validates that the token is 64 hexadecimal characters and shows **Verify and continue**. Only a user click sends `POST /api/v1/auth/verify-email` with `{ "token": "..." }`.
 
-The API URL itself must not be used as the email button URL because it returns JSON directly in the browser. Backend email-link setup is documented in `EMAIL_VERIFICATION_FRONTEND_FLOW.md`.
+A successful verification response contains the same authenticated session shape as password login. The frontend stores that session through the shared authentication store, removes the one-time token from visible browser history, and redirects with history replacement to the authenticated workspace. It does not call `/auth/login` after verification.
+
+The API URL itself must not be used as the email button URL because email scanners or link previews must not be able to consume the one-time token. Backend email-link setup is documented in `EMAIL_VERIFICATION_FRONTEND_FLOW.md`.
 
 ## Authentication `404` behavior
 

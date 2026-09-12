@@ -29,14 +29,16 @@ export function Header({ onboardingOnly = false }) {
 
   const isApplicationRecordPage = location.pathname.startsWith(`${ROUTES.applications}/`);
   const isIssuerRedemptionPage = location.pathname.startsWith(`${ROUTES.issuerRedemptions}/`);
+  const isIssuerInvestmentRequestPage = location.pathname.startsWith(`${ROUTES.investors}/`);
+  const isMarketplaceTokenPage = location.pathname.startsWith(`${ROUTES.marketplace}/`);
   const isTokenRecordPage =
     location.pathname.startsWith('/app/tokens/') &&
     !location.pathname.startsWith(ROUTES.createToken);
   const roleAwareMeta =
     user?.role === ROLES.investor && location.pathname === ROUTES.dashboard
-      ? { title: 'Investor Dashboard', description: 'Your investments, invitations and token activity' }
+      ? { title: 'Investor Dashboard', description: 'Your next actions, applications, and investments' }
       : user?.role === ROLES.investor && location.pathname === ROUTES.profile
-        ? { title: 'Investor Profile', description: 'Your submitted identity and verification details' }
+        ? { title: 'Investor Profile', description: 'Your identity, eligibility information, documents, and registered wallet' }
         : user?.role === ROLES.investor && location.pathname === ROUTES.investors
           ? { title: 'Investor Onboarding', description: 'Set up your investor profile and eligibility' }
           : null;
@@ -45,7 +47,9 @@ export function Header({ onboardingOnly = false }) {
     routeMeta[location.pathname] ||
     (location.pathname.startsWith(ROUTES.organization) ? routeMeta[ROUTES.organization] : null) ||
     (isApplicationRecordPage ? routeMeta[ROUTES.applications] : null) ||
+    (isIssuerInvestmentRequestPage ? routeMeta[ROUTES.investors] : null) ||
     (isIssuerRedemptionPage ? routeMeta[ROUTES.issuerRedemptions] : null) ||
+    (isMarketplaceTokenPage ? routeMeta.marketplaceToken : null) ||
     (isTokenRecordPage ? routeMeta.tokenDetails : null) ||
     routeMeta[ROUTES.dashboard];
 
@@ -105,7 +109,7 @@ export function Header({ onboardingOnly = false }) {
         type="button"
         className="account-menu__trigger"
         onClick={() => setProfileOpen((value) => !value)}
-        aria-label={onboardingOnly ? 'Open logout menu' : `Open ${roleLabel} profile menu`}
+        aria-label={onboardingOnly ? 'Open account menu' : `Open ${roleLabel} profile menu`}
         title={`${user?.name || 'User'} · ${roleLabel}`}
         aria-haspopup="menu"
         aria-expanded={profileOpen}
@@ -126,30 +130,28 @@ export function Header({ onboardingOnly = false }) {
         <div
           className="account-menu__panel"
           role="menu"
-          aria-label={onboardingOnly ? 'Logout menu' : 'Profile menu'}
+          aria-label={onboardingOnly ? 'Account menu' : 'Profile menu'}
         >
+          <div className="account-menu__identity">
+            <span className="avatar account-menu__panel-avatar">{initials || 'U'}</span>
+            <span>
+              <strong>{user?.name || 'Issuer User'}</strong>
+              <small>{user?.email || roleLabel}</small>
+            </span>
+          </div>
           {!onboardingOnly ? (
-            <>
-              <div className="account-menu__identity">
-                <span className="avatar account-menu__panel-avatar">{initials || 'U'}</span>
-                <span>
-                  <strong>{user?.name || 'Issuer User'}</strong>
-                  <small>{user?.email || roleLabel}</small>
-                </span>
-              </div>
-              <Link
-                className="account-menu__item"
-                to={user?.role === ROLES.issuer ? ROUTES.organization : ROUTES.profile}
-                role="menuitem"
-              >
-                {user?.role === ROLES.issuer ? (
-                  <Building2 size={18} aria-hidden="true" />
-                ) : (
-                  <UserRound size={18} aria-hidden="true" />
-                )}
-                <span>{user?.role === ROLES.issuer ? 'My Organization' : 'Profile'}</span>
-              </Link>
-            </>
+            <Link
+              className="account-menu__item"
+              to={user?.role === ROLES.issuer ? ROUTES.organization : ROUTES.profile}
+              role="menuitem"
+            >
+              {user?.role === ROLES.issuer ? (
+                <Building2 size={18} aria-hidden="true" />
+              ) : (
+                <UserRound size={18} aria-hidden="true" />
+              )}
+              <span>{user?.role === ROLES.issuer ? 'My Organization' : 'Profile'}</span>
+            </Link>
           ) : null}
           <button
             type="button"

@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUiStore } from '@/store/ui.store';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useMyToken } from '@/hooks/useMyToken';
+import { useSidebarActionIndicators } from '@/hooks/useSidebarActionIndicators';
 import { ORGANIZATION_STATUSES } from '@/services/organizationStorageService';
 import { ROUTES } from '@/config/routes';
 import { cn } from '@/utils/cn';
@@ -24,6 +25,7 @@ export function Sidebar() {
   const { user } = useAuth();
   const { organization } = useOrganization();
   const tokenRecord = useMyToken({ enabled: user?.role === ROLES.issuer });
+  const actionIndicators = useSidebarActionIndicators(user?.role);
   const open = useUiStore((state) => state.sidebarOpen);
   const collapsed = useUiStore((state) => state.sidebarCollapsed);
   const close = useUiStore((state) => state.closeSidebar);
@@ -60,7 +62,15 @@ export function Sidebar() {
         aria-label="Application sidebar"
       >
         <div className="brand">
-          <TrexLogo />
+          <NavLink
+            to={ROUTES.dashboard}
+            onClick={close}
+            className="brand__home-link"
+            aria-label="Go to dashboard"
+            title="Go to dashboard"
+          >
+            <TrexLogo />
+          </NavLink>
           <button
             className="icon-button sidebar__close"
             onClick={close}
@@ -97,6 +107,9 @@ export function Sidebar() {
                 {visibleItems.map((item) => {
                   const isOrganizationItem = item.dynamicOrganization;
                   const isTokenItem = item.dynamicToken;
+                  const attentionCount = Math.max(0, Number(actionIndicators.data?.[item.to]) || 0);
+                  const hasAttention = attentionCount > 0;
+                  const attentionTone = item.to === ROUTES.invitations ? 'new' : 'action';
                   const label =
                     user?.role === ROLES.investor && item.to === ROUTES.investors
                       ? 'Investor Profile'
@@ -127,17 +140,41 @@ export function Sidebar() {
                           : ''
                     : '';
 
+                  const attentionLabel = hasAttention
+                    ? `${attentionCount} ${attentionCount === 1 ? 'item needs' : 'items need'} your attention`
+                    : '';
+
                   return (
                     <NavLink
                       key={item.to}
                       to={destination}
                       onClick={close}
-                      title={collapsed ? label : undefined}
-                      className={({ isActive }) => cn('sidebar-link', isActive && 'is-active')}
+                      title={collapsed ? `${label}${attentionLabel ? ` — ${attentionLabel}` : ''}` : undefined}
+                      aria-label={`${label}${attentionLabel ? `, ${attentionLabel}` : ''}`}
+                      className={({ isActive }) => cn(
+                        'sidebar-link',
+                        isActive && 'is-active',
+                        hasAttention && 'sidebar-link--attention',
+                        hasAttention && `sidebar-link--attention-${attentionTone}`,
+                      )}
                     >
-                      <item.icon size={19} aria-hidden="true" />
+                      <span className="sidebar-link__icon-wrap">
+                        <item.icon size={19} aria-hidden="true" />
+                        {hasAttention ? <span className="sidebar-link__attention-dot" aria-hidden="true" /> : null}
+                      </span>
                       <span className="sidebar-link__label">{label}</span>
-                      {showOrganizationBadge ? (
+                      {hasAttention ? (
+                        <small
+                          className={cn(
+                            'sidebar-link__attention-badge',
+                            `sidebar-link__attention-badge--${attentionTone}`,
+                          )}
+                          title={attentionLabel}
+                          aria-label={attentionLabel}
+                        >
+                          {attentionCount > 99 ? '99+' : attentionCount}
+                        </small>
+                      ) : showOrganizationBadge ? (
                         <OrganizationStatusBadge status={organization.status} compact />
                       ) : tokenStatusBadge ? (
                         <small

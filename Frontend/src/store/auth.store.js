@@ -6,8 +6,8 @@ export const useAuthStore = create((set, get) => ({
   status: 'checking',
   isAuthenticated: false,
 
-  setSession: ({ user, accessToken, remember = false }) => {
-    tokenService.setSession({ user, accessToken, remember });
+  setSession: ({ user, accessToken, tokenType = 'Bearer', expiresIn = null, remember = false }) => {
+    tokenService.setSession({ user, accessToken, tokenType, expiresIn, remember });
     set({ user, isAuthenticated: true, status: 'authenticated' });
   },
 

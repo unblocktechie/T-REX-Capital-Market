@@ -14,6 +14,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { getAddress, isAddress } from 'viem';
 import { toast } from 'sonner';
 import { ApplicationHistory } from '@/components/application-history/ApplicationHistory';
+import { InvestmentJourneyTracker } from '@/components/application-history/InvestmentJourneyTracker';
 import { CompactAddress } from '@/components/common/CompactAddress';
 import { SecureDocumentPreviewModal } from '@/components/common/SecureDocumentPreviewModal';
 import { AppStatusBadge } from '@/components/common/AppStatusBadge';
@@ -35,6 +36,7 @@ import {
 import { formatDate } from '@/utils/date';
 import { getErrorMessage } from '@/utils/error';
 import { isValidTransactionHash } from '@/utils/transactionHash';
+import { getInvestmentJourney } from '@/utils/investmentJourney';
 
 const normalizeStatus = (status) => String(status || '')
   .trim()
@@ -44,17 +46,6 @@ const normalizeStatus = (status) => String(status || '')
 const isClaimVerifiedStatus = (status) => ['verifiedbyissuer', 'verified'].includes(normalizeStatus(status));
 const isClaimSubmittedStatus = (status) => normalizeStatus(status) === 'claimsubmitted';
 
-const statusMeta = (status) => {
-  const value = String(status || '').toLowerCase();
-  if (isClaimSubmittedStatus(status)) return { label: 'Verification Submitted', tone: 'success' };
-  if (isClaimVerifiedStatus(status)) return { label: 'Verification Approved', tone: 'success' };
-  if (value === 'approved') return { label: 'Approved', tone: 'success' };
-  if (value === 'rejected') return { label: 'Rejected', tone: 'danger' };
-  if (value === 'cancelled') return { label: 'Cancelled', tone: 'neutral' };
-  if (value === 'pending') return { label: 'Documents Required', tone: 'pending' };
-  return { label: 'Pending Review', tone: 'pending' };
-};
-
 const filenameFromDisposition = (value, fallback) => {
   const match = String(value || '').match(/filename\*?=(?:UTF-8''|\")?([^\";]+)/i);
   if (!match?.[1]) return fallback;
@@ -63,9 +54,9 @@ const filenameFromDisposition = (value, fallback) => {
 
 const REGISTRY_STATUS_POLL_INTERVAL_MS = 5_000;
 const REGISTRY_REQUIRED_CONFIRMATIONS = 12;
-const REGISTRY_SUCCESS_MESSAGE = 'This investor is now approved to purchase, receive and hold the token.';
-const REGISTRY_PENDING_MESSAGE = 'Transaction submitted. Finalizing investor approval.';
-const REGISTRY_INVITE_TOOLTIP = 'Send the investor an email letting them know they can now purchase this token.';
+const REGISTRY_SUCCESS_MESSAGE = 'Final approval is complete. This investor can now invest in this asset.';
+const REGISTRY_PENDING_MESSAGE = 'Final approval was submitted. We are confirming the investor’s access now.';
+const REGISTRY_INVITE_TOOLTIP = 'Send the investor an email letting them know they are ready to invest.';
 
 const normalizeRegistryStatus = (status) => String(status || '').trim().toUpperCase();
 const isRegistryConfirmed = (registration) => normalizeRegistryStatus(registration?.status) === 'CONFIRMED';
@@ -79,7 +70,7 @@ const friendlyRegistryError = (error) => {
   const status = error?.response?.status;
   if (status === 403) return 'You do not have permission to approve this investor.';
   if (status === 409) return 'This application is not ready for investor approval yet. Refresh and try again.';
-  if (status === 422) return 'We could not verify this investor-approval transaction. Do not submit another wallet transaction. Check the status again after the issue is resolved.';
+  if (status === 422) return 'We could not confirm the final approval. Do not submit another approval. Check the status again after the issue is resolved.';
   if (status === 503 || error?.code === 'ERR_NETWORK') {
     return 'The investor-approval status is temporarily unavailable. Please try again in a few moments.';
   }
@@ -117,7 +108,7 @@ export default function IssuerInvestorSubscriptionReviewPage() {
     refresh: refreshOrganization,
   } = useOrganization();
 
-  useDocumentTitle(request ? `${request.investorName} · Application Activity` : 'Application Activity');
+  useDocumentTitle(request ? `${request.investorName} · Investment Request` : 'Investment Request');
 
   const loadData = useCallback(async ({ silent = false } = {}) => {
     if (!requestId) return null;
@@ -183,13 +174,13 @@ export default function IssuerInvestorSubscriptionReviewPage() {
       && getAddress(wallet.address) === getAddress(organizationWalletAddress),
   );
   const registryWalletGateMessage = organizationLoading
-    ? 'Checking your Organization Wallet…'
+    ? 'Checking your approved organization account…'
     : !organizationWalletIsAvailable
-      ? 'We could not verify your Organization Wallet. Refresh your organization details before continuing.'
+      ? 'We could not verify the approved organization account. Refresh your organization details before continuing.'
       : !wallet.isConnected
-        ? 'Connect your Organization Wallet to approve this investor for the token.'
+        ? 'Connect the approved organization account to complete final approval.'
         : !connectedWalletIsOrganizationWallet
-          ? 'This is not your Organization Wallet. Switch wallets to continue.'
+          ? 'The connected account is not the approved organization account. Switch accounts to continue.'
           : '';
 
   const openOrganizationWalletControl = useCallback(async () => {
@@ -197,7 +188,7 @@ export default function IssuerInvestorSubscriptionReviewPage() {
       try {
         await wallet.disconnect();
       } catch (error) {
-        toast.error(getErrorMessage(error, 'Unable to change wallets right now. Please try again.'));
+        toast.error(getErrorMessage(error, 'Unable to change accounts right now. Please try again.'));
         return;
       }
     }
@@ -211,7 +202,7 @@ export default function IssuerInvestorSubscriptionReviewPage() {
     try {
       await refreshOrganization();
     } catch (error) {
-      toast.error(getErrorMessage(error, 'Unable to refresh the organization wallet right now. Please try again.'));
+      toast.error(getErrorMessage(error, 'Unable to refresh the organization details right now. Please try again.'));
     }
   }, [refreshOrganization]);
 
@@ -320,7 +311,7 @@ export default function IssuerInvestorSubscriptionReviewPage() {
             });
           }
           setRegistryMessage(REGISTRY_SUCCESS_MESSAGE);
-          toast.success('Investor approved for this token.');
+          toast.success('Investor access enabled.');
           await loadData({ silent: true });
           return;
         }
@@ -363,7 +354,7 @@ export default function IssuerInvestorSubscriptionReviewPage() {
               current: REGISTRY_REQUIRED_CONFIRMATIONS,
             });
             setRegistryMessage(REGISTRY_SUCCESS_MESSAGE);
-            toast.success('Investor approved for this token.');
+            toast.success('Investor access enabled.');
             await loadData({ silent: true });
             return;
           }
@@ -593,7 +584,7 @@ export default function IssuerInvestorSubscriptionReviewPage() {
 
   const confirmRegistryTransaction = async (registration) => {
     if (!hasRegistryTransaction(registration)) {
-      throw new Error('The investor-approval transaction is not available yet.');
+      throw new Error('Final approval is not ready yet. Check the status again in a moment.');
     }
 
     // Preserve a known hash before Confirm as well as immediately after MetaMask. This
@@ -635,7 +626,7 @@ export default function IssuerInvestorSubscriptionReviewPage() {
         current: REGISTRY_REQUIRED_CONFIRMATIONS,
       });
       setRegistryMessage(REGISTRY_SUCCESS_MESSAGE);
-      toast.success('Investor approved for this token.');
+      toast.success('Investor access enabled.');
       await loadData({ silent: true });
       return nextRegistration;
     }
@@ -678,13 +669,13 @@ export default function IssuerInvestorSubscriptionReviewPage() {
       // that was saved during issuer onboarding. This guard runs before the API call so
       // an account mismatch cannot create an operation the connected wallet should not sign.
       if (!organizationWalletIsAvailable) {
-        throw new Error('We could not verify your Organization Wallet. Refresh your organization details before continuing.');
+        throw new Error('We could not verify the approved organization account. Refresh your organization details before continuing.');
       }
       if (!wallet.isConnected || !wallet.connector || !wallet.address) {
-        throw new Error('Connect your Organization Wallet to approve this investor for the token.');
+        throw new Error('Connect the approved organization account to complete final approval.');
       }
       if (!connectedWalletIsOrganizationWallet) {
-        throw new Error('This is not your Organization Wallet. Switch wallets to continue.');
+        throw new Error('The connected account is not the approved organization account. Switch accounts to continue.');
       }
 
       // Prepare is idempotent. The API is authoritative for all registerIdentity args.
@@ -699,7 +690,7 @@ export default function IssuerInvestorSubscriptionReviewPage() {
       if (isRegistryConfirmed(preparedRegistration)) {
         stopRegistryPolling();
         setRegistryMessage(REGISTRY_SUCCESS_MESSAGE);
-        toast.success('Investor approved for this token.');
+        toast.success('Investor access enabled.');
         await loadData({ silent: true });
         return;
       }
@@ -712,7 +703,7 @@ export default function IssuerInvestorSubscriptionReviewPage() {
       }
 
       if (preparedRegistration?.txHash && !hasRegistryTransaction(preparedRegistration)) {
-        throw new Error('The existing registration transaction could not be verified safely.');
+        throw new Error('We could not safely confirm the existing approval. Check the status before trying again.');
       }
 
       const preparedChainId = Number(preparedRegistration?.chainId);
@@ -793,15 +784,15 @@ export default function IssuerInvestorSubscriptionReviewPage() {
         setRegistryMessage(REGISTRY_PENDING_MESSAGE);
         startRegistryPolling(registryInterestUid, pendingRegistration);
         if (recoveryStorageError) {
-          toast.warning('Transaction submitted, but browser recovery storage is unavailable. Keep this page open while registration finalizes.');
+          toast.warning('Final approval was submitted, but browser recovery is unavailable. Keep this page open while it finishes.');
         } else if (error?.response?.status === 503 || error?.code === 'ERR_NETWORK') {
-          toast.info('Transaction submitted. Verification will retry automatically using the same transaction.');
+          toast.info('Final approval submitted. We will keep checking it automatically.');
         }
         return;
       }
 
       if (isIssuerRegistryWalletRejection(error)) {
-        setRegistryMessage('Transaction cancelled. You can try again when ready.');
+        setRegistryMessage('Final approval was cancelled. You can try again when ready.');
         return;
       }
 
@@ -835,29 +826,31 @@ export default function IssuerInvestorSubscriptionReviewPage() {
   const effectiveStatus = claimSubmitted ? 'claimSubmitted' : request.status;
   const canReject = requestStatus === 'submitintrest';
   const canVerify = requestStatus === 'submitintrest';
-  const currentMeta = statusMeta(effectiveStatus);
+  const journey = getInvestmentJourney({
+    status: effectiveStatus,
+    viewerRole: 'issuer',
+    registryStatus: registryRegistration?.status,
+    hasRegistryTransaction: hasRegistryTransaction(registryRegistration),
+    registryNeedsAttention: hasRegistryVerificationFailure(registryRegistration),
+  });
   const submissionNumber = request.submissionNumber || history?.timeline?.reduce((max, event) => Math.max(max, Number(event?.submissionNumber) || 0), 0) || null;
   const registryTransactionPending = hasRegistryTransaction(registryRegistration)
     && !isRegistryConfirmed(registryRegistration);
 
   return (
     <div className="page-stack issuer-investor-review-page issuer-application-activity-page">
-      <div className="application-detail-breadcrumbs">
-        <button type="button" onClick={() => navigate(ROUTES.investors)}>Investment Requests</button>
-        <span>›</span>
-        <strong>Application Activity</strong>
-      </div>
-
       <header className="issuer-application-activity-header">
         <div>
-          <span className="eyebrow">Issuer review</span>
-          <h1>Application Activity</h1>
-          <p>Audit trail and submission history for {request.investorName}&apos;s application.</p>
+          <span className="eyebrow">Investor application</span>
+          <h1>Investment request</h1>
+          <p>Track {request.investorName}&apos;s request and complete the action shown below when it is your turn.</p>
         </div>
         <div className="issuer-application-activity-header__actions">
           <Button variant="secondary" icon={RefreshCw} loading={refreshing} onClick={() => void loadData({ silent: true })}>Refresh</Button>
         </div>
       </header>
+
+      <InvestmentJourneyTracker journey={journey} />
 
       <Card className={`issuer-application-overview-card${claimVerified ? ' is-claim-verified' : ''}`}>
         <div className="issuer-application-overview-card__identity">
@@ -878,12 +871,12 @@ export default function IssuerInvestorSubscriptionReviewPage() {
           </div>
         </div>
         <div className="issuer-application-overview-card__grid">
-          <div><span>Application ID</span><strong>{request.interestUid || request.requestReference}</strong></div>
-          <div><span>Token</span><strong>{[request.tokenName, request.tokenSymbol ? `(${request.tokenSymbol})` : ''].filter(Boolean).join(' ') || '—'}</strong></div>
+          <div><span>Request reference</span><strong>{request.interestUid || request.requestReference}</strong></div>
+          <div><span>Asset</span><strong>{[request.tokenName, request.tokenSymbol ? `(${request.tokenSymbol})` : ''].filter(Boolean).join(' ') || '—'}</strong></div>
           <div><span>Submitted</span><strong>{formatDate(request.submittedAt || request.requestedDate, 'MMM DD, YYYY hh:mm A')}</strong></div>
-          <div><span>Latest Submission</span><strong>{submissionNumber ? `Submission ${submissionNumber}` : '—'}</strong></div>
-          <div><span>Status</span><AppStatusBadge status={effectiveStatus} label={currentMeta.label} tone={currentMeta.tone} compact /></div>
-          <div><span>Resubmissions</span><strong>{history?.summary?.timesResubmitted ?? request?.resubmissionSummary?.timesResubmitted ?? 0}</strong></div>
+          <div><span>Submission version</span><strong>{submissionNumber ? `Version ${submissionNumber}` : '—'}</strong></div>
+          <div><span>Current status</span><AppStatusBadge status={effectiveStatus} label={journey.statusLabel} tone={journey.tone} compact /></div>
+          <div><span>Changes submitted</span><strong>{history?.summary?.timesResubmitted ?? request?.resubmissionSummary?.timesResubmitted ?? 0}</strong></div>
         </div>
         {claimSubmitted ? (
           <div className="issuer-application-overview-card__actions issuer-application-overview-card__actions--registry">
@@ -891,7 +884,7 @@ export default function IssuerInvestorSubscriptionReviewPage() {
               <div className="issuer-registry-success" role="status">
                 <div className="issuer-registry-success__status">
                   <CheckCircle2 size={16} aria-hidden="true" />
-                  <strong>Approved Investor</strong>
+                  <strong>Investor Access Enabled</strong>
                 </div>
                 <p>{REGISTRY_SUCCESS_MESSAGE}</p>
                 <div className="issuer-registry-invite">
@@ -903,7 +896,7 @@ export default function IssuerInvestorSubscriptionReviewPage() {
                     aria-describedby="issuer-registry-invite-tooltip"
                     title={REGISTRY_INVITE_TOOLTIP}
                   >
-                    Invite to Purchase
+                    Invite to Invest
                   </Button>
                   <span
                     id="issuer-registry-invite-tooltip"
@@ -927,7 +920,7 @@ export default function IssuerInvestorSubscriptionReviewPage() {
                       && !hasRegistryVerificationFailure(registryRegistration)}
                     onClick={() => void handleRegistryAction()}
                   >
-                    {hasRegistryTransaction(registryRegistration) ? 'Check Status' : 'Approve Investor'}
+                    {hasRegistryTransaction(registryRegistration) ? 'Check Status' : 'Complete Final Approval'}
                   </Button>
                 ) : (
                   <div className="issuer-registry-wallet-gate" role="status">
@@ -944,7 +937,7 @@ export default function IssuerInvestorSubscriptionReviewPage() {
                           loading={wallet.isBusy}
                           onClick={() => void openOrganizationWalletControl()}
                         >
-                          {wallet.isConnected ? 'Switch Wallet' : 'Connect Wallet'}
+                          {wallet.isConnected ? 'Switch Account' : 'Connect Account'}
                         </Button>
                       ) : (
                         <Button
@@ -954,7 +947,7 @@ export default function IssuerInvestorSubscriptionReviewPage() {
                           loading={organizationFetching}
                           onClick={() => void handleRefreshOrganizationWallet()}
                         >
-                          Refresh Organization
+                          Refresh Organization Details
                         </Button>
                       )
                     ) : null}
@@ -968,7 +961,7 @@ export default function IssuerInvestorSubscriptionReviewPage() {
                     <div
                       className="issuer-registry-confirmation-progress__track"
                       role="progressbar"
-                      aria-label="Transaction confirmation progress"
+                      aria-label="Final approval confirmation progress"
                       aria-valuemin={0}
                       aria-valuemax={REGISTRY_REQUIRED_CONFIRMATIONS}
                       aria-valuenow={registryConfirmationCount}
@@ -990,14 +983,21 @@ export default function IssuerInvestorSubscriptionReviewPage() {
           <div className="issuer-application-overview-card__waiting" role="status">
             <Clock3 size={18} />
             <div>
-              <strong>Waiting for Investor Action</strong>
-              <span>The investor still needs to complete the required verification. Once submitted, you can approve them for this token.</span>
+              <strong>Waiting for investor</strong>
+              <span>Your review is complete. The investor now needs to finish verification before you can give them final investment access.</span>
             </div>
           </div>
         ) : (
-          <div className="issuer-application-overview-card__actions">
-            <Button variant="danger" icon={XCircle} disabled={!canReject || decisionLoading} onClick={() => setDecisionModal('reject')}>Reject Request</Button>
-            <Button icon={ShieldCheck} disabled={!canVerify || decisionLoading} onClick={() => setDecisionModal('verify')}>Approve Verification</Button>
+          <div className="issuer-application-overview-card__review-action">
+            <div className="issuer-application-overview-card__review-copy">
+              <span>Your action</span>
+              <strong>Review the investor&apos;s information and documents</strong>
+              <p>Approve the request if everything looks correct. If something is missing or incorrect, ask for changes or decline it.</p>
+            </div>
+            <div className="issuer-application-overview-card__actions">
+              <Button variant="danger" icon={XCircle} disabled={!canReject || decisionLoading} onClick={() => setDecisionModal('reject')}>Request changes or decline</Button>
+              <Button icon={ShieldCheck} disabled={!canVerify || decisionLoading} onClick={() => setDecisionModal('verify')}>Approve &amp; Continue</Button>
+            </div>
           </div>
         )}
       </Card>
@@ -1005,8 +1005,8 @@ export default function IssuerInvestorSubscriptionReviewPage() {
       <section className="application-history-section issuer-application-history-section">
         <div className="application-history-section__heading">
           <div>
-            <h2>Application History</h2>
-            <p>Expand each activity to review the exact submission snapshot, issuer decision, and resubmission details.</p>
+            <h2>Application details & documents</h2>
+            <p>Review the investor&apos;s submitted information, documents, and any previous updates before making a decision.</p>
           </div>
           <span>{history?.timeline?.length || 0} event{history?.timeline?.length === 1 ? '' : 's'}</span>
         </div>
@@ -1024,8 +1024,8 @@ export default function IssuerInvestorSubscriptionReviewPage() {
             issuer: user?.name || user?.fullName || 'Issuer account',
             system: 'System',
           }}
-          emptyTitle="No application activity was returned"
-          emptyDescription="The current request is available, but the history endpoint did not return any timeline events."
+          emptyTitle="No application updates yet"
+          emptyDescription="The request is available, but there are no additional updates or document events to show yet."
         />
       </section>
 
@@ -1051,6 +1051,8 @@ export default function IssuerInvestorSubscriptionReviewPage() {
         subscriptionId={request.subscriptionId || request.interestUid || request.requestReference || requestId}
         investorIdentityAddress={request.investorIdentityAddress}
         requiredClaimTopics={requiredClaimTopics}
+        investorName={request.investorName}
+        assetName={[request.tokenName, request.tokenSymbol ? `(${request.tokenSymbol})` : ''].filter(Boolean).join(' ')}
         onVerified={handleClaimsVerified}
       />
     </div>

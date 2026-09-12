@@ -50,11 +50,7 @@ export function TrexLoader({
 
         <div className="trex-loader__content">
           <div className="trex-loader__brand" aria-hidden="true">
-            <TrexLogo compact className="trex-loader__brand-logo" />
-            <div className="trex-loader__brand-copy">
-              <strong>T-REX Capital Market</strong>
-              <small>Secure access layer</small>
-            </div>
+            <TrexLogo className="trex-loader__brand-logo" />
           </div>
           <span className="trex-loader__eyebrow">
             <span />

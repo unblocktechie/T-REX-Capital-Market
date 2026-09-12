@@ -5,6 +5,8 @@ import { toast } from 'sonner';
 import { tokenApi } from '@/api/tokens';
 import { toClaimsPayload } from '@/api/tokens/token.mapper';
 import {
+  HelpDetails,
+  ImpactNote,
   SectionCard,
   StatusBadge,
   Toggle,
@@ -20,6 +22,39 @@ import { validateIdentityClaims } from '@/utils/tokenIssuance';
 const CLAIM_FIELD_MAP = {
   claimTopicUids: 'claimTopics',
   organizationActsAsTrustedClaimIssuer: 'trustedIssuer',
+};
+
+const getTopicCopy = (topic) => {
+  if (topic.id === 'kyc') {
+    return {
+      title: 'Require identity verification',
+      description: 'Investors must confirm who they are before they can invest in or receive this asset.',
+      helpTitle: 'What is identity verification?',
+      help: 'It confirms that an investor is a real person or organization using information such as their name, address, and identification.',
+      enabledImpact: 'An investor cannot participate until their identity has been approved.',
+      disabledImpact: 'Investors will not be asked to complete identity verification for this asset.',
+    };
+  }
+
+  if (topic.id === 'accredited') {
+    return {
+      title: 'Require accredited investor status',
+      description: 'Only investors who meet the required financial eligibility rules will be approved.',
+      helpTitle: 'What does accredited investor mean?',
+      help: 'Some offerings may only be available to investors who meet specific financial or professional requirements. Your legal or compliance team can confirm whether this applies to your offering.',
+      enabledImpact: 'Only investors whose accredited status is approved can participate.',
+      disabledImpact: 'Accredited investor status will not be required by this asset.',
+    };
+  }
+
+  return {
+    title: topic.shortName || topic.name || 'Investor check',
+    description: topic.description || 'Investors must complete this check before they can participate.',
+    helpTitle: 'What does this check mean?',
+    help: topic.description || 'This check is used to decide whether an investor is eligible to participate.',
+    enabledImpact: 'Investors must pass this check before they can participate.',
+    disabledImpact: 'This check will not be required for investors.',
+  };
 };
 
 export default function IdentityClaimsPage() {
@@ -39,7 +74,7 @@ export default function IdentityClaimsPage() {
   const [serverErrors, setServerErrors] = useState({});
   const errors = validateIdentityClaims(data);
   const visibleTopics = useMemo(() => data.claimTopics || [], [data.claimTopics]);
-  useDocumentTitle('Investor Verification');
+  useDocumentTitle('Who Can Invest');
 
   useEffect(() => {
     hydrateWalletDefaults(organization?.walletAddress || '');
@@ -89,14 +124,14 @@ export default function IdentityClaimsPage() {
       const response = await tokenApi.saveClaims(toClaimsPayload(data, false));
       recordBackendSave('identity-claims', response);
       markStepCompleted('identity-claims');
-      toast.success('Investor verification requirements saved.');
+      toast.success('Investor requirements saved.');
       navigate(ROUTES.tokenIssuanceStep('compliance'));
     } catch (error) {
       setServerErrors(mapTokenApiFieldErrors(error, CLAIM_FIELD_MAP));
-      toast.error('Investor verification settings were not saved.', {
+      toast.error('Investor requirements were not saved.', {
         description: getTokenApiErrorMessage(
           error,
-          'Review the selected verification requirements and verification provider.',
+          'Review the selected investor checks and who will approve investors.',
         ),
       });
     } finally {
@@ -120,8 +155,8 @@ export default function IdentityClaimsPage() {
   return (
     <IssuanceLayout
       stepKey="identity-claims"
-      title="Investor Verification"
-      description="Choose the identity and eligibility checks an investor must complete before they can hold or receive this token."
+      title="Who Can Invest"
+      description="Choose the checks an investor must pass before they can invest in or receive this asset."
       onBack={() => navigate(ROUTES.tokenIssuanceStep('token-information'))}
       onContinue={continueStep}
       continueLabel="Save and Continue"
@@ -134,14 +169,15 @@ export default function IdentityClaimsPage() {
     >
       <div className="identity-claims-simple-grid">
         <SectionCard
-          title="Verification Requirements"
-          description="Choose at least one check investors must complete before they can use this token."
-          action={<StatusBadge status="pending">At least one required</StatusBadge>}
+          title="Choose investor checks"
+          description="Choose at least one check. Every investor must pass all checks you turn on."
+          action={<StatusBadge status="pending">Choose at least one</StatusBadge>}
         >
           {visibleTopics.length ? (
             <div className="claim-topic-grid claim-topic-grid--simple">
               {visibleTopics.map((topic) => {
                 const unavailable = !topic.claimTopicUid || topic.available === false;
+                const copy = getTopicCopy(topic);
                 return (
                   <article
                     key={topic.id}
@@ -152,12 +188,12 @@ export default function IdentityClaimsPage() {
                         <BadgeCheck size={18} />
                       </span>
                       <div>
-                        <strong>{topic.name}</strong>
-                        <p>{topic.description}</p>
+                        <strong>{copy.title}</strong>
+                        <p>{copy.description}</p>
+                        <HelpDetails title={copy.helpTitle}>{copy.help}</HelpDetails>
                         {unavailable ? (
                           <small className="claim-topic-card__unavailable">
-                            This verification requirement is not fully configured. Reload the page or
-                            contact an administrator.
+                            This check is not available right now. Reload the page or contact an administrator.
                           </small>
                         ) : null}
                       </div>
@@ -165,9 +201,18 @@ export default function IdentityClaimsPage() {
                     <Toggle
                       checked={topic.enabled}
                       onChange={(enabled) => setTopicEnabled(topic, enabled)}
-                      label={topic.enabled ? 'Enabled' : unavailable ? 'Unavailable' : 'Disabled'}
+                      label={topic.enabled ? 'Required' : unavailable ? 'Unavailable' : 'Not required'}
+                      description={topic.enabled ? 'Investors must pass this check.' : 'This check will not be required.'}
                       disabled={unavailable || backend.isLocked}
                     />
+                    {!unavailable ? (
+                      <ImpactNote
+                        title={topic.enabled ? 'If you require this' : 'If you leave this off'}
+                        tone={topic.enabled ? 'positive' : 'neutral'}
+                      >
+                        {topic.enabled ? copy.enabledImpact : copy.disabledImpact}
+                      </ImpactNote>
+                    ) : null}
                   </article>
                 );
               })}
@@ -176,8 +221,7 @@ export default function IdentityClaimsPage() {
             <div className="issuance-empty-inline" role="status">
               <BadgeCheck size={18} />
               <span>
-                No verification requirements are available for this token. Reload the page or ask an
-                administrator to configure them.
+                No investor checks are available for this asset. Reload the page or ask an administrator to configure them.
               </span>
             </div>
           )}
@@ -191,11 +235,11 @@ export default function IdentityClaimsPage() {
         <div className="trusted-issuer-column">
           <SectionCard
             className="trusted-issuer-card"
-            title="Verification Provider"
-            description="Your organization will approve investor verification credentials used to determine whether a wallet can hold or receive this token."
+            title="Who will approve investors?"
+            description="Confirm who is responsible for reviewing investors and approving the checks you selected."
             action={
               organizationActsAsIssuer ? (
-                <StatusBadge status="valid">Selected</StatusBadge>
+                <StatusBadge status="valid">Confirmed</StatusBadge>
               ) : null
             }
           >
@@ -212,14 +256,17 @@ export default function IdentityClaimsPage() {
                 }}
               />
               <span>
-                <strong>
-                  My organization will approve investor verification for this token.
-                </strong>
+                <strong>My organization will review and approve investors</strong>
                 <small>
-                  Your approved Organization Wallet will confirm the selected verification requirements when an investor is reviewed.
+                  Your approved organization account will confirm that each investor meets the checks you selected.
                 </small>
               </span>
             </label>
+            <ImpactNote title="What this means" tone={organizationActsAsIssuer ? 'positive' : 'warning'}>
+              {organizationActsAsIssuer
+                ? 'Your organization will be the approval authority for this asset. Investors cannot participate until the required checks are approved.'
+                : 'You must confirm an approval authority before you can continue.'}
+            </ImpactNote>
             {trustedIssuerError ? (
               <p className="issuance-section-error" role="alert">
                 {trustedIssuerError}
@@ -227,18 +274,23 @@ export default function IdentityClaimsPage() {
             ) : null}
           </SectionCard>
 
-          <aside className="claims-work-card" aria-label="How investor verification works">
+          <aside className="claims-work-card" aria-label="What happens when an investor wants to participate">
             <span className="claims-work-card__icon">
               <Fingerprint size={20} />
             </span>
             <div>
-              <strong>How Investor Verification Works</strong>
-              <p>
-                Each approved wallet is linked to a verified on-chain identity. Your organization confirms the selected verification requirements, and the token checks them automatically before a transfer. Technical standard: ERC-3643.
-              </p>
+              <strong>What happens when an investor wants to participate?</strong>
+              <ol className="claims-work-card__steps">
+                <li><b>1. They complete your required checks.</b><span>The investor provides the information needed for the options you selected.</span></li>
+                <li><b>2. The investor is reviewed.</b><span>Your approved process confirms whether the investor is eligible.</span></li>
+                <li><b>3. Approved investors can participate.</b><span>Only approved investors can invest in or receive the asset.</span></li>
+              </ol>
               <span className="claims-work-card__note">
-                <ShieldCheck size={15} /> Transfers proceed only when the required verification is valid.
+                <ShieldCheck size={15} /> These checks are automatically enforced when the asset is transferred.
               </span>
+              <HelpDetails className="claims-technical-details" title="View technical details">
+                Investor eligibility is represented by verified on-chain identity claims and enforced by the ERC-3643 token controls.
+              </HelpDetails>
             </div>
           </aside>
         </div>

@@ -82,21 +82,21 @@ const requestStatusMeta = (value) => {
 const tokenStatusMeta = (tokenRecord) => {
   const status = compactStatus(tokenRecord.status);
   if (tokenRecord.isDeployed || status === 'deployed') {
-    return { label: 'Created', tone: 'success', description: 'Your token has been successfully created and is ready to use.' };
+    return { label: 'Created', tone: 'success', description: 'Your investment asset has been created. Open it to review the live price and investor access.' };
   }
   if (tokenRecord.isDeploymentPending || status === 'deploymentpending') {
-    return { label: 'Creating', tone: 'info', description: 'Your token-creation transaction is being finalized.' };
+    return { label: 'Creating', tone: 'info', description: 'Your asset is being created. No action is needed while this finishes.' };
   }
   if (tokenRecord.isDeploymentFailed || status === 'deploymentfailed') {
-    return { label: 'Creation needs attention', tone: 'danger', description: 'Review the last token-creation attempt before trying again.' };
+    return { label: 'Needs attention', tone: 'danger', description: 'One setup action did not complete. Review the creation status before trying again.' };
   }
   if (tokenRecord.isReadyToDeploy || status === 'readytodeploy') {
-    return { label: 'Ready to create', tone: 'warning', description: 'Your setup is complete and ready for final review.' };
+    return { label: 'Ready to create', tone: 'warning', description: 'Your setup is complete. Review the details and create the asset when you are ready.' };
   }
   if (tokenRecord.hasToken) {
-    return { label: 'Draft', tone: 'neutral', description: 'Continue configuring the token issuance workflow.' };
+    return { label: 'Setup in progress', tone: 'neutral', description: 'Continue the guided setup to prepare your investment asset.' };
   }
-  return { label: 'Not created', tone: 'neutral', description: 'Create your security token after organization onboarding is complete.' };
+  return { label: 'Not started', tone: 'neutral', description: 'Create your investment asset after organization verification is complete.' };
 };
 
 const organizationStatusMeta = (organization) => {
@@ -238,7 +238,7 @@ function IssuerDashboardPage() {
   const investorTotal = tokenRecord.isDeployed ? overview.data?.investorMeta?.total || 0 : null;
   const pendingRequests = requests.filter(requestNeedsReview);
   const redemptionActions = redemptions.filter(redemptionNeedsIssuerAction);
-  const tokenName = getTokenRecordName(tokenRecord.token) || 'Security token';
+  const tokenName = getTokenRecordName(tokenRecord.token) || 'Investment asset';
   const tokenSymbol = getTokenRecordSymbol(tokenRecord.token);
   const companyName = organization?.company?.legalName || user?.name || 'Your organization';
   const organizationStatus = organizationStatusMeta(organization);
@@ -258,14 +258,6 @@ function IssuerDashboardPage() {
     rawToken?.deployment?.deployedAt,
     rawToken?.createdAt,
   );
-  const tokenContractAddress = firstText(
-    rawToken?.tokenAddress,
-    rawToken?.contractAddress,
-    rawToken?.proxyAddress,
-    rawToken?.contracts?.token,
-    rawToken?.deployment?.contracts?.token,
-    rawToken?.deployment?.tokenAddress,
-  );
   const tokenDestination = tokenRecord.isDeployed
     ? ROUTES.tokenDetails(tokenRecord.tokenUid || 'token')
     : tokenRecord.isDeploymentPending
@@ -276,14 +268,14 @@ function IssuerDashboardPage() {
           ? ROUTES.tokenIssuanceStep(tokenStepKey(rawToken))
           : ROUTES.createToken;
   const tokenActionLabel = tokenRecord.isDeployed
-    ? 'View token'
+    ? 'View asset'
     : tokenRecord.isDeploymentPending
       ? 'View creation status'
       : tokenRecord.isReadyToDeploy || tokenRecord.isDeploymentFailed
-        ? 'Review token setup'
+        ? 'Review asset setup'
         : tokenRecord.hasToken
-          ? 'Continue token setup'
-          : 'Create security token';
+          ? 'Continue asset setup'
+          : 'Create investment asset';
 
   const recentRequests = useMemo(
     () => [...requests]
@@ -336,7 +328,7 @@ function IssuerDashboardPage() {
           id: 'organization-onboarding',
           icon: Building2,
           title: 'Complete organization onboarding',
-          description: 'Finish the remaining organization information before creating your token.',
+          description: 'Finish the remaining organization information before creating your investment asset.',
           label: 'Continue',
           to: ROUTES.organization,
           tone: 'warning',
@@ -349,9 +341,9 @@ function IssuerDashboardPage() {
       items.push({
         id: 'create-token',
         icon: Coins,
-        title: 'Create your security token',
-        description: 'Your organization is verified and ready to begin token configuration.',
-        label: 'Create token',
+        title: 'Create your investment asset',
+        description: 'Your organization is verified and ready to begin the guided asset setup.',
+        label: 'Create asset',
         to: ROUTES.createToken,
         tone: 'info',
       });
@@ -396,7 +388,7 @@ function IssuerDashboardPage() {
         id: 'eligible-investors',
         icon: Mail,
         title: 'Eligible investors are available to invite',
-        description: 'Open the investor directory to review eligibility and send token invitations.',
+        description: 'Open the investor directory to review eligibility and send investment invitations.',
         label: 'Open investors',
         to: ROUTES.issuerInvestorDirectory,
         tone: 'info',
@@ -435,18 +427,18 @@ function IssuerDashboardPage() {
     {
       id: 'investors',
       icon: UserRoundCheck,
-      label: 'Completed investors',
+      label: 'Approved investors',
       value: investorTotal === null ? '—' : numberFormatter.format(investorTotal),
       helper: tokenRecord.isDeployed
-        ? `Investor directory for ${tokenSymbol || tokenName}`
-        : 'Available after token creation',
+        ? `Approved to invest in ${tokenSymbol || tokenName}`
+        : 'Available after asset creation',
       to: ROUTES.issuerInvestorDirectory,
       disabled: !tokenRecord.isDeployed,
     },
     {
       id: 'redemptions',
       icon: RefreshCcw,
-      label: 'Redemptions',
+      label: 'Redemption requests',
       value: numberFormatter.format(redemptions.length),
       helper: redemptionActions.length
         ? `${numberFormatter.format(redemptionActions.length)} require issuer action`
@@ -458,11 +450,13 @@ function IssuerDashboardPage() {
     {
       id: 'token',
       icon: Coins,
-      label: 'Token status',
+      label: 'Asset status',
       value: tokenStatus.label,
       helper: tokenRecord.hasToken
-        ? [tokenSymbol, tokenNetwork].filter(Boolean).join(' · ') || 'Current token configuration'
-        : 'No token configured yet',
+        ? tokenRecord.isDeployed
+          ? `${tokenSymbol || tokenName} creation complete`
+          : [tokenSymbol, tokenNetwork].filter(Boolean).join(' · ') || 'Current asset setup'
+        : 'No investment asset configured yet',
       to: tokenDestination,
     },
   ];
@@ -487,7 +481,7 @@ function IssuerDashboardPage() {
         <div>
           <span className="eyebrow">Issuer workspace</span>
           <h1>Dashboard</h1>
-          <p>Monitor your organization, token lifecycle, investor requests, and redemptions using your latest account data.</p>
+          <p>See what is ready, what needs your attention, and what to do next across your investment activity.</p>
         </div>
         <Button
           variant="secondary"
@@ -503,23 +497,37 @@ function IssuerDashboardPage() {
         <div className="issuer-dashboard-hero-live__content">
           <div className="issuer-dashboard-hero-live__badges">
             <Badge tone={organizationStatus.tone}>Organization · {organizationStatus.label}</Badge>
-            <Badge tone={tokenStatus.tone}>Token · {tokenStatus.label}</Badge>
+            <Badge tone={tokenStatus.tone}>Asset · {tokenStatus.label}</Badge>
           </div>
           <span className="issuer-dashboard-hero-live__eyebrow">{companyName}</span>
           <h2>Welcome back, {user?.name?.split(' ')[0] || 'Issuer'}.</h2>
           <p>
             {tokenRecord.isDeployed
-              ? `Your token ${tokenName}${tokenSymbol ? ` (${tokenSymbol})` : ''} has been successfully created and is ready to use. You can now invite investors from the Investors menu and start managing your investor list.`
+              ? `${tokenName}${tokenSymbol ? ` (${tokenSymbol})` : ''} has been created. Open the asset to review its live price and access settings, or continue to your approved investor list.`
               : tokenRecord.hasToken
                 ? `${tokenName}${tokenSymbol ? ` (${tokenSymbol})` : ''} is currently ${tokenStatus.label.toLowerCase()}. ${tokenStatus.description}`
                 : tokenStatus.description}
           </p>
+          <div className="issuer-dashboard-next-step" role="note">
+            <strong>Next:</strong>
+            <span>
+              {tokenRecord.isDeployed
+                ? 'Open the asset to confirm its live settings, then review approved investors and send invitations when you are ready.'
+                : tokenRecord.hasToken
+                  ? 'Continue the asset setup from where you left off.'
+                  : 'Start the guided asset setup when you are ready to raise investment.'}
+            </span>
+          </div>
           <div className="issuer-dashboard-hero-live__actions">
             <Button icon={Coins} onClick={() => navigate(tokenDestination)}>
               {tokenActionLabel}
             </Button>
-            <Button variant="secondary" icon={Building2} onClick={() => navigate(ROUTES.organization)}>
-              Organization
+            <Button
+              variant="secondary"
+              icon={tokenRecord.isDeployed ? UsersRound : Building2}
+              onClick={() => navigate(tokenRecord.isDeployed ? ROUTES.issuerInvestorDirectory : ROUTES.organization)}
+            >
+              {tokenRecord.isDeployed ? 'View investors' : 'Organization'}
             </Button>
           </div>
         </div>
@@ -527,17 +535,17 @@ function IssuerDashboardPage() {
           <div className="issuer-dashboard-token-snapshot__top">
             <span className="issuer-dashboard-token-snapshot__icon"><ShieldCheck size={24} /></span>
             <div>
-              <small>Current token</small>
-              <strong>{tokenRecord.hasToken ? tokenName : 'No token yet'}</strong>
+              <small>Current investment asset</small>
+              <strong>{tokenRecord.hasToken ? tokenName : 'No asset yet'}</strong>
               {tokenSymbol ? <span>{tokenSymbol}</span> : null}
             </div>
           </div>
           <dl>
             <div><dt>Status</dt><dd>{tokenStatus.label}</dd></div>
-            <div><dt>Network</dt><dd>{tokenNetwork || '—'}</dd></div>
             <div><dt>Last updated</dt><dd>{formatDashboardDate(tokenUpdatedAt)}</dd></div>
+            <div><dt>Investor access</dt><dd>{tokenRecord.isDeployed ? 'Review on asset page' : 'Not available yet'}</dd></div>
             {tokenRecord.isDeployed ? (
-              <div><dt>Contract</dt><dd title={tokenContractAddress || undefined}>{tokenContractAddress ? `${tokenContractAddress.slice(0, 8)}…${tokenContractAddress.slice(-6)}` : '—'}</dd></div>
+              <div><dt>Network</dt><dd>{tokenNetwork || '—'}</dd></div>
             ) : null}
           </dl>
         </div>
@@ -589,8 +597,8 @@ function IssuerDashboardPage() {
         <Card className="issuer-dashboard-workflow-card">
           <header className="issuer-dashboard-card-header">
             <div>
-              <span className="eyebrow">Token issuance</span>
-              <h2>{tokenRecord.hasToken ? tokenName : 'Security token setup'}</h2>
+              <span className="eyebrow">Asset setup</span>
+              <h2>{tokenRecord.hasToken ? tokenName : 'Investment asset setup'}</h2>
               <p>{tokenStatus.description}</p>
             </div>
             <Badge tone={tokenStatus.tone}>{tokenStatus.label}</Badge>
@@ -599,10 +607,10 @@ function IssuerDashboardPage() {
           {tokenRecord.hasToken ? (
             <>
               <div className="issuer-dashboard-progress-copy">
-                <span>Configuration progress</span>
+                <span>Setup progress</span>
                 <strong>{workflow.progress}%</strong>
               </div>
-              <div className="issuer-dashboard-progress-track" aria-label={`Token configuration ${workflow.progress}% complete`}>
+              <div className="issuer-dashboard-progress-track" aria-label={`Asset setup ${workflow.progress}% complete`}>
                 <span style={{ width: `${workflow.progress}%` }} />
               </div>
               <div className="issuer-dashboard-workflow-list">
@@ -630,10 +638,10 @@ function IssuerDashboardPage() {
           ) : (
             <div className="issuer-dashboard-empty-panel">
               <span><Coins size={28} /></span>
-              <h3>No token configuration yet</h3>
-              <p>Once your organization is ready, start the token wizard. The dashboard will then reflect your saved token setup automatically.</p>
+              <h3>No investment asset yet</h3>
+              <p>Start the guided setup when you are ready. Your progress is saved automatically as you complete each step.</p>
               <Button onClick={() => navigate(ROUTES.createToken)} disabled={organization?.status !== ORGANIZATION_STATUSES.VERIFIED}>
-                Create security token
+                Create investment asset
               </Button>
             </div>
           )}
@@ -643,8 +651,8 @@ function IssuerDashboardPage() {
           <header className="issuer-dashboard-card-header">
             <div>
               <span className="eyebrow">Action center</span>
-              <h2>What needs attention</h2>
-              <p>Prioritized from your current issuer data.</p>
+              <h2>What should I do next?</h2>
+              <p>Only actions that need you are shown here.</p>
             </div>
           </header>
           {isDashboardLoading ? (
@@ -685,7 +693,7 @@ function IssuerDashboardPage() {
             <div>
               <span className="eyebrow">Investment Requests</span>
               <h2>Recent investment requests</h2>
-              <p>Latest investor requests for your token.</p>
+              <p>Latest investor requests for your investment asset.</p>
             </div>
             <button className="link-button" type="button" onClick={() => navigate(ROUTES.investors)}>
               View all
@@ -855,7 +863,7 @@ function InvestorDashboardPage() {
         id: 'new-invitations',
         icon: Mail,
         title: `${numberFormatter.format(newInvitationTotal)} new invitation${newInvitationTotal === 1 ? '' : 's'}`,
-        description: 'Review token invitations sent to you by issuers.',
+        description: 'An issuer invited you to review an investment opportunity.',
         label: 'View invitations',
         to: ROUTES.invitations,
         tone: 'info',
@@ -890,9 +898,9 @@ function InvestorDashboardPage() {
       items.push({
         id: 'registered-assets',
         icon: Coins,
-        title: `${numberFormatter.format(registeredApplications.length)} registered asset${registeredApplications.length === 1 ? '' : 's'} ready`,
-        description: 'Invest, send, or redeem through your registered asset workspace.',
-        label: 'Manage assets',
+        title: `${numberFormatter.format(registeredApplications.length)} approved investment${registeredApplications.length === 1 ? '' : 's'} ready`,
+        description: 'You are approved for this investment. You can invest more, send, or redeem.',
+        label: 'Open my assets',
         to: ROUTES.assetManagement,
         tone: 'success',
       });
@@ -902,8 +910,8 @@ function InvestorDashboardPage() {
       items.push({
         id: 'explore-marketplace',
         icon: Store,
-        title: 'Explore available offerings',
-        description: `${numberFormatter.format(offeringTotal)} created offering${offeringTotal === 1 ? '' : 's'} currently available in the marketplace.`,
+        title: 'Explore available investments',
+        description: `${numberFormatter.format(offeringTotal)} investment opportunit${offeringTotal === 1 ? 'y is' : 'ies are'} available to review.`,
         label: 'Open marketplace',
         to: ROUTES.marketplace,
         tone: 'info',
@@ -965,7 +973,7 @@ function InvestorDashboardPage() {
         <div>
           <span className="eyebrow">Investor workspace</span>
           <h1>Dashboard</h1>
-          <p>Track your profile, applications, invitations, registered assets, and available offerings using your current account data.</p>
+          <p>See what needs your attention, continue applications, and manage your investments from one place.</p>
         </div>
         <div className="investor-dashboard-live__header-actions">
           <Button
@@ -986,7 +994,7 @@ function InvestorDashboardPage() {
         <div className="investor-dashboard-live__hero-copy">
           <div className="investor-dashboard-live__badges">
             <Badge tone={profileStatus.tone}>Profile · {profileStatus.label}</Badge>
-            <Badge tone={investorQuery.isLoading ? 'neutral' : walletAddress ? 'success' : 'neutral'}>Wallet · {investorQuery.isLoading ? 'Loading' : walletAddress ? 'Linked' : 'Not linked'}</Badge>
+            <Badge tone={investorQuery.isLoading ? 'neutral' : walletAddress ? 'success' : 'neutral'}>Wallet · {investorQuery.isLoading ? 'Loading' : walletAddress ? 'Connected' : 'Not connected'}</Badge>
           </div>
           <span className="investor-dashboard-live__eyebrow">{investorName}</span>
           <h2>Welcome back, {firstText(user?.name?.split(' ')[0], identity.firstName, 'Investor')}.</h2>
@@ -995,13 +1003,13 @@ function InvestorDashboardPage() {
               ? `You have ${numberFormatter.format(newInvitationTotal)} new invitation${newInvitationTotal === 1 ? '' : 's'} waiting to be reviewed.`
               : applicationsNeedingAction.length > 0
                 ? `${numberFormatter.format(applicationsNeedingAction.length)} application${applicationsNeedingAction.length === 1 ? '' : 's'} currently need your attention.`
-                : 'Your account is up to date. Continue from your applications, registered assets, or marketplace offerings below.'}
+                : 'Nothing needs your attention right now. You can manage an approved investment or explore new opportunities below.'}
           </p>
           <div className="investor-dashboard-live__hero-actions">
             {newInvitationTotal > 0 ? (
               <Button icon={Mail} onClick={() => navigate(ROUTES.invitations)}>Review invitations</Button>
             ) : registeredApplications.length > 0 ? (
-              <Button icon={Coins} onClick={() => navigate(ROUTES.assetManagement)}>Manage assets</Button>
+              <Button icon={Coins} onClick={() => navigate(ROUTES.assetManagement)}>Manage investments</Button>
             ) : (
               <Button icon={Store} onClick={() => navigate(ROUTES.marketplace)}>Browse offerings</Button>
             )}
@@ -1015,21 +1023,31 @@ function InvestorDashboardPage() {
           <div className="investor-dashboard-live__identity-top">
             <span className="investor-dashboard-card-icon"><UserRoundCheck size={21} /></span>
             <div>
-              <small>Investor identity</small>
-              <strong>{profile.profileId || 'Profile reference unavailable'}</strong>
+              <small>Account setup</small>
+              <strong>{profileStatus.label === 'Loading' ? 'Checking your profile…' : 'Investor profile ready'}</strong>
               <span>{locationLabel}</span>
             </div>
           </div>
           <dl>
-            <div><dt>On-chain identity</dt><dd title={profile.onchainId || undefined}>{profile.onchainId ? `${profile.onchainId.slice(0, 8)}…${profile.onchainId.slice(-6)}` : '—'}</dd></div>
-            <div><dt>Documents</dt><dd>{numberFormatter.format(documentCount)}</dd></div>
-            <div><dt>Submitted</dt><dd>{formatDashboardDate(submittedAt)}</dd></div>
+            <div><dt>Profile reference</dt><dd>{profile.profileId || '—'}</dd></div>
+            <div><dt>Documents provided</dt><dd>{numberFormatter.format(documentCount)}</dd></div>
+            <div><dt>Profile submitted</dt><dd>{formatDashboardDate(submittedAt)}</dd></div>
           </dl>
-          {profile.onchainId || profile.profileId ? (
-            <button type="button" className="investor-dashboard-live__copy" onClick={copyIdentity}>
-              <Copy size={14} /> Copy identity reference
+          <div className="investor-dashboard-live__identity-actions">
+            <button type="button" className="investor-dashboard-live__copy" onClick={() => navigate(ROUTES.profile)}>
+              <UserRoundCheck size={14} /> View profile
             </button>
-          ) : null}
+            {profile.onchainId || profile.profileId ? (
+              <details className="investor-technical-details investor-technical-details--compact">
+                <summary>Technical details</summary>
+                <div>
+                  <span>Blockchain identity</span>
+                  <strong title={profile.onchainId || undefined}>{profile.onchainId ? `${profile.onchainId.slice(0, 8)}…${profile.onchainId.slice(-6)}` : 'Not available'}</strong>
+                  <button type="button" onClick={copyIdentity}><Copy size={13} /> Copy reference</button>
+                </div>
+              </details>
+            ) : null}
+          </div>
         </div>
       </Card>
 
@@ -1055,7 +1073,7 @@ function InvestorDashboardPage() {
             ))
           : [
               {
-                id: 'applications', icon: FileClock, label: 'Applications', value: applications.length,
+                id: 'applications', icon: FileClock, label: 'Investment applications', value: applications.length,
                 helper: applicationsNeedingAction.length ? `${applicationsNeedingAction.length} need your attention` : applications.length ? 'No immediate action required' : 'No applications submitted yet',
                 to: ROUTES.applications,
               },
@@ -1065,13 +1083,13 @@ function InvestorDashboardPage() {
                 to: ROUTES.invitations,
               },
               {
-                id: 'assets', icon: Coins, label: 'Registered assets', value: registeredApplications.length,
-                helper: registeredApplications.length ? 'Available in Manage Tokens' : 'Available after investor approval',
+                id: 'assets', icon: Coins, label: 'Approved investments', value: registeredApplications.length,
+                helper: registeredApplications.length ? 'Approved and ready to manage' : 'Available after issuer approval',
                 to: ROUTES.assetManagement,
               },
               {
-                id: 'offerings', icon: Store, label: 'Marketplace offerings', value: offeringTotal,
-                helper: offeringTotal ? 'Created offerings available to explore' : 'No created offerings available',
+                id: 'offerings', icon: Store, label: 'Available investments', value: offeringTotal,
+                helper: offeringTotal ? 'Opportunities available to explore' : 'No investments available right now',
                 to: ROUTES.marketplace,
               },
             ].map((metric) => {
@@ -1100,7 +1118,7 @@ function InvestorDashboardPage() {
           <header className="investor-dashboard-card-heading">
             <div>
               <span className="eyebrow">Action center</span>
-              <h2>What needs attention</h2>
+              <h2>What should I do next?</h2>
             </div>
             <span className="investor-dashboard-card-icon"><ShieldCheck size={20} /></span>
           </header>

@@ -5,6 +5,8 @@ import { toast } from 'sonner';
 import { tokenApi } from '@/api/tokens';
 import {
   FieldWrapper,
+  HelpDetails,
+  ImpactNote,
   SectionCard,
   TextareaInput,
   TextInput,
@@ -58,7 +60,7 @@ export default function TokenInformationPage() {
   const errors = validateTokenInformation(data, supplyPricing, {
     requiredTreasuryWallet: organizationWallet,
   });
-  useDocumentTitle('Token Information');
+  useDocumentTitle('Asset Details');
 
   useEffect(() => {
     hydrateWalletDefaults(organizationWallet);
@@ -125,7 +127,7 @@ export default function TokenInformationPage() {
       });
       recordBackendSave('token-information', response);
       markStepCompleted('token-information');
-      toast.success('Token information saved securely.');
+      toast.success('Asset details saved securely.');
       navigate(ROUTES.tokenIssuanceStep('identity-claims'));
     } catch (error) {
       const duplicateConflict =
@@ -137,7 +139,7 @@ export default function TokenInformationPage() {
       setServerErrors({ ...duplicateErrors, ...mappedErrors });
 
       if (duplicateConflict) {
-        toast.error('Token name or symbol already exists', {
+        toast.error('Asset name or symbol already exists', {
           id: 'duplicate-token-information',
           description: getDuplicateTokenMessage({
             tokenName: data.name,
@@ -146,7 +148,7 @@ export default function TokenInformationPage() {
           duration: 8_000,
         });
       } else {
-        toast.error('Token information was not saved.', {
+        toast.error('Asset details were not saved.', {
           description: getTokenApiErrorMessage(
             error,
             'Review the highlighted fields and try again.',
@@ -161,8 +163,8 @@ export default function TokenInformationPage() {
   return (
     <IssuanceLayout
       stepKey="token-information"
-      title="Token Information"
-      description="Enter the essential details investors will see and the settings used to create your token."
+      title="Asset Details"
+      description="Add the basic information that identifies your asset and helps investors understand what they are investing in."
       onBack={() => navigate(ROUTES.createToken)}
       onContinue={continueStep}
       continueLabel="Save and Continue"
@@ -182,7 +184,7 @@ export default function TokenInformationPage() {
             />
 
             <FieldWrapper
-              label="Token Name"
+              label="Asset name"
               required
               error={fieldError('name')}
               htmlFor="token-name"
@@ -195,7 +197,7 @@ export default function TokenInformationPage() {
                   updateToken('name', normalizeTokenName(data.name));
                   blur('name');
                 }}
-                placeholder="Example: Psephos Token"
+                placeholder="Example: Psephos Growth Fund"
                 error={fieldError('name')}
                 minLength={3}
                 maxLength={50}
@@ -204,10 +206,10 @@ export default function TokenInformationPage() {
             </FieldWrapper>
 
             <FieldWrapper
-              label="Token Symbol"
+              label="Short symbol"
               required
               error={fieldError('symbol')}
-              hint={`${data.symbol.length}/10 characters`}
+              hint={`Use 2–10 letters or numbers. Example: TRXF. ${data.symbol.length}/10 characters`}
               htmlFor="token-symbol"
             >
               <TextInput
@@ -234,25 +236,29 @@ export default function TokenInformationPage() {
             <SelectField
               id="token-decimals"
               className="issuance-decimals-select"
-              label="Decimals"
+              label="Decimal places"
               required
               options={DECIMAL_OPTIONS}
               value={data.decimals}
-              placeholder="Select decimals"
+              placeholder="Choose decimal places"
               searchable={false}
               showEmptyOption={false}
               onChange={(event) => updateToken('decimals', event.target.value)}
               onBlur={() => blur('decimals')}
               error={fieldError('decimals')}
-              hint="Select the supported token decimal precision."
+              hint="This controls how finely one unit can be divided. If your product or legal team has not specified a value, 6 is a practical default for many assets."
               disabled={backend.isLocked}
             />
 
+            <HelpDetails className="issuance-form-grid__full-help" title="What do decimal places change?">
+              Decimal places do not change the total value of the asset. They only decide how small a fraction of one unit can be represented. For example, 6 decimal places allows quantities smaller than one whole unit.
+            </HelpDetails>
+
             <FieldWrapper
-              label="Initial Token Price (USDT)"
+              label="Starting price per unit (USDT)"
               required
               error={fieldError('initialPrice')}
-              hint="Enter a positive price in USDT."
+              hint="Enter the starting price for one unit of the asset. Example: 10 means one unit starts at 10 USDT."
               htmlFor="initial-token-price"
             >
               <TextInput
@@ -283,10 +289,10 @@ export default function TokenInformationPage() {
 
             <FieldWrapper
               className="issuance-field--full"
-              label="Treasury Wallet Address"
+              label="Approved organization account"
               required
               error={fieldError('treasuryWallet')}
-              hint="This is the approved organization wallet registered during onboarding."
+              hint="This account was approved during organization onboarding and is filled in automatically."
               htmlFor="treasury-wallet"
             >
               <TextInput
@@ -300,12 +306,16 @@ export default function TokenInformationPage() {
               />
             </FieldWrapper>
 
+            <ImpactNote className="issuance-form-grid__full-help" title="What happens to this account" tone="positive">
+              This approved organization account is used for the asset setup and management permissions. You do not need to type or change the address here.
+            </ImpactNote>
+
             <FieldWrapper
               className="issuance-field--full"
-              label="Token Description"
+              label="Investor-facing description"
               required
               error={fieldError('description')}
-              hint="Describe the represented asset and holder rights in clear language."
+              hint="Explain what the asset represents, what investors receive, and any key rights in clear business language."
               htmlFor="token-description"
             >
               <TextareaInput
@@ -314,7 +324,7 @@ export default function TokenInformationPage() {
                 value={data.description}
                 onChange={(event) => updateToken('description', event.target.value)}
                 onBlur={() => blur('description')}
-                placeholder="Describe the security token and its intended use."
+                placeholder="Example: This asset represents units in our investment offering and gives approved investors the rights described in the offering documents."
                 error={fieldError('description')}
                 maxLength={600}
                 disabled={backend.isLocked}

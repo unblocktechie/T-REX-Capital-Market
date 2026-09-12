@@ -19,7 +19,7 @@ export function IssuanceStepper({ currentStepKey, completedSteps, stepErrors = {
   };
 
   return (
-    <div className="org-stepper issuance-stepper-org" aria-label={`Token issuance step ${current.number} of ${TOKEN_ISSUANCE_STEPS.length}`}>
+    <div className="org-stepper issuance-stepper-org" aria-label={`Asset setup step ${current.number} of ${TOKEN_ISSUANCE_STEPS.length}`}>
       <div className="org-stepper__mobile">
         <div className="org-stepper__mobile-summary">
           <div>
@@ -33,7 +33,7 @@ export function IssuanceStepper({ currentStepKey, completedSteps, stepErrors = {
           <i style={{ width: `${(current.number / TOKEN_ISSUANCE_STEPS.length) * 100}%` }} />
         </div>
 
-        <ol className="org-stepper__mobile-steps" aria-label="Token issuance steps">
+        <ol className="org-stepper__mobile-steps" aria-label="Asset setup steps">
           {TOKEN_ISSUANCE_STEPS.map((step, index) => {
             const complete = completedSteps.includes(step.key);
             const active = step.key === currentStepKey;

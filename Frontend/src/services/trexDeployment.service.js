@@ -10,8 +10,9 @@ import {
   parseUnits,
   zeroAddress,
 } from 'viem';
-import { env } from '@/config/env';
+import { DEFAULT_TREX_PLATFORM_CONTROLLER_ADDRESS, env } from '@/config/env';
 import { web3Config } from '@/config/web3';
+import { assertValidTransactionHash } from '@/utils/transactionHash';
 
 const TREX_GATEWAY_ABI = [
   {
@@ -352,6 +353,369 @@ const extractSuiteDeployment = (receipt, factoryAddress) => {
   return null;
 };
 
+const createTrexPublicClient = () =>
+  createPublicClient({
+    chain: web3Config.requiredChain,
+    transport: http(env.web3.rpcUrl),
+  });
+
+const receiptSucceeded = (receipt) =>
+  receipt?.status === 'success' || receipt?.status === 1 || receipt?.status === 1n;
+
+const configurationError = ({
+  message,
+  deploymentTransactionHash,
+  failedTransactionHash = '',
+  tokenAddress,
+  contracts,
+  onChainPaused,
+  cause,
+}) => {
+  const error = new Error(message, cause ? { cause } : undefined);
+  error.code = 'TOKEN_CONFIGURATION_FAILED';
+  error.failedStep = 'activate-transfers';
+  error.transactionHash = deploymentTransactionHash;
+  error.failedTransactionHash = failedTransactionHash;
+  error.tokenAddress = tokenAddress;
+  error.contracts = contracts;
+  error.onChainPaused = onChainPaused;
+  error.transactionSubmitted = true;
+  error.deploymentConfirmed = true;
+  error.mandatoryStepPending = true;
+  return error;
+};
+
+/**
+ * Reads the transfer state directly from the token contract. This is the source of truth
+ * for pause/unpause UI; callers must not infer it from a previous React or database value.
+ */
+export async function readTrexTokenPaused({ tokenAddress }) {
+  const token = requiredAddress(tokenAddress, 'Token contract');
+  return Boolean(
+    await createTrexPublicClient().readContract({
+      address: token,
+      abi: TOKEN_ACCESS_ABI,
+      functionName: 'paused',
+    }),
+  );
+}
+
+/**
+ * Recovers a confirmed deployment from its transaction receipt without changing state.
+ * Used after refresh so mandatory post-deployment transactions can resume safely instead
+ * of finalizing the database merely because transaction #1 exists.
+ */
+export async function recoverTrexDeploymentState({ transactionHash, deploymentConfig }) {
+  const deployHash = assertValidTransactionHash(transactionHash);
+  const publicClient = createTrexPublicClient();
+  const gatewayAddress = requiredAddress(deploymentConfig?.gateway, 'T-REX Gateway address');
+  const factoryAddress = getAddress(
+    await publicClient.readContract({
+      address: gatewayAddress,
+      abi: TREX_GATEWAY_ABI,
+      functionName: 'getFactory',
+    }),
+  );
+
+  let receipt;
+  try {
+    receipt = await publicClient.waitForTransactionReceipt({
+      hash: deployHash,
+      confirmations: 1,
+      timeout: 120_000,
+    });
+  } catch (cause) {
+    const error = new Error(
+      'The token-creation transaction is still waiting for network confirmation.',
+      { cause },
+    );
+    error.code = 'DEPLOYMENT_CONFIRMATION_PENDING';
+    error.transactionHash = deployHash;
+    error.transactionSubmitted = true;
+    error.syncOnly = true;
+    throw error;
+  }
+
+  if (!receiptSucceeded(receipt)) {
+    const error = new Error('The token-creation transaction was confirmed but reverted.');
+    error.code = 'DEPLOYMENT_TRANSACTION_REVERTED';
+    error.failedStep = 'deployment';
+    error.transactionHash = deployHash;
+    error.transactionSubmitted = true;
+    error.confirmedRevert = true;
+    throw error;
+  }
+
+  const contracts = extractSuiteDeployment(receipt, factoryAddress);
+  if (!contracts?.token) {
+    const error = new Error('The confirmed token-creation receipt did not contain the deployed token address.');
+    error.code = 'DEPLOYMENT_RECEIPT_INVALID';
+    error.failedStep = 'deployment';
+    error.transactionHash = deployHash;
+    error.transactionSubmitted = true;
+    throw error;
+  }
+
+  const paused = await readTrexTokenPaused({ tokenAddress: contracts.token });
+  return {
+    transactionHash: deployHash,
+    blockNumber: receipt.blockNumber?.toString?.() || '',
+    contracts,
+    tokenAddress: contracts.token,
+    paused,
+    receipt: jsonSafe(receipt),
+  };
+}
+
+/**
+ * Runs only the transfer-activation transaction for an already deployed token. It first
+ * reads paused() and reads it again after a successful receipt, preventing optimistic
+ * unpause state from leaking into the UI or database.
+ */
+export async function activateTrexTransfers({
+  connector,
+  connectedAddress,
+  issuerWalletAddress,
+  tokenAddress,
+  deploymentTransactionHash,
+  contracts,
+  previousTransactionHash = '',
+  onWalletAction,
+}) {
+  const deployHash = assertValidTransactionHash(deploymentTransactionHash);
+  const provider = await connector?.getProvider?.();
+  if (!provider?.request) {
+    throw configurationError({
+      message: 'The organization wallet is unavailable. Reconnect it to activate transfers.',
+      deploymentTransactionHash: deployHash,
+      tokenAddress,
+      contracts,
+      onChainPaused: null,
+    });
+  }
+
+  const issuerAddress = requiredAddress(issuerWalletAddress, 'Approved organization wallet');
+  const accounts = await provider.request({ method: 'eth_accounts' });
+  const activeAddress = requiredAddress(accounts?.[0] || connectedAddress, 'Connected deployment wallet');
+  if (activeAddress.toLowerCase() !== issuerAddress.toLowerCase()) {
+    throw configurationError({
+      message: 'Connect the approved organization wallet before activating transfers.',
+      deploymentTransactionHash: deployHash,
+      tokenAddress,
+      contracts,
+      onChainPaused: null,
+    });
+  }
+
+  const providerChainId = Number(BigInt(await provider.request({ method: 'eth_chainId' })));
+  if (providerChainId !== web3Config.requiredChain.id) {
+    throw configurationError({
+      message: `Switch the connected wallet to ${web3Config.requiredChain.name} before activating transfers.`,
+      deploymentTransactionHash: deployHash,
+      tokenAddress,
+      contracts,
+      onChainPaused: null,
+    });
+  }
+
+  const token = requiredAddress(tokenAddress, 'Token contract');
+  const publicClient = createTrexPublicClient();
+  const walletClient = createWalletClient({
+    account: activeAddress,
+    chain: web3Config.requiredChain,
+    transport: custom(provider),
+  });
+
+  const pausedBefore = Boolean(
+    await publicClient.readContract({
+      address: token,
+      abi: TOKEN_ACCESS_ABI,
+      functionName: 'paused',
+    }),
+  );
+  if (!pausedBefore) {
+    return {
+      attempted: false,
+      status: 'already-unpaused',
+      transactionHash: '',
+      blockNumber: '',
+      paused: false,
+    };
+  }
+
+  const previousHash = String(previousTransactionHash || '').trim();
+  if (/^0x[a-fA-F0-9]{64}$/.test(previousHash)) {
+    try {
+      const previousReceipt = await publicClient.waitForTransactionReceipt({
+        hash: previousHash,
+        confirmations: 1,
+        timeout: 45_000,
+      });
+      if (receiptSucceeded(previousReceipt)) {
+        const pausedAfterPrevious = await readTrexTokenPaused({ tokenAddress: token });
+        if (!pausedAfterPrevious) {
+          onWalletAction?.({
+            key: 'activate-transfers',
+            step: 2,
+            total: 3,
+            status: 'confirmed',
+            title: 'Token transfers activated',
+            description: 'The previously submitted activation transaction is confirmed and transfers are active.',
+            transactionHash: previousHash,
+            gasRequired: true,
+          });
+          return {
+            attempted: true,
+            status: 'success',
+            transactionHash: previousHash,
+            blockNumber: previousReceipt.blockNumber?.toString?.() || '',
+            paused: false,
+            receipt: jsonSafe(previousReceipt),
+          };
+        }
+        throw configurationError({
+          message: 'The previous activation transaction succeeded, but the token still reports paused. No new transaction was sent.',
+          deploymentTransactionHash: deployHash,
+          failedTransactionHash: previousHash,
+          tokenAddress: token,
+          contracts,
+          onChainPaused: true,
+        });
+      }
+      // A confirmed revert is terminal for that transaction, so a fresh retry is safe.
+    } catch (cause) {
+      if (cause?.code === 'TOKEN_CONFIGURATION_FAILED') throw cause;
+      const pendingError = configurationError({
+        message: 'The previous transfer-activation transaction is still being confirmed. Wait for it before retrying; no new transaction was sent.',
+        deploymentTransactionHash: deployHash,
+        failedTransactionHash: previousHash,
+        tokenAddress: token,
+        contracts,
+        onChainPaused: true,
+        cause,
+      });
+      pendingError.code = 'TOKEN_CONFIGURATION_PENDING';
+      throw pendingError;
+    }
+  }
+
+  let activationHash = '';
+  try {
+    onWalletAction?.({
+      key: 'activate-transfers',
+      step: 2,
+      total: 3,
+      status: 'awaiting-signature',
+      title: 'Transaction 2 of 3: Activate token transfers',
+      description: 'Approve this transaction to allow eligible investors to receive and transfer the token.',
+      gasRequired: true,
+    });
+    const simulation = await publicClient.simulateContract({
+      account: activeAddress,
+      address: token,
+      abi: TOKEN_ACCESS_ABI,
+      functionName: 'unpause',
+    });
+    activationHash = await walletClient.writeContract(simulation.request);
+    onWalletAction?.({
+      key: 'activate-transfers',
+      step: 2,
+      total: 3,
+      status: 'confirming',
+      title: 'Activating token transfers',
+      description: 'The wallet approval was received. Waiting for network confirmation.',
+      transactionHash: activationHash,
+      gasRequired: true,
+    });
+
+    const receipt = await publicClient.waitForTransactionReceipt({
+      hash: activationHash,
+      confirmations: 1,
+    });
+    if (!receiptSucceeded(receipt)) {
+      throw Object.assign(new Error('The transfer-activation transaction was confirmed but reverted.'), {
+        code: 'TRANSFER_ACTIVATION_REVERTED',
+        transactionHash: activationHash,
+        confirmedRevert: true,
+      });
+    }
+
+    const pausedAfter = Boolean(
+      await publicClient.readContract({
+        address: token,
+        abi: TOKEN_ACCESS_ABI,
+        functionName: 'paused',
+      }),
+    );
+    if (pausedAfter) {
+      throw Object.assign(
+        new Error('The activation transaction succeeded, but the token is still paused on-chain.'),
+        {
+          code: 'TRANSFER_STATE_VERIFICATION_FAILED',
+          transactionHash: activationHash,
+        },
+      );
+    }
+
+    onWalletAction?.({
+      key: 'activate-transfers',
+      step: 2,
+      total: 3,
+      status: 'confirmed',
+      title: 'Token transfers activated',
+      description: 'The transaction is confirmed and the token contract reports that transfers are active.',
+      transactionHash: activationHash,
+      gasRequired: true,
+    });
+
+    return {
+      attempted: true,
+      status: 'success',
+      transactionHash: activationHash,
+      blockNumber: receipt.blockNumber?.toString?.() || '',
+      paused: false,
+      receipt: jsonSafe(receipt),
+    };
+  } catch (cause) {
+    let pausedAfterFailure = null;
+    try {
+      pausedAfterFailure = await readTrexTokenPaused({ tokenAddress: token });
+    } catch {
+      // If the authoritative read is unavailable, keep the value unknown and fail closed.
+      pausedAfterFailure = null;
+    }
+
+    onWalletAction?.({
+      key: 'activate-transfers',
+      step: 2,
+      total: 3,
+      status: 'failed',
+      title: pausedAfterFailure === true
+        ? 'Token created, but transfers are still paused'
+        : 'Transfer activation needs verification',
+      description: pausedAfterFailure === true
+        ? 'The token exists, but the transfer-activation step did not complete. Retry this step; the token will not be finalized yet.'
+        : pausedAfterFailure === false
+          ? 'The latest contract read shows transfers are active. Refresh the status before sending another transaction.'
+          : 'The transfer transaction did not complete and the live pause state could not be read. Refresh the status before retrying.',
+      transactionHash: activationHash || cause?.transactionHash || '',
+      gasRequired: true,
+    });
+
+    throw configurationError({
+      message: pausedAfterFailure === true
+        ? 'Token creation succeeded, but transfer activation failed. The token remains paused and has not been finalized.'
+        : 'Transfer activation could not be safely verified. Refresh the on-chain state before continuing.',
+      deploymentTransactionHash: deployHash,
+      failedTransactionHash: activationHash || cause?.transactionHash || '',
+      tokenAddress: token,
+      contracts,
+      onChainPaused: pausedAfterFailure,
+      cause,
+    });
+  }
+}
+
 const getDeploymentErrorText = (error) =>
   `${error?.name || ''} ${error?.shortMessage || ''} ${error?.details || ''} ${error?.message || ''} ${
     error?.cause?.message || ''
@@ -363,6 +727,7 @@ const isWalletTransportTimeout = (error) =>
   );
 
 const deploymentErrorMessage = (error) => {
+  if (['TOKEN_CONFIGURATION_FAILED', 'TOKEN_CONFIGURATION_PENDING'].includes(error?.code)) return error.message;
   const message = getDeploymentErrorText(error);
 
   if (isWalletTransportTimeout(error)) {
@@ -456,6 +821,15 @@ export async function deployTrexSuite({
     deploymentConfig?.platformWallet,
     'Platform Token Agent wallet',
   );
+  // The Platform Controller is a mandatory default Token Agent for every token
+  // created through the platform. This lets controller-based purchase/mint and
+  // redemption/burn flows work immediately after creation without a separate
+  // issuer Agent transaction. Keep the environment value configurable for a
+  // controlled controller migration, but never omit the current platform default.
+  const platformControllerAddress = requiredAddress(
+    deploymentConfig?.platformController || DEFAULT_TREX_PLATFORM_CONTROLLER_ADDRESS,
+    'Platform Controller address',
+  );
   const identityFactoryAddress = requiredAddress(
     deploymentConfig?.identityFactory,
     'ONCHAINID Identity Factory address',
@@ -464,10 +838,7 @@ export async function deployTrexSuite({
   // transaction signature is sent through the injected wallet provider. This keeps
   // routine blockchain reads out of MetaMask's request transport and avoids a stalled
   // wallet connection from leaving the deployment page in a loading state.
-  const publicClient = createPublicClient({
-    chain: web3Config.requiredChain,
-    transport: http(env.web3.rpcUrl),
-  });
+  const publicClient = createTrexPublicClient();
   const walletClient = createWalletClient({
     account: activeAddress,
     chain: web3Config.requiredChain,
@@ -566,10 +937,22 @@ export async function deployTrexSuite({
       optionalAgentAddress(agents?.tokenAgent?.address, issuerAddress, 'Token Agent wallet'),
       issuerAddress,
       platformWalletAddress,
+      // Required system Agent: always include the Platform Controller so buy/redeem
+      // can mint/burn through the controller as soon as the token is created.
+      platformControllerAddress,
     ]),
     complianceModules,
     complianceSettings,
   };
+
+  if (
+    !tokenDetails.tokenAgents.some(
+      (agentAddress) => agentAddress.toLowerCase() === platformControllerAddress.toLowerCase(),
+    )
+  ) {
+    throw new Error('Platform Controller must be configured as a Token Agent before token creation.');
+  }
+
   const claimDetails = {
     claimTopics,
     issuers: [getAddress(issuerIdentityAddress)],
@@ -609,6 +992,7 @@ export async function deployTrexSuite({
       tokenDetails,
       claimDetails,
       platformWalletAddress,
+      platformControllerAddress,
       maximumBalance: {
         input:
           compliance?.maximumBalance !== '' && compliance?.maximumBalance != null
@@ -642,9 +1026,9 @@ export async function deployTrexSuite({
     onWalletAction?.({
       key: 'create-token',
       step: 1,
-      total: 2,
+      total: 3,
       status: 'awaiting-signature',
-      title: 'Transaction 1 of 2: Create your token',
+      title: 'Transaction 1 of 3: Create your token',
       description:
         'Approve this transaction to create the ERC-3643 token and its identity, compliance, and registry contracts on Sepolia.',
       gasRequired: true,
@@ -654,7 +1038,7 @@ export async function deployTrexSuite({
     onWalletAction?.({
       key: 'create-token',
       step: 1,
-      total: 2,
+      total: 3,
       status: 'confirming',
       title: 'Creating your token',
       description: 'The wallet approval was received. Waiting for Sepolia to confirm the token creation transaction.',
@@ -684,11 +1068,11 @@ export async function deployTrexSuite({
       confirmations: 1,
     });
 
-    if (receipt.status !== 'success') {
+    if (!receiptSucceeded(receipt)) {
       onWalletAction?.({
         key: 'create-token',
         step: 1,
-        total: 2,
+        total: 3,
         status: 'failed',
         title: 'Token creation transaction failed',
         description: 'Sepolia confirmed the transaction, but it reverted.',
@@ -696,6 +1080,8 @@ export async function deployTrexSuite({
         gasRequired: true,
       });
       const reverted = new Error('The deployment transaction was confirmed but reverted.');
+      reverted.code = 'DEPLOYMENT_TRANSACTION_REVERTED';
+      reverted.failedStep = 'deployment';
       reverted.transactionHash = transactionHash;
       reverted.transactionSubmitted = true;
       reverted.confirmedRevert = true;
@@ -705,10 +1091,10 @@ export async function deployTrexSuite({
     onWalletAction?.({
       key: 'create-token',
       step: 1,
-      total: 2,
+      total: 3,
       status: 'confirmed',
-      title: 'Token created successfully',
-      description: 'The T-REX token suite is confirmed on Sepolia. One final wallet approval will activate token transfers.',
+      title: 'Asset contracts created',
+      description: 'The first transaction is confirmed. The next required wallet approval will activate approved transfers.',
       transactionHash,
       gasRequired: true,
     });
@@ -723,8 +1109,8 @@ export async function deployTrexSuite({
       throw missingEvent;
     }
 
-    // Persist the confirmed deployment hash before requesting the optional second wallet
-    // transaction. This keeps the deployment recoverable even if the web session expires,
+    // Persist transaction #1 only after its successful receipt, before requesting the
+    // mandatory transfer-activation transaction. This keeps the deployment recoverable even if the web session expires,
     // the tab reloads, or another authenticated request redirects the user to sign in.
     if (onDeploymentConfirmed) {
       try {
@@ -774,6 +1160,12 @@ export async function deployTrexSuite({
         args: [platformWalletAddress],
       }),
       publicClient.readContract({
+        address: contracts.token,
+        abi: TOKEN_ACCESS_ABI,
+        functionName: 'isAgent',
+        args: [platformControllerAddress],
+      }),
+      publicClient.readContract({
         address: contracts.ir,
         abi: IDENTITY_REGISTRY_ACCESS_ABI,
         functionName: 'isAgent',
@@ -798,103 +1190,19 @@ export async function deployTrexSuite({
     const identityRegistryOwner = readValue(1);
     const issuerIsTokenAgent = readValue(2);
     const platformIsTokenAgent = readValue(3);
-    const issuerIsIdentityRegistryAgent = readValue(4);
-    const tokenWasPaused = readValue(5);
+    const controllerIsTokenAgent = readValue(4);
+    const issuerIsIdentityRegistryAgent = readValue(5);
+    const tokenWasPaused = readValue(6);
 
-    let unpause = {
-      attempted: false,
-      status: tokenWasPaused === false ? 'already-unpaused' : 'not-attempted',
-      transactionHash: '',
-      blockNumber: '',
-      error: '',
-    };
-
-    if (tokenWasPaused !== false) {
-      unpause = { ...unpause, attempted: true, status: 'pending' };
-      try {
-        onWalletAction?.({
-          key: 'activate-transfers',
-          step: 2,
-          total: 2,
-          status: 'awaiting-signature',
-          title: 'Transaction 2 of 2: Activate token transfers',
-          description:
-            'Approve this transaction to unpause the new token so eligible investors can receive and transfer it.',
-          gasRequired: true,
-        });
-
-        const unpauseSimulation = await publicClient.simulateContract({
-          account: activeAddress,
-          address: contracts.token,
-          abi: TOKEN_ACCESS_ABI,
-          functionName: 'unpause',
-        });
-        const unpauseTransactionHash = await walletClient.writeContract(unpauseSimulation.request);
-        onWalletAction?.({
-          key: 'activate-transfers',
-          step: 2,
-          total: 2,
-          status: 'confirming',
-          title: 'Activating token transfers',
-          description: 'The wallet approval was received. Waiting for Sepolia to confirm the activation transaction.',
-          transactionHash: unpauseTransactionHash,
-          gasRequired: true,
-        });
-        const unpauseReceipt = await publicClient.waitForTransactionReceipt({
-          hash: unpauseTransactionHash,
-          confirmations: 1,
-        });
-        onWalletAction?.({
-          key: 'activate-transfers',
-          step: 2,
-          total: 2,
-          status: unpauseReceipt.status === 'success' ? 'confirmed' : 'failed',
-          title:
-            unpauseReceipt.status === 'success'
-              ? 'Token transfers activated'
-              : 'Token activation transaction failed',
-          description:
-            unpauseReceipt.status === 'success'
-              ? 'The token is unpaused and ready for eligible transfers.'
-              : 'The token was created, but the activation transaction reverted.',
-          transactionHash: unpauseTransactionHash,
-          gasRequired: true,
-        });
-        unpause = {
-          attempted: true,
-          status: unpauseReceipt.status === 'success' ? 'success' : 'reverted',
-          transactionHash: unpauseTransactionHash,
-          blockNumber: unpauseReceipt.blockNumber.toString(),
-          error:
-            unpauseReceipt.status === 'success'
-              ? ''
-              : 'The issuer-signed unpause transaction was confirmed but reverted.',
-          receipt: jsonSafe(unpauseReceipt),
-        };
-      } catch (unpauseError) {
-        onWalletAction?.({
-          key: 'activate-transfers',
-          step: 2,
-          total: 2,
-          status: 'failed',
-          title: 'Token created, but transfers are still paused',
-          description:
-            'The second wallet transaction was not completed. The token exists on Sepolia, but it must be unpaused before transfers can begin.',
-          transactionHash: unpauseError?.transactionHash || '',
-          gasRequired: true,
-        });
-        unpause = {
-          attempted: true,
-          status: 'failed',
-          transactionHash: unpauseError?.transactionHash || '',
-          blockNumber: '',
-          error:
-            unpauseError?.shortMessage ||
-            unpauseError?.message ||
-            'The issuer could not unpause the deployed token.',
-        };
-      }
-    }
+    const unpause = await activateTrexTransfers({
+      connector,
+      connectedAddress: activeAddress,
+      issuerWalletAddress: issuerAddress,
+      tokenAddress: contracts.token,
+      deploymentTransactionHash: transactionHash,
+      contracts,
+      onWalletAction,
+    });
 
     let deployedAt = new Date().toISOString();
     try {
@@ -919,6 +1227,7 @@ export async function deployTrexSuite({
       identityRegistryOwner: identityRegistryOwner ? getAddress(identityRegistryOwner) : null,
       issuerIsTokenAgent,
       platformIsTokenAgent,
+      controllerIsTokenAgent,
       issuerIsIdentityRegistryAgent,
       tokenWasPaused,
       tokenOwnerMatchesIssuer: tokenOwner ? sameAddress(tokenOwner, issuerAddress) : null,
@@ -930,8 +1239,9 @@ export async function deployTrexSuite({
         identityRegistryOwner: readError(1),
         issuerIsTokenAgent: readError(2),
         platformIsTokenAgent: readError(3),
-        issuerIsIdentityRegistryAgent: readError(4),
-        tokenPaused: readError(5),
+        controllerIsTokenAgent: readError(4),
+        issuerIsIdentityRegistryAgent: readError(5),
+        tokenPaused: readError(6),
       },
     };
     const receiptDetails = {
@@ -958,6 +1268,7 @@ export async function deployTrexSuite({
       issuerWallet: issuerAddress,
       issuerOnchainId: getAddress(issuerIdentityAddress),
       platformWallet: platformWalletAddress,
+      platformController: platformControllerAddress,
       contracts,
       claimIssuer,
       tokenAgents: tokenDetails.tokenAgents,
@@ -985,7 +1296,8 @@ export async function deployTrexSuite({
       verification.identityRegistryOwnerMatchesIssuer ? '✓ issuer' : '✗ WRONG/UNAVAILABLE',
     );
     console.log('issuer isAgent(Token)   :', issuerIsTokenAgent);
-    console.log('platform isAgent(Token) :', platformIsTokenAgent);
+    console.log('platform wallet isAgent(Token):', platformIsTokenAgent);
+    console.log('platform controller isAgent(Token):', controllerIsTokenAgent);
     console.log('issuer isAgent(IR)      :', issuerIsIdentityRegistryAgent);
     console.log('Issuer unpause result   :', unpause);
     console.log('JSON-safe response:', jsonSafe(deploymentResponse));
@@ -1004,6 +1316,7 @@ export async function deployTrexSuite({
       issuerAddress,
       issuerIdentityAddress: getAddress(issuerIdentityAddress),
       platformWalletAddress,
+      platformControllerAddress,
       tokenDetails,
       claimDetails,
       contracts,

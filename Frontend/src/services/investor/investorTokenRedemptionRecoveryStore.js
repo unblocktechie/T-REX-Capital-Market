@@ -24,6 +24,7 @@ export function loadInvestorTokenRedemptionRecovery(interestUid) {
       redemptionUid: clean(parsed.redemptionUid),
       tokenAmount: clean(parsed.tokenAmount),
       idempotencyKey: clean(parsed.idempotencyKey),
+      txHash: clean(parsed.txHash),
       createdAt: clean(parsed.createdAt),
     };
   } catch {
@@ -42,6 +43,7 @@ export function saveInvestorTokenRedemptionRecovery(interestUid, patch = {}) {
     redemptionUid: clean(patch.redemptionUid ?? current.redemptionUid),
     tokenAmount: clean(patch.tokenAmount ?? current.tokenAmount),
     idempotencyKey: clean(patch.idempotencyKey ?? current.idempotencyKey),
+    txHash: clean(patch.txHash ?? current.txHash),
     createdAt: clean(patch.createdAt ?? current.createdAt) || new Date().toISOString(),
   };
 

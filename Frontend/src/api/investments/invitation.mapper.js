@@ -97,6 +97,12 @@ export const mapIssuerInvestor = (raw = {}) => {
     walletAddress: text(raw?.walletAddress, raw?.investorWalletAddress, wallet?.address, wallet?.walletAddress, profile?.walletAddress, investor?.walletAddress, user?.walletAddress),
     onchainIdentityAddress: text(raw?.onchainIdentityAddress, raw?.onchainIdAddress, raw?.onchainIDAddress, wallet?.onchainIdentityAddress, wallet?.onchainIdAddress, profile?.onchainIdentityAddress, profile?.onchainIdAddress),
     complianceStatus: text(raw?.complianceStatus, compliance?.status, profile?.complianceStatus),
+    accreditationType: text(
+      raw?.accreditationType,
+      profile?.accreditationType,
+      compliance?.accreditationType,
+      investor?.accreditationType,
+    ),
     invitation,
     eligibleForInvitation: boolean(eligibleValue, false),
     eligibilityCode: text(raw?.eligibilityCode, raw?.stableEligibilityCode, raw?.invitationEligibility?.code, raw?.eligibility?.code),

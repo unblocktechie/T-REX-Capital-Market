@@ -221,7 +221,134 @@ const cleanRedemptionHistoryStatus = (value) => {
   return canonical;
 };
 
+
+const TRANSACTION_ACTIONS = new Set(['INVEST', 'TRANSFER', 'REDEMPTION']);
+const TRANSACTION_STATUSES = new Set(['SUBMITTED', 'CONFIRMED', 'FAILED']);
+
+const requiredTransactionHash = (value) => {
+  const normalized = String(value || '').trim();
+  if (!/^0x[a-fA-F0-9]{64}$/.test(normalized)) throw new Error('Transaction hash is invalid.');
+  return normalized;
+};
+
+const requiredTransactionAction = (value) => {
+  const normalized = String(value || '').trim().toUpperCase();
+  if (!TRANSACTION_ACTIONS.has(normalized)) throw new Error('Transaction action is invalid.');
+  return normalized;
+};
+
+const cleanTransactionStatus = (value) => {
+  const normalized = String(value || '').trim().toUpperCase();
+  if (!normalized || normalized === 'ALL') return '';
+  if (!TRANSACTION_STATUSES.has(normalized)) throw new Error('Transaction status is invalid.');
+  return normalized;
+};
+
+const unwrapTransactionResponse = (response) => {
+  const data = unwrap(response);
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return data;
+  const transaction = data.transaction && typeof data.transaction === 'object' && !Array.isArray(data.transaction)
+    ? data.transaction
+    : data.row && typeof data.row === 'object' && !Array.isArray(data.row)
+      ? data.row
+      : null;
+  return {
+    ...(transaction || {}),
+    ...data,
+    status: data.status || transaction?.status || '',
+    transactionHash: data.transactionHash || data.txHash || transaction?.transactionHash || transaction?.txHash || '',
+    httpStatus: response?.status,
+  };
+};
+
+const transactionRows = (data) => {
+  if (Array.isArray(data)) return data;
+  if (!data || typeof data !== 'object') return [];
+  for (const key of ['items', 'rows', 'transactions', 'results', 'data']) {
+    if (Array.isArray(data[key])) return data[key];
+  }
+  return [];
+};
+
+const dedupeTransactionRows = (rows) => {
+  const seen = new Set();
+  return rows.filter((row) => {
+    const chainId = String(row?.chainId ?? '');
+    const hash = String(row?.transactionHash || row?.txHash || '').trim().toLowerCase();
+    const type = String(row?.type || row?.action || '').trim().toUpperCase();
+    if (!hash) return true;
+    const key = `${chainId}:${hash}:${type}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 export const investmentApi = Object.freeze({
+
+  confirmObservedTransaction: ({ chainId, txHash, tokenUid, expectedAction }) => {
+    const parsedChainId = Number(chainId);
+    if (!Number.isSafeInteger(parsedChainId) || parsedChainId <= 0) throw new Error('Chain identifier is invalid.');
+    return apiClient
+      .post(
+        INVESTMENT_ENDPOINTS.confirmTransaction,
+        {
+          chainId: parsedChainId,
+          txHash: requiredTransactionHash(txHash),
+          tokenUid: requiredUid(tokenUid, 'Token identifier'),
+          expectedAction: requiredTransactionAction(expectedAction),
+        },
+        { skipGlobalLoader: true, validateStatus: accept2xx },
+      )
+      .then(unwrapTransactionResponse);
+  },
+
+  async listTransactions({ page = 1, limit = 20, tokenUid = '', type = '', status = '', walletAddress = '', txHash = '', fromDate = '', toDate = '', search = '', signal } = {}) {
+    const normalizedType = String(type || '').trim().toUpperCase();
+    if (normalizedType && normalizedType !== 'ALL' && !TRANSACTION_ACTIONS.has(normalizedType)) throw new Error('Transaction type is invalid.');
+    const normalizedStatus = cleanTransactionStatus(status);
+    const response = await apiClient.get(INVESTMENT_ENDPOINTS.transactions, {
+      params: {
+        page: normalizePage(page),
+        limit: normalizeLimit(limit, 20),
+        ...(String(tokenUid || '').trim() ? { tokenUid: String(tokenUid).trim() } : {}),
+        ...(normalizedType && normalizedType !== 'ALL' ? { type: normalizedType } : {}),
+        ...(normalizedStatus ? { status: normalizedStatus } : {}),
+        ...(String(walletAddress || '').trim() ? { walletAddress: String(walletAddress).trim() } : {}),
+        ...(String(txHash || '').trim() ? { txHash: String(txHash).trim() } : {}),
+        ...(String(fromDate || '').trim() ? { fromDate: String(fromDate).trim() } : {}),
+        ...(String(toDate || '').trim() ? { toDate: String(toDate).trim() } : {}),
+        ...(String(search || '').trim() ? { search: String(search).trim().slice(0, 120) } : {}),
+      },
+      signal,
+      skipGlobalLoader: true,
+      validateStatus: accept2xx,
+    });
+    const data = unwrap(response);
+    return { data: dedupeTransactionRows(transactionRows(data)), meta: responseMeta(response, data) };
+  },
+
+  exportTransactions: ({ tokenUid = '', type = '', status = '', walletAddress = '', txHash = '', fromDate = '', toDate = '', search = '' } = {}) => {
+    const normalizedType = String(type || '').trim().toUpperCase();
+    const normalizedStatus = cleanTransactionStatus(status);
+    return apiClient.get(INVESTMENT_ENDPOINTS.exportTransactions, {
+      params: {
+        ...(String(tokenUid || '').trim() ? { tokenUid: String(tokenUid).trim() } : {}),
+        ...(normalizedType && normalizedType !== 'ALL' ? { type: normalizedType } : {}),
+        ...(normalizedStatus ? { status: normalizedStatus } : {}),
+        ...(String(walletAddress || '').trim() ? { walletAddress: String(walletAddress).trim() } : {}),
+        ...(String(txHash || '').trim() ? { txHash: String(txHash).trim() } : {}),
+        ...(String(fromDate || '').trim() ? { fromDate: String(fromDate).trim() } : {}),
+        ...(String(toDate || '').trim() ? { toDate: String(toDate).trim() } : {}),
+        ...(String(search || '').trim() ? { search: String(search).trim().slice(0, 120) } : {}),
+      },
+      responseType: 'blob',
+      timeout: 60_000,
+      skipGlobalLoader: true,
+      validateStatus: accept2xx,
+    }).then((response) => ({ blob: response.data, headers: response.headers }));
+  },
+
   async listTokens({ page = 1, limit = 12, search = '', status = 'deployed' } = {}) {
     const normalizedStatus = String(status || 'deployed').trim().toLowerCase();
     if (!TOKEN_STATUSES.has(normalizedStatus)) throw new Error('Invalid token catalogue status.');
@@ -283,18 +410,6 @@ export const investmentApi = Object.freeze({
       )
       .then(unwrap),
 
-  createTokenPurchase: (tokenUid, { tokenAmount, idempotencyKey }) =>
-    apiClient
-      .post(
-        INVESTMENT_ENDPOINTS.tokenPurchases(requiredUid(tokenUid, 'Token identifier')),
-        {
-          tokenAmount: requiredDecimalString(tokenAmount, 'Token amount'),
-          idempotencyKey: requiredUid(idempotencyKey, 'Checkout idempotency key'),
-        },
-        { skipGlobalLoader: true, validateStatus: accept2xx },
-      )
-      .then(unwrapPurchaseResponse),
-
   async listTokenPurchases(tokenUid, { page = 1, limit = 20, search = '', status = 'all', signal } = {}) {
     const normalizedStatus = cleanPurchaseHistoryStatus(status);
     const normalizedSearch = String(search || '').trim().slice(0, 100);
@@ -324,37 +439,6 @@ export const investmentApi = Object.freeze({
       })
       .then(unwrapPurchaseResponse),
 
-  confirmTokenPurchase: (purchaseUid, txHash) =>
-    apiClient
-      .post(
-        INVESTMENT_ENDPOINTS.confirmPurchase(requiredUid(purchaseUid, 'Purchase identifier')),
-        { txHash: requiredUid(txHash, 'Transaction hash') },
-        { skipGlobalLoader: true, validateStatus: accept2xx },
-      )
-      .then(unwrapPurchaseResponse),
-
-  retryTokenPurchase: (purchaseUid) =>
-    apiClient
-      .post(
-        INVESTMENT_ENDPOINTS.retryPurchase(requiredUid(purchaseUid, 'Purchase identifier')),
-        {},
-        { skipGlobalLoader: true, validateStatus: accept2xx },
-      )
-      .then(unwrapPurchaseResponse),
-
-  createTokenTransfer: (tokenUid, { recipientWalletAddress, tokenAmount, idempotencyKey }) =>
-    apiClient
-      .post(
-        INVESTMENT_ENDPOINTS.tokenTransfers(requiredUid(tokenUid, 'Token identifier')),
-        {
-          recipientWalletAddress: requiredUid(recipientWalletAddress, 'Recipient wallet address'),
-          tokenAmount: requiredDecimalString(tokenAmount, 'Transfer amount'),
-          idempotencyKey: requiredUid(idempotencyKey, 'Transfer idempotency key'),
-        },
-        { skipGlobalLoader: true, validateStatus: accept2xx },
-      )
-      .then(unwrapTransferResponse),
-
   getTokenTransfer: (transferUid, { signal } = {}) =>
     apiClient
       .get(INVESTMENT_ENDPOINTS.transfer(requiredUid(transferUid, 'Transfer identifier')), {
@@ -362,24 +446,6 @@ export const investmentApi = Object.freeze({
         skipGlobalLoader: true,
         validateStatus: accept2xx,
       })
-      .then(unwrapTransferResponse),
-
-  confirmTokenTransfer: (transferUid, txHash) =>
-    apiClient
-      .post(
-        INVESTMENT_ENDPOINTS.confirmTransfer(requiredUid(transferUid, 'Transfer identifier')),
-        { txHash: requiredUid(txHash, 'Transaction hash') },
-        { skipGlobalLoader: true, validateStatus: accept2xx },
-      )
-      .then(unwrapTransferResponse),
-
-  retryTokenTransfer: (transferUid) =>
-    apiClient
-      .post(
-        INVESTMENT_ENDPOINTS.retryTransfer(requiredUid(transferUid, 'Transfer identifier')),
-        {},
-        { skipGlobalLoader: true, validateStatus: accept2xx },
-      )
       .then(unwrapTransferResponse),
 
   async listTokenTransfers(tokenUid, { page = 1, limit = 20, search = '', status = 'all', direction = 'all', signal } = {}) {
@@ -514,15 +580,6 @@ export const investmentApi = Object.freeze({
       )
       .then(unwrapRedemptionResponse);
   },
-
-  confirmIssuerRedemptionPayment: (redemptionUid, txHash) =>
-    apiClient
-      .post(
-        INVESTMENT_ENDPOINTS.confirmIssuerRedemptionPayment(requiredUid(redemptionUid, 'Redemption identifier')),
-        { txHash: requiredUid(txHash, 'Payment transaction hash') },
-        { skipGlobalLoader: true, validateStatus: accept2xx },
-      )
-      .then(unwrapRedemptionResponse),
 
   async listIssuerInvestors({ tokenUid, page = 1, limit = 20, search = '', invitationStatus = 'all', signal } = {}) {
     const normalizedSearch = String(search || '').trim().slice(0, 100);

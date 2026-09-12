@@ -13,7 +13,7 @@ const SendTokenPage = lazy(() => import('./SendTokenPage'));
 const RedeemTokenPage = lazy(() => import('./RedeemTokenPage'));
 
 const TABS = Object.freeze([
-  { id: 'invest', label: 'Invest', icon: Coins },
+  { id: 'invest', label: 'Invest more', icon: Coins },
   { id: 'send', label: 'Send', icon: Send },
   { id: 'redeem', label: 'Redeem', icon: RotateCcw },
 ]);
@@ -58,7 +58,7 @@ function OperationLoadingState() {
 }
 
 export default function AssetManagementPage() {
-  useDocumentTitle('Manage Tokens');
+  useDocumentTitle('Manage Investments');
   const [searchParams] = useSearchParams();
   const requestedInterestUid = String(searchParams.get('interestUid') || '').trim();
   const requestedTokenUid = String(searchParams.get('tokenUid') || '').trim();
@@ -78,7 +78,7 @@ export default function AssetManagementPage() {
       .catch((error) => {
         if (active) {
           setApplications([]);
-          setLoadError(getErrorMessage(error, 'Unable to load your registered assets.'));
+          setLoadError(getErrorMessage(error, 'Unable to load your approved investments.'));
         }
       })
       .finally(() => {
@@ -98,8 +98,8 @@ export default function AssetManagementPage() {
   const tokenOptions = useMemo(
     () => registeredApplications.map((application) => ({
       value: interestUidOf(application),
-      label: [application.symbol, application.name].filter(Boolean).join(' · ') || 'Registered token',
-      description: [application.issuer, 'Registered'].filter(Boolean).join(' · '),
+      label: [application.symbol, application.name].filter(Boolean).join(' · ') || 'Approved investment',
+      description: [application.issuer, 'Approved'].filter(Boolean).join(' · '),
     })),
     [registeredApplications],
   );
@@ -141,28 +141,28 @@ export default function AssetManagementPage() {
     <div className="page-stack investor-asset-management-page">
       <header className="asset-management-header">
         <div>
-          <span className="eyebrow">Registered asset workspace</span>
-          <h1>Manage Tokens</h1>
-          <p>Select a token you are approved to hold, then buy more, send tokens, or request a redemption.</p>
+          <span className="eyebrow">Your approved investments</span>
+          <h1>Manage Investments</h1>
+          <p>Choose an investment, then invest more, send units to another approved investor, or redeem your units.</p>
         </div>
         <span className="asset-management-header__status">
-          <ShieldCheck size={17} /> Registered assets only
+          <ShieldCheck size={17} /> Approved investments only
         </span>
       </header>
 
       <Card className="asset-management-controls">
         <div className="asset-management-token-selector">
           <div className="asset-management-token-selector__label">
-            <span>Selected token</span>
-            <small>{loading ? 'Loading registered assets…' : `${tokenOptions.length} registered token${tokenOptions.length === 1 ? '' : 's'}`}</small>
+            <span>Selected investment</span>
+            <small>{loading ? 'Loading approved investments…' : `${tokenOptions.length} approved investment${tokenOptions.length === 1 ? '' : 's'}`}</small>
           </div>
           <MarketplaceDropdown
             value={resolvedInterestUid}
             options={tokenOptions}
             onChange={setSelectedInterestUid}
             icon={ArrowDownUp}
-            ariaLabel="Select a registered token"
-            placeholder={loading ? 'Loading tokens…' : 'Select a registered token'}
+            ariaLabel="Select an approved investment"
+            placeholder={loading ? 'Loading investments…' : 'Select an investment'}
             disabled={loading || !tokenOptions.length}
             className="asset-management-token-dropdown"
             menuClassName="asset-management-token-dropdown__menu"
@@ -190,6 +190,16 @@ export default function AssetManagementPage() {
             );
           })}
         </div>
+        <div className="asset-management-action-guide" role="status">
+          <strong>{activeTab === 'invest' ? 'Invest more' : activeTab === 'send' ? 'Send units' : 'Redeem units'}</strong>
+          <span>
+            {activeTab === 'invest'
+              ? 'Choose how many units to buy. If USDT approval is needed, you will complete it once before investing.'
+              : activeTab === 'send'
+                ? 'Enter the approved recipient wallet and amount. We check eligibility before your wallet asks you to confirm.'
+                : 'Choose how many units to redeem. The issuer prepares the USDT, then you sign the final redemption when it is ready.'}
+          </span>
+        </div>
       </Card>
 
       {loading ? (
@@ -197,14 +207,14 @@ export default function AssetManagementPage() {
       ) : loadError ? (
         <Card className="asset-management-state-card" role="alert">
           <ShieldCheck size={29} />
-          <h2>Registered assets are unavailable</h2>
+          <h2>Your approved investments are unavailable</h2>
           <p>{loadError}</p>
         </Card>
       ) : !resolvedInterestUid ? (
         <Card className="asset-management-state-card">
           <ShieldCheck size={29} />
-          <h2>No registered assets yet</h2>
-          <p>Tokens will appear here after the issuer approves your verified profile for an offering.</p>
+          <h2>No approved investments yet</h2>
+          <p>An investment will appear here after the issuer approves your application and enables your access.</p>
         </Card>
       ) : (
         <section

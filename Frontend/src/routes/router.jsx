@@ -18,6 +18,7 @@ import { RoleMiddleware } from '@/middleware/RoleMiddleware';
 import { WorkspaceMiddleware } from '@/middleware/WorkspaceMiddleware';
 import { useAuth } from '@/hooks/useAuth';
 import { useInvestorAccessStatus } from '@/hooks/useInvestorAccessStatus';
+import { resolveAuthenticatedLandingRoute } from '@/services/auth-landing.service';
 
 const LoginPage = lazy(() => import('@/pages/auth/LoginPage'));
 const SignupPage = lazy(() => import('@/pages/auth/SignupPage'));
@@ -28,6 +29,7 @@ const DashboardPage = lazy(() => import('@/pages/dashboard/DashboardPage'));
 const InvestorsRoutePage = lazy(() => import('@/pages/investors/InvestorsRoutePage'));
 const IssuerInvestorSubscriptionReviewPage = lazy(() => import('@/pages/issuer/IssuerInvestorSubscriptionReviewPage'));
 const IssuerInvestorDirectoryPage = lazy(() => import('@/pages/issuer/IssuerInvestorDirectoryPage'));
+const IssuerTransactionHistoryPage = lazy(() => import('@/pages/issuer/IssuerTransactionHistoryPage'));
 const IssuerRedemptionsPage = lazy(() => import('@/pages/issuer/IssuerRedemptionsPage'));
 const IssuerRedemptionDetailPage = lazy(() => import('@/pages/issuer/IssuerRedemptionDetailPage'));
 const MarketplacePage = lazy(() => import('@/pages/investor-portal/MarketplacePage'));
@@ -77,11 +79,10 @@ function HomeRedirect() {
     user?.role === ROLES.investor ? user : null,
   );
   if (!isAuthenticated) return <Navigate to={ROUTES.login} replace />;
-  if (user?.role === ROLES.admin) return <Navigate to={ROUTES.adminReviewQueue} replace />;
   if (user?.role === ROLES.investor && !investorAccess.isWorkspaceUnlocked) {
     return <Navigate to={ROUTES.investors} replace />;
   }
-  return <Navigate to={ROUTES.dashboard} replace />;
+  return <Navigate to={resolveAuthenticatedLandingRoute(user?.role)} replace />;
 }
 
 const withSuspense = (element) => (
@@ -180,6 +181,7 @@ export const router = createBrowserRouter([
                   { path: 'tokens/:tokenAddress', element: withSuspense(<TokenDetailsPage />) },
                   { path: 'investors/:requestId', element: withSuspense(<IssuerInvestorSubscriptionReviewPage />) },
                   { path: 'investor-directory', element: withSuspense(<IssuerInvestorDirectoryPage />) },
+                  { path: 'transactions', element: withSuspense(<IssuerTransactionHistoryPage />) },
                   { path: 'redemptions', element: withSuspense(<IssuerRedemptionsPage />) },
                   { path: 'redemptions/:redemptionUid', element: withSuspense(<IssuerRedemptionDetailPage />) },
                 ],
@@ -193,6 +195,7 @@ export const router = createBrowserRouter([
                   { path: 'applications', element: withSuspense(<MyApplicationsPage />) },
                   { path: 'portfolio', element: withSuspense(<PortfolioPage />) },
                   { path: 'asset-management', element: withSuspense(<AssetManagementPage />) },
+                  { path: 'transactions', element: <Navigate to={ROUTES.dashboard} replace /> },
                   { path: 'applications/:interestUid', element: withSuspense(<ApplicationDetailsPage />) },
                   { path: 'applications/:interestUid/submit-claim', element: withSuspense(<SubmitClaimPage />) },
                   { path: 'applications/:interestUid/purchase', element: withSuspense(<PurchaseTokenPage />) },
@@ -236,10 +239,6 @@ export const router = createBrowserRouter([
               },
               {
                 path: 'compliance',
-                element: <Navigate to={ROUTES.dashboard} replace />,
-              },
-              {
-                path: 'transactions',
                 element: <Navigate to={ROUTES.dashboard} replace />,
               },
               {

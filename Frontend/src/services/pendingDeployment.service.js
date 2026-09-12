@@ -34,6 +34,27 @@ const normalizeAddress = (value) => {
     : '';
 };
 
+const normalizeContracts = (contracts) => {
+  if (!contracts || typeof contracts !== 'object') return {};
+  return Object.fromEntries(
+    ['token', 'ir', 'irs', 'tir', 'ctr', 'mc']
+      .map((key) => [key, normalizeAddress(contracts[key])])
+      .filter(([, value]) => Boolean(value)),
+  );
+};
+
+const normalizePriceSetup = (priceSetup) => {
+  if (!priceSetup || typeof priceSetup !== 'object') return {};
+  return {
+    status: text(priceSetup.status),
+    transactionHash: text(priceSetup.transactionHash),
+    currentTokenPrice: text(priceSetup.currentTokenPrice),
+    priceRaw: text(priceSetup.priceRaw),
+    paymentToken: normalizeAddress(priceSetup.paymentToken),
+    error: text(priceSetup.error).slice(0, 1000),
+  };
+};
+
 const removeStoredRecord = () => {
   getStorages().forEach((storage) => {
     try {
@@ -92,6 +113,16 @@ const normalizeRecord = (value) => {
         attemptStatus: text(metadata.attemptStatus),
         blockNumber: text(metadata.blockNumber),
         deployedAt: text(metadata.deployedAt),
+        tokenAddress: normalizeAddress(metadata.tokenAddress || metadata.contracts?.token),
+        contracts: normalizeContracts(metadata.contracts),
+        configurationStatus: text(metadata.configurationStatus),
+        onChainPaused:
+          typeof metadata.onChainPaused === 'boolean' ? metadata.onChainPaused : null,
+        unpauseTransactionHash: text(metadata.unpauseTransactionHash),
+        failedStep: text(metadata.failedStep),
+        failedTransactionHash: text(metadata.failedTransactionHash),
+        configurationError: text(metadata.configurationError).slice(0, 1000),
+        priceSetup: normalizePriceSetup(metadata.priceSetup),
       },
       createdAt,
       expiresAt,
