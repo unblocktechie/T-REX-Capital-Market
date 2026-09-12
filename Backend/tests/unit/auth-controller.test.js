@@ -9,27 +9,37 @@ const response = () => ({
   json(body) { this.body = body; return this; },
 });
 
-test('resend verification returns an explicit already-verified success response', async () => {
-  const controller = createAuthController({
-    resendVerification: async () => ({ status: 'ALREADY_VERIFIED', emailVerified: true }),
-  });
+test('signup reports that the account was saved before Privy verification', async () => {
+  const controller = createAuthController({ signup: async () => ({ userUid: 'user-1' }) });
   const res = response();
-  await controller.resendVerification({ id: 'request-1', body: { email: 'verified@example.com' } }, res);
-
-  assert.equal(res.statusCode, 200);
+  await controller.signup({ id: 'request-1', body: { email: 'ada@example.com' } }, res);
+  assert.equal(res.statusCode, 201);
   assert.equal(res.body.success, true);
-  assert.equal(res.body.message, 'User is already verified. You can log in.');
-  assert.deepEqual(res.body.data, { status: 'ALREADY_VERIFIED', emailVerified: true });
+  assert.match(res.body.message, /Privy email OTP/i);
+  assert.equal(res.body.data.userUid, 'user-1');
 });
 
-test('resend verification preserves the generic message for other request states', async () => {
+test('complete Privy signup returns the application session', async () => {
   const controller = createAuthController({
-    resendVerification: async () => ({ status: 'REQUEST_ACCEPTED' }),
+    completeSignup: async () => ({ accessToken: 'app-jwt', user: { privyWalletAddress: '0x1111111111111111111111111111111111111111' } }),
   });
   const res = response();
-  await controller.resendVerification({ id: 'request-1', body: { email: 'unknown@example.com' } }, res);
-
+  await controller.completePrivySignup({
+    id: 'request-1',
+    body: { email: 'ada@example.com', identityToken: 'identity-token' },
+  }, res);
   assert.equal(res.statusCode, 200);
-  assert.match(res.body.message, /If the account is eligible/);
-  assert.equal(res.body.data, null);
+  assert.equal(res.body.data.accessToken, 'app-jwt');
+  assert.match(res.body.message, /wallet linked/i);
+});
+
+test('password phase of issuer login reports that Privy verification is required', async () => {
+  const controller = createAuthController({
+    login: async () => ({ privyVerificationRequired: true, email: 'ada@example.com' }),
+  });
+  const res = response();
+  await controller.login({ id: 'request-1', body: { email: 'ada@example.com', password: 'Launch!234' } }, res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.data.privyVerificationRequired, true);
+  assert.match(res.body.message, /Privy email verification/i);
 });

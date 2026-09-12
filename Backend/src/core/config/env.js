@@ -39,11 +39,14 @@ const env = Object.freeze({
     secret: process.env.JWT_SECRET,
     expiry: process.env.JWT_EXPIRY || '1h',
   },
+  privy: {
+    appId: process.env.PRIVY_APP_ID,
+    appSecret: process.env.PRIVY_APP_SECRET,
+  },
   auth: {
     issuerRoleUid: process.env.ISSUER_ROLE_UID || '00000000-0000-4000-8000-000000000003',
     investorRoleUid: process.env.INVESTOR_ROLE_UID || '00000000-0000-4000-8000-000000000004',
     bcryptRounds: Number(process.env.BCRYPT_ROUNDS || 2),
-    verificationTtlMinutes: Number(process.env.EMAIL_VERIFICATION_TOKEN_TTL_MINUTES || 10),
     resetTtlMinutes: Number(process.env.PASSWORD_RESET_TOKEN_TTL_MINUTES || 30),
   },
   smtp: {
@@ -52,7 +55,7 @@ const env = Object.freeze({
     secure: booleanValue(process.env.SMTP_SECURE),
     user: process.env.SMTP_USER,
     password: process.env.SMTP_PASSWORD,
-    fromName: process.env.SMTP_FROM_NAME || 'T-REX Capital Market',
+    fromName: process.env.SMTP_FROM_NAME || 'Trex Capital Market',
     fromEmail: process.env.SMTP_FROM_EMAIL,
   },
   cors: {
@@ -95,7 +98,7 @@ const env = Object.freeze({
     deployerAddress: process.env.DEPLOYER_ADDRESS,
     // Backend-authoritative Token Agent assigned to every newly configured TREX token.
     platformControllerAddress: process.env.PLATFORM_CONTROLLER_ADDRESS
-      || '0x9BEFDF75Dc94bbB36532c5d7A74daab28714f579',
+      || '0x40e81FAA4e6D54ae0632DF146939bB5858359271',
     identityFactoryAddress: process.env.IDENTITY_FACTORY_ADDRESS,
     trexFactoryAddress: process.env.TREX_FACTORY_ADDRESS,
     confirmations: Number(process.env.BLOCKCHAIN_CONFIRMATIONS || 2),
@@ -173,6 +176,8 @@ const requiredSchema = Joi.object({
   DB_USER: Joi.string().required(),
   DB_PASSWORD: Joi.string().allow('').required(),
   JWT_SECRET: Joi.string().min(32).required(),
+  PRIVY_APP_ID: Joi.string().required(),
+  PRIVY_APP_SECRET: Joi.string().required(),
   SMTP_HOST: Joi.string().required(),
   SMTP_USER: Joi.string().required(),
   SMTP_PASSWORD: Joi.string().required(),

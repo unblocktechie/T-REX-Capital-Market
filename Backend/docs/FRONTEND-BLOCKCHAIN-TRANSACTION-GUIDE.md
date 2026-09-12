@@ -23,7 +23,8 @@ recommended for immediate UI feedback, but failure to call it does not affect th
 
 `POST /api/v1/investments/transactions/confirm`
 
-Investor JWT request:
+Authenticated wallet-owner request. Use the Investor JWT for `INVEST`/`TRANSFER` and the owning
+Issuer JWT for the new issuer-executed `REDEMPTION`:
 
 ```json
 {
@@ -67,7 +68,9 @@ filtered CSV result, not only the visible page.
 
 ## Invest / Buy
 
-1. Read the current Platform Controller token configuration and quote on-chain.
+1. Use the token's returned `tokenAgentWalletAddress` as its assigned Platform Controller, then read
+   that Controller's token configuration and quote on-chain. Do not replace an existing token's
+   stored Controller with the current new-token default.
 2. Read `USDT.allowance(investorWallet, controllerAddress)` on-chain.
 3. If insufficient, investor signs `USDT.approve(controllerAddress, amount or MaxUint256)`.
 4. Re-read allowance after the approval receipt succeeds.
@@ -115,8 +118,8 @@ execution:
 2. Issuer approves or rejects it.
 3. Issuer performs the reusable USDT allowance approval directly from the issuer wallet. Current
    on-chain allowance and balance—not a database boolean—determine readiness.
-4. Investor signs `PlatformController.redeem(tokenAddress, tokenAmountRaw)`.
-5. Call `/transactions/confirm` with `expectedAction: REDEMPTION`.
+4. Issuer signs `PlatformController.redeem(investorWalletAddress, tokenAddress, tokenAmountRaw)`.
+5. Call `/transactions/confirm` with the Issuer JWT and `expectedAction: REDEMPTION`.
 6. Refresh canonical history and the redemption detail. The verified atomic controller transaction
    changes the matching legacy request to `COMPLETED` during migration.
 
@@ -141,8 +144,9 @@ POST /investments/redemptions/:redemptionUid/retry
 POST /investments/issuer/redemptions/:redemptionUid/payment/confirm
 ```
 
-The issuer must not send a separate USDT transfer for each redemption. The backend must not burn or
-unlock tokens. The controller performs USDT settlement and burn atomically in `redeem()`.
+The investor never signs the final redemption transaction. The issuer must not send a separate USDT
+transfer for each redemption. The backend must not burn or unlock tokens. The issuer-signed
+controller call performs issuer-to-investor USDT settlement and investor token burn atomically.
 
 ## Recovery and UI rules
 

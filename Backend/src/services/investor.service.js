@@ -62,7 +62,7 @@ const isRegisteredWalletDuplicate = (error) => error?.code === 'ER_DUP_ENTRY'
   && String(error.sqlMessage || error.message || '').includes('ukInvestorMasterRegisteredWallet');
 
 class InvestorService {
-  constructor({ repository, optionRepository, locationService, identityService, walletOwnershipRepository, investmentService = null, transactionRunner = withTransaction }) {
+  constructor({ repository, optionRepository, locationService, identityService, walletOwnershipRepository, userRepository, investmentService = null, transactionRunner = withTransaction }) {
     this.repository = repository;
     this.optionRepository = optionRepository;
     this.locationService = locationService;
@@ -70,6 +70,7 @@ class InvestorService {
     // approval flow uses) to create the investor's on-chain identity.
     this.identityService = identityService;
     this.walletOwnershipRepository = walletOwnershipRepository;
+    this.userRepository = userRepository;
     // Optional: enforces the investment-interest document-upload gate and promotes/repairs
     // interest records after a submitted investor uploads claim documents.
     this.investmentService = investmentService;
@@ -276,12 +277,16 @@ class InvestorService {
     });
   }
 
-  async submit(user, { walletAddress }) {
+  async submit(user) {
     this.assertInvestor(user);
     const investor = await this.repository.findByUserUid(user.userUid);
     if (!investor) throw ApiError.badRequest('Investor onboarding has not been started.');
     this.assertEditable(investor);
-    const normalizedWalletAddress = normalizeWalletAddress(walletAddress);
+    const authUser = await this.userRepository.findAuthIdentityByUid(user.userUid);
+    const normalizedWalletAddress = normalizeWalletAddress(authUser?.privyWalletAddress);
+    if (!/^0x[a-f0-9]{40}$/.test(normalizedWalletAddress)) {
+      throw ApiError.forbidden('Complete Privy email verification and wallet setup before submitting investor onboarding.');
+    }
 
     const issuerWalletOwner = await this.walletOwnershipRepository.findIssuerOwner(normalizedWalletAddress);
     if (issuerWalletOwner) throw issuerWalletConflictError();

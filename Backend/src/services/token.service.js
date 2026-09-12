@@ -110,7 +110,7 @@ class TokenService {
 
   // Reusable pre-deployment eligibility gate. Verifies every configuration field,
   // that issuer-managed governance wallets equal the approved organization wallet, that the
-  // Token Agent equals the backend-configured Platform Controller, that at least
+  // Token Agent stored when this token was created is valid, that at least
   // one claim topic and one country restriction exist, and that the optimized image
   // is still present. Returns the loaded claim topics and country restrictions.
   async assertTokenReadyForDeployment(token, organization) {
@@ -120,9 +120,8 @@ class TokenService {
         throw ApiError.badRequest(`${field} must match the approved organization walletAddress.`);
       }
     }
-    if (!ethers.isAddress(token.tokenAgentWalletAddress)
-      || ethers.getAddress(token.tokenAgentWalletAddress) !== this.platformControllerAddress()) {
-      throw ApiError.badRequest('tokenAgentWalletAddress must match the configured Platform Controller address.');
+    if (!ethers.isAddress(token.tokenAgentWalletAddress)) {
+      throw ApiError.badRequest('tokenAgentWalletAddress must be a valid Platform Controller address.');
     }
     const [claimTopics, countryRestrictions] = await Promise.all([
       this.repository.listClaimTopics(token.tokenUid),
@@ -185,9 +184,11 @@ class TokenService {
     const { isDraft, ...fields } = input;
     const update = {
       ...fields,
-      // Never accept the Token Agent from client state. Every new/editable token uses the
-      // configured Platform Controller contract as its authoritative Token Agent.
-      tokenAgentWalletAddress: this.platformControllerAddress(),
+      // Never accept the Token Agent from client state. New rows receive the current default,
+      // while a token created under an earlier Platform Controller keeps its stored agent.
+      tokenAgentWalletAddress: current
+        ? current.tokenAgentWalletAddress
+        : this.platformControllerAddress(),
       ...(fields.initialTokenPrice !== undefined
         ? { currentTokenPrice: fields.initialTokenPrice }
         : {}),
@@ -318,8 +319,8 @@ class TokenService {
     );
     return this.repository.updateByUserUid(user.userUid, {
       // `tokenAgentWalletAddress` in a legacy frontend payload is intentionally ignored.
-      // The backend owns this security-sensitive deployment parameter.
-      tokenAgentWalletAddress: this.platformControllerAddress(),
+      // Preserve the backend-owned value assigned when this token row was first created.
+      tokenAgentWalletAddress: current.tokenAgentWalletAddress,
       identityManagerWalletAddress: input.identityManagerWalletAddress,
       currentStep: input.isDraft ? current.currentStep : 'review',
       isDraft: true,

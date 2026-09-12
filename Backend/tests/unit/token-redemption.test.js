@@ -109,3 +109,39 @@ test('issuer redemption detail includes the investor name', async () => {
 
   assert.equal(result.investorName, 'Jane Investor');
 });
+
+test('investor cannot cancel a redemption after issuer approval', async () => {
+  let transitionCalled = false;
+  const approvedRedemption = {
+    redemptionUid: 'redemption-approved',
+    investorUserUid: 'user-1',
+    status: 'ISSUER_APPROVED',
+  };
+  const repository = {
+    findOwned: async () => approvedRedemption,
+    transition: async () => {
+      transitionCalled = true;
+      return true;
+    },
+  };
+  const service = new TokenRedemptionService({
+    repository,
+    blockchain: {},
+    executionService: {},
+    transactionRunner: (work) => work({}),
+  });
+
+  await assert.rejects(
+    service.cancel(
+      { userUid: 'user-1', roleName: 'Investor' },
+      approvedRedemption.redemptionUid,
+    ),
+    (error) => (
+      error.statusCode === 409
+      && error.code === 'REDEMPTION_CANCELLATION_NOT_ALLOWED_AFTER_ISSUER_APPROVAL'
+      && error.message === 'Redemption cannot be cancelled after issuer approval.'
+    ),
+  );
+  assert.equal(transitionCalled, false);
+  assert.equal(approvedRedemption.status, 'ISSUER_APPROVED');
+});

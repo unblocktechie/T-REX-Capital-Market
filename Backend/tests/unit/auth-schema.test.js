@@ -1,6 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { signup, resetPassword, tokenBody } = require('../../src/schemas/auth.schema');
+const { signup, login, completePrivySignup, resetPassword } = require('../../src/schemas/auth.schema');
+
+const identityToken = 'x'.repeat(128);
 
 test('signup trims names and normalizes email', () => {
   const { error, value } = signup.validate({
@@ -23,12 +25,20 @@ test('signup requires an explicit issuer or investor selection', () => {
   assert.match(error.message, /isIssuer/);
 });
 
+test('login accepts the password-only phase and the follow-up Privy identity-token phase', () => {
+  const first = login.validate({ email: 'ada@example.com', password: 'Launch!234' });
+  const second = login.validate({ email: 'ada@example.com', password: 'Launch!234', identityToken });
+  assert.equal(first.error, undefined);
+  assert.equal(second.error, undefined);
+});
+
+test('Privy signup completion requires the account email and identity token', () => {
+  assert.equal(completePrivySignup.validate({ email: 'ada@example.com', identityToken }).error, undefined);
+  assert.ok(completePrivySignup.validate({ email: 'ada@example.com', identityToken: 'short' }).error);
+  assert.ok(completePrivySignup.validate({ identityToken }).error);
+});
+
 test('reset token must be 64 hexadecimal characters', () => {
   const { error } = resetPassword.validate({ token: 'not-a-token', newPassword: 'Launch!234' });
   assert.ok(error);
-});
-
-test('email verification accepts the one-time token only in the POST body', () => {
-  assert.equal(tokenBody.validate({ token: 'a'.repeat(64) }).error, undefined);
-  assert.ok(tokenBody.validate({ token: 'not-a-token' }).error);
 });

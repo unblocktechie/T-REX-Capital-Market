@@ -103,8 +103,9 @@ Manager address:
 
 Send to `PUT /api/v1/tokens/me/governance`. `identityManagerWalletAddress` must exactly represent
 the organization wallet (comparison is case-insensitive). The response and subsequent
-`GET /tokens/me` return `tokenAgentWalletAddress` as the configured Platform Controller contract,
-currently `0x9BEFDF75Dc94bbB36532c5d7A74daab28714f579`. Render it as read-only in review screens and use
+`GET /tokens/me` returns `tokenAgentWalletAddress` as the Platform Controller assigned when that
+token was created. New tokens use `0x40e81FAA4e6D54ae0632DF146939bB5858359271` by default. Existing
+tokens retain their previously stored Token Agent. Render it as read-only in review screens and use
 that backend value when building the TREX deployment transaction.
 
 ## Step 5: Final review

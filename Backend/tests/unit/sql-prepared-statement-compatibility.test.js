@@ -37,6 +37,30 @@ test('canonical transaction upsert binds exactly one value for every placeholder
   }
 });
 
+test('issuer-executed redemption synchronizes the legacy request by investor recipient wallet', async () => {
+  const executor = captureExecutor();
+  await new BlockchainTransactionRepository().synchronizeLegacy({
+    chainId: 11155111,
+    transactionHash: `0x${'a'.repeat(64)}`,
+    blockNumber: 100,
+    blockHash: `0x${'b'.repeat(64)}`,
+    transactionIndex: 2,
+    logIndex: 3,
+    confirmedAt: new Date('2026-09-07T00:00:00.000Z'),
+    tokenUid: 'token-1',
+    initiatedByWallet: '0xIssuer',
+    fromWallet: '0xIssuer',
+    toWallet: '0xInvestor',
+    tokenAmountRaw: '250',
+    type: 'REDEMPTION',
+    status: 'CONFIRMED',
+  }, executor);
+  assert.equal(executor.calls.length, 1);
+  const update = executor.calls[0];
+  assert.equal(update.params.length, (update.sql.match(/\?/g) || []).length);
+  assert.deepEqual(update.params.slice(-3), ['token-1', '0xInvestor', '250']);
+});
+
 test('reconciliation repository limits are sanitized literals, not prepared-statement parameters', async () => {
   const executor = captureExecutor();
   await new TokenPurchaseRepository().listPaymentEvents(11155111, 200, executor);

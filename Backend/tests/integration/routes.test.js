@@ -34,10 +34,13 @@ test('protected routes require a Bearer token', async () => {
   assert.equal(response.body.error.code, 'UNAUTHORIZED');
 });
 
-test('email verification is a POST endpoint with a validated token body', async () => {
-  const response = await request(app).post('/api/v1/auth/verify-email').send({ token: 'invalid' }).expect(422);
+test('Privy signup completion validates the email and identity token before service access', async () => {
+  const response = await request(app)
+    .post('/api/v1/auth/privy/complete-signup')
+    .send({ email: 'ada@example.com', identityToken: 'short' })
+    .expect(422);
   assert.equal(response.body.error.code, 'VALIDATION_ERROR');
-  await request(app).get(`/api/v1/auth/verify-email?token=${'a'.repeat(64)}`).expect(404);
+  await request(app).post('/api/v1/auth/verify-email').send({ token: 'invalid' }).expect(404);
 });
 
 test('token creation routes require a Bearer token', async () => {

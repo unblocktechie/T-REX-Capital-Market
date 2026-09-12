@@ -5,7 +5,7 @@ const { sqlInteger } = require('../utils/sql');
 class BlockchainTransactionRepository {
   async findTokenByUid(tokenUid, executor) {
     const rows = await execute(
-      `SELECT t.*, o.walletAddress AS issuerWalletAddress, o.legalCompanyName
+      `SELECT t.*, o.userUid AS issuerUserUid, o.walletAddress AS issuerWalletAddress, o.legalCompanyName
        FROM tokenMaster t
        INNER JOIN organizationMaster o ON o.organizationUid=t.organizationUid AND o.isDeleted=0
        WHERE t.tokenUid=? AND t.status='deployed' AND t.isActive=1 AND t.isDeleted=0 LIMIT 1`,
@@ -16,7 +16,7 @@ class BlockchainTransactionRepository {
 
   async findTokenByAddress(tokenAddress, executor) {
     const rows = await execute(
-      `SELECT t.*, o.walletAddress AS issuerWalletAddress, o.legalCompanyName
+      `SELECT t.*, o.userUid AS issuerUserUid, o.walletAddress AS issuerWalletAddress, o.legalCompanyName
        FROM tokenMaster t
        INNER JOIN organizationMaster o ON o.organizationUid=t.organizationUid AND o.isDeleted=0
        WHERE LOWER(t.tokenAddress)=LOWER(?) AND t.status='deployed'
@@ -29,6 +29,7 @@ class BlockchainTransactionRepository {
   async listIndexedTokens(executor) {
     return execute(
       `SELECT t.tokenUid,t.organizationUid,t.tokenAddress,t.tokenSymbol,t.decimals,t.deployedAtBlock,
+              t.tokenAgentWalletAddress,
               o.walletAddress AS issuerWalletAddress
        FROM tokenMaster t
        INNER JOIN organizationMaster o ON o.organizationUid=t.organizationUid AND o.isDeleted=0
@@ -90,6 +91,18 @@ class BlockchainTransactionRepository {
        INNER JOIN userMaster u ON u.userUid=i.userUid AND u.isDeleted=0
        WHERE LOWER(i.walletAddress)=LOWER(?) AND i.status='submitted'
          AND i.isActive=1 AND i.isDeleted=0 LIMIT 1`,
+      [walletAddress], executor,
+    );
+    return rows[0] || null;
+  }
+
+  async findIssuerByWallet(walletAddress, executor) {
+    const rows = await execute(
+      `SELECT o.organizationUid,o.userUid,o.walletAddress,u.fullName,u.email
+       FROM organizationMaster o
+       INNER JOIN userMaster u ON u.userUid=o.userUid AND u.isDeleted=0
+       WHERE LOWER(o.walletAddress)=LOWER(?) AND o.status='approved'
+         AND o.isActive=1 AND o.isDeleted=0 LIMIT 1`,
       [walletAddress], executor,
     );
     return rows[0] || null;
@@ -189,7 +202,8 @@ class BlockchainTransactionRepository {
            AND status NOT IN ('COMPLETED','ISSUER_REJECTED','CANCELLED','EXPIRED') AND isDeleted=0`,
         [
           ...common.slice(0, 6), record.transactionHash, record.blockNumber, record.blockHash,
-          record.transactionIndex, record.logIndex, record.confirmedAt, ...common.slice(6),
+          record.transactionIndex, record.logIndex, record.confirmedAt,
+          record.tokenUid, record.toWallet, record.tokenAmountRaw,
         ], executor,
       );
       if (result.affectedRows > 0) {
@@ -197,7 +211,7 @@ class BlockchainTransactionRepository {
           `SELECT redemptionUid FROM tokenRedemption WHERE tokenUid=?
            AND LOWER(investorWalletAddress)=LOWER(?) AND tokenAmountRaw=? AND status='COMPLETED'
            ORDER BY updatedAt DESC LIMIT 1`,
-          [record.tokenUid, record.initiatedByWallet, record.tokenAmountRaw], executor,
+          [record.tokenUid, record.toWallet, record.tokenAmountRaw], executor,
         );
         if (rows[0]) {
           await execute(

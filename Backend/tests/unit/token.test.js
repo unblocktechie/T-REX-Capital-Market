@@ -19,7 +19,8 @@ const organization = {
   walletAddress: '0x1111111111111111111111111111111111111111',
 };
 const issuer = { userUid: 'user-1', roleName: 'Issuer' };
-const PLATFORM_CONTROLLER = '0x9BEFDF75Dc94bbB36532c5d7A74daab28714f579';
+const PLATFORM_CONTROLLER = '0x40e81FAA4e6D54ae0632DF146939bB5858359271';
+const LEGACY_PLATFORM_CONTROLLER = '0x9BEFDF75Dc94bbB36532c5d7A74daab28714f579';
 
 test('token information trims names, uppercases symbols, and accepts only supported decimals', () => {
   const valid = schemas.tokenInformation.validate({
@@ -66,7 +67,9 @@ test('saving the launch price initializes the current token price to the same va
   let savedFields;
   const service = new TokenService({
     repository: {
-      findByUserUid: async () => ({ tokenUid: 'token-1', status: 'draft' }),
+      findByUserUid: async () => ({
+        tokenUid: 'token-1', status: 'draft', tokenAgentWalletAddress: PLATFORM_CONTROLLER,
+      }),
       updateByUserUid: async (_userUid, fields) => { savedFields = fields; return fields; },
     },
     organizationRepository: { findByUserUid: async () => organization },
@@ -157,9 +160,12 @@ test('completed claims require at least one active claim topic and trusted issue
   );
 });
 
-test('token agent is always the Platform Controller while identity manager remains the organization wallet', async () => {
+test('a new token keeps its assigned Platform Controller while identity manager follows the organization wallet', async () => {
   const repository = {
-    findByUserUid: async () => ({ tokenUid: 'token-1', status: 'draft', currentStep: 'governance' }),
+    findByUserUid: async () => ({
+      tokenUid: 'token-1', status: 'draft', currentStep: 'governance',
+      tokenAgentWalletAddress: PLATFORM_CONTROLLER,
+    }),
     updateByUserUid: async (userUid, fields) => ({ userUid, ...fields }),
   };
   const service = new TokenService({
@@ -183,6 +189,25 @@ test('token agent is always the Platform Controller while identity manager remai
     }),
     /must match the approved organization walletAddress/,
   );
+});
+
+test('editing an existing token preserves the Platform Controller assigned at creation', async () => {
+  let savedFields;
+  const existing = {
+    tokenUid: 'legacy-token', status: 'draft', currentStep: 'tokenInformation',
+    tokenAgentWalletAddress: LEGACY_PLATFORM_CONTROLLER,
+  };
+  const service = new TokenService({
+    repository: {
+      findByUserUid: async () => existing,
+      updateByUserUid: async (_userUid, fields) => { savedFields = fields; return { ...existing, ...fields }; },
+    },
+    organizationRepository: { findByUserUid: async () => organization },
+  });
+
+  const result = await service.saveInformation(issuer, { tokenName: 'Legacy Token', isDraft: true });
+  assert.equal(savedFields.tokenAgentWalletAddress, LEGACY_PLATFORM_CONTROLLER);
+  assert.equal(result.tokenAgentWalletAddress, LEGACY_PLATFORM_CONTROLLER);
 });
 
 test('deployed or ready-to-deploy token cannot be edited into another token', () => {

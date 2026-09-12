@@ -52,7 +52,12 @@ class BlockchainTransactionIndexerService {
   async candidates(provider, tokens, fromBlock, toBlock, addressBatchSize) {
     const candidates = new Map();
     const paymentAddress = this.transactionService.paymentAddress();
-    const controllerAddress = this.transactionService.controllerAddress();
+    const controllerAddresses = new Set(tokens
+      .map((token) => token.tokenAgentWalletAddress)
+      .filter(ethers.isAddress)
+      .map((address) => ethers.getAddress(address)));
+    // Include the current default even before the first token using it has been deployed.
+    controllerAddresses.add(this.transactionService.controllerAddress());
     const paymentLogs = await provider.getLogs({
       address: paymentAddress,
       topics: [this.transferTopic],
@@ -65,7 +70,9 @@ class BlockchainTransactionIndexerService {
       // Filtering by the outer target prevents unrelated USDT transfers from entering verification.
       // eslint-disable-next-line no-await-in-loop
       const tx = await provider.getTransaction(hash);
-      if (tx && sameAddress(tx.to, controllerAddress)) candidates.set(hash, { txHash: hash });
+      if (tx && [...controllerAddresses].some((address) => sameAddress(tx.to, address))) {
+        candidates.set(hash, { txHash: hash });
+      }
     }
 
     for (let offset = 0; offset < tokens.length; offset += addressBatchSize) {

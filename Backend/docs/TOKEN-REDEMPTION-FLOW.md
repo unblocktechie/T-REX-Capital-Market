@@ -1,161 +1,140 @@
-# Token Redemption Flow (business workflow plus legacy settlement)
+# Token Redemption Flow
 
-> Settlement sections describing backend USDT payment, lock, burn, unlock, or retry are deprecated
-> as of 2026-09-11. The request/authorization/issuer-decision workflow remains. The investor wallet
-> calls `PlatformController.redeem()` and canonical verification/indexing completes the record. See
-> `FRONTEND-BLOCKCHAIN-TRANSACTION-GUIDE.md`.
+## Current model
 
-## Settlement model
-
-Redemption is manual on the issuer side and backend-authoritative on the settlement side:
-
-1. Investor creates a redemption intent.
-2. Investor signs the exact EIP-712 authorization returned by the backend.
-3. Issuer approves or rejects the request.
-4. The platform Token Agent locks the redemption token amount with `freezePartialTokens`.
-5. After the lock is canonically confirmed, the issuer sends the exact USDT amount from the stored treasury/payment wallet to the registered investor wallet.
-6. The issuer submits only the payment transaction hash.
-7. The backend verifies the chain, sender, contract, calldata, raw amount, receipt, canonical block and Transfer event.
-8. The platform Token Agent calls `burn(investorWalletAddress, tokenAmountRaw)`.
-9. The backend verifies the exact burn and releases any redemption-created partial freeze that remains after burn.
-10. Only then is the redemption `COMPLETED`.
-
-The payment amount snapshots the token's `currentTokenPrice` when the redemption intent is created; values are calculated in integer base units and rounded upward only when a USDT base-unit fraction occurs. Later issuer price changes do not alter an already-created redemption. There is currently no redemption fee.
-
-## Safety invariants
-
-- Investor, token, treasury, USDT and platform addresses come only from backend state/configuration.
-- A registered investment and active investor/issuer/token are required.
-- The requested amount cannot exceed `balanceOf - getFrozenTokens` at intent creation.
-- An active purchase and redemption cannot overlap for the same investment.
-- The EIP-712 signature must recover the registered investor wallet and expires after `REDEMPTION_AUTHORIZATION_TTL_MINUTES`.
-- The issuer can act only on redemptions owned by its organization.
-- Issuer payment is accepted only after the platform token lock is confirmed.
-- Burn is never submitted until payment is independently verified.
-- A payment transaction hash and every platform transaction hash are globally unique in the redemption ledger.
-- Every on-chain confirmation includes a canonical block-hash check and `REDEMPTION_CONFIRMATIONS` confirmations.
-- Platform lock, burn and unlock operations share a database lease, preventing concurrent signer execution across API instances.
-- Append-only history and transaction tables retain business decisions, settlement transitions, and submitted/failed/confirmed hashes.
-
-## Status lifecycle
+Redemption keeps its off-chain request/approval workflow, but settlement is one atomic blockchain
+transaction executed by the token-owning Issuer. The backend observes and verifies that transaction;
+it never signs, relays, burns tokens, or transfers USDT.
 
 ```text
-PENDING_INVESTOR_AUTHORIZATION
-  -> PENDING_ISSUER_APPROVAL
-  -> ISSUER_APPROVED
-  -> TOKEN_LOCK_SUBMITTED
-  -> TOKENS_LOCKED
-  -> PAYMENT_SUBMITTED
-  -> PAYMENT_CONFIRMED
-  -> BURN_SUBMITTED
-  -> BURN_CONFIRMED       (only when lock cleanup is required)
-  -> UNLOCK_SUBMITTED     (only when lock cleanup is required)
-  -> COMPLETED
+Investor creates request
+  -> existing investor authorization step
+  -> Issuer reviews and approves/rejects
+  -> Issuer ensures Controller USDT allowance
+  -> Issuer signs redeem(investor, token, tokenAmount)
+  -> Controller burns investor tokens and transfers Issuer USDT to Investor
+  -> frontend submits txHash (optional fast path)
+  -> backend verifier or canonical indexer confirms it
+  -> canonical transaction CONFIRMED + matching redemption COMPLETED
 ```
 
-Terminal/exception paths are `ISSUER_REJECTED`, `CANCELLED`, `EXPIRED`, and `MANUAL_REVIEW`.
-`CANCELLATION_PENDING` means the request cannot be marked cancelled until a possibly confirmed lock is found and released.
+The investor does not execute the final redemption transaction. The Issuer does not send a separate
+USDT transfer. The Platform Controller performs the burn and payment atomically.
 
-The independent `lockStatus`, `paymentStatus`, `burnStatus`, `unlockStatus`, and `syncStatus` fields explain progress without overloading the main business status.
+## APIs in order
 
-## APIs
+Investor business workflow:
 
-Investor:
+1. `POST /api/v1/investments/tokens/:tokenUid/redemptions`
+2. `POST /api/v1/investments/redemptions/:redemptionUid/authorize`
+3. `GET /api/v1/investments/redemptions/:redemptionUid`
+4. `POST /api/v1/investments/redemptions/:redemptionUid/cancel` when still cancellable
 
-- `POST /api/v1/investments/tokens/:tokenUid/redemptions`
-- `POST /api/v1/investments/redemptions/:redemptionUid/authorize`
-- `GET /api/v1/investments/tokens/:tokenUid/redemptions?page=1&limit=20&search=&status=all`
-- `GET /api/v1/investments/redemptions/:redemptionUid`
-- `POST /api/v1/investments/redemptions/:redemptionUid/cancel`
-- `POST /api/v1/investments/redemptions/:redemptionUid/retry`
+Issuer business workflow:
 
-Issuer:
+1. `GET /api/v1/investments/issuer/redemptions`
+2. `GET /api/v1/investments/issuer/redemptions/:redemptionUid`
+3. `POST /api/v1/investments/issuer/redemptions/:redemptionUid/approve` or `/reject`
 
-- `GET /api/v1/investments/issuer/redemptions?page=1&limit=20&search=&status=all`
-- `GET /api/v1/investments/issuer/redemptions/:redemptionUid`
-- `POST /api/v1/investments/issuer/redemptions/:redemptionUid/approve`
-- `POST /api/v1/investments/issuer/redemptions/:redemptionUid/reject`
-- `POST /api/v1/investments/issuer/redemptions/:redemptionUid/payment/confirm`
+Issuer blockchain synchronization after approval:
 
-Create sample:
+```http
+POST /api/v1/investments/transactions/confirm
+Authorization: Bearer <issuerAccessToken>
+Content-Type: application/json
+```
 
 ```json
 {
-  "tokenAmount": "1.25",
-  "idempotencyKey": "redeem-20260910-0001"
+  "chainId": 11155111,
+  "txHash": "0x...",
+  "tokenUid": "<tokenUid>",
+  "expectedAction": "REDEMPTION"
 }
 ```
 
-Authorize sample:
+The confirmation API is optional for execution but recommended for fast UI synchronization. If it
+is missed, the canonical checkpointed indexer detects the token burn event and runs the same
+verifier.
 
-```json
-{
-  "signature": "0x<65-byte EIP-712 signature>"
-}
-```
+## Issuer frontend execution
 
-Issuer payment confirmation accepts no transaction parameters besides the hash:
+1. Require the connected wallet to equal the organization wallet returned by backend state.
+2. Read `USDT.allowance(issuerWallet, controllerAddress)` from chain.
+3. If insufficient, have the Issuer approve the Controller and re-read allowance after mining.
+4. Check the Issuer USDT balance for UX; the contract remains authoritative.
+5. Call `redeem(investorWalletAddress, tokenAddress, tokenAmountRaw)` on the Controller.
+6. Persist the returned hash locally and call `/investments/transactions/confirm` with the Issuer JWT.
+7. Treat `SUBMITTED` as waiting, not failure. Refresh transaction/redemption history.
+8. Treat only `CONFIRMED`/`COMPLETED` as final success. Never send a second redemption because the
+   backend is temporarily unavailable.
 
-```json
-{
-  "txHash": "0x<32-byte USDT transfer hash>"
-}
-```
+## Backend verification
 
-When `TOKENS_LOCKED`, the issuer detail response contains the authoritative:
+The verifier independently requires all of the following:
 
-- `usdtContractAddress`
-- `issuerPaymentWalletAddress`
-- `investorWalletAddress`
-- `usdtAmountRaw`
-- `usdtDecimals`
-- `chainId`
+- authenticated role is Issuer;
+- token belongs to the authenticated Issuer's organization;
+- outer transaction sender equals the stored organization wallet;
+- delegated execution manager is allowlisted when delegation is used;
+- effective call target equals the Controller stored for that token;
+- function is `redeem(address investor,address token,uint256 tokenAmount)`;
+- calldata token matches the deployed backend token and amount is positive;
+- receipt succeeded and its block remains canonical;
+- token `Transfer(investor, zeroAddress, tokenAmount)` burn exists;
+- USDT `Transfer(issuer, investor, paymentAmount)` exists;
+- `TokensRedeemed(investor, token, issuer, tokenAmount, paymentAmount, price)` exists on the expected
+  Controller and matches the calldata/DB context;
+- Controller payment token, token configuration, quote, decimals, issuer, price, and amount match;
+- configured confirmation threshold is reached before final `CONFIRMED`.
 
-The frontend must call `transfer(investorWalletAddress, usdtAmountRaw)` on the returned USDT contract from `issuerPaymentWalletAddress`.
+Frontend-supplied investor, wallet, amount, controller, settlement, or status values are never
+accepted as proof. Only `chainId`, `txHash`, `tokenUid`, and `expectedAction` are accepted as lookup
+context.
 
-## Recovery architecture
+## Status ownership
 
-The `tokenRedemptionPayment` checkpoint scans configured USDT Transfer events sequentially up to the safe head, persists them, then matches exact payable redemptions by:
+Canonical blockchain status is stored in `blockchainTransaction`:
 
-```text
-chainId + USDT contract + issuer payment wallet + investor wallet + raw amount + payment start block
-```
+- `SUBMITTED`: known hash but not yet final under the configured confirmations.
+- `CONFIRMED`: the complete on-chain verification passed.
+- `FAILED`: mined transaction reverted.
+- `ORPHANED`: previously recorded block is no longer canonical.
 
-This recovers a payment when MetaMask succeeded but the frontend never sent its hash.
+The existing `tokenRedemption` business statuses remain for request compatibility. The important
+active stages are:
 
-Targeted recovery handles platform operations:
+- `PENDING_INVESTOR_AUTHORIZATION`
+- `PENDING_ISSUER_APPROVAL`
+- `ISSUER_APPROVED`
+- `ISSUER_REJECTED`
+- `CANCELLED`
+- `EXPIRED`
+- `COMPLETED`
 
-- prepared lock without stored hash -> search exact `TokensFrozen` event;
-- prepared burn without stored hash -> search exact investor-to-zero `Transfer` event;
-- prepared unlock without stored hash -> search exact `TokensUnfrozen` event.
+When the canonical redemption becomes `CONFIRMED`, the matching non-terminal redemption is updated
+idempotently to `COMPLETED`; the verified hash/receipt fields are copied to the legacy payment/burn
+columns for compatibility, and one `ONCHAIN_REDEMPTION_CONFIRMED` history event is appended.
 
-The real event transaction hash is stored. If the now-safe range contains no matching event, the leased worker may safely submit the missing platform action. Repeated Retry/API/worker calls never insert a second redemption or deliberately submit a second transaction.
+## Recovery and idempotency
 
-## Cancellation and failure handling
+The global canonical indexer scans confirmed token `Transfer` events from its persisted checkpoint.
+A burn event identifies a redemption candidate. The indexer then fetches the full transaction and
+uses the same strict verification path as the confirmation API. This recovers the record when the
+browser closes, the confirm API fails, or the backend was offline when the transaction mined.
 
-- Before issuer approval: cancellation is immediate.
-- After approval/lock submission but before issuer payment: cancellation becomes `CANCELLATION_PENDING`; a confirmed lock is released on-chain first.
-- After issuer payment submission: cancellation is rejected.
-- Definitive unexpected settlement mismatches move the request to `MANUAL_REVIEW`; the worker does not guess a hash or continue to burn.
-- If USDT is paid and burn fails transiently, payment stays confirmed and burn retries; the issuer is never asked to pay again.
+Canonical uniqueness is enforced by chain, transaction hash, action/event. Replaying the same hash
+updates the same row and does not repeat the blockchain transaction or append duplicate completion
+history.
 
-## Database and configuration
+## Migration
 
-Apply `database/migrations/20260910_add_token_redemption_flow.sql`. It creates:
+Apply migrations through:
 
-- `tokenRedemption`
-- `tokenRedemptionTransaction`
-- `tokenRedemptionHistory`
-- `tokenRedemptionPaymentEvent`
+1. `20260911_add_canonical_blockchain_transactions.sql`
+2. `20260911_repair_blockchain_transaction_permissions.sql`
+3. `20260912_allow_issuer_redemption_confirmation.sql`
 
-Required runtime configuration:
-
-```dotenv
-REDEMPTION_USDT_ADDRESS=0x...
-REDEMPTION_CONFIRMATIONS=2
-REDEMPTION_AUTHORIZATION_TTL_MINUTES=30
-REDEMPTION_INDEXER_START_BLOCK=0
-REDEMPTION_WORKER_ENABLED=true
-```
-
-Set `REDEMPTION_INDEXER_START_BLOCK` to a block no later than the earliest possible issuer redemption payment on the configured chain. Monitor the `tokenRedemptionPayment` and shared `platformTokenAgentExecution` rows in `blockchainIndexerCheckpoint`.
+The last migration grants the Issuer role access to the canonical confirmation endpoint. It does not
+grant Issuers permission to confirm INVEST or TRANSFER: service-level action and wallet ownership
+checks still reject those calls.

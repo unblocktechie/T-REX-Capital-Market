@@ -198,7 +198,8 @@ only the current page.
 
 ```text
 1. Load token details
-2. Read current controller quote and token configuration on-chain
+2. Read the assigned controller from the token's `tokenAgentWalletAddress`, then read its quote and
+   token configuration on-chain
 3. Read USDT allowance on-chain
 4. If allowance is insufficient, investor signs USDT approve()
 5. Wait for the approval receipt and re-read allowance
@@ -263,7 +264,7 @@ The token and compliance contracts—not a backend pending record—are the exec
 
 ## Redemption call order
 
-Redemption has an off-chain business workflow before the investor submits the atomic on-chain
+Redemption has an off-chain business workflow before the issuer submits the atomic on-chain
 redemption. The business record and blockchain record therefore have separate statuses.
 
 ### Phase A: investor request and authorization
@@ -328,16 +329,17 @@ ISSUER_REJECTED
 The issuer maintains sufficient USDT balance and allowance for the Platform Controller. The issuer
 does not send a separate USDT payment for each approved redemption.
 
-### Phase C: investor executes redemption
+### Phase C: issuer executes redemption
 
 ```text
 1. Frontend verifies the business request is ISSUER_APPROVED
 2. Frontend reads issuer USDT allowance/balance on-chain
-3. Investor signs Platform Controller redeem(token, tokenAmountRaw)
+3. Issuer signs Platform Controller redeem(investorWallet, token, tokenAmountRaw)
 4. Controller atomically burns tokens and transfers issuer USDT to investor
 5. Frontend saves txHash locally
-6. POST /transactions/confirm with expectedAction = REDEMPTION
-7. Backend verifies receipt, burn, USDT settlement, quote, wallets, and confirmations
+6. POST /transactions/confirm using the owning Issuer JWT with expectedAction = REDEMPTION
+7. Backend verifies issuer ownership/sender, calldata investor/token/amount, receipt, TokensRedeemed,
+   burn, USDT settlement, quote, wallets, and confirmations
 8. Canonical status becomes CONFIRMED
 9. Matching redemption business record becomes COMPLETED
 10. Refresh redemption detail and canonical history

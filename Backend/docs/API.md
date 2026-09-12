@@ -456,9 +456,10 @@ A completed step requires at least one active claim topic and `organizationActsA
 
 `identityManagerWalletAddress` must be a valid EVM address matching the approved organization's
 `walletAddress` case-insensitively. The backend automatically stores
-`tokenAgentWalletAddress = PLATFORM_CONTROLLER_ADDRESS` (default
-`0x9BEFDF75Dc94bbB36532c5d7A74daab28714f579`). The frontend must treat this field as read-only
-and should omit it from the request. A legacy client-supplied Token Agent value is ignored.
+For a newly created token, `tokenAgentWalletAddress = PLATFORM_CONTROLLER_ADDRESS` (default
+`0x40e81FAA4e6D54ae0632DF146939bB5858359271`). The frontend must treat this field as read-only
+and should omit it from the request. A client-supplied Token Agent value is ignored. Existing token
+rows keep the Token Agent assigned when they were created.
 
 ### `POST /tokens/me/submit`
 
@@ -616,14 +617,17 @@ creating transactions or trusting events alone. See `docs/IDENTITY-REGISTRY-REGI
 
 ## Frontend-executed blockchain transactions
 
-Invest, Send, and Redeem are executed directly by the authenticated investor wallet. The backend
-does not prepare, sign, relay, mint, burn, transfer USDT, or continue these transactions.
+Invest and Send are executed directly by the authenticated investor wallet. After the off-chain
+redemption request is approved, Redeem is executed by the owning issuer wallet. The backend does
+not prepare, sign, relay, mint, burn, transfer USDT, or continue these transactions.
 
 - `POST /investments/transactions/confirm` accepts `{ chainId, txHash, tokenUid, expectedAction }`,
   where `expectedAction` is `INVEST`, `TRANSFER`, or `REDEMPTION`. It independently verifies the
-  current canonical transaction, sender, target, calldata, deployed token, receipt, events,
+  current canonical transaction, role/ownership, sender, target, calldata, deployed token, receipt, events,
   controller configuration, exact on-chain quote/USDT settlement, and confirmations. It returns
   HTTP 200 with `SUBMITTED`, `CONFIRMED`, or `FAILED`; authoritative mismatches remain 4xx.
+  Investors may submit `INVEST` and `TRANSFER` hashes. The token-owning Issuer may submit the new
+  `redeem(investor, token, tokenAmount)` `REDEMPTION` hash.
 - `GET /investments/transactions?page=1&limit=20&tokenUid=&type=ALL&status=ALL&walletAddress=&txHash=&fromDate=&toDate=&search=`
   returns role-scoped canonical history. Investor access is wallet-scoped; issuer access is
   organization-scoped; Super Administrator access is global.

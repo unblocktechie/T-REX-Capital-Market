@@ -13,6 +13,7 @@ const TOKEN = address('3');
 const INVESTOR = address('4');
 const ISSUER = address('5');
 const DELEGATION_MANAGER = address('6');
+const NEW_CONTROLLER = address('7');
 const TX_HASH = `0x${'a'.repeat(64)}`;
 const BLOCK_HASH = `0x${'b'.repeat(64)}`;
 const controllerInterface = new ethers.Interface(CONTROLLER_ABI);
@@ -27,22 +28,38 @@ const encodedLog = (iface, event, values, contract, index) => {
   };
 };
 
-const makeContext = ({ receipt = true, quoteAmount = 5_000_000n, delegated = false } = {}) => {
+const makeContext = ({
+  receipt = true,
+  quoteAmount = 5_000_000n,
+  delegated = false,
+  configuredController = CONTROLLER,
+  tokenController = CONTROLLER,
+  action = 'INVEST',
+} = {}) => {
   const buyData = controllerInterface.encodeFunctionData('buy', [TOKEN, 250n]);
+  const redeemData = controllerInterface.encodeFunctionData('redeem(address,address,uint256)', [INVESTOR, TOKEN, 250n]);
+  const controllerData = action === 'REDEMPTION' ? redeemData : buyData;
   const delegationInterface = new ethers.Interface([
     'function redeemDelegations(bytes[] _permissionContexts,bytes32[] _modes,bytes[] _executionCallDatas)',
   ]);
   const delegatedData = delegationInterface.encodeFunctionData('redeemDelegations', [
-    ['0x'], [ethers.ZeroHash], [ethers.concat([CONTROLLER, ethers.zeroPadValue('0x00', 32), buyData])],
+    ['0x'], [ethers.ZeroHash], [ethers.concat([tokenController, ethers.zeroPadValue('0x00', 32), controllerData])],
   ]);
   const tx = {
-    hash: TX_HASH, from: INVESTOR, to: delegated ? DELEGATION_MANAGER : CONTROLLER, value: 0n,
-    data: delegated ? delegatedData : buyData,
+    hash: TX_HASH, from: action === 'REDEMPTION' ? ISSUER : INVESTOR,
+    to: delegated ? DELEGATION_MANAGER : tokenController, value: 0n,
+    data: delegated ? delegatedData : controllerData,
   };
   const minedReceipt = {
     status: 1, blockNumber: 100, blockHash: BLOCK_HASH, index: 2,
     gasUsed: 125000n, gasPrice: 10n,
-    logs: [
+    logs: action === 'REDEMPTION' ? [
+      encodedLog(tokenInterface, 'Transfer', [INVESTOR, ethers.ZeroAddress, 250n], TOKEN, 3),
+      encodedLog(paymentInterface, 'Transfer', [ISSUER, INVESTOR, 5_000_000n], USDT, 4),
+      encodedLog(controllerInterface, 'TokensRedeemed', [
+        INVESTOR, TOKEN, ISSUER, 250n, 5_000_000n, 2_000_000n,
+      ], tokenController, 5),
+    ] : [
       encodedLog(tokenInterface, 'Transfer', [ethers.ZeroAddress, INVESTOR, 250n], TOKEN, 3),
       encodedLog(paymentInterface, 'Transfer', [INVESTOR, ISSUER, 5_000_000n], USDT, 4),
     ],
@@ -51,9 +68,11 @@ const makeContext = ({ receipt = true, quoteAmount = 5_000_000n, delegated = fal
   const repository = {
     findTokenByUid: async () => ({
       tokenUid: '02647af2-e585-4c03-8984-108e1e44c616', organizationUid: 'org-1',
-      tokenAddress: TOKEN, issuerWalletAddress: ISSUER, tokenSymbol: 'TREX', decimals: 2,
+      tokenAddress: TOKEN, tokenAgentWalletAddress: tokenController,
+      issuerUserUid: 'issuer-user-1', issuerWalletAddress: ISSUER, tokenSymbol: 'TREX', decimals: 2,
     }),
     findInvestorByUserUid: async () => ({ userUid: 'user-1', walletAddress: INVESTOR }),
+    findIssuerByWallet: async () => ({ userUid: 'issuer-user-1', walletAddress: ISSUER }),
     upsert: async (record) => {
       const key = `${record.chainId}:${record.transactionHash}:${record.type}`;
       const row = { transactionUid: state.rows.get(key)?.transactionUid || 'transaction-1', ...record };
@@ -73,7 +92,7 @@ const makeContext = ({ receipt = true, quoteAmount = 5_000_000n, delegated = fal
   const service = new BlockchainTransactionService({
     repository,
     config: {
-      sepoliaRpcUrl: 'rpc', chainId: 11155111, platformControllerAddress: CONTROLLER,
+      sepoliaRpcUrl: 'rpc', chainId: 11155111, platformControllerAddress: configuredController,
       purchaseUsdtAddress: USDT, transactionIndexerConfirmations: 2,
       transactionDelegationManagerAddresses: [DELEGATION_MANAGER],
     },
@@ -81,7 +100,7 @@ const makeContext = ({ receipt = true, quoteAmount = 5_000_000n, delegated = fal
     dependencies: {
       providerFactory: () => provider,
       contractFactory: (contractAddress) => {
-        if (contractAddress.toLowerCase() === CONTROLLER.toLowerCase()) {
+        if (contractAddress.toLowerCase() === tokenController.toLowerCase()) {
           return {
             paymentToken: async () => USDT,
             getTokenInfo: async () => [ISSUER, 2, 2_000_000n, true],
@@ -136,6 +155,47 @@ test('allowlisted delegated wallet execution is decoded to the exact controller 
   assert.equal(result.executionType, 'DELEGATED');
 });
 
+test('an existing token remains verifiable through its stored legacy Controller', async () => {
+  const { service } = makeContext({
+    configuredController: NEW_CONTROLLER,
+    tokenController: CONTROLLER,
+  });
+  const result = await service.confirm({ userUid: 'user-1', roleName: 'Investor' }, {
+    chainId: 11155111,
+    txHash: TX_HASH,
+    tokenUid: '02647af2-e585-4c03-8984-108e1e44c616',
+    expectedAction: 'INVEST',
+  });
+  assert.equal(result.status, 'CONFIRMED');
+  assert.equal(result.controllerAddress, CONTROLLER);
+});
+
+test('token issuer can confirm the new issuer-executed atomic redemption', async () => {
+  const { service, state } = makeContext({ action: 'REDEMPTION', delegated: true });
+  const result = await service.confirm({ userUid: 'issuer-user-1', roleName: 'Issuer' }, {
+    chainId: 11155111,
+    txHash: TX_HASH,
+    tokenUid: '02647af2-e585-4c03-8984-108e1e44c616',
+    expectedAction: 'REDEMPTION',
+  });
+  assert.equal(result.status, 'CONFIRMED');
+  assert.equal(result.initiatedByWallet, ISSUER);
+  assert.equal(result.fromWallet, ISSUER);
+  assert.equal(result.toWallet, INVESTOR);
+  assert.equal(result.logIndex, 5);
+  assert.equal(state.syncCount, 1);
+});
+
+test('issuer redemption confirmation rejects a different issuer account', async () => {
+  const { service } = makeContext({ action: 'REDEMPTION' });
+  await assert.rejects(service.confirm({ userUid: 'other-issuer', roleName: 'Issuer' }, {
+    chainId: 11155111,
+    txHash: TX_HASH,
+    tokenUid: '02647af2-e585-4c03-8984-108e1e44c616',
+    expectedAction: 'REDEMPTION',
+  }), (error) => error.code === 'TRANSACTION_SENDER_MISMATCH');
+});
+
 test('known unmined transaction is stored as SUBMITTED and never synchronizes legacy completion', async () => {
   const { service, state } = makeContext({ receipt: false });
   const result = await service.confirm({ userUid: 'user-1', roleName: 'Investor' }, {
@@ -171,12 +231,15 @@ test('canonical indexer discovers a controller transaction and advances the glob
   const service = new BlockchainTransactionIndexerService({
     settingRepository: { findByKey: async () => null },
     repository: {
-      listIndexedTokens: async () => [{ tokenUid: 'token-1', tokenAddress: TOKEN, deployedAtBlock: 100 }],
+      listIndexedTokens: async () => [{
+        tokenUid: 'token-1', tokenAddress: TOKEN,
+        tokenAgentWalletAddress: CONTROLLER, deployedAtBlock: 100,
+      }],
       markOrphanedFromBlock: async () => {},
     },
     checkpointRepository,
     transactionService: {
-      paymentAddress: () => USDT, controllerAddress: () => CONTROLLER,
+      paymentAddress: () => USDT, controllerAddress: () => NEW_CONTROLLER,
       synchronize: async (candidate) => { state.synchronized.push(candidate); return { status: 'CONFIRMED' }; },
     },
     config: {
@@ -208,7 +271,10 @@ test('a newly discovered token is backfilled behind the global checkpoint', asyn
   const service = new BlockchainTransactionIndexerService({
     settingRepository: { findByKey: async () => null },
     repository: {
-      listIndexedTokens: async () => [{ tokenUid: 'token-1', tokenAddress: TOKEN, deployedAtBlock: 90 }],
+      listIndexedTokens: async () => [{
+        tokenUid: 'token-1', tokenAddress: TOKEN,
+        tokenAgentWalletAddress: CONTROLLER, deployedAtBlock: 90,
+      }],
       registerIndexedTokens: async () => {},
       listContractsRequiringBackfill: async () => [{
         indexedContractUid: 'contract-1', tokenUid: 'token-1', contractAddress: TOKEN,

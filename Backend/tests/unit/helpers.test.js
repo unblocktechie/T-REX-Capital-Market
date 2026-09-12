@@ -3,9 +3,8 @@ const assert = require('node:assert/strict');
 const { createOpaqueToken, hashToken, createUid } = require('../../src/utils/token');
 const { parseSettingValue } = require('../../src/services/general-setting.service');
 const { redact } = require('../../src/services/common/log.service');
-const { resolveSignupRoleUid } = require('../../src/services/auth.service');
+const { resolveSignupRoleUid, requiresPrivyWalletIdentity } = require('../../src/services/auth.service');
 const { env } = require('../../src/core/config/env');
-const { verificationEmail } = require('../../src/services/common/email-template.service');
 
 test('opaque tokens are random and only their hash needs storage', () => {
   const first = createOpaqueToken();
@@ -35,11 +34,8 @@ test('signup role selection maps issuer and investor deterministically', () => {
   assert.equal(resolveSignupRoleUid(false), env.auth.investorRoleUid);
 });
 
-test('verification email points to the frontend verification route', () => {
-  const token = 'a'.repeat(64);
-  const email = verificationEmail({ fullName: 'Ada Lovelace', token });
-  const expectedUrl = `${env.frontendUrl.replace(/\/$/, '')}/verify-email?token=${token}`;
-  assert.match(email.text, new RegExp(expectedUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-  assert.match(email.html, new RegExp(expectedUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-  assert.doesNotMatch(email.html, /\/api\/v1\/auth\/verify-email/);
+test('Privy wallet identity is required only for issuer and investor roles', () => {
+  assert.equal(requiresPrivyWalletIdentity({ roleName: 'Issuer' }), true);
+  assert.equal(requiresPrivyWalletIdentity({ roleName: 'Investor' }), true);
+  assert.equal(requiresPrivyWalletIdentity({ roleName: 'Admin' }), false);
 });

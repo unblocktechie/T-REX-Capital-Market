@@ -8,8 +8,7 @@ const createAuthRouter = (controller) => {
   const router = express.Router();
   router.use(authRateLimiter);
   router.post('/signup', validate({ body: schemas.signup }), asyncHandler(controller.signup));
-  router.post('/resend-verification', validate({ body: schemas.emailOnly }), asyncHandler(controller.resendVerification));
-  router.post('/verify-email', validate({ body: schemas.tokenBody }), asyncHandler(controller.verifyEmail));
+  router.post('/privy/complete-signup', validate({ body: schemas.completePrivySignup }), asyncHandler(controller.completePrivySignup));
   router.post('/login', validate({ body: schemas.login }), asyncHandler(controller.login));
   router.post('/forgot-password', validate({ body: schemas.emailOnly }), asyncHandler(controller.forgotPassword));
   router.get('/verify-reset-token', validate({ query: schemas.tokenQuery }), asyncHandler(controller.verifyResetToken));

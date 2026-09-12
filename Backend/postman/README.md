@@ -19,7 +19,8 @@ Import `T-REX Capital Market Backend.postman_collection.json` into Postman.
     UI history and **Export Canonical Blockchain Transactions** for full CSV export.
 11. For **Token Redemption**, retain the request, investor authorization, and issuer decision.
     The issuer grants the Platform Controller reusable USDT allowance directly from its wallet.
-    The investor then signs `PlatformController.redeem()`; confirm/index that one atomic transaction.
+    The issuer then signs `PlatformController.redeem(investor, token, tokenAmount)` and calls the
+    canonical confirmation endpoint using the Issuer JWT; confirm/index that one atomic transaction.
     Do not send issuer USDT separately and do not call legacy payment-confirm or Retry APIs.
 12. For **Investor Invitations**, set `investmentTokenUid`, run **Issuer - List Completed Investors**
     with the issuer `userToken`, then run **Issuer - Invite Investor**. The test stores

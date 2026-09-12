@@ -29,6 +29,7 @@ const { MenuService } = require('../services/menu.service');
 const { PermissionService } = require('../services/permission.service');
 const { GeneralSettingService } = require('../services/general-setting.service');
 const { AuthService } = require('../services/auth.service');
+const { PrivyService } = require('../services/privy.service');
 const { LocationService } = require('../services/location.service');
 const { OrganizationService } = require('../services/organization.service');
 const { OrganizationAdminService } = require('../services/organization-admin.service');
@@ -116,19 +117,21 @@ const identityRegistryVerifierService = new IdentityRegistryVerifierService();
 const tokenImageService = new TokenImageService();
 const tokenDeploymentReceiptService = new TokenDeploymentReceiptService();
 const tokenRedemptionBlockchainService = new TokenRedemptionBlockchainService();
+const privyService = new PrivyService();
 
 const userService = new UserService(userRepository, roleRepository);
 const roleService = new RoleService(roleRepository, userRepository, permissionRepository);
 const menuService = new MenuService(menuRepository, permissionRepository);
 const permissionService = new PermissionService(permissionRepository, roleRepository, menuRepository);
 const settingService = new GeneralSettingService(settingRepository);
-const authService = new AuthService({ userRepository, roleRepository, authTokenRepository, emailService });
+const authService = new AuthService({ userRepository, roleRepository, authTokenRepository, emailService, privyService });
 const locationService = new LocationService(locationRepository);
 const organizationService = new OrganizationService({
   repository: organizationRepository,
   optionRepository: organizationOptionRepository,
   locationService,
   walletOwnershipRepository,
+  userRepository,
 });
 const organizationAdminService = new OrganizationAdminService(
   organizationRepository,
@@ -228,6 +231,7 @@ const investorService = new InvestorService({
   locationService,
   identityService: organizationIdentityService,
   walletOwnershipRepository,
+  userRepository,
   // Enforces the investment-interest upload gate + resubmission sync on document upload.
   investmentService,
 });

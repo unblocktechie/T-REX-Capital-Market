@@ -309,7 +309,7 @@ curl -X PUT http://localhost:3000/api/v1/tokens/me/governance \
 ```
 
 Expected: the response contains
-`tokenAgentWalletAddress: 0x9BEFDF75Dc94bbB36532c5d7A74daab28714f579`. A different valid
+`tokenAgentWalletAddress: 0x40e81FAA4e6D54ae0632DF146939bB5858359271`. A different valid
 Identity Manager wallet must return `400`. A legacy client-supplied Token Agent is ignored.
 
 Review and submit:

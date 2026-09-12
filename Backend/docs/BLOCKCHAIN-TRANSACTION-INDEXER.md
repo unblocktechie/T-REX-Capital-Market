@@ -5,10 +5,12 @@ and Redemption transactions.
 
 It scans sequential safe block ranges using the global `canonicalTransactions` row in
 `blockchainIndexerCheckpoint`. It monitors the configured USDT contract for settlement events sent
-through the Platform Controller and every active deployed token for ERC-20 `Transfer` events. Every
+through the Platform Controller stored on each active token (including older Controller versions),
+and every active deployed token for ERC-20 `Transfer` events. Every
 candidate is passed to the same strict verifier used by the fast confirmation endpoint.
 
-The verifier requires the configured chain, correct target and supported function, deployed token,
+The verifier requires the configured chain, the Controller assigned to that token, the correct
+target and supported function, deployed token,
 canonical successful receipt, exact issue/burn/transfer event, exact settlement direction and
 amount from `quoteBuy`/`quoteRedeem`, configured payment token, controller token metadata, and the
 configured confirmation threshold. API confirmation additionally requires the authenticated

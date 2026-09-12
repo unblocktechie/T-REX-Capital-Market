@@ -381,7 +381,15 @@ class TokenRedemptionService {
     const row = await this.repository.findOwned(redemptionUid, user.userUid);
     if (!row) throw new ApiError(404, 'Redemption was not found.', undefined, 'REDEMPTION_NOT_FOUND');
     if (row.status === 'CANCELLED') return { redemption: this.present(row), idempotent: true };
-    if (['PENDING_INVESTOR_AUTHORIZATION', 'PENDING_ISSUER_APPROVAL', 'ISSUER_APPROVED'].includes(row.status)) {
+    if (row.status === 'ISSUER_APPROVED') {
+      throw new ApiError(
+        409,
+        'Redemption cannot be cancelled after issuer approval.',
+        undefined,
+        'REDEMPTION_CANCELLATION_NOT_ALLOWED_AFTER_ISSUER_APPROVAL',
+      );
+    }
+    if (['PENDING_INVESTOR_AUTHORIZATION', 'PENDING_ISSUER_APPROVAL'].includes(row.status)) {
       await this.transactionRunner(async (connection) => {
         const changed = await this.repository.transition(redemptionUid, row.status, {
           status: 'CANCELLED', lockStatus: 'NOT_REQUIRED', paymentStatus: 'NOT_REQUIRED',

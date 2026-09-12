@@ -8,10 +8,12 @@ const ACTIONS = new Set(['INVEST', 'TRANSFER', 'REDEMPTION']);
 const CONTROLLER_ABI = [
   'function buy(address token,uint256 tokenAmount)',
   'function redeem(address token,uint256 tokenAmount)',
+  'function redeem(address investor,address token,uint256 tokenAmount)',
   'function paymentToken() view returns (address)',
   'function getTokenInfo(address token) view returns (address issuer,uint8 tokenDecimals,uint256 price,bool controllerIsAgent)',
   'function quoteBuy(address token,uint256 tokenAmount) view returns (uint256 paymentAmount,uint256 price,uint8 tokenDecimals,address issuer)',
   'function quoteRedeem(address token,uint256 tokenAmount) view returns (uint256 paymentAmount,uint256 price,uint8 tokenDecimals,address issuer)',
+  'event TokensRedeemed(address indexed investor,address indexed token,address indexed issuer,uint256 tokenAmount,uint256 paymentAmount,uint256 price)',
 ];
 const TOKEN_ABI = [
   'function transfer(address to,uint256 amount) returns (bool)',
@@ -56,11 +58,12 @@ class BlockchainTransactionService {
     return this.providerFactory(this.config.sepoliaRpcUrl);
   }
 
-  controllerAddress() {
-    if (!ethers.isAddress(this.config.platformControllerAddress || '')) {
+  controllerAddress(storedAddress = null) {
+    const address = storedAddress || this.config.platformControllerAddress;
+    if (!ethers.isAddress(address || '')) {
       throw new ApiError(500, 'Platform Controller is not configured.', undefined, 'PLATFORM_CONTROLLER_NOT_CONFIGURED');
     }
-    return ethers.getAddress(this.config.platformControllerAddress);
+    return ethers.getAddress(address);
   }
 
   paymentAddress() {
@@ -124,19 +127,40 @@ class BlockchainTransactionService {
       executionType = 'DELEGATED';
     }
 
-    if (sameAddress(target, this.controllerAddress())) {
-      let decoded;
-      try { decoded = this.controllerInterface.parseTransaction({ data, value: 0 }); } catch {
-        throw new ApiError(422, 'Transaction does not call a supported Platform Controller function.', undefined, 'INVALID_CONTROLLER_FUNCTION');
-      }
-      const action = decoded?.name === 'buy' ? 'INVEST' : decoded?.name === 'redeem' ? 'REDEMPTION' : null;
-      return { action, decoded, target, executionType };
-    }
+    // Decode the selector first, then verify the target against the token's stored Controller
+    // after the token has been loaded. This keeps older tokens bound to their original Controller.
+    let controllerDecoded;
+    try { controllerDecoded = this.controllerInterface.parseTransaction({ data, value: 0 }); } catch {}
+    const controllerAction = controllerDecoded?.name === 'buy'
+      ? 'INVEST' : controllerDecoded?.name === 'redeem' ? 'REDEMPTION' : null;
+    if (controllerAction) return {
+      action: controllerAction, decoded: controllerDecoded, target, executionType,
+    };
     let decoded;
     try { decoded = this.tokenInterface.parseTransaction({ data, value: 0 }); } catch {
-      throw new ApiError(422, 'Transaction was not sent to the Platform Controller or a supported token.', undefined, 'INVALID_TRANSACTION_CONTRACT');
+      throw new ApiError(422, 'Transaction does not call a supported Platform Controller or token function.', undefined, 'INVALID_TRANSACTION_CONTRACT');
     }
     return { action: decoded?.name === 'transfer' ? 'TRANSFER' : null, decoded, target, executionType };
+  }
+
+  controllerCall(action, decoded, transactionSender) {
+    if (action === 'INVEST') {
+      return {
+        tokenAddress: decoded.args[0],
+        tokenAmountRaw: decoded.args[1].toString(),
+        investorWallet: ethers.getAddress(transactionSender),
+        issuerExecuted: false,
+      };
+    }
+    const issuerExecuted = Number(decoded.fragment?.inputs?.length || 0) === 3;
+    return {
+      tokenAddress: decoded.args[issuerExecuted ? 1 : 0],
+      tokenAmountRaw: decoded.args[issuerExecuted ? 2 : 1].toString(),
+      investorWallet: issuerExecuted
+        ? ethers.getAddress(decoded.args[0])
+        : ethers.getAddress(transactionSender),
+      issuerExecuted,
+    };
   }
 
   async assertNetwork(provider, chainId) {
@@ -176,6 +200,24 @@ class BlockchainTransactionService {
     return { log, from, to, amountRaw };
   }
 
+  redemptionEventLog(log, controllerAddress, expected = {}) {
+    if (!sameAddress(log.address, controllerAddress)) return null;
+    let parsed;
+    try { parsed = this.controllerInterface.parseLog(log); } catch { return null; }
+    if (parsed?.name !== 'TokensRedeemed') return null;
+    const investor = ethers.getAddress(parsed.args[0]);
+    const token = ethers.getAddress(parsed.args[1]);
+    const issuer = ethers.getAddress(parsed.args[2]);
+    const tokenAmountRaw = parsed.args[3].toString();
+    const paymentAmountRaw = parsed.args[4].toString();
+    const priceRaw = parsed.args[5].toString();
+    if (expected.investor && !sameAddress(investor, expected.investor)) return null;
+    if (expected.token && !sameAddress(token, expected.token)) return null;
+    if (expected.issuer && !sameAddress(issuer, expected.issuer)) return null;
+    if (expected.tokenAmountRaw && tokenAmountRaw !== String(expected.tokenAmountRaw)) return null;
+    return { log, investor, token, issuer, tokenAmountRaw, paymentAmountRaw, priceRaw };
+  }
+
   receiptFields(receipt, anchor, block, confirmationCount) {
     return {
       blockNumber: Number(receipt.blockNumber),
@@ -189,13 +231,16 @@ class BlockchainTransactionService {
     };
   }
 
-  async controllerRecord({ provider, tx, receipt, token, action, decoded, executionType, userUid, confirmationCount, block }) {
-    const investorWallet = ethers.getAddress(tx.from);
-    const tokenAmountRaw = decoded.args[1].toString();
+  async controllerRecord({ provider, tx, receipt, token, controllerAddress, action, call, executionType, userUid, confirmationCount, block }) {
+    const investorWallet = call.investorWallet;
+    const tokenAmountRaw = call.tokenAmountRaw;
     if (BigInt(tokenAmountRaw) <= 0n) {
       throw new ApiError(422, 'Transaction token amount must be greater than zero.', undefined, 'INVALID_TRANSACTION_AMOUNT');
     }
     const issuerWallet = ethers.getAddress(token.issuerWalletAddress);
+    if (action === 'REDEMPTION' && call.issuerExecuted && !sameAddress(tx.from, issuerWallet)) {
+      throw new ApiError(403, 'Redemption transaction sender is not the token issuer wallet.', undefined, 'TRANSACTION_SENDER_MISMATCH');
+    }
     const tokenEvent = (receipt.logs || []).map((log) => this.parseTransferLog(
       log,
       token.tokenAddress,
@@ -217,7 +262,19 @@ class BlockchainTransactionService {
       throw new ApiError(422, 'Expected USDT settlement event is missing.', undefined, 'PAYMENT_EVENT_MISSING');
     }
 
-    const controller = this.contractFactory(this.controllerAddress(), CONTROLLER_ABI, provider);
+    const redemptionEvent = action === 'REDEMPTION'
+      ? (receipt.logs || []).map((log) => this.redemptionEventLog(log, controllerAddress, {
+        investor: investorWallet,
+        token: token.tokenAddress,
+        issuer: issuerWallet,
+        tokenAmountRaw,
+      })).find(Boolean)
+      : null;
+    if (action === 'REDEMPTION' && !redemptionEvent) {
+      throw new ApiError(422, 'Expected TokensRedeemed event is missing or does not match the request.', undefined, 'REDEMPTION_EVENT_MISSING');
+    }
+
+    const controller = this.contractFactory(controllerAddress, CONTROLLER_ABI, provider);
     const paymentToken = await controller.paymentToken({ blockTag: receipt.blockNumber });
     if (!sameAddress(paymentToken, this.paymentAddress())) {
       throw new ApiError(422, 'Controller payment token does not match backend configuration.', undefined, 'PAYMENT_TOKEN_MISMATCH');
@@ -234,19 +291,23 @@ class BlockchainTransactionService {
       || BigInt(quote[1]) !== BigInt(tokenInfo[2])) {
       throw new ApiError(422, 'USDT settlement does not match the authoritative controller quote.', undefined, 'PAYMENT_AMOUNT_MISMATCH');
     }
+    if (redemptionEvent && (BigInt(redemptionEvent.paymentAmountRaw) !== BigInt(quote[0])
+      || BigInt(redemptionEvent.priceRaw) !== BigInt(quote[1]))) {
+      throw new ApiError(422, 'TokensRedeemed event does not match the authoritative controller quote.', undefined, 'REDEMPTION_EVENT_MISMATCH');
+    }
 
     const payment = this.contractFactory(this.paymentAddress(), PAYMENT_ABI, provider);
     const usdtDecimals = Number(await payment.decimals({ blockTag: receipt.blockNumber }));
     return {
       chainId: Number(this.config.chainId), tokenUid: token.tokenUid, organizationUid: token.organizationUid,
-      tokenAddress: ethers.getAddress(token.tokenAddress), controllerAddress: this.controllerAddress(),
+      tokenAddress: ethers.getAddress(token.tokenAddress), controllerAddress,
       transactionHash: tx.hash.toLowerCase(), type: action, executionType, initiatedByUserUid: userUid || null,
-      initiatedByWallet: investorWallet, fromWallet: paymentEvent.from, toWallet: paymentEvent.to,
+      initiatedByWallet: ethers.getAddress(tx.from), fromWallet: paymentEvent.from, toWallet: paymentEvent.to,
       tokenAmountRaw, tokenAmountFormatted: ethers.formatUnits(tokenAmountRaw, Number(token.decimals)),
       usdtAmountRaw: paymentEvent.amountRaw,
       usdtAmountFormatted: ethers.formatUnits(paymentEvent.amountRaw, usdtDecimals),
       tokenSymbol: token.tokenSymbol, status: 'CONFIRMED', confirmedAt: new Date(), isCanonical: true,
-      ...this.receiptFields(receipt, paymentEvent, block, confirmationCount),
+      ...this.receiptFields(receipt, redemptionEvent || paymentEvent, block, confirmationCount),
     };
   }
 
@@ -270,16 +331,19 @@ class BlockchainTransactionService {
     };
   }
 
-  submittedRecord({ tx, token, action, decoded, executionType, userUid }) {
+  submittedRecord({ tx, token, controllerAddress, action, call, decoded, executionType, userUid }) {
     const sender = ethers.getAddress(tx.from);
     const transfer = action === 'TRANSFER';
-    const tokenAmountRaw = decoded.args[1].toString();
+    const tokenAmountRaw = transfer ? decoded.args[1].toString() : call.tokenAmountRaw;
+    const destination = transfer
+      ? ethers.getAddress(decoded.args[0])
+      : action === 'REDEMPTION' ? call.investorWallet : controllerAddress;
     return {
       chainId: Number(this.config.chainId), tokenUid: token.tokenUid, organizationUid: token.organizationUid,
-      tokenAddress: ethers.getAddress(token.tokenAddress), controllerAddress: transfer ? null : this.controllerAddress(),
+      tokenAddress: ethers.getAddress(token.tokenAddress), controllerAddress: transfer ? null : controllerAddress,
       transactionHash: tx.hash.toLowerCase(), type: action, executionType, initiatedByUserUid: userUid || null,
       initiatedByWallet: sender, fromWallet: sender,
-      toWallet: transfer ? ethers.getAddress(decoded.args[0]) : this.controllerAddress(),
+      toWallet: destination,
       tokenAmountRaw, tokenAmountFormatted: ethers.formatUnits(tokenAmountRaw, Number(token.decimals)),
       usdtAmountRaw: null, usdtAmountFormatted: null, tokenSymbol: token.tokenSymbol,
       status: 'SUBMITTED', confirmationCount: 0, confirmedAt: null, isCanonical: true,
@@ -310,28 +374,50 @@ class BlockchainTransactionService {
       if (!action || (normalizedAction && action !== normalizedAction)) {
         throw new ApiError(422, 'Blockchain action does not match expectedAction.', undefined, 'TRANSACTION_ACTION_MISMATCH');
       }
-      const transactionTokenAddress = action === 'TRANSFER' ? effectiveTarget : decoded.args[0];
+      const call = action === 'TRANSFER' ? null : this.controllerCall(action, decoded, tx.from);
+      const transactionTokenAddress = action === 'TRANSFER' ? effectiveTarget : call.tokenAddress;
       const token = tokenUid
         ? await this.repository.findTokenByUid(tokenUid)
         : await this.repository.findTokenByAddress(transactionTokenAddress);
       if (!token || !sameAddress(token.tokenAddress, transactionTokenAddress)) {
         throw new ApiError(422, 'Transaction token is not a deployed platform token.', undefined, 'INVALID_TRANSACTION_TOKEN');
       }
+      const expectedControllerAddress = action === 'TRANSFER'
+        ? null : this.controllerAddress(token.tokenAgentWalletAddress);
+      if (expectedControllerAddress && !sameAddress(effectiveTarget, expectedControllerAddress)) {
+        throw new ApiError(
+          422,
+          'Transaction was not sent to the Platform Controller assigned to this token.',
+          undefined,
+          'INVALID_TRANSACTION_CONTRACT',
+        );
+      }
 
-      let investor = null;
+      let actor = null;
       if (user) {
-        if (user.roleName !== 'Investor') throw ApiError.forbidden('Only an investor can confirm wallet transactions.');
-        investor = await this.repository.findInvestorByUserUid(user.userUid);
-        if (!investor || !sameAddress(investor.walletAddress, tx.from)) {
-          throw new ApiError(403, 'Transaction sender does not match your registered investor wallet.', undefined, 'TRANSACTION_SENDER_MISMATCH');
+        if (action === 'REDEMPTION' && call.issuerExecuted) {
+          if (user.roleName !== 'Issuer') throw ApiError.forbidden('Only the token issuer can confirm this redemption transaction.');
+          if (token.issuerUserUid !== user.userUid || !sameAddress(token.issuerWalletAddress, tx.from)) {
+            throw new ApiError(403, 'Transaction sender does not match the token issuer wallet.', undefined, 'TRANSACTION_SENDER_MISMATCH');
+          }
+          actor = { userUid: user.userUid, walletAddress: token.issuerWalletAddress };
+        } else {
+          if (user.roleName !== 'Investor') throw ApiError.forbidden('Only an investor can confirm this wallet transaction.');
+          actor = await this.repository.findInvestorByUserUid(user.userUid);
+          if (!actor || !sameAddress(actor.walletAddress, tx.from)) {
+            throw new ApiError(403, 'Transaction sender does not match your registered investor wallet.', undefined, 'TRANSACTION_SENDER_MISMATCH');
+          }
         }
       } else {
-        investor = await this.repository.findUserByWallet(tx.from);
+        actor = action === 'REDEMPTION' && call.issuerExecuted
+          ? await this.repository.findIssuerByWallet(tx.from)
+          : await this.repository.findUserByWallet(tx.from);
       }
 
       if (!receipt) {
         const pending = this.submittedRecord({
-          tx, token, action, decoded, executionType, userUid: investor?.userUid || user?.userUid,
+          tx, token, controllerAddress: expectedControllerAddress, action, call, decoded, executionType,
+          userUid: actor?.userUid || user?.userUid,
         });
         const saved = await this.transactionRunner((connection) => this.repository.upsert(pending, connection));
         return { ...saved, requiredConfirmations: this.requiredConfirmations() };
@@ -346,9 +432,9 @@ class BlockchainTransactionService {
       if (Number(receipt.status) !== 1) {
         const failed = {
           chainId: Number(chainId), tokenUid: token.tokenUid, organizationUid: token.organizationUid,
-          tokenAddress: ethers.getAddress(token.tokenAddress), controllerAddress: action === 'TRANSFER' ? null : this.controllerAddress(),
+          tokenAddress: ethers.getAddress(token.tokenAddress), controllerAddress: expectedControllerAddress,
           transactionHash: tx.hash.toLowerCase(), type: action, executionType,
-          initiatedByUserUid: investor?.userUid || user?.userUid || null,
+          initiatedByUserUid: actor?.userUid || user?.userUid || null,
           initiatedByWallet: ethers.getAddress(tx.from), fromWallet: ethers.getAddress(tx.from), toWallet: tx.to ? ethers.getAddress(tx.to) : null,
           tokenSymbol: token.tokenSymbol, status: 'FAILED', confirmationCount: 0, blockNumber: Number(receipt.blockNumber),
           blockHash: receipt.blockHash, transactionIndex: Number(receipt.index ?? 0), logIndex: null,
@@ -363,8 +449,12 @@ class BlockchainTransactionService {
       const latestBlock = await provider.getBlockNumber();
       const confirmationCount = confirmationsAt(latestBlock, receipt.blockNumber);
       const record = action === 'TRANSFER'
-        ? this.transferRecord({ tx, receipt, token, decoded, executionType, userUid: investor?.userUid || user?.userUid, confirmationCount, block: canonicalBlock })
-        : await this.controllerRecord({ provider, tx, receipt, token, action, decoded, executionType, userUid: investor?.userUid || user?.userUid, confirmationCount, block: canonicalBlock });
+        ? this.transferRecord({ tx, receipt, token, decoded, executionType, userUid: actor?.userUid || user?.userUid, confirmationCount, block: canonicalBlock })
+        : await this.controllerRecord({
+          provider, tx, receipt, token, controllerAddress: expectedControllerAddress,
+          action, call, executionType, userUid: actor?.userUid || user?.userUid,
+          confirmationCount, block: canonicalBlock,
+        });
       if (confirmationCount < this.requiredConfirmations()) {
         record.status = 'SUBMITTED';
         record.confirmedAt = null;

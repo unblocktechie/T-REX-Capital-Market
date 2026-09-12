@@ -41,11 +41,7 @@ const compliance = Joi.object({
 const documentUpload = Joi.object({ documentTypeUid: uid.required() });
 const documentParams = Joi.object({ documentUid: uid.required() });
 
-const submitInvestor = Joi.object({
-  walletAddress: Joi.string().trim().pattern(/^0x[a-fA-F0-9]{40}$/).required().messages({
-    'string.pattern.base': 'walletAddress must be a valid EVM wallet address.',
-  }),
-});
+const submitInvestor = Joi.object({});
 
 module.exports = {
   identityDetails,

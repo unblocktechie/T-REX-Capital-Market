@@ -52,7 +52,7 @@ const createInvestmentRouter = ({ controller, registryController, purchaseContro
   );
 
   // Off-chain redemption request and issuer decision workflow. The approved redemption
-  // transaction itself is signed by the investor in the frontend and observed above.
+  // transaction is signed by the token issuer in the frontend and observed above.
   router.post(
     '/tokens/:tokenUid/redemptions',
     validate({ params: schemas.tokenParams, body: schemas.createRedemption }),

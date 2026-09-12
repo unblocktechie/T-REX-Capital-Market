@@ -2089,7 +2089,7 @@
                   "pm.test('Token governance roles are saved', () => pm.response.to.have.status(200));",
                   "const token = pm.response.json().data;",
                   "pm.expect(token.currentStep).to.eql('review');",
-                  "pm.expect(token.tokenAgentWalletAddress.toLowerCase()).to.eql('0x9befdf75dc94bbb36532c5d7a74daab28714f579');"
+                  "pm.expect(token.tokenAgentWalletAddress.toLowerCase()).to.eql('0x40e81faa4e6d54ae0632df146939bb5858359271');"
                 ]
               }
             }
@@ -2724,13 +2724,37 @@
               "options": { "raw": { "language": "json" } }
             },
             "url": "{{baseUrl}}/api/v1/investments/transactions/confirm",
-            "description": "Optional fast path after the investor signs PlatformController.buy(), token.transfer(), or PlatformController.redeem(). Change expectedAction accordingly. The backend independently verifies canonical chain data; the fallback indexer recovers the transaction if this call is missed."
+            "description": "Optional fast path after the investor signs PlatformController.buy() or token.transfer(). Use the separate Issuer Redemption request for the issuer-executed redeem call. The backend independently verifies canonical chain data; the fallback indexer recovers the transaction if this call is missed."
           },
           "event": [{
             "listen": "test",
             "script": { "type": "text/javascript", "exec": [
               "pm.test('Canonical transaction state returned', () => pm.response.to.have.status(200));",
               "const data = pm.response.json().data;",
+              "pm.expect(data.status).to.be.oneOf(['SUBMITTED', 'CONFIRMED', 'FAILED']);"
+            ] }
+          }]
+        },
+        {
+          "name": "Issuer - Confirm Redemption Transaction",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{userToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chainId\": 11155111,\n  \"txHash\": \"{{blockchainTransactionHash}}\",\n  \"tokenUid\": \"{{investmentTokenUid}}\",\n  \"expectedAction\": \"REDEMPTION\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/investments/transactions/confirm",
+            "description": "Call after the owning issuer signs PlatformController.redeem(investor, token, tokenAmount). The backend verifies issuer ownership and sender, the exact calldata, TokensRedeemed event, token burn, USDT settlement, quote, receipt, and confirmations."
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('Issuer redemption transaction state returned', () => pm.response.to.have.status(200));",
+              "const data = pm.response.json().data;",
+              "pm.expect(data.type).to.eql('REDEMPTION');",
               "pm.expect(data.status).to.be.oneOf(['SUBMITTED', 'CONFIRMED', 'FAILED']);"
             ] }
           }]
@@ -3406,7 +3430,7 @@
     },
     {
       "name": "Token Redemption",
-      "description": "Off-chain redemption request and issuer decision. Issuer grants controller USDT allowance once; investor signs PlatformController.redeem(); canonical confirmation/indexing records the atomic burn and payout.",
+      "description": "Off-chain redemption request and issuer decision. Issuer grants controller USDT allowance when needed and signs PlatformController.redeem(investor, token, amount); canonical confirmation/indexing records the atomic burn and payout.",
       "item": [
         {
           "name": "Investor - Create Redemption",

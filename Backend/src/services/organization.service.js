@@ -39,11 +39,12 @@ const isRegisteredIssuerWalletDuplicate = (error) => error?.code === 'ER_DUP_ENT
   && String(error.sqlMessage || error.message || '').includes('ukOrganizationMasterRegisteredWallet');
 
 class OrganizationService {
-  constructor({ repository, optionRepository, locationService, walletOwnershipRepository }) {
+  constructor({ repository, optionRepository, locationService, walletOwnershipRepository, userRepository }) {
     this.repository = repository;
     this.optionRepository = optionRepository;
     this.locationService = locationService;
     this.walletOwnershipRepository = walletOwnershipRepository;
+    this.userRepository = userRepository;
   }
 
   assertIssuer(user) {
@@ -243,12 +244,16 @@ class OrganizationService {
     });
   }
 
-  async submit(user, { walletAddress }) {
+  async submit(user) {
     this.assertIssuer(user);
     const organization = await this.repository.findByUserUid(user.userUid);
     if (!organization) throw ApiError.badRequest('Organization form has not been started.');
     this.assertEditable(organization);
-    const normalizedWalletAddress = normalizeWalletAddress(walletAddress);
+    const authUser = await this.userRepository.findAuthIdentityByUid(user.userUid);
+    const normalizedWalletAddress = normalizeWalletAddress(authUser?.privyWalletAddress);
+    if (!/^0x[a-f0-9]{40}$/.test(normalizedWalletAddress)) {
+      throw ApiError.forbidden('Complete Privy email verification and wallet setup before submitting issuer onboarding.');
+    }
     const investorWalletOwner = await this.walletOwnershipRepository.findInvestorOwner(normalizedWalletAddress);
     if (investorWalletOwner) throw investorWalletConflictError();
     const issuerWalletOwner = await this.walletOwnershipRepository.findIssuerOwner(

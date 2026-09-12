@@ -681,7 +681,7 @@ paths:
     post:
       tags: [Blockchain Transactions]
       summary: Verify and record a frontend wallet transaction
-      description: Optional fast path. The backend independently verifies the transaction; the fallback indexer remains authoritative when this API is missed.
+      description: Optional fast path. Investors submit INVEST/TRANSFER hashes; the owning issuer submits the issuer-executed REDEMPTION hash. The backend independently verifies role, ownership, sender, calldata, receipt, events and settlement; the fallback indexer remains authoritative when this API is missed.
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
@@ -690,7 +690,7 @@ paths:
             schema: { $ref: '#/components/schemas/ConfirmBlockchainTransactionInput' }
       responses:
         '200': { description: Current SUBMITTED, CONFIRMED, or FAILED canonical state }
-        '403': { description: Sender is not the authenticated investor wallet }
+        '403': { description: Role, token ownership, or transaction sender does not match the authenticated wallet owner }
         '422': { description: Chain, contract, function, token, event, quote, or settlement mismatch }
         '503': { description: Blockchain RPC is temporarily unavailable }
   /api/v1/investments/transactions:
