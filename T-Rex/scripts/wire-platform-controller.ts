@@ -3,6 +3,7 @@ import { ethers } from 'ethers';
 import TREX from '@erc3643org/erc-3643';
 import * as fs from 'fs';
 import * as path from 'path';
+import { getNetwork, deploymentsPathFor } from './network-config';
 
 /**
  * Per-token onboarding step for TREXPlatformController. Run once for every
@@ -20,7 +21,7 @@ import * as path from 'path';
  *      Pricing, and responsibility for it, stays entirely with the issuer.
  *
  * Required env vars:
- *   SEPOLIA_RPC_URL
+ *   NETWORK, ARC_TESTNET_RPC_URL / SEPOLIA_RPC_URL
  *   ISSUER_PRIVATE_KEY        the issuer's own wallet (token owner) — the
  *                             only key that can add the controller as Agent
  *                             or set this token's price.
@@ -29,7 +30,7 @@ import * as path from 'path';
  *                             payment token's units, e.g. "10" for 10 USDT.
  */
 
-const deploymentsPath = path.join(__dirname, '..', 'deployments', 'sepolia.json');
+const deploymentsPath = deploymentsPathFor(getNetwork().name);
 const controllerArtifactPath = path.join(
   __dirname,
   '..',
@@ -41,13 +42,13 @@ const controllerArtifactPath = path.join(
 );
 
 async function main() {
-  const rpcUrl = process.env.SEPOLIA_RPC_URL;
+  const { rpcUrl, name: networkName } = getNetwork();
   const issuerPrivateKey = process.env.ISSUER_PRIVATE_KEY;
   const tokenAddress = process.env.TOKEN_ADDRESS;
   const initialPrice = process.env.INITIAL_PRICE;
 
-  if (!rpcUrl || !issuerPrivateKey) {
-    throw new Error('Missing SEPOLIA_RPC_URL or ISSUER_PRIVATE_KEY in .env');
+  if (!issuerPrivateKey) {
+    throw new Error('Missing ISSUER_PRIVATE_KEY in .env');
   }
   if (!tokenAddress || !ethers.isAddress(tokenAddress)) {
     throw new Error('Missing or invalid TOKEN_ADDRESS in .env');
@@ -63,7 +64,7 @@ async function main() {
   const controllerAddress = deployment.platform?.platformController;
   const paymentTokenAddress = deployment.platform?.paymentToken;
   if (!controllerAddress || !paymentTokenAddress) {
-    throw new Error('platform.platformController / platform.paymentToken missing from deployments/sepolia.json — run deploy-platform-controller.ts first');
+    throw new Error(`platform.platformController / platform.paymentToken missing from deployments/${networkName}.json — run deploy-platform-controller.ts first`);
   }
 
   const controllerArtifact = JSON.parse(fs.readFileSync(controllerArtifactPath, 'utf8'));

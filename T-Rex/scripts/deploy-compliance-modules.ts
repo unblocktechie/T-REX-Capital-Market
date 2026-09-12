@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { ethers } from 'ethers';
 import * as fs from 'fs';
 import * as path from 'path';
+import { getNetwork, deploymentsPathFor } from './network-config';
 
 /**
  * One-time platform deployment for our custom compliance modules
@@ -15,7 +16,7 @@ import * as path from 'path';
  * addresses come from actually exist on disk.
  */
 
-const deploymentsPath = path.join(__dirname, '..', 'deployments', 'sepolia.json');
+const deploymentsPath = deploymentsPathFor(getNetwork().name);
 const artifactsDir = path.join(__dirname, '..', 'artifacts', 'contracts', 'modules');
 
 function loadArtifact(contractName: string) {
@@ -35,10 +36,10 @@ async function deployModule(name: string, signer: ethers.Wallet) {
 }
 
 async function main() {
-  const rpcUrl = process.env.SEPOLIA_RPC_URL;
+  const { rpcUrl } = getNetwork();
   const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
-  if (!rpcUrl || !privateKey) {
-    throw new Error('Missing SEPOLIA_RPC_URL or DEPLOYER_PRIVATE_KEY in .env');
+  if (!privateKey) {
+    throw new Error('Missing DEPLOYER_PRIVATE_KEY in .env');
   }
 
   const provider = new ethers.JsonRpcProvider(rpcUrl);

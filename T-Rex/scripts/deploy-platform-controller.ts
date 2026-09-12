@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { ethers } from 'ethers';
 import * as fs from 'fs';
 import * as path from 'path';
+import { getNetwork, deploymentsPathFor } from './network-config';
 
 /**
  * One-time platform deployment for TREXPlatformController
@@ -15,16 +16,18 @@ import * as path from 'path';
  * address comes from actually exists on disk.
  *
  * Required env vars (see .env.example):
- *   SEPOLIA_RPC_URL
+ *   NETWORK                   "arcTestnet" (default) or "sepolia".
+ *   ARC_TESTNET_RPC_URL / SEPOLIA_RPC_URL   matching the NETWORK above.
  *   DEPLOYER_PRIVATE_KEY      the platform/backend wallet — becomes the
  *                             controller's owner unless PLATFORM_OWNER_ADDRESS
  *                             is set to something else.
- *   PAYMENT_TOKEN_ADDRESS     USDT (or equivalent) contract address on Sepolia.
+ *   PAYMENT_TOKEN_ADDRESS     stablecoin contract address on that network
+ *                             (e.g. Arc's native USDC or a mock USDT/USDC).
  * Optional:
  *   PLATFORM_OWNER_ADDRESS    defaults to the deployer's own address.
  */
 
-const deploymentsPath = path.join(__dirname, '..', 'deployments', 'sepolia.json');
+const deploymentsPath = deploymentsPathFor(getNetwork().name);
 const artifactPath = path.join(
   __dirname,
   '..',
@@ -36,15 +39,15 @@ const artifactPath = path.join(
 );
 
 async function main() {
-  const rpcUrl = process.env.SEPOLIA_RPC_URL;
+  const { rpcUrl } = getNetwork();
   const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
   const paymentTokenAddress = process.env.PAYMENT_TOKEN_ADDRESS;
 
-  if (!rpcUrl || !privateKey) {
-    throw new Error('Missing SEPOLIA_RPC_URL or DEPLOYER_PRIVATE_KEY in .env');
+  if (!privateKey) {
+    throw new Error('Missing DEPLOYER_PRIVATE_KEY in .env');
   }
   if (!paymentTokenAddress || !ethers.isAddress(paymentTokenAddress)) {
-    throw new Error('Missing or invalid PAYMENT_TOKEN_ADDRESS in .env (USDT contract address on Sepolia)');
+    throw new Error('Missing or invalid PAYMENT_TOKEN_ADDRESS in .env (stablecoin contract address on this network)');
   }
 
   const provider = new ethers.JsonRpcProvider(rpcUrl);

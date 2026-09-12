@@ -79,7 +79,7 @@ export interface TREXPlatformControllerInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "redeem",
-    values: [AddressLike, BigNumberish]
+    values: [AddressLike, AddressLike, BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "renounceOwnership",
@@ -368,7 +368,7 @@ export interface TREXPlatformController extends BaseContract {
   >;
 
   redeem: TypedContractMethod<
-    [token: AddressLike, tokenAmount: BigNumberish],
+    [investor: AddressLike, token: AddressLike, tokenAmount: BigNumberish],
     [void],
     "nonpayable"
   >;
@@ -465,7 +465,7 @@ export interface TREXPlatformController extends BaseContract {
   getFunction(
     nameOrSignature: "redeem"
   ): TypedContractMethod<
-    [token: AddressLike, tokenAmount: BigNumberish],
+    [investor: AddressLike, token: AddressLike, tokenAmount: BigNumberish],
     [void],
     "nonpayable"
   >;

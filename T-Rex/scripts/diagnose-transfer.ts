@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { ethers } from 'ethers';
 import TREX from '@erc3643org/erc-3643';
+import { getNetwork, deploymentsPathFor } from './network-config';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -29,7 +30,7 @@ async function main() {
     throw new Error('Usage: ts-node scripts/diagnose-transfer.ts <tokenAddress> <fromAddress> <toAddress> <amount>');
   }
 
-  const provider = new ethers.JsonRpcProvider(process.env.SEPOLIA_RPC_URL);
+  const provider = new ethers.JsonRpcProvider(getNetwork().rpcUrl);
   const token = new ethers.Contract(tokenAddress, TREX.contracts.Token.abi, provider);
 
   const decimals = await (token as any).decimals();
@@ -121,7 +122,7 @@ async function main() {
   }
 
   async function resolveKnownAddress(key: 'countryRestrict' | 'maxBalance' | 'maxInvestors'): Promise<string> {
-    const deploymentsPath = path.join(__dirname, '..', 'deployments', 'sepolia.json');
+    const deploymentsPath = deploymentsPathFor(getNetwork().name);
     if (!fs.existsSync(deploymentsPath)) return ethers.ZeroAddress;
     const deployment = JSON.parse(fs.readFileSync(deploymentsPath, 'utf8'));
     return deployment.platform?.complianceModules?.[key] || ethers.ZeroAddress;
