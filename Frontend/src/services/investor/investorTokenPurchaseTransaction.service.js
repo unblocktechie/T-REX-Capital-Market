@@ -1,7 +1,5 @@
 import {
   createPublicClient,
-  createWalletClient,
-  custom,
   getAddress,
   http,
   isAddress,
@@ -68,55 +66,6 @@ const publicClientFor = (chainId) => {
     chain,
     transport: http(env.web3.rpcUrl),
   });
-};
-
-const activeRegisteredWallet = async ({ connector, connectedAddress, investorWalletAddress, chainId }) => {
-  if (!connector?.getProvider) {
-    throw new Error('Open the Privy secure account linked to your investor profile before continuing.');
-  }
-  if (!isAddress(connectedAddress || '')) {
-    throw new Error('Open the Privy secure account linked to your investor profile before continuing.');
-  }
-
-  const chain = chainFor(chainId);
-  const registeredAddress = requiredAddress(investorWalletAddress, 'Investor Privy secure account');
-  const provider = await connector.getProvider();
-  if (!provider?.request) {
-    throw new Error('The connected wallet is unavailable. Reconnect it and try again.');
-  }
-
-  const accounts = await provider.request({ method: 'eth_accounts' });
-  const activeProviderAddress = Array.isArray(accounts) ? accounts[0] : '';
-  if (!isAddress(activeProviderAddress || '')) {
-    throw new Error('Restore the Privy secure account linked to your investor profile before continuing.');
-  }
-
-  if (getAddress(activeProviderAddress) !== registeredAddress) {
-    const error = new Error('Use the Privy secure account linked to this investment before continuing.');
-    error.code = 'WALLET_MISMATCH';
-    throw error;
-  }
-
-  if (getAddress(activeProviderAddress) !== getAddress(connectedAddress)) {
-    const error = new Error('Your active wallet account changed. Reconnect your registered wallet and try again.');
-    error.code = 'WALLET_ACCOUNT_CHANGED';
-    throw error;
-  }
-
-  const providerChainId = parseChainId(await provider.request({ method: 'eth_chainId' }));
-  if (providerChainId !== chain.id) {
-    const error = new Error(`Your Privy secure account needs a quick setup check. Open the account control and try again.`);
-    error.code = 'WRONG_WALLET_NETWORK';
-    error.requiredChainId = chain.id;
-    throw error;
-  }
-
-  return {
-    provider,
-    chain,
-    account: getAddress(activeProviderAddress),
-    registeredAddress,
-  };
 };
 
 /**
@@ -214,48 +163,4 @@ export async function getInvestorPurchaseTokenBalance(preparedPurchase) {
     functionName: 'balanceOf',
     args: [investorWalletAddress],
   });
-}
-
-/**
- * Ask the connected wallet to track the deployed ERC-3643 token after a first
- * successful purchase. wallet_watchAsset is only called for the registered wallet
- * on the required network and never affects purchase settlement.
- */
-export async function addInvestorPurchaseTokenToWallet({
-  connector,
-  connectedAddress,
-  chainId,
-  investorWalletAddress,
-  tokenAddress,
-  tokenSymbol,
-  tokenDecimals,
-}) {
-  const address = requiredAddress(tokenAddress, 'Token contract');
-  const symbol = String(tokenSymbol || '').trim();
-  const decimals = Number(tokenDecimals);
-  if (!symbol) throw new Error('The token symbol is unavailable. Refresh the page and try again.');
-  if (!Number.isSafeInteger(decimals) || decimals < 0 || decimals > 36) {
-    throw new Error('The token decimals are unavailable. Refresh the page and try again.');
-  }
-
-  const { provider } = await activeRegisteredWallet({
-    connector,
-    connectedAddress,
-    investorWalletAddress,
-    chainId,
-  });
-
-  const added = await provider.request({
-    method: 'wallet_watchAsset',
-    params: {
-      type: 'ERC20',
-      options: {
-        address,
-        symbol,
-        decimals,
-      },
-    },
-  });
-
-  return added === true;
 }

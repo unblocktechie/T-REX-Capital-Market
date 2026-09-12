@@ -8,6 +8,7 @@ import {
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { PrivyTrustBadge } from '@/components/branding/PrivyBrand';
 import { OrganizationActionBar } from '@/components/organization/OrganizationActionBar';
 import { OrganizationPageLayout } from '@/components/organization/OrganizationPageLayout';
 import { getOrganizationStepRoute } from '@/components/organization/OrganizationStepper';
@@ -258,6 +259,7 @@ export default function ReviewSubmissionPage() {
               <div className="grid min-w-0 gap-3">
                 <h3 className="m-0 text-sm font-semibold text-slate-950">Privy secure account</h3>
                 <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <PrivyTrustBadge compact tone="soft" label="Issuer embedded wallet" className="mb-3" />
                   <strong className="block text-sm text-slate-950">
                     {privyWalletAddress ? 'Securely managed by Privy' : 'Secure account not linked'}
                   </strong>

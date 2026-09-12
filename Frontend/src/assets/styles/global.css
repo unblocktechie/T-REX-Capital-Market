@@ -7887,3 +7887,58 @@ button.issuer-dashboard-live-metric:disabled {
     flex: 1;
   }
 }
+
+/* ========================================================================== 
+   Workspace identity pill: keep name and network readable at every sidebar size
+   ========================================================================== */
+.workspace-pill {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 8px;
+  overflow: hidden;
+  padding-inline: 9px;
+}
+
+.workspace-pill__copy {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.workspace-pill__copy small,
+.workspace-pill__copy strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-pill__copy strong {
+  width: 100%;
+  max-width: none;
+}
+
+.workspace-pill__network {
+  flex: 0 0 auto;
+  max-width: 64px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar--collapsed .workspace-pill {
+  display: flex;
+  justify-content: center;
+  padding-inline: 0;
+}
+
+@media (max-width: 900px) {
+  .sidebar,
+  .sidebar--collapsed {
+    overflow-x: hidden;
+  }
+
+  .sidebar:not(.sidebar--collapsed) .workspace-pill {
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+  }
+}

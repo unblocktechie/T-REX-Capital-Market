@@ -758,7 +758,7 @@ export default function SendTokenPage({
     }
     setAddressChecked(true);
     toast.success('Recipient address ready', {
-      description: 'We will check the recipient's eligibility before Privy asks you to confirm.',
+      description: "We will check the recipient's eligibility before Privy asks you to confirm.",
     });
   };
 

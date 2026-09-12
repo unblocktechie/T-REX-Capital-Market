@@ -103,10 +103,10 @@ export default function SignupPage() {
       try {
         await beginEmailVerification(variables.email);
         toast.success(
-          `${variables.role === 'issuer' ? 'Issuer' : 'Investor'} account saved. Privy sent a verification code to your email.`,
+          `${variables.role === 'issuer' ? 'Issuer' : 'Investor'} account saved. We sent a verification code to your email.`,
         );
       } catch (error) {
-        toast.error('Your account was saved, but Privy could not send the verification code.', {
+        toast.error('Your account was saved, but we could not send the verification code.', {
           description: error?.message || 'Open the verification page and request a new code.',
         });
       }
@@ -128,7 +128,7 @@ export default function SignupPage() {
           Create your account
         </h2>
         <p className="m-0 text-sm leading-[22px] text-[var(--text-soft)]">
-          Choose how you will use the platform. Privy will verify your email and securely manage the account linked to your T-REX profile.
+          Choose how you will use the platform.
         </p>
       </div>
 

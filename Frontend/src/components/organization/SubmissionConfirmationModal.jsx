@@ -1,5 +1,6 @@
-import { AlertTriangle, ShieldCheck, WalletCards } from 'lucide-react';
+import { AlertTriangle, ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { PrivyMark, PrivyTrustBadge } from '@/components/branding/PrivyBrand';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { shortenWalletAddress } from '@/utils/wallet';
@@ -48,7 +49,7 @@ export function SubmissionConfirmationModal({
           <div className="flex items-start justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">
               <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-white/10 text-[var(--primary-100)]">
-                <WalletCards size={23} />
+                <PrivyMark size={24} />
               </span>
               <div className="min-w-0">
                 <small className="block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
@@ -59,6 +60,12 @@ export function SubmissionConfirmationModal({
             </div>
             <ShieldCheck className="shrink-0 text-emerald-400" size={23} />
           </div>
+          <PrivyTrustBadge
+            compact
+            tone="dark"
+            label="Issuer embedded wallet"
+            className="mt-4"
+          />
           <p className="mt-5 mb-0 rounded-2xl bg-white/[0.07] p-4 text-sm leading-6 text-slate-300">
             Your Privy account is linked to your T-REX profile. You do not need to connect another account or enter an address here.
           </p>

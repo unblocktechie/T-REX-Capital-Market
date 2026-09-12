@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { PrivyTrustBadge } from '@/components/branding/PrivyBrand';
 import { CreateInvestorProfileModal } from '@/components/investor/CreateInvestorProfileModal';
 import { InvestorDocumentList } from '@/components/investor/InvestorDocumentReview';
 import { InvestorLayout } from '@/components/investor/InvestorLayout';
@@ -18,7 +19,6 @@ import { useInvestorOnboarding } from '@/hooks/useInvestorOnboarding';
 import { useCityOptions, useCountryOptions, useStateOptions } from '@/hooks/useLocationOptions';
 import { useAuthStore } from '@/store/auth.store';
 import { getErrorMessage } from '@/utils/error';
-import { shortenWalletAddress } from '@/utils/wallet';
 import { isInvestorOnboardingReady } from '@/validations/investor.schemas';
 
 const displayLabel = (options, value) =>
@@ -89,7 +89,7 @@ export default function ReviewSubmitStep() {
       return;
     }
     if (!privyWalletAddress) {
-      toast.error('Your Privy secure account is not linked yet. Complete Privy email verification before continuing.');
+      toast.error('Your secure wallet is not linked yet. Confirm your email before continuing.');
       return;
     }
     setSubmissionError('');
@@ -106,7 +106,7 @@ export default function ReviewSubmitStep() {
   const createProfileAndSubmit = async () => {
     if (submitting) return;
     setSubmissionError('');
-    setLoadingMessage('Creating your investor profile and linking your Privy secure account…');
+    setLoadingMessage('Creating your investor profile…');
     try {
       const { result } = await submitInvestor();
       setModalOpen(false);
@@ -133,18 +133,18 @@ export default function ReviewSubmitStep() {
       <Card className="investor-review-action-card">
         <span className="eyebrow">Final action</span>
         <h2>Create your investor profile</h2>
-        <p>Review your information, then create your profile. Your Privy secure account is already linked.</p>
+        <p>Review your information, then create your investor profile. Your secure wallet is already linked to your account.</p>
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <small className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Privy secure account</small>
-          <strong className="mt-2 block text-sm text-slate-950">
-            {privyWalletAddress ? 'Securely managed by Privy' : 'Secure account not linked'}
+          <PrivyTrustBadge compact tone="soft" label="Investor embedded wallet" className="mb-3" />
+          <small className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Secure wallet</small>
+          <strong className="mt-2 block text-sm leading-5 text-slate-950">
+            {privyWalletAddress ? 'Your wallet is securely managed and ready to use.' : 'Your secure wallet is not ready yet.'}
           </strong>
-          <p className="mt-2 mb-0 text-xs leading-5 text-slate-500">You do not need to connect another account during onboarding.</p>
           {privyWalletAddress ? (
             <details className="mt-3 text-xs text-slate-600">
-              <summary className="cursor-pointer font-semibold text-slate-800">View Privy wallet details</summary>
+              <summary className="cursor-pointer font-semibold text-slate-800">View wallet details</summary>
               <p className="mt-2 mb-0 break-all font-mono" title={privyWalletAddress}>
-                {shortenWalletAddress(privyWalletAddress, 9, 9)}
+                {privyWalletAddress}
               </p>
             </details>
           ) : null}
@@ -241,7 +241,6 @@ export default function ReviewSubmitStep() {
         error={submissionError}
         walletAddress={privyWalletAddress}
         ready={ready}
-        profileCreated={false}
       />
     </>
   );

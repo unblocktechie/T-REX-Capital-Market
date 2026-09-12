@@ -1,16 +1,23 @@
 import { motion } from 'framer-motion';
 import { CheckCircle2, FileCheck2, ShieldCheck, UserRoundCheck } from 'lucide-react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
+import { PrivyTrustBadge } from '@/components/branding/PrivyBrand';
 import { TrexLogo, TrexMark } from '@/components/branding/TrexLogo';
 import { appConfig } from '@/config/app.config';
+import { ROUTES } from '@/config/routes';
 
 const points = [
-  ['Issuer ready', 'Build and manage compliant digital-security offerings.', FileCheck2],
-  ['Investor friendly', 'Guide investors through clear identity and eligibility checks.', UserRoundCheck],
-  ['Built-in safeguards', 'Apply investor eligibility and transfer rules automatically.', ShieldCheck],
+  ['For companies', 'Create and manage your investment offering.', FileCheck2],
+  ['For investors', 'Complete the checks you need before investing.', UserRoundCheck],
+  ['Built-in protection', 'Rules and safeguards are handled automatically.', ShieldCheck],
 ];
 
 export function AuthLayout() {
+  const location = useLocation();
+  const showPrivyTrust = [ROUTES.login, ROUTES.signup, ROUTES.verifyEmail].includes(
+    location.pathname,
+  );
+
   return (
     <main className="relative min-h-dvh w-full max-w-full overflow-x-hidden bg-[linear-gradient(180deg,#edf2f8_0%,#f8fafc_28%,#ffffff_100%)] text-[var(--text)] max-[900px]:grid max-[900px]:place-items-center min-[901px]:grid min-[901px]:h-dvh min-[901px]:min-h-0 min-[901px]:grid-cols-[minmax(420px,1.08fr)_minmax(480px,0.92fr)] min-[901px]:overflow-hidden">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[220px] bg-[radial-gradient(circle_at_top,rgba(30,64,175,0.08),transparent_58%)] max-[900px]:block min-[901px]:hidden" />
@@ -49,11 +56,10 @@ export function AuthLayout() {
             </span>
           </span>
           <h1 className="my-4 max-w-[610px] font-[var(--font-display)] text-[clamp(34px,4.3vw,66px)] leading-[1.06] tracking-[-0.055em] text-[var(--brand-panel-text)] min-[901px]:max-[1100px]:text-4xl">
-            Compliant digital securities, launched with confidence.
+            A simple, secure way to manage your digital investments
           </h1>
           <p className="mb-5 max-w-[560px] text-sm leading-6 text-[var(--brand-panel-soft)] min-[1200px]:text-base min-[1200px]:leading-7">
-            T-REX Capital Market gives issuers and investors one secure journey for token creation,
-            identity verification, eligibility and lifecycle management.
+            T-REX Capital Market helps companies launch investments and helps investors manage them with confidence.
           </p>
           <div className="grid gap-2.5">
             {points.map(([title, text, Icon]) => (
@@ -101,6 +107,11 @@ export function AuthLayout() {
               </div>
             </div>
             <Outlet />
+            {showPrivyTrust ? (
+              <div className="mt-5 flex justify-center px-1">
+                <PrivyTrustBadge label="Secure access & embedded wallet" />
+              </div>
+            ) : null}
           </div>
         </div>
       </section>

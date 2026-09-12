@@ -13,6 +13,7 @@ import { useSidebarActionIndicators } from '@/hooks/useSidebarActionIndicators';
 import { ORGANIZATION_STATUSES } from '@/services/organizationStorageService';
 import { ROUTES } from '@/config/routes';
 import { cn } from '@/utils/cn';
+import { web3Config } from '@/config/web3';
 
 const formatRole = (role) => {
   if (!role) return 'Issuer';
@@ -34,8 +35,11 @@ export function Sidebar() {
   const roleLabel = formatRole(user?.role);
   const isIssuer = user?.role === ROLES.issuer;
   const workspaceName = isIssuer
-    ? user?.company || 'Your organization'
+    ? user?.company || user?.name || 'Issuer account'
     : user?.name || `${roleLabel} account`;
+  const networkLabel = web3Config.requiredChain?.testnet
+    ? 'Testnet'
+    : web3Config.requiredChain?.name || 'Network';
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 900px)');
@@ -88,7 +92,7 @@ export function Sidebar() {
             <small>{roleLabel} workspace</small>
             <strong>{workspaceName}</strong>
           </span>
-          <span className="workspace-pill__network">Secure environment</span>
+          <span className="workspace-pill__network">{networkLabel}</span>
         </div>
 
         <nav className="sidebar__nav" aria-label="Primary navigation">

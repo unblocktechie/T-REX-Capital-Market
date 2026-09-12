@@ -18,6 +18,7 @@ import {
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { PrivyTrustBadge } from '@/components/branding/PrivyBrand';
 import { DeploymentConfirmationModal } from '@/components/token-issuance/DeploymentConfirmationModal';
 import {
   AddressDisplay,
@@ -568,6 +569,7 @@ export default function ReviewDeployPage() {
               <div className="review-deployment-wallet__control">
                 <span className="review-deployment-wallet__label">Approved organization account</span>
                 <WalletControl expanded />
+                <PrivyTrustBadge compact tone="soft" label="Issuer embedded wallet" />
               </div>
 
               <div

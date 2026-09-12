@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { PrivyTrustBadge } from '@/components/branding/PrivyBrand';
 import { OrganizationSummaryHeader } from '@/components/organization/OrganizationSummaryHeader';
 import { Card } from '@/components/ui/Card';
 import { ROUTES } from '@/config/routes';
@@ -245,6 +246,9 @@ export default function OrganizationOverviewPage() {
           </header>
 
           <div className="org-wallet-card__body">
+            <div className="flex">
+              <PrivyTrustBadge compact tone="dark" label="Issuer embedded wallet" />
+            </div>
             <section className="org-wallet-card__address" aria-label="Privy secure account status">
               <span className="org-wallet-card__icon" aria-hidden="true">
                 <Wallet size={20} />

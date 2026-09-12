@@ -20,6 +20,13 @@ import { resolveAuthenticatedLandingRoute } from '@/services/auth-landing.servic
 import { getErrorMessage } from '@/utils/error';
 import { loginSchema } from '@/validations/auth.schemas';
 
+const maskEmail = (value) => {
+  const [localPart = '', domain = ''] = String(value || '').split('@');
+  if (!localPart || !domain) return value;
+  if (localPart.length <= 5) return `${localPart}@${domain}`;
+  return `${localPart.slice(0, 5)}...@${domain}`;
+};
+
 export default function LoginPage() {
   useDocumentTitle('Sign in');
   const navigate = useNavigate();
@@ -120,11 +127,11 @@ export default function LoginPage() {
       setStep('otp');
       try {
         await beginEmailVerification(next.email);
-        toast.success('Password accepted. Privy sent a verification code to your email.');
+        toast.success('Password accepted. We sent a verification code to your email.');
       } catch (error) {
         setOtpDeliveryIssue(true);
-        toast.error(getErrorMessage(error, 'Privy could not send the verification code.'), {
-          description: 'Your password step is complete. Resend the Privy verification code to continue.',
+        toast.error(getErrorMessage(error, 'We could not send the verification code.'), {
+          description: 'Your password step is complete. Send a new code to continue.',
         });
       }
     } catch (error) {
@@ -145,7 +152,7 @@ export default function LoginPage() {
       const canResume = Boolean(identity || error?.privyAuthenticated);
       setResumeAvailable(canResume);
       if (!canResume) setOtp('');
-      toast.error(getErrorMessage(error, 'Unable to confirm the Privy verification code.'));
+      toast.error(getErrorMessage(error, 'Unable to confirm the verification code.'));
     } finally {
       setWorking(false);
     }
@@ -174,10 +181,10 @@ export default function LoginPage() {
     setOtp('');
     try {
       await beginEmailVerification(pendingCredentials.email);
-      toast.success('Privy sent a new verification code.');
+      toast.success('A new verification code was sent to your email.');
     } catch (error) {
       setOtpDeliveryIssue(true);
-      toast.error(getErrorMessage(error, 'Unable to resend the Privy verification code.'));
+      toast.error(getErrorMessage(error, 'Unable to send a new verification code.'));
     } finally {
       setResending(false);
     }
@@ -200,21 +207,20 @@ export default function LoginPage() {
             <ShieldCheck size={24} />
           </div>
           <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--primary-500)]">
-            Secure sign in with Privy
+            Email confirmation
           </span>
           <h2 className="my-2 font-[var(--font-display)] text-3xl text-[var(--text)]">
-            {resumeAvailable ? 'Finish secure sign in' : 'Verify your email'}
+            {resumeAvailable ? 'Finish secure sign in' : 'Enter the 6-digit code'}
           </h2>
           <p className="m-0 text-sm leading-6 text-[var(--text-soft)]">
             {resumeAvailable ? (
               <>
-                Privy has already verified your email. Continue to finish preparing your secure account
-                without requesting another code.
+                Your email is confirmed. Continue to finish signing in without requesting another code.
               </>
             ) : (
               <>
-                Enter the 6-digit Privy code sent to <strong>{pendingCredentials?.email}</strong>.
-                Privy uses this check to restore the secure account linked to your T-REX profile.
+                We sent a 6-digit code to <strong>{maskEmail(pendingCredentials?.email)}</strong>. Enter it below to
+                confirm your email.
               </>
             )}
           </p>
@@ -224,7 +230,7 @@ export default function LoginPage() {
           {otpDeliveryIssue && !resumeAvailable ? (
             <div className="rounded-xl border border-[color-mix(in_srgb,var(--warning-500)_30%,transparent)] bg-[color-mix(in_srgb,var(--warning-500)_8%,transparent)] px-3.5 py-3 text-[13px] leading-5 text-[#965f0b]">
               <strong className="block text-[var(--text)]">Your sign-in progress is saved</strong>
-              Privy could not deliver the code this time. If no code arrived, resend it below. You do
+              We could not deliver the code this time. If no code arrived, resend it below. You do
               not need to enter your password again.
             </div>
           ) : null}
@@ -232,11 +238,15 @@ export default function LoginPage() {
           {resumeAvailable ? (
             <div className="rounded-xl border border-[color-mix(in_srgb,var(--success-500)_24%,transparent)] bg-[color-mix(in_srgb,var(--success-500)_7%,transparent)] px-3.5 py-3 text-[13px] leading-5 text-[var(--text-soft)]">
               <strong className="block text-[var(--text)]">Your verification progress is saved</strong>
-              Privy has already verified your email. Continue to finish preparing your secure account.
-              You do not need another code.
+              Your email is already confirmed. Continue to finish signing in. You do not need another code.
             </div>
           ) : (
-            <OTPInput value={otp} onChange={setOtp} length={6} />
+            <div className="grid gap-2.5">
+              <OTPInput value={otp} onChange={setOtp} length={6} />
+              <p className="m-0 text-center text-xs leading-5 text-[var(--text-muted)]">
+                The code may take a minute to arrive. Check your spam folder if you don’t see it.
+              </p>
+            </div>
           )}
 
           <AuthRecoveryNotice state={recoveryState} />
@@ -253,7 +263,7 @@ export default function LoginPage() {
               disabled={otp.length !== 6}
               onClick={submitOtp}
             >
-              Confirm securely with Privy <ArrowRight className="size-[18px]" />
+              Confirm email <ArrowRight className="size-[18px]" />
             </AuthButton>
           )}
 
@@ -267,7 +277,7 @@ export default function LoginPage() {
               ? 'Sending code…'
               : resumeAvailable
                 ? 'Send a new code instead'
-                : 'Resend Privy verification code'}
+                : 'Send a new code'}
           </button>
           <button
             type="button"
@@ -275,9 +285,12 @@ export default function LoginPage() {
             disabled={working || resending}
             onClick={useDifferentCredentials}
           >
-            Use different sign-in details
+            Back to sign in
           </button>
         </div>
+        <p className="mt-5 mb-0 text-center text-xs leading-5 text-[var(--text-muted)]">
+          This helps keep your account secure.
+        </p>
       </div>
     );
   }
@@ -292,8 +305,8 @@ export default function LoginPage() {
           Sign in to T-REX Capital Market
         </h2>
         <p className="m-0 text-sm leading-6 text-[var(--text-soft)]">
-          After your password, Privy confirms your email and securely manages the account linked
-          to your T-REX profile.
+          Enter your email and password to continue. We’ll send a one-time code to your email to keep
+          your account secure.
         </p>
       </div>
       {sessionExpired ? (
@@ -306,8 +319,8 @@ export default function LoginPage() {
       <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-[color-mix(in_srgb,var(--success-500)_24%,transparent)] bg-[color-mix(in_srgb,var(--success-500)_7%,transparent)] px-3.5 py-3 text-[13px] leading-5 text-[var(--text-soft)]">
         <CircleCheck className="mt-0.5 size-[17px] shrink-0 text-[var(--success-500)]" />
         <span>
-          You do not need to connect another account. Your Privy secure account is already linked
-          to your T-REX profile.
+          You don’t need a separate wallet. Privy provides a secure embedded wallet linked to your
+          verified email.
         </span>
       </div>
       <form className="grid gap-3.5" onSubmit={handleSubmit(submitCredentials)} noValidate>
@@ -340,12 +353,12 @@ export default function LoginPage() {
           </Link>
         </div>
         <AuthButton type="submit" loading={working} className="w-full">
-          Continue securely with Privy <ArrowRight className="size-[18px] shrink-0 self-center" />
+          Sign in securely <ArrowRight className="size-[18px] shrink-0 self-center" />
         </AuthButton>
         <AuthRecoveryNotice state={recoveryState} />
       </form>
       <p className="mt-5 mb-0 text-center text-sm text-[var(--text-soft)]">
-        New to T-REX Capital Market?{' '}
+        New here?{' '}
         <Link className="font-bold" to={ROUTES.signup}>
           Create an account
         </Link>

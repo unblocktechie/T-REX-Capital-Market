@@ -143,6 +143,13 @@ const ERC20_PAYMENT_ABI = [
     inputs: [],
     outputs: [{ name: '', type: 'uint8' }],
   },
+  {
+    type: 'function',
+    name: 'symbol',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'string' }],
+  },
 ];
 
 const clean = (value) => String(value ?? '').trim();
@@ -277,17 +284,29 @@ const controllerPaymentToken = async (publicClient) => {
 
 const paymentTokenMetadata = async (publicClient) => {
   const paymentToken = await controllerPaymentToken(publicClient);
-  const decimals = Number(await publicClient.readContract({
-    address: paymentToken,
-    abi: ERC20_PAYMENT_ABI,
-    functionName: 'decimals',
-  }));
+  const [decimalsValue, symbolValue] = await Promise.all([
+    publicClient.readContract({
+      address: paymentToken,
+      abi: ERC20_PAYMENT_ABI,
+      functionName: 'decimals',
+    }),
+    publicClient.readContract({
+      address: paymentToken,
+      abi: ERC20_PAYMENT_ABI,
+      functionName: 'symbol',
+    }).catch(() => ''),
+  ]);
+  const decimals = Number(decimalsValue);
   if (!Number.isSafeInteger(decimals) || decimals < 0 || decimals > 36) {
     const error = new Error('The payment token decimals could not be verified. Please try again.');
     error.code = 'INVALID_PAYMENT_TOKEN_DECIMALS';
     throw error;
   }
-  return { paymentToken, paymentTokenDecimals: decimals };
+  return {
+    paymentToken,
+    paymentTokenDecimals: decimals,
+    paymentTokenSymbol: clean(symbolValue) || 'Payment token',
+  };
 };
 
 const normalizeDecimalPrice = (value) => {
@@ -391,7 +410,7 @@ const quoteOperation = async ({ mode, chainId, tokenAddress, tokenAmountRaw, tok
   const price = BigInt(priceValue);
   const quoteTokenDecimals = Number(quoteTokenDecimalsValue);
   const issuer = getAddress(issuerValue);
-  const { paymentToken, paymentTokenDecimals } = await paymentTokenMetadata(publicClient);
+  const { paymentToken, paymentTokenDecimals, paymentTokenSymbol } = await paymentTokenMetadata(publicClient);
 
   if (issuer !== tokenInfo.issuer || quoteTokenDecimals !== tokenInfo.tokenDecimals || price !== tokenInfo.price) {
     const error = new Error('The investment price changed while this action was being prepared. Refresh and try again.');
@@ -410,6 +429,7 @@ const quoteOperation = async ({ mode, chainId, tokenAddress, tokenAmountRaw, tok
     controller,
     paymentToken,
     paymentTokenDecimals,
+    paymentTokenSymbol,
     tokenAddress: tokenInfo.token,
     tokenAmountRaw: tokenInfo.rawAmount,
     tokenDecimals: tokenInfo.tokenDecimals,
@@ -424,6 +444,27 @@ const quoteOperation = async ({ mode, chainId, tokenAddress, tokenAmountRaw, tok
 
 export const quotePlatformPurchase = (input) => quoteOperation({ ...input, mode: 'buy' });
 export const quotePlatformRedemption = (input) => quoteOperation({ ...input, mode: 'redeem' });
+
+const ensureNativeFeeBalance = async ({ publicClient, address, chain, paymentTokenSymbol = 'payment token', nativeBalance: knownNativeBalance }) => {
+  const nativeBalance = typeof knownNativeBalance === 'bigint'
+    ? knownNativeBalance
+    : await publicClient.getBalance({ address });
+  if (nativeBalance > 0n) return nativeBalance;
+
+  const nativeSymbol = chain.nativeCurrency.symbol;
+  const error = new Error(`Your wallet needs ${nativeSymbol} to cover the network fee for this transaction.`);
+  error.code = 'INSUFFICIENT_NATIVE_BALANCE';
+  error.fundingIssue = {
+    type: 'gas',
+    nativeInsufficient: true,
+    paymentSymbol: paymentTokenSymbol,
+    walletAddress: address,
+    networkName: chain.name,
+    nativeSymbol,
+    nativeBalanceLabel: `0 ${nativeSymbol}`,
+  };
+  throw error;
+};
 
 const paymentAccountState = async ({ quote, owner }) => {
   const ownerAddress = requiredAddress(owner, 'Payment wallet');
@@ -549,12 +590,19 @@ export async function approvePlatformPurchaseSpending({
     purpose: 'allowing USDT spending',
   });
   const controller = platformControllerAddress();
-  const paymentToken = await controllerPaymentToken(wallet.publicClient);
+  const { paymentToken, paymentTokenSymbol } = await paymentTokenMetadata(wallet.publicClient);
   const current = await getPlatformPaymentApprovalState({ chainId: chain.id, owner: investor });
 
   if (current.spendingApproved) {
-    return { ...current, approvalTxHash: '', alreadyApproved: true };
+    return { ...current, paymentTokenSymbol, approvalTxHash: '', alreadyApproved: true };
   }
+
+  await ensureNativeFeeBalance({
+    publicClient: wallet.publicClient,
+    address: investor,
+    chain,
+    paymentTokenSymbol,
+  });
 
   const approvalTxHash = await approveMaximumAllowance({
     ...wallet,
@@ -570,7 +618,7 @@ export async function approvePlatformPurchaseSpending({
     throw error;
   }
 
-  return { ...refreshed, approvalTxHash, alreadyApproved: false };
+  return { ...refreshed, paymentTokenSymbol, approvalTxHash, alreadyApproved: false };
 }
 
 export async function submitPlatformPurchase({
@@ -593,13 +641,39 @@ export async function submitPlatformPurchase({
     chainId: quote.chain.id,
     purpose: 'purchasing tokens',
   });
-  const paymentState = await paymentAccountState({ quote, owner: investor });
+  const [paymentState, nativeBalance] = await Promise.all([
+    paymentAccountState({ quote, owner: investor }),
+    wallet.publicClient.getBalance({ address: investor }),
+  ]);
 
   if (!paymentState.balanceSufficient) {
-    const error = new Error(`Your USDT balance is too low for this purchase. Required: ${quote.paymentAmountFormatted} USDT.`);
-    error.code = 'INSUFFICIENT_INVESTOR_BALANCE';
+    const paymentSymbol = quote.paymentTokenSymbol || 'payment token';
+    const nativeSymbol = quote.chain.nativeCurrency.symbol;
+    const nativeInsufficient = nativeBalance === 0n;
+    const error = new Error(`Your ${paymentSymbol} balance is too low for this purchase. Required: ${quote.paymentAmountFormatted} ${paymentSymbol}.`);
+    error.code = nativeInsufficient ? 'INSUFFICIENT_WALLET_BALANCE' : 'INSUFFICIENT_INVESTOR_BALANCE';
+    error.fundingIssue = {
+      type: nativeInsufficient ? 'both' : 'payment',
+      paymentInsufficient: true,
+      nativeInsufficient,
+      paymentSymbol,
+      requiredPayment: quote.paymentAmountFormatted,
+      availablePayment: paymentState.balanceFormatted,
+      walletAddress: investor,
+      networkName: quote.chain.name,
+      nativeSymbol,
+      nativeBalanceLabel: `${formatUnits(nativeBalance, quote.chain.nativeCurrency.decimals)} ${nativeSymbol}`,
+    };
     throw error;
   }
+
+  await ensureNativeFeeBalance({
+    publicClient: wallet.publicClient,
+    address: investor,
+    chain: quote.chain,
+    paymentTokenSymbol: quote.paymentTokenSymbol,
+    nativeBalance,
+  });
 
   const expectedRaw = clean(expectedPaymentAmountRaw);
   if (/^\d+$/.test(expectedRaw) && BigInt(expectedRaw) !== quote.paymentAmount) {
@@ -706,6 +780,13 @@ export async function approvePlatformRedemptionFunding({
     return { approvalTxHash: '', funding, alreadyApproved: true };
   }
 
+  await ensureNativeFeeBalance({
+    publicClient: wallet.publicClient,
+    address: funding.issuer,
+    chain: funding.chain,
+    paymentTokenSymbol: funding.paymentTokenSymbol,
+  });
+
   const approvalTxHash = await approveMaximumAllowance({
     ...wallet,
     paymentToken: funding.paymentToken,
@@ -740,6 +821,7 @@ export async function submitPlatformRedemption({
     chainId: funding.chain.id,
     purpose: 'executing the redemption',
   });
+  const nativeBalance = await wallet.publicClient.getBalance({ address: funding.issuer });
 
   if (!funding.issuerAllowanceSufficient) {
     const error = new Error('Allow USDT payments before completing this redemption.');
@@ -747,10 +829,33 @@ export async function submitPlatformRedemption({
     throw error;
   }
   if (!funding.issuerBalanceSufficient) {
-    const error = new Error(`The organization secure account does not have enough USDT for this redemption. Required: ${funding.paymentAmountFormatted} USDT.`);
-    error.code = 'INSUFFICIENT_ISSUER_BALANCE';
+    const paymentSymbol = funding.paymentTokenSymbol || 'payment token';
+    const nativeSymbol = funding.chain.nativeCurrency.symbol;
+    const nativeInsufficient = nativeBalance === 0n;
+    const error = new Error(`The organization wallet does not have enough ${paymentSymbol} for this redemption. Required: ${funding.paymentAmountFormatted} ${paymentSymbol}.`);
+    error.code = nativeInsufficient ? 'INSUFFICIENT_WALLET_BALANCE' : 'INSUFFICIENT_ISSUER_BALANCE';
+    error.fundingIssue = {
+      type: nativeInsufficient ? 'both' : 'payment',
+      paymentInsufficient: true,
+      nativeInsufficient,
+      paymentSymbol,
+      requiredPayment: funding.paymentAmountFormatted,
+      availablePayment: funding.issuerBalanceFormatted,
+      walletAddress: funding.issuer,
+      networkName: funding.chain.name,
+      nativeSymbol,
+      nativeBalanceLabel: `${formatUnits(nativeBalance, funding.chain.nativeCurrency.decimals)} ${nativeSymbol}`,
+    };
     throw error;
   }
+
+  await ensureNativeFeeBalance({
+    publicClient: wallet.publicClient,
+    address: funding.issuer,
+    chain: funding.chain,
+    paymentTokenSymbol: funding.paymentTokenSymbol,
+    nativeBalance,
+  });
 
   const investorTokenBalance = BigInt(await funding.publicClient.readContract({
     address: funding.tokenAddress,

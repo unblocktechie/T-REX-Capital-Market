@@ -84,9 +84,6 @@ const TERMINAL_REDEMPTION_STATUSES = new Set([
 const CANCELLABLE_REDEMPTION_STATUSES = new Set([
   'PENDING_INVESTOR_AUTHORIZATION',
   'PENDING_ISSUER_APPROVAL',
-  'ISSUER_APPROVED',
-  'TOKEN_LOCK_SUBMITTED',
-  'TOKENS_LOCKED',
 ]);
 const DIRECT_REDEEM_READY_STATUSES = new Set([
   'ISSUER_APPROVED',
@@ -1151,6 +1148,29 @@ export default function RedeemTokenPage({
     setCancellingRedemptionUid(uid);
     setFlowError('');
     try {
+      // Re-check the latest server status immediately before cancellation. This prevents
+      // a stale history row or an already-open dialog from exposing cancellation after
+      // the issuer has approved the request. The backend remains the final authority.
+      try {
+        const latest = await investmentApi.getTokenRedemption(uid);
+        const latestStatus = normalizeStatus(latest?.status);
+        if (latestStatus && !CANCELLABLE_REDEMPTION_STATUSES.has(latestStatus)) {
+          setRedemptionHistory((items) => items.map((item) => (
+            redemptionUidOf(item) === uid ? { ...item, ...latest } : item
+          )));
+          if (uid === redemptionUid) applyRedemption(latest, latest?.tokenAmount || amount);
+          setCancelTarget(null);
+          setRedemptionHistoryRefreshVersion((value) => value + 1);
+          toast.info('Cancellation is no longer available', {
+            description: 'The issuer has already approved this redemption request, so it can no longer be cancelled.',
+          });
+          return;
+        }
+      } catch {
+        // If the latest-status read is temporarily unavailable, continue to the cancel
+        // endpoint, which must still enforce the same approval boundary server-side.
+      }
+
       const next = await investmentApi.cancelTokenRedemption(uid);
       const nextStatus = normalizeStatus(next?.status);
 
@@ -1183,7 +1203,7 @@ export default function RedeemTokenPage({
 
       if (statusCode === 409 || errorCode === 'REDEMPTION_CANCELLATION_NOT_ALLOWED') {
         toast.info('Cancellation is no longer available', {
-          description: 'Payment processing has already started for this redemption.',
+          description: 'The issuer has already approved this redemption request or processing has started, so it can no longer be cancelled.',
         });
 
         try {
@@ -1651,7 +1671,7 @@ export default function RedeemTokenPage({
           <div>
             <strong>Cancel this redemption request</strong>
             <p>
-              This will stop the redemption if payment processing has not started yet.
+              You can cancel this request only before the issuer approves it. Once approved, cancellation is no longer available.
               You can submit a new redemption request later if needed.
             </p>
           </div>

@@ -13,6 +13,7 @@ import {
   X,
   XCircle,
 } from 'lucide-react';
+import { PrivyTrustBadge } from '@/components/branding/PrivyBrand';
 import { MarketplaceDropdown } from '@/components/investor-marketplace/MarketplaceDropdown';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -545,6 +546,10 @@ export function VerifyIdentityClaimsModal({
                 <strong>What happens when you continue</strong>
                 <p>Your approved organization account will ask you to confirm each check separately. These confirmations do not move money. After all checks are confirmed, the investor can continue to the next step.</p>
               </div>
+            </div>
+
+            <div className="flex">
+              <PrivyTrustBadge compact tone="soft" label="Issuer embedded wallet" />
             </div>
 
             <div className={`issuer-claim-wallet-card ${walletMatches ? 'is-match' : 'is-mismatch'}`}>

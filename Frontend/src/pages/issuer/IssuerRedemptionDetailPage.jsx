@@ -20,6 +20,7 @@ import { CompactAddress } from '@/components/common/CompactAddress';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
+import { WalletFundingDialog } from '@/components/wallet/WalletFundingDialog';
 import { ROUTES } from '@/config/routes';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useWalletConnection } from '@/hooks/useWalletConnection';
@@ -37,6 +38,7 @@ import {
 } from '@/services/investor/observedWalletTransactionStore';
 import { formatDate } from '@/utils/date';
 import { getApiFieldErrors, getErrorMessage } from '@/utils/error';
+import { getWalletFundingIssue } from '@/utils/walletFunding';
 import { transactionExplorerName, transactionExplorerUrl } from '@/utils/blockExplorer';
 import {
   cleanRedemptionText,
@@ -96,6 +98,7 @@ export default function IssuerRedemptionDetailPage() {
   const [funding, setFunding] = useState(null);
   const [fundingLoading, setFundingLoading] = useState(false);
   const [fundingError, setFundingError] = useState('');
+  const [walletFundingIssue, setWalletFundingIssue] = useState(null);
   const [submittedRedemptionHash, setSubmittedRedemptionHash] = useState('');
   const mounted = useRef(true);
 
@@ -214,6 +217,29 @@ export default function IssuerRedemptionDetailPage() {
   const correctChain = Number.isSafeInteger(chainId) && wallet.chainId === chainId;
   const canSwitchChain = Number.isSafeInteger(chainId) && wallet.supportedChains.some((chain) => chain.id === chainId);
   const tokenUid = redemptionTokenUid(redemption);
+  const configuredRedemptionChain = wallet.supportedChains.find((chain) => chain.id === chainId) || wallet.requiredChain;
+  const resolveWalletFundingIssue = useCallback((walletError) => getWalletFundingIssue(walletError, {
+    walletAddress: wallet.address || expectedIssuerWallet,
+    networkName: funding?.chain?.name || configuredRedemptionChain?.name,
+    nativeSymbol: funding?.chain?.nativeCurrency?.symbol || configuredRedemptionChain?.nativeCurrency?.symbol,
+    nativeBalance: wallet.balance,
+    nativeBalanceLabel: wallet.balanceLabel,
+    paymentSymbol: funding?.paymentTokenSymbol,
+    requiredPayment: funding?.paymentAmountFormatted,
+    availablePayment: funding?.issuerBalanceFormatted,
+  }), [
+    configuredRedemptionChain?.name,
+    configuredRedemptionChain?.nativeCurrency?.symbol,
+    expectedIssuerWallet,
+    funding?.chain?.name,
+    funding?.chain?.nativeCurrency?.symbol,
+    funding?.issuerBalanceFormatted,
+    funding?.paymentAmountFormatted,
+    funding?.paymentTokenSymbol,
+    wallet.address,
+    wallet.balance,
+    wallet.balanceLabel,
+  ]);
 
   const markRedemptionConfirmedLocally = useCallback((txHash) => {
     const hash = cleanRedemptionText(txHash);
@@ -378,7 +404,9 @@ export default function IssuerRedemptionDetailPage() {
       if (isPlatformWalletRejection(fundingApprovalError)) {
         toast.info('Payment permission cancelled', { description: 'No changes were made. You can complete the one-time approval later.' });
       } else {
-        toast.error(getErrorMessage(fundingApprovalError, 'Unable to allow USDT payments.'));
+        const fundingIssue = resolveWalletFundingIssue(fundingApprovalError);
+        if (fundingIssue) setWalletFundingIssue(fundingIssue);
+        toast.error(getErrorMessage(fundingApprovalError, 'Unable to allow payments.'));
       }
     } finally {
       setAction('');
@@ -397,7 +425,20 @@ export default function IssuerRedemptionDetailPage() {
         throw new Error('Allow USDT payments before executing this redemption.');
       }
       if (!funding?.issuerBalanceSufficient) {
-        throw new Error(`The organization secure account does not have enough USDT for this redemption. Required: ${funding?.paymentAmountFormatted || 'the quoted amount'} USDT.`);
+        const paymentSymbol = funding?.paymentTokenSymbol || 'payment token';
+        const insufficientBalanceError = new Error(`The organization wallet does not have enough ${paymentSymbol} for this redemption.`);
+        insufficientBalanceError.code = 'INSUFFICIENT_ISSUER_BALANCE';
+        insufficientBalanceError.fundingIssue = {
+          type: 'payment',
+          paymentInsufficient: true,
+          paymentSymbol,
+          requiredPayment: funding?.paymentAmountFormatted,
+          availablePayment: funding?.issuerBalanceFormatted,
+          walletAddress: wallet.address || expectedIssuerWallet,
+          networkName: funding?.chain?.name || configuredRedemptionChain?.name,
+          nativeSymbol: funding?.chain?.nativeCurrency?.symbol || configuredRedemptionChain?.nativeCurrency?.symbol,
+        };
+        throw insufficientBalanceError;
       }
       if (!Number.isSafeInteger(chainId)) {
         throw new Error('The secure account setup could not be verified. Refresh and try again.');
@@ -485,6 +526,8 @@ export default function IssuerRedemptionDetailPage() {
         toast.error('Redemption failed', { description: 'The transaction was confirmed but reverted. The redemption remains incomplete and can be retried after the issue is resolved.' });
         await loadDetail({ quiet: true }).catch(() => null);
       } else {
+        const fundingIssue = resolveWalletFundingIssue(redeemError);
+        if (fundingIssue) setWalletFundingIssue(fundingIssue);
         toast.error(getErrorMessage(redeemError, 'Unable to execute this redemption.'));
         await getPlatformRedemptionFunding({
           chainId,
@@ -794,6 +837,11 @@ export default function IssuerRedemptionDetailPage() {
           ) : null}
         </div>
       </Modal>
+
+      <WalletFundingDialog
+        issue={walletFundingIssue}
+        onClose={() => setWalletFundingIssue(null)}
+      />
     </div>
   );
 }

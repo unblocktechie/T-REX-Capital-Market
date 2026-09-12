@@ -31,6 +31,7 @@ import { MarketplaceDropdown } from '@/components/investor-marketplace/Marketpla
 import { InvestmentJourneyTracker } from '@/components/application-history/InvestmentJourneyTracker';
 import { InvestorHistoryPagination } from '@/components/investor-marketplace/InvestorHistoryPagination';
 import { Button } from '@/components/ui/Button';
+import { WalletFundingDialog } from '@/components/wallet/WalletFundingDialog';
 import { Card } from '@/components/ui/Card';
 import { ROUTES } from '@/config/routes';
 import { web3Config } from '@/config/web3';
@@ -45,7 +46,6 @@ import {
 } from '@/services/investor/observedWalletTransactionStore';
 import { quotePlatformPurchase } from '@/services/blockchain/trexPlatformController.service';
 import {
-  addInvestorPurchaseTokenToWallet,
   approveInvestorUsdtSpending,
   getInvestorPurchaseTokenBalance,
   getInvestorUsdtSpendingApproval,
@@ -54,6 +54,7 @@ import {
 } from '@/services/investor/investorTokenPurchaseTransaction.service';
 import { getErrorMessage, sanitizeUserFacingMessage } from '@/utils/error';
 import { getWalletErrorMessage } from '@/utils/wallet';
+import { getWalletFundingIssue } from '@/utils/walletFunding';
 import { getInvestmentActionContext } from '@/utils/investmentPurchase';
 import { getInvestmentJourney } from '@/utils/investmentJourney';
 import { resolveCurrentTokenPriceExact } from '@/utils/tokenPrice';
@@ -281,9 +282,6 @@ export default function PurchaseTokenPage({
   const [busyAction, setBusyAction] = useState('');
   const [, setPollingTimedOut] = useState(false);
   const [verificationBlocked, setVerificationBlocked] = useState(false);
-  const [wasFirstTokenPurchase, setWasFirstTokenPurchase] = useState(false);
-  const [addingWalletToken, setAddingWalletToken] = useState(false);
-  const [walletTokenAdded, setWalletTokenAdded] = useState(false);
   const [tokenWalletBalanceRaw, setTokenWalletBalanceRaw] = useState(null);
   const [tokenWalletBalanceLoading, setTokenWalletBalanceLoading] = useState(false);
   const [usdtSpendingApproved, setUsdtSpendingApproved] = useState(false);
@@ -302,9 +300,9 @@ export default function PurchaseTokenPage({
   const [platformQuote, setPlatformQuote] = useState(null);
   const [platformQuoteLoading, setPlatformQuoteLoading] = useState(false);
   const [platformQuoteError, setPlatformQuoteError] = useState('');
+  const [walletFundingIssue, setWalletFundingIssue] = useState(null);
   const operationLockRef = useRef(false);
   const completedToastRef = useRef('');
-  const walletTokenAutoPromptRef = useRef(false);
   const purchaseHistoryRequestRef = useRef({ controller: null, inFlight: false });
   const purchaseHistoryLoadedVersionRef = useRef(0);
   const usdtApprovalRequestRef = useRef(0);
@@ -393,6 +391,27 @@ export default function PurchaseTokenPage({
       : Number.isFinite(tokenPrice) && tokenPrice > 0 && Number(normalizedTokenAmount) > 0
         ? Number(normalizedTokenAmount) * tokenPrice
         : 0;
+
+  const resolveWalletFundingIssue = useCallback((walletError) => getWalletFundingIssue(walletError, {
+    walletAddress: walletGuard.wallet.address || preparedInvestorWallet,
+    networkName: walletGuard.targetChain?.name || walletGuard.wallet.requiredChain?.name,
+    nativeSymbol: walletGuard.targetChain?.nativeCurrency?.symbol || walletGuard.wallet.requiredChain?.nativeCurrency?.symbol,
+    nativeBalance: walletGuard.wallet.balance,
+    nativeBalanceLabel: walletGuard.wallet.balanceLabel,
+    paymentSymbol: platformQuote?.paymentTokenSymbol,
+    requiredPayment: platformQuote?.paymentAmountFormatted,
+  }), [
+    platformQuote?.paymentAmountFormatted,
+    platformQuote?.paymentTokenSymbol,
+    preparedInvestorWallet,
+    walletGuard.targetChain?.name,
+    walletGuard.targetChain?.nativeCurrency?.symbol,
+    walletGuard.wallet.address,
+    walletGuard.wallet.balance,
+    walletGuard.wallet.balanceLabel,
+    walletGuard.wallet.requiredChain?.name,
+    walletGuard.wallet.requiredChain?.nativeCurrency?.symbol,
+  ]);
   const requiredPaymentAmountRaw = clean(
     purchase?.usdtAmountRaw
     || purchase?.paymentAmountRaw
@@ -821,9 +840,11 @@ export default function PurchaseTokenPage({
       if (isInvestorPurchaseWalletRejection(approvalError)) {
         toast.info('Payment permission cancelled. No investment was submitted.');
       } else {
-        const message = getWalletErrorMessage(approvalError, 'Your Privy secure account could not confirm the USDT payment permission. Please try again.');
+        const fundingIssue = resolveWalletFundingIssue(approvalError);
+        if (fundingIssue) setWalletFundingIssue(fundingIssue);
+        const message = getWalletErrorMessage(approvalError, 'Your wallet could not confirm the payment permission. Please try again.');
         setUsdtApprovalError(message);
-        toast.error('Unable to allow USDT payments', { description: message });
+        toast.error('Unable to allow payments', { description: message });
       }
     } finally {
       setBusyAction('');
@@ -874,17 +895,6 @@ export default function PurchaseTokenPage({
     setVerificationBlocked(false);
 
     try {
-      try {
-        const currentTokenBalance = await getInvestorPurchaseTokenBalance({
-          tokenAddress: tokenContractAddress,
-          investorWalletAddress: preparedInvestorWallet,
-          chainId,
-        });
-        setWasFirstTokenPurchase(currentTokenBalance === 0n);
-      } catch {
-        // Wallet token tracking is optional and never blocks the investment.
-      }
-
       const result = await submitInvestorPurchasePayment({
         connector: walletGuard.wallet.connector,
         connectedAddress: walletGuard.wallet.address,
@@ -981,7 +991,9 @@ export default function PurchaseTokenPage({
           description: 'Allow USDT payments, then review your investment again.',
         });
       } else {
-        const message = getWalletErrorMessage(walletError, 'Your Privy secure account could not submit this investment. Please try again.');
+        const fundingIssue = resolveWalletFundingIssue(walletError);
+        if (fundingIssue) setWalletFundingIssue(fundingIssue);
+        const message = getWalletErrorMessage(walletError, 'Your wallet could not submit this investment. Please try again.');
         setPurchaseError(message);
         setPurchaseErrorCode(clean(walletError?.code));
         toast.error('Unable to submit investment', { description: message });
@@ -1008,74 +1020,6 @@ export default function PurchaseTokenPage({
 
     setTokenAmountInput(normalized);
   };
-
-  const handleAddTokenToWallet = useCallback(async ({ automatic = false } = {}) => {
-    if (!isCompleted || !wasFirstTokenPurchase || walletTokenAdded || addingWalletToken) return;
-    if (!walletGuard.ready) {
-      if (!automatic) {
-        toast.error('Open the Privy secure account linked to your profile before adding this asset to your Privy wallet display.');
-      }
-      return;
-    }
-    if (!tokenContractAddress) {
-      if (!automatic) toast.error('The token details are temporarily unavailable. Refresh the page and try again.');
-      return;
-    }
-
-    setAddingWalletToken(true);
-    try {
-      const added = await addInvestorPurchaseTokenToWallet({
-        connector: walletGuard.wallet.connector,
-        connectedAddress: walletGuard.wallet.address,
-        chainId: purchase?.chainId || context.chainId,
-        investorWalletAddress: preparedInvestorWallet,
-        tokenAddress: tokenContractAddress,
-        tokenSymbol: token?.symbol,
-        tokenDecimals,
-      });
-
-      if (added) {
-        setWalletTokenAdded(true);
-        toast.success(`${token?.symbol || 'Asset'} added to your Privy wallet display.`);
-      } else if (!automatic) {
-        toast.info('Token was not added. You can try again whenever you are ready.');
-      }
-    } catch (watchError) {
-      if (isInvestorPurchaseWalletRejection(watchError)) {
-        if (!automatic) toast.info('Add token request cancelled.');
-      } else {
-        const message = getErrorMessage(watchError, 'We could not add this asset to your Privy wallet display right now.');
-        if (!automatic) toast.error('Unable to add token', { description: message });
-      }
-    } finally {
-      setAddingWalletToken(false);
-    }
-  }, [
-    addingWalletToken,
-    context.chainId,
-    isCompleted,
-    preparedInvestorWallet,
-    purchase?.chainId,
-    token?.symbol,
-    tokenContractAddress,
-    tokenDecimals,
-    walletGuard,
-    walletTokenAdded,
-    wasFirstTokenPurchase,
-  ]);
-
-  useEffect(() => {
-    if (
-      !isCompleted
-      || !wasFirstTokenPurchase
-      || walletTokenAdded
-      || !walletGuard.ready
-      || walletTokenAutoPromptRef.current
-    ) return;
-
-    walletTokenAutoPromptRef.current = true;
-    void handleAddTokenToWallet({ automatic: true });
-  }, [handleAddTokenToWallet, isCompleted, walletGuard.ready, walletTokenAdded, wasFirstTokenPurchase]);
 
   if (loading) {
     return (
@@ -1419,30 +1363,6 @@ export default function PurchaseTokenPage({
         </aside>
       </div>
 
-      {isCompleted && wasFirstTokenPurchase && !walletTokenAdded ? (
-        <Card className="investor-token-action-card investor-token-purchase-wallet-token">
-          <div className="investor-token-action-card__heading">
-            <div>
-              <span>Privy wallet display</span>
-              <h2>Add {token.symbol} to your Privy wallet</h2>
-            </div>
-            <WalletCards size={19} />
-          </div>
-          <p className="investor-token-action-helper">
-            Your first purchase is complete. You can add this asset to your Privy wallet if you want it to appear in the wallet's asset list.
-          </p>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => handleAddTokenToWallet()}
-            disabled={!walletGuard.ready || addingWalletToken}
-            loading={addingWalletToken}
-          >
-            Add to Privy wallet
-          </Button>
-        </Card>
-      ) : null}
-
       <Card className="investor-token-purchase-history investor-token-purchase-history--investments">
         <div className="investor-token-purchase-history__header">
           <div className="investor-token-purchase-history__heading">
@@ -1575,6 +1495,11 @@ export default function PurchaseTokenPage({
           itemLabel="Purchase history"
         />
       </Card>
+
+      <WalletFundingDialog
+        issue={walletFundingIssue}
+        onClose={() => setWalletFundingIssue(null)}
+      />
     </div>
   );
 }

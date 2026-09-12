@@ -20692,3 +20692,78 @@ button.investor-dashboard-live__metric:focus-visible,
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ========================================================================== */
+/* Issuer investment request: registry action alignment                       */
+/* ========================================================================== */
+
+/*
+ * Keep the final-approval / invite area visually balanced inside the summary
+ * card.  This is intentionally presentation-only: no request, registry, or
+ * wallet behavior is changed.
+ */
+.issuer-application-overview-card > .issuer-application-overview-card__actions--registry {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  align-self: stretch;
+  justify-self: stretch;
+  justify-content: center;
+}
+
+/* Center the single final-approval action in the available action column,
+ * rather than pinning it to the top edge of the card. */
+.issuer-application-overview-card__actions--registry .issuer-registry-action {
+  width: min(220px, 100%);
+  align-self: center;
+  justify-self: center;
+}
+
+.issuer-application-overview-card__actions--registry .issuer-registry-action__message,
+.issuer-application-overview-card__actions--registry .issuer-registry-confirmation-progress__label {
+  max-width: none;
+  text-align: center;
+  justify-content: center;
+}
+
+/* Completed state: use the whole action area and center the status copy so the
+ * text does not appear pushed against one side with unused space beside it. */
+.issuer-application-overview-card__actions--registry .issuer-registry-success {
+  width: min(280px, 100%);
+  max-width: 100%;
+  align-self: center;
+  justify-self: center;
+  justify-items: center;
+}
+
+.issuer-application-overview-card__actions--registry .issuer-registry-success__status {
+  width: 100%;
+  justify-content: center;
+  text-align: center;
+}
+
+.issuer-application-overview-card__actions--registry .issuer-registry-success p {
+  width: 100%;
+  max-width: none;
+  text-align: center;
+}
+
+.issuer-application-overview-card__actions--registry .issuer-registry-invite {
+  width: 100%;
+  justify-content: center;
+}
+
+/* When the card collapses to a single-column mobile/tablet layout, preserve
+ * full-width tap targets and avoid any horizontal overflow. */
+@media (max-width: 860px) {
+  .issuer-application-overview-card__actions--registry .issuer-registry-action,
+  .issuer-application-overview-card__actions--registry .issuer-registry-success {
+    width: 100%;
+    max-width: none;
+    justify-self: stretch;
+  }
+
+  .issuer-application-overview-card__actions--registry .issuer-registry-action__message {
+    width: 100%;
+  }
+}

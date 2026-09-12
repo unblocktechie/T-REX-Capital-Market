@@ -179,7 +179,7 @@ export function Header({ onboardingOnly = false }) {
         </div>
         <div className="onboarding-header__account">
           <div className="header-wallet-control">
-            <WalletControl onboarding />
+            <WalletControl onboarding context={user?.role === ROLES.investor ? 'investor' : 'organization'} />
           </div>
           {accountMenu}
         </div>
@@ -205,7 +205,7 @@ export function Header({ onboardingOnly = false }) {
 
       <div className="app-header__actions">
         <div className="header-wallet-control">
-          <WalletControl />
+          <WalletControl context={user?.role === ROLES.investor ? 'investor' : 'organization'} />
         </div>
         {accountMenu}
       </div>

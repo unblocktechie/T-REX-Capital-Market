@@ -1,4 +1,4 @@
-import { ArrowRight, CircleCheck, MailCheck, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CircleCheck, MailCheck, ShieldCheck } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -12,8 +12,15 @@ import { usePrivyEmailAuth } from '@/hooks/usePrivyEmailAuth';
 import { resolveAuthenticatedLandingRoute } from '@/services/auth-landing.service';
 import { getErrorMessage } from '@/utils/error';
 
+const maskEmail = (value) => {
+  const [localPart = '', domain = ''] = String(value || '').split('@');
+  if (!localPart || !domain) return value;
+  if (localPart.length <= 5) return `${localPart}@${domain}`;
+  return `${localPart.slice(0, 5)}...@${domain}`;
+};
+
 export default function VerifyEmailPage() {
-  useDocumentTitle('Verify with Privy');
+  useDocumentTitle('Confirm email');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const email = String(searchParams.get('email') || '').trim().toLowerCase();
@@ -39,7 +46,7 @@ export default function VerifyEmailPage() {
     setSuccessWallet(identity.walletAddress);
     pendingIdentityRef.current = null;
     setResumeAvailable(false);
-    toast.success('Email verified. Your Privy secure account is linked to your T-REX profile.');
+    toast.success('Email confirmed. Your secure account is ready.');
     navigate(resolveAuthenticatedLandingRoute(session?.user?.role), { replace: true });
   };
 
@@ -51,9 +58,9 @@ export default function VerifyEmailPage() {
     setCode('');
     try {
       await beginEmailVerification(email);
-      toast.success('Privy sent a new verification code.');
+      toast.success('A new code was sent to your email.');
     } catch (error) {
-      toast.error(getErrorMessage(error, 'Unable to send a new Secure verification with Privy code.'));
+      toast.error(getErrorMessage(error, 'Unable to send a new code. Please try again.'));
     } finally {
       setResending(false);
     }
@@ -70,7 +77,7 @@ export default function VerifyEmailPage() {
       const canResume = Boolean(identity || error?.privyAuthenticated);
       setResumeAvailable(canResume);
       if (!canResume) setCode('');
-      toast.error(getErrorMessage(error, 'The Secure verification with Privy code is invalid or expired.'));
+      toast.error(getErrorMessage(error, 'The code is invalid or expired. Please try again.'));
     } finally {
       setSubmitting(false);
     }
@@ -84,7 +91,7 @@ export default function VerifyEmailPage() {
       await completeSignup(identity);
     } catch (error) {
       setResumeAvailable(true);
-      toast.error(getErrorMessage(error, 'Unable to finish setting up your Privy secure account.'));
+      toast.error(getErrorMessage(error, 'Unable to finish setting up your secure account.'));
     } finally {
       setSubmitting(false);
     }
@@ -109,12 +116,10 @@ export default function VerifyEmailPage() {
           <CircleCheck size={34} />
         </div>
         <span className="verification-result__eyebrow">
-          <ShieldCheck size={14} /> Privy verified
+          <ShieldCheck size={14} /> Email confirmed
         </span>
         <h2>Your secure account is ready to use</h2>
-        <p>
-          Your secure account is managed by Privy and linked to your T-REX profile.
-        </p>
+        <p>Your secure account is linked to your T-REX profile.</p>
       </div>
     );
   }
@@ -126,21 +131,18 @@ export default function VerifyEmailPage() {
           <MailCheck size={24} />
         </div>
         <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--primary-500)]">
-          Secure verification with Privy
+          Email confirmation
         </span>
         <h2 className="my-2 font-[var(--font-display)] text-3xl text-[var(--text)]">
-          {resumeAvailable ? 'Finish secure account setup' : 'Enter your email code'}
+          {resumeAvailable ? 'Finish secure account setup' : 'Enter the 6-digit code'}
         </h2>
         <p className="m-0 text-sm leading-6 text-[var(--text-soft)]">
           {resumeAvailable ? (
-            <>
-              Your email is already verified. Privy is finishing your secure account setup, so you can
-              continue without entering another code.
-            </>
+            <>Your email is confirmed. Continue to finish setting up your secure account.</>
           ) : (
             <>
-              Privy sent a 6-digit code to <strong>{email}</strong>. After you confirm the code, Privy
-              will prepare your secure account and link it to your T-REX profile.
+              We sent a 6-digit code to <strong>{maskEmail(email)}</strong>. Enter it below to confirm
+              your email.
             </>
           )}
         </p>
@@ -149,12 +151,16 @@ export default function VerifyEmailPage() {
       <div className="grid gap-4">
         {resumeAvailable ? (
           <div className="rounded-xl border border-[color-mix(in_srgb,var(--success-500)_24%,transparent)] bg-[color-mix(in_srgb,var(--success-500)_7%,transparent)] px-3.5 py-3 text-[13px] leading-5 text-[var(--text-soft)]">
-            <strong className="block text-[var(--text)]">Your verification progress is saved</strong>
-            Your email is already verified. Continue to finish setting up your secure account. You do
-            not need another code.
+            <strong className="block text-[var(--text)]">Your confirmation progress is saved</strong>
+            Your email is already confirmed. Continue below; you do not need another code.
           </div>
         ) : (
-          <OTPInput value={code} onChange={setCode} length={6} />
+          <div className="grid gap-2.5">
+            <OTPInput value={code} onChange={setCode} length={6} />
+            <p className="m-0 text-center text-xs leading-5 text-[var(--text-muted)]">
+              The code may take a minute to arrive. Check your spam folder if you don’t see it.
+            </p>
+          </div>
         )}
 
         <AuthRecoveryNotice state={recoveryState} />
@@ -166,7 +172,7 @@ export default function VerifyEmailPage() {
             loading={submitting}
             onClick={resumeSecureSetup}
           >
-            Resume secure setup <ArrowRight className="size-[18px]" />
+            Finish setup <ArrowRight className="size-[18px]" />
           </AuthButton>
         ) : (
           <AuthButton
@@ -176,29 +182,39 @@ export default function VerifyEmailPage() {
             disabled={code.length !== 6}
             onClick={verify}
           >
-            Confirm securely with Privy <ArrowRight className="size-[18px]" />
+            Confirm email <ArrowRight className="size-[18px]" />
           </AuthButton>
         )}
 
-        <button
-          type="button"
-          className="text-sm font-semibold text-[var(--primary-600)]"
-          disabled={resending || submitting}
-          onClick={resend}
-        >
-          {resending
-            ? 'Sending code…'
-            : resumeAvailable
-              ? 'Send a new code instead'
-              : 'Resend Privy verification code'}
-        </button>
+        {!resumeAvailable ? (
+          <button
+            type="button"
+            className="text-sm font-semibold text-[var(--primary-600)]"
+            disabled={resending || submitting}
+            onClick={resend}
+          >
+            {resending ? 'Sending code…' : 'Send a new code'}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="text-sm font-semibold text-[var(--primary-600)]"
+            disabled={resending || submitting}
+            onClick={resend}
+          >
+            {resending ? 'Sending code…' : 'Send a new code instead'}
+          </button>
+        )}
       </div>
 
       <p className="mt-5 mb-0 text-center text-xs leading-5 text-[var(--text-muted)]">
-        Privy verifies your email and securely manages the account linked to your T-REX profile.
+        This helps keep your account secure.
       </p>
-      <Link className="mt-4 block text-center text-sm font-semibold" to={ROUTES.login}>
-        Go to sign in
+      <Link
+        className="mt-4 flex items-center justify-center gap-1.5 text-center text-sm font-semibold"
+        to={ROUTES.login}
+      >
+        <ArrowLeft size={15} aria-hidden="true" /> Back to sign in
       </Link>
     </div>
   );
