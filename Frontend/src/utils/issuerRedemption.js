@@ -21,12 +21,12 @@ export const issuerRedemptionStatusMeta = (status) => {
   switch (cleanRedemptionText(status).toUpperCase()) {
     case 'PENDING_INVESTOR_AUTHORIZATION': return { label: 'Waiting for investor', tone: 'pending' };
     case 'PENDING_ISSUER_APPROVAL': return { label: 'Needs your review', tone: 'pending' };
-    case 'ISSUER_APPROVED': return { label: 'Preparing redemption', tone: 'pending' };
+    case 'ISSUER_APPROVED': return { label: 'Ready for issuer', tone: 'pending' };
     case 'READY_TO_REDEEM':
     case 'APPROVED':
-    case 'AWAITING_INVESTOR_REDEMPTION': return { label: 'Waiting for investor', tone: 'success' };
-    case 'TOKENS_LOCKED': return { label: 'Waiting for investor', tone: 'success' };
-    case 'PAYMENT_SUBMITTED': return { label: 'Investor transaction submitted', tone: 'pending' };
+    case 'AWAITING_INVESTOR_REDEMPTION': return { label: 'Ready for issuer', tone: 'success' };
+    case 'TOKENS_LOCKED': return { label: 'Ready for issuer', tone: 'success' };
+    case 'PAYMENT_SUBMITTED': return { label: 'Redemption submitted', tone: 'pending' };
     case 'PAYMENT_CONFIRMED': return { label: 'Finalizing redemption', tone: 'pending' };
     case 'BURN_SUBMITTED': return { label: 'Finalizing redemption', tone: 'pending' };
     case 'COMPLETED': return { label: 'Completed', tone: 'success' };

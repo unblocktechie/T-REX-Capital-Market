@@ -451,7 +451,7 @@ export function SubmitInterestModal({ open, onClose, token, onConfirm, loading =
     >
       <div className="marketplace-modal-stack">
         <div className="marketplace-modal-hero-icon"><FileCheck2 size={21} /></div>
-        <p className="marketplace-modal-copy">Your verified profile and selected documents will be available to <strong>{token.issuer}</strong> for review. Submitting interest does not start a blockchain transaction.</p>
+        <p className="marketplace-modal-copy">Your verified profile and selected documents will be available to <strong>{token.issuer}</strong> for review. Submitting interest does not make an investment or move any funds.</p>
         {requiredTopics.length ? (
           <div>
             <span className="marketplace-modal-label">Required Verification</span>

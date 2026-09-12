@@ -20495,3 +20495,200 @@ button.investor-dashboard-live__metric:focus-visible,
     justify-items: start;
   }
 }
+
+/* ========================================================================== */
+/* Issuer investment request overview: content-width responsive hardening      */
+/* ========================================================================== */
+
+/*
+ * This summary card lives beside the application sidebar, so viewport-only
+ * breakpoints can leave its metadata/action columns cramped on laptops or
+ * when browser tooling is docked. The app shell already exposes the actual
+ * main-content width as the `app-main` container; use it here so the card
+ * responds to the space it truly has without changing any request behavior.
+ */
+.issuer-application-overview-card {
+  grid-template-columns: minmax(170px, 0.55fr) minmax(0, 1.65fr) minmax(300px, 0.9fr);
+  align-items: stretch;
+}
+
+.issuer-application-overview-card__identity {
+  align-self: center;
+}
+
+.issuer-application-overview-card__grid {
+  align-content: center;
+}
+
+.issuer-application-overview-card__grid > div {
+  align-content: start;
+}
+
+.issuer-application-overview-card__grid strong,
+.issuer-application-overview-card__review-copy > strong,
+.issuer-application-overview-card__review-copy > p {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.issuer-application-overview-card__review-action {
+  min-width: 0;
+  align-content: center;
+}
+
+/* Laptop / expanded-sidebar layout: keep identity + facts together and move
+ * the decision prompt to a full-width second row. This avoids the squeezed
+ * UUID/date/status columns visible in the previous three-column layout. */
+@container app-main (max-width: 1280px) {
+  .issuer-application-overview-card,
+  .issuer-application-overview-card.is-claim-verified {
+    grid-template-columns: minmax(180px, 0.52fr) minmax(0, 2fr);
+  }
+
+  .issuer-application-overview-card__grid {
+    border-right: 0;
+  }
+
+  .issuer-application-overview-card > .issuer-application-overview-card__actions,
+  .issuer-application-overview-card > .issuer-application-overview-card__waiting {
+    grid-column: 1 / -1;
+  }
+
+  .issuer-application-overview-card > .issuer-application-overview-card__actions {
+    flex-direction: row;
+    justify-content: flex-end;
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+  }
+
+  .issuer-application-overview-card__review-action {
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 24px;
+    row-gap: 12px;
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+  }
+
+  .issuer-application-overview-card__review-action .issuer-application-overview-card__actions {
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+  }
+
+  .issuer-application-overview-card__review-action .issuer-application-overview-card__actions .button {
+    width: auto;
+    min-width: 164px;
+  }
+
+  .issuer-application-overview-card__review-action .issuer-application-overview-card__actions .button--danger {
+    min-width: 208px;
+  }
+}
+
+/* Tablet / narrow content: every major region becomes its own row while the
+ * fact grid stays two-up for fast scanning. */
+@container app-main (max-width: 920px) {
+  .issuer-application-overview-card,
+  .issuer-application-overview-card.is-claim-verified {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .issuer-application-overview-card__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border: 0;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 0;
+  }
+
+  .issuer-application-overview-card > .issuer-application-overview-card__actions,
+  .issuer-application-overview-card > .issuer-application-overview-card__waiting {
+    grid-column: auto;
+  }
+
+  .issuer-application-overview-card > .issuer-application-overview-card__actions {
+    border-top: 0;
+    padding-top: 0;
+  }
+
+  .issuer-application-overview-card__review-action {
+    grid-column: auto;
+    grid-template-columns: minmax(0, 1fr);
+    border-top: 0;
+    padding-top: 0;
+  }
+
+  .issuer-application-overview-card__review-action .issuer-application-overview-card__actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .issuer-application-overview-card__review-action .issuer-application-overview-card__actions .button,
+  .issuer-application-overview-card__review-action .issuer-application-overview-card__actions .button--danger {
+    min-width: 0;
+  }
+}
+
+/* Phone layout: facts become a clean vertical list and actions use the full
+ * available tap area. No horizontal overflow or compressed labels. */
+@container app-main (max-width: 620px) {
+  .issuer-application-overview-card,
+  .issuer-application-overview-card.is-claim-verified {
+    gap: 16px;
+    padding: 16px;
+  }
+
+  .issuer-application-overview-card__identity {
+    align-items: flex-start;
+  }
+
+  .issuer-application-overview-card__identity strong,
+  .issuer-application-overview-card__identity small {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .issuer-application-overview-card__grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding: 0;
+  }
+
+  .issuer-application-overview-card__grid > div {
+    gap: 5px;
+    border-bottom: 1px solid var(--border);
+    padding: 12px 0;
+  }
+
+  .issuer-application-overview-card__grid > div:last-child {
+    border-bottom: 0;
+  }
+
+  .issuer-application-overview-card > .issuer-application-overview-card__actions,
+  .issuer-application-overview-card__review-action .issuer-application-overview-card__actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .issuer-application-overview-card > .issuer-application-overview-card__actions--registry {
+    grid-template-columns: minmax(0, 1fr);
+    min-width: 0;
+  }
+
+  .issuer-application-overview-card > .issuer-application-overview-card__actions .button,
+  .issuer-application-overview-card__review-action .issuer-application-overview-card__actions .button,
+  .issuer-application-overview-card__review-action .issuer-application-overview-card__actions .button--danger {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@container app-main (max-width: 440px) {
+  .issuer-application-overview-card > .issuer-application-overview-card__actions,
+  .issuer-application-overview-card__review-action .issuer-application-overview-card__actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

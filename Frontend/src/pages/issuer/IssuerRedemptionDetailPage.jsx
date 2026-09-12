@@ -6,6 +6,7 @@ import {
   Clock3,
   CreditCard,
   RefreshCw,
+  RotateCcw,
   ShieldCheck,
   WalletCards,
   XCircle,
@@ -26,7 +27,14 @@ import {
   approvePlatformRedemptionFunding,
   getPlatformRedemptionFunding,
   isPlatformWalletRejection,
+  submitPlatformRedemption,
+  waitForPlatformTransactionReceipt,
 } from '@/services/blockchain/trexPlatformController.service';
+import {
+  clearObservedWalletTransaction,
+  listObservedWalletTransactions,
+  saveObservedWalletTransaction,
+} from '@/services/investor/observedWalletTransactionStore';
 import { formatDate } from '@/utils/date';
 import { getApiFieldErrors, getErrorMessage } from '@/utils/error';
 import { transactionExplorerName, transactionExplorerUrl } from '@/utils/blockExplorer';
@@ -58,6 +66,12 @@ const addressesEqual = (left, right) => {
 };
 
 const detailValue = (value) => cleanRedemptionText(value) || '—';
+const redemptionTokenUid = (value) => cleanRedemptionText(
+  value?.tokenUid
+  || value?.token?.tokenUid
+  || value?.token?.uid
+  || value?.token?.id,
+);
 
 function StatusStep({ icon: Icon, label, value, active = false, complete = false }) {
   return (
@@ -82,6 +96,7 @@ export default function IssuerRedemptionDetailPage() {
   const [funding, setFunding] = useState(null);
   const [fundingLoading, setFundingLoading] = useState(false);
   const [fundingError, setFundingError] = useState('');
+  const [submittedRedemptionHash, setSubmittedRedemptionHash] = useState('');
   const mounted = useRef(true);
 
   useDocumentTitle('Redemption Details');
@@ -198,6 +213,81 @@ export default function IssuerRedemptionDetailPage() {
   const correctIssuerWallet = Boolean(wallet.address && expectedIssuerWallet && addressesEqual(wallet.address, expectedIssuerWallet));
   const correctChain = Number.isSafeInteger(chainId) && wallet.chainId === chainId;
   const canSwitchChain = Number.isSafeInteger(chainId) && wallet.supportedChains.some((chain) => chain.id === chainId);
+  const tokenUid = redemptionTokenUid(redemption);
+
+  const markRedemptionConfirmedLocally = useCallback((txHash) => {
+    const hash = cleanRedemptionText(txHash);
+    setSubmittedRedemptionHash('');
+    setRedemption((current) => current ? {
+      ...current,
+      status: 'COMPLETED',
+      canonicalStatus: 'CONFIRMED',
+      transactionHash: hash || current?.transactionHash,
+      paymentTxHash: hash || current?.paymentTxHash,
+      burnTxHash: hash || current?.burnTxHash,
+    } : current);
+  }, []);
+
+  const syncObservedRedemption = useCallback(async (observed) => {
+    if (!observed?.txHash || !tokenUid) return null;
+    const result = await investmentApi.confirmObservedTransaction({
+      chainId: observed.chainId,
+      txHash: observed.txHash,
+      tokenUid,
+      expectedAction: 'REDEMPTION',
+    });
+    const observedStatus = cleanRedemptionText(result?.status).toUpperCase();
+    if (observedStatus === 'CONFIRMED') {
+      clearObservedWalletTransaction(observed);
+      markRedemptionConfirmedLocally(observed.txHash);
+    } else if (observedStatus === 'FAILED') {
+      clearObservedWalletTransaction(observed);
+      setSubmittedRedemptionHash('');
+      await loadDetail({ quiet: true }).catch(() => null);
+    }
+    return result;
+  }, [loadDetail, markRedemptionConfirmedLocally, tokenUid]);
+
+  useEffect(() => {
+    if (!redemptionUid || terminal) return undefined;
+    const observed = listObservedWalletTransactions({ expectedAction: 'REDEMPTION' })
+      .filter((item) => item.redemptionUid === redemptionUid)
+      .sort((left, right) => String(right.observedAt).localeCompare(String(left.observedAt)))[0];
+    if (!observed) return undefined;
+
+    setSubmittedRedemptionHash(observed.txHash);
+    let active = true;
+    let timer = null;
+    let syncing = false;
+    const sync = async () => {
+      if (!active || syncing) return;
+      syncing = true;
+      try {
+        const result = await syncObservedRedemption(observed);
+        const observedStatus = cleanRedemptionText(result?.status).toUpperCase();
+        if (active && !['CONFIRMED', 'FAILED'].includes(observedStatus)) {
+          timer = window.setTimeout(sync, POLL_MS);
+        }
+      } catch {
+        // The backend/indexer can lag the confirmed chain transaction. Keep the
+        // observed hash so refresh/focus can safely resume without resubmitting.
+        if (active) timer = window.setTimeout(sync, POLL_MS);
+      } finally {
+        syncing = false;
+      }
+    };
+    void sync();
+    const onFocus = () => {
+      if (timer) window.clearTimeout(timer);
+      void sync();
+    };
+    window.addEventListener('focus', onFocus);
+    return () => {
+      active = false;
+      if (timer) window.clearTimeout(timer);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [redemptionUid, syncObservedRedemption, terminal]);
 
   const closeDecisionModal = () => {
     if (action) return;
@@ -250,18 +340,18 @@ export default function IssuerRedemptionDetailPage() {
     setAction('funding');
     try {
       if (!wallet.isConnected || !wallet.connector || !wallet.address) {
-        throw new Error('Connect the organization wallet in the header before continuing.');
+        throw new Error('Open the Privy secure account in the header before continuing.');
       }
       if (fundingError) throw new Error(fundingError);
 
       const chainId = Number(redemption?.chainId);
-      if (!Number.isSafeInteger(chainId)) throw new Error('The redemption network is unavailable. Refresh and try again.');
+      if (!Number.isSafeInteger(chainId)) throw new Error('The secure account setup could not be verified. Refresh and try again.');
       if (!correctIssuerWallet) {
-        throw new Error('Switch to the organization wallet that owns this token before continuing.');
+        throw new Error('Use the Privy secure account linked to this organization before continuing.');
       }
       if (!correctChain) {
         if (canSwitchChain) await wallet.switchChain(chainId);
-        else throw new Error('The required redemption network is not configured in this application.');
+        else throw new Error('The secure account setup needed for this redemption is unavailable. Contact support if this continues.');
       }
 
       const result = await approvePlatformRedemptionFunding({
@@ -273,22 +363,135 @@ export default function IssuerRedemptionDetailPage() {
         tokenAmount: cleanRedemptionText(redemption?.tokenAmount || redemption?.amount),
         onStep: ({ stage }) => {
           if (stage === 'approval-signature') {
-            toast.info('Approve USDT spending', { description: 'This is a separate one-time approval. It does not redeem tokens or send a redemption payment.' });
+            toast.info('Allow USDT payments', { description: 'This is a separate one-time permission. It does not redeem units or send a redemption payment by itself.' });
           }
         },
       });
       setFunding(result.funding);
       if (result.alreadyApproved) {
-        toast.success('Payment setup is ready', { description: 'The investor can sign Redeem when the organization wallet has enough USDT.' });
+        toast.success('Payment setup is ready', { description: 'You can confirm the redemption once the organization secure account has enough USDT.' });
       } else {
         toast.success('Payment setup complete', { description: 'No further setup is needed for future redemptions while this permission remains available.' });
       }
       await loadDetail({ quiet: true });
     } catch (fundingApprovalError) {
       if (isPlatformWalletRejection(fundingApprovalError)) {
-        toast.info('USDT approval cancelled', { description: 'No changes were made. You can complete the one-time approval later.' });
+        toast.info('Payment permission cancelled', { description: 'No changes were made. You can complete the one-time approval later.' });
       } else {
-        toast.error(getErrorMessage(fundingApprovalError, 'Unable to approve USDT spending.'));
+        toast.error(getErrorMessage(fundingApprovalError, 'Unable to allow USDT payments.'));
+      }
+    } finally {
+      setAction('');
+    }
+  };
+
+  const handleExecuteRedemption = async () => {
+    if (!redemptionUid || !fundingPhase || fundingLoading || submittedRedemptionHash) return;
+    setAction('redeem');
+    try {
+      if (!wallet.isConnected || !wallet.connector || !wallet.address) {
+        throw new Error('Open the Privy secure account in the header before continuing.');
+      }
+      if (fundingError) throw new Error(fundingError);
+      if (!funding?.issuerAllowanceSufficient) {
+        throw new Error('Allow USDT payments before executing this redemption.');
+      }
+      if (!funding?.issuerBalanceSufficient) {
+        throw new Error(`The organization secure account does not have enough USDT for this redemption. Required: ${funding?.paymentAmountFormatted || 'the quoted amount'} USDT.`);
+      }
+      if (!Number.isSafeInteger(chainId)) {
+        throw new Error('The secure account setup could not be verified. Refresh and try again.');
+      }
+      if (!correctIssuerWallet) {
+        throw new Error('Use the Privy secure account linked to this organization before continuing.');
+      }
+      if (!correctChain) {
+        if (canSwitchChain) await wallet.switchChain(chainId);
+        else throw new Error('The secure account setup needed for this redemption is unavailable. Contact support if this continues.');
+      }
+
+      const result = await submitPlatformRedemption({
+        connector: wallet.connector,
+        connectedAddress: wallet.address,
+        investorWalletAddress: cleanRedemptionText(redemption?.investorWalletAddress),
+        chainId,
+        tokenAddress: cleanRedemptionText(redemption?.tokenAddress || redemption?.token?.tokenAddress || redemption?.token?.address),
+        tokenAmountRaw: cleanRedemptionText(redemption?.tokenAmountRaw),
+        tokenAmount: cleanRedemptionText(redemption?.tokenAmount || redemption?.amount),
+        onStep: ({ stage }) => {
+          if (stage === 'redeem-signature') {
+            toast.info('Review and confirm redemption', { description: 'Confirm securely with Privy after you review the redemption amount.' });
+          }
+        },
+      });
+
+      const txHash = cleanRedemptionText(result?.txHash);
+      if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
+        throw new Error('The redemption confirmation ID was not returned. Check the activity record before trying again.');
+      }
+
+      setSubmittedRedemptionHash(txHash);
+      if (tokenUid) {
+        saveObservedWalletTransaction({
+          chainId,
+          txHash,
+          tokenUid,
+          expectedAction: 'REDEMPTION',
+          redemptionUid,
+        });
+      }
+      setRedemption((current) => current ? {
+        ...current,
+        status: 'PAYMENT_SUBMITTED',
+        transactionHash: txHash,
+        paymentTxHash: txHash,
+      } : current);
+      toast.success('Redemption submitted', { description: 'Your redemption is being confirmed. Do not submit another redemption request.' });
+
+      await waitForPlatformTransactionReceipt({ txHash, chainId });
+      toast.success('Redemption confirmed', { description: 'The investor units were redeemed and the USDT payment was completed.' });
+      markRedemptionConfirmedLocally(txHash);
+
+      if (tokenUid) {
+        try {
+          const synced = await investmentApi.confirmObservedTransaction({
+            chainId,
+            txHash,
+            tokenUid,
+            expectedAction: 'REDEMPTION',
+          });
+          if (cleanRedemptionText(synced?.status).toUpperCase() === 'CONFIRMED') {
+            clearObservedWalletTransaction({ chainId, txHash, expectedAction: 'REDEMPTION' });
+          } else {
+            toast.info('History is syncing', { description: 'The redemption is confirmed. Issuer and investor history will update shortly.' });
+          }
+        } catch {
+          toast.info('History is syncing', { description: 'The redemption is confirmed. Issuer and investor history will update shortly.' });
+        }
+      }
+    } catch (redeemError) {
+      if (isPlatformWalletRejection(redeemError)) {
+        toast.info('Redemption cancelled', { description: 'The transaction was not signed. No redemption was submitted.' });
+      } else if (redeemError?.code === 'PLATFORM_CONFIRMATION_PENDING' && redeemError?.transactionHash) {
+        setSubmittedRedemptionHash(redeemError.transactionHash);
+        toast.info('Redemption is still confirming', { description: 'Do not submit another transaction. This page will continue syncing the existing transaction.' });
+      } else if (redeemError?.code === 'PLATFORM_TRANSACTION_REVERTED' && redeemError?.transactionHash) {
+        clearObservedWalletTransaction({
+          chainId,
+          txHash: redeemError.transactionHash,
+          expectedAction: 'REDEMPTION',
+        });
+        setSubmittedRedemptionHash('');
+        toast.error('Redemption failed', { description: 'The transaction was confirmed but reverted. The redemption remains incomplete and can be retried after the issue is resolved.' });
+        await loadDetail({ quiet: true }).catch(() => null);
+      } else {
+        toast.error(getErrorMessage(redeemError, 'Unable to execute this redemption.'));
+        await getPlatformRedemptionFunding({
+          chainId,
+          tokenAddress: cleanRedemptionText(redemption?.tokenAddress || redemption?.token?.tokenAddress || redemption?.token?.address),
+          tokenAmountRaw: cleanRedemptionText(redemption?.tokenAmountRaw),
+          tokenAmount: cleanRedemptionText(redemption?.tokenAmount || redemption?.amount),
+        }).then(setFunding).catch(() => null);
       }
     } finally {
       setAction('');
@@ -314,7 +517,7 @@ export default function IssuerRedemptionDetailPage() {
 
   const created = cleanRedemptionText(redemption?.createdAt || redemption?.requestedAt || redemption?.submittedAt);
   const paymentAmount = detailValue(funding?.paymentAmountFormatted || redemption?.usdtAmount || redemption?.usdtAmountFormatted || redemption?.payment?.amount);
-  const paymentHash = issuerPaymentHash(redemption);
+  const paymentHash = issuerPaymentHash(redemption) || submittedRedemptionHash;
   const burnHash = issuerBurnHash(redemption);
   const explorerName = transactionExplorerName(redemption?.chainId);
   const paymentHashUrl = transactionExplorerUrl(paymentHash, redemption?.chainId);
@@ -322,7 +525,7 @@ export default function IssuerRedemptionDetailPage() {
   const requestApprovedComplete = !['PENDING_INVESTOR_AUTHORIZATION', 'PENDING_ISSUER_APPROVAL'].includes(status)
     && status !== 'ISSUER_REJECTED';
   const redemptionSubmitted = Boolean(paymentHash) || ['PAYMENT_SUBMITTED', 'PAYMENT_CONFIRMED', 'BURN_SUBMITTED', 'COMPLETED'].includes(status);
-  const redemptionComplete = Boolean(burnHash) || status === 'COMPLETED';
+  const redemptionComplete = status === 'COMPLETED';
   const requestReviewStatus = status === 'ISSUER_REJECTED'
     ? 'Rejected'
     : requestApprovedComplete
@@ -330,12 +533,12 @@ export default function IssuerRedemptionDetailPage() {
       : awaitingDecision
         ? 'Action needed'
         : 'Waiting';
-  const investorRedeemStatus = redemptionComplete
+  const issuerRedeemStatus = redemptionComplete
     ? 'Completed'
     : redemptionSubmitted
       ? 'In progress'
       : paymentReady
-        ? 'Waiting for investor'
+        ? 'Ready'
         : requestApprovedComplete
           ? 'Preparing'
           : 'Waiting';
@@ -352,23 +555,23 @@ export default function IssuerRedemptionDetailPage() {
     }
 
     if (status === 'COMPLETED') {
-      return `Redemption completed. Transaction IDs are shown in the status section and can be opened in ${explorerName}.`;
+      return `Redemption completed. Confirmation IDs are available under View details and can be opened in ${explorerName}.`;
     }
 
     if (redemptionComplete) {
-      return `${baseMessage} The investor redemption transaction is being finalized.`;
+      return 'The redemption is confirmed and complete.';
     }
 
     if (redemptionSubmitted) {
-      return `${baseMessage} The investor has submitted the Redeem transaction and it is being confirmed.`;
+      return `${baseMessage} The redemption was submitted from the organization secure account and is being confirmed.`;
     }
 
     if (paymentReady) {
-      return 'Nothing else is required from you. The investor must now sign the Redeem transaction.';
+      return 'USDT payment permission and balance are ready. Review and confirm the redemption with Privy.';
     }
 
     if (issuerAllowanceReady && !issuerBalanceReady) {
-      return 'The organization wallet needs enough USDT before the investor can redeem.';
+      return 'The organization secure account needs enough USDT before you can confirm this redemption.';
     }
 
     return baseMessage;
@@ -380,13 +583,13 @@ export default function IssuerRedemptionDetailPage() {
         <div>
           <span className="issuer-redemptions-eyebrow">Redemption review</span>
           <h1>{issuerRedemptionTokenLabel(redemption)}</h1>
-          <p>Review the request. Once it is ready, the investor—not the issuer—signs the final Redeem transaction.</p>
+          <p>Review the request and prepare USDT if needed. When everything is ready, review and confirm the redemption securely with Privy.</p>
         </div>
         <AppStatusBadge status={status} label={statusMeta.label} tone={statusMeta.tone} />
       </header>
 
       {error ? <div className="issuer-redemption-inline-alert is-warning"><AlertTriangle size={18} /><span>{error}</span></div> : null}
-      {status === 'MANUAL_REVIEW' ? <div className="issuer-redemption-inline-alert is-danger"><AlertTriangle size={18} /><span>This redemption requires manual review. Do not start another settlement transaction. Contact your support team.</span></div> : null}
+      {status === 'MANUAL_REVIEW' ? <div className="issuer-redemption-inline-alert is-danger"><AlertTriangle size={18} /><span>This redemption requires manual review. Do not submit another redemption. Contact your support team.</span></div> : null}
 
       <div className="issuer-redemption-detail-grid">
         <div className="issuer-redemption-detail-main">
@@ -397,8 +600,18 @@ export default function IssuerRedemptionDetailPage() {
               <div><span>Investor name</span><strong>{issuerRedemptionInvestorLabel(redemption)}</strong></div>
               <div><span>Redeem amount</span><strong>{issuerRedemptionAmountLabel(redemption)}</strong></div>
               <div><span>Requested</span><strong>{created ? formatDate(created, 'MMM DD, YYYY · hh:mm A') : '—'}</strong></div>
-              <div><span>Investor wallet</span>{redemption?.investorWalletAddress ? <CompactAddress value={redemption.investorWalletAddress} label="Investor wallet" /> : <strong>—</strong>}</div>
+              <div><span>Investor secure account</span><strong>{redemption?.investorWalletAddress ? 'Linked to investor profile' : 'Not available'}</strong></div>
             </div>
+            {(redemption?.investorWalletAddress || expectedIssuerWallet || Number.isSafeInteger(chainId)) ? (
+              <details className="investor-technical-details">
+                <summary>View account details</summary>
+                <div className="issuer-redemption-payment-summary">
+                  {redemption?.investorWalletAddress ? <div><span>Investor Privy wallet address</span><CompactAddress value={redemption.investorWalletAddress} label="Investor Privy wallet address" /></div> : null}
+                  {expectedIssuerWallet ? <div><span>Organization Privy wallet address</span><CompactAddress value={expectedIssuerWallet} label="Organization Privy wallet address" /></div> : null}
+                  {Number.isSafeInteger(chainId) ? <div><span>Network</span><strong>{wallet.supportedChains.find((chain) => chain.id === chainId)?.name || `Chain ${chainId}`}</strong></div> : null}
+                </div>
+              </details>
+            ) : null}
           </Card>
 
           <Card className="issuer-redemption-card">
@@ -410,8 +623,8 @@ export default function IssuerRedemptionDetailPage() {
               ) : null}
               <StatusStep
                 icon={WalletCards}
-                label="Investor redeems"
-                value={investorRedeemStatus}
+                label="Issuer redeems"
+                value={issuerRedeemStatus}
                 active={requestApprovedComplete && !redemptionSubmitted && !approvalNeeded}
                 complete={redemptionComplete}
               />
@@ -428,11 +641,11 @@ export default function IssuerRedemptionDetailPage() {
 
         <aside className="issuer-redemption-detail-side">
           <Card className="issuer-redemption-card issuer-redemption-action-card">
-            <div className="issuer-redemption-card__heading"><div><span>Required action</span><h2>{awaitingDecision ? 'Review request' : fundingPhase ? fundingCheckPending || fundingLoading ? 'Preparing redemption' : fundingError ? 'Unable to check readiness' : approvalNeeded ? 'One-time payment setup' : !issuerBalanceReady ? 'Add USDT for this redemption' : 'Waiting for investor' : status === 'ISSUER_REJECTED' ? 'Redemption outcome' : 'Redemption progress'}</h2></div><WalletCards size={21} /></div>
+            <div className="issuer-redemption-card__heading"><div><span>Required action</span><h2>{awaitingDecision ? 'Review request' : fundingPhase ? fundingCheckPending || fundingLoading ? 'Preparing redemption' : fundingError ? 'Unable to check readiness' : approvalNeeded ? 'One-time payment setup' : !issuerBalanceReady ? 'Add USDT for this redemption' : 'Execute redemption' : status === 'ISSUER_REJECTED' ? 'Redemption outcome' : 'Redemption progress'}</h2></div><WalletCards size={21} /></div>
 
             {awaitingDecision ? (
               <>
-                <p>Review the investor’s request, then approve or reject it. If approved, the investor completes the final redemption from their wallet.</p>
+                <p>Review the investor’s request, then approve or reject it. If approved, you will review and confirm the final redemption with the organization’s Privy secure account after USDT readiness is verified.</p>
                 <div className="issuer-redemption-action-stack">
                   <Button loading={action === 'approve'} disabled={Boolean(action)} onClick={() => openDecisionModal('approve')} icon={CheckCircle2}>Approve redemption</Button>
                   <Button variant="danger" loading={action === 'reject'} disabled={Boolean(action)} onClick={() => openDecisionModal('reject')} icon={XCircle}>Reject redemption</Button>
@@ -450,22 +663,22 @@ export default function IssuerRedemptionDetailPage() {
 
                 {approvalNeeded ? (
                   <>
-                    <p>This organization needs a one-time payment setup before redemptions can be processed. Complete it once from the approved organization wallet.</p>
+                    <p>This organization needs a one-time payment setup before redemptions can be processed. Complete it once with the approved Privy secure account.</p>
                     <div className="issuer-redemption-payment-summary">
                       <div><span>Current redemption</span><strong>{paymentAmount !== '—' ? `${paymentAmount} USDT` : 'Unavailable'}</strong></div>
-                      <div><span>Required network</span><strong>{Number.isSafeInteger(chainId) ? wallet.supportedChains.find((chain) => chain.id === chainId)?.name || `Chain ${chainId}` : '—'}</strong></div>
-                      <div><span>Organization wallet</span>{expectedIssuerWallet ? <CompactAddress value={expectedIssuerWallet} label="Organization wallet" /> : <strong>—</strong>}</div>
+                      <div><span>Payment permission</span><strong>Required once</strong></div>
+                      <div><span>Secure account</span><strong>Securely managed by Privy</strong></div>
                     </div>
-                    {!wallet.isConnected ? <div className="issuer-redemption-inline-alert is-warning"><AlertTriangle size={17} /><span>Connect the organization wallet to complete the one-time setup.</span></div> : !correctIssuerWallet ? <div className="issuer-redemption-inline-alert is-danger"><AlertTriangle size={17} /><span>Switch to the approved organization wallet before continuing.</span></div> : !correctChain ? <div className="issuer-redemption-inline-alert is-warning"><AlertTriangle size={17} /><span>Your wallet is on the wrong network. We will ask you to switch before continuing.</span></div> : <div className="issuer-redemption-inline-alert is-success"><CheckCircle2 size={17} /><span>Organization wallet and network are ready.</span></div>}
+                    {!wallet.isConnected ? <div className="issuer-redemption-inline-alert is-warning"><AlertTriangle size={17} /><span>Open the approved Privy secure account to complete this one-time setup.</span></div> : !correctIssuerWallet ? <div className="issuer-redemption-inline-alert is-danger"><AlertTriangle size={17} /><span>Use the approved Privy secure account before continuing.</span></div> : !correctChain ? <div className="issuer-redemption-inline-alert is-warning"><AlertTriangle size={17} /><span>Your Privy secure account needs a quick setup check before continuing.</span></div> : <div className="issuer-redemption-inline-alert is-success"><CheckCircle2 size={17} /><span>Your Privy secure account is ready.</span></div>}
                     <Button
                       loading={action === 'funding'}
                       disabled={Boolean(action) || Boolean(fundingError) || !wallet.isConnected || !correctIssuerWallet}
                       onClick={handleFundingApproval}
                       icon={CreditCard}
                     >
-                      Approve USDT
+                      Allow payments
                     </Button>
-                    <small className="issuer-redemption-action-note">This is required only for the first redemption setup. It does not complete the investor’s redemption.</small>
+                    <small className="issuer-redemption-action-note">This one-time permission lets the organization make redemption payments using USDT. You will still review and confirm each redemption before funds are used.</small>
                   </>
                 ) : null}
 
@@ -473,14 +686,30 @@ export default function IssuerRedemptionDetailPage() {
                   <>
                     <div className="issuer-redemption-payment-summary">
                       <div><span>USDT needed</span><strong>{paymentAmount !== '—' ? `${paymentAmount} USDT` : 'Unavailable'}</strong></div>
-                      <div><span>Organization wallet</span>{expectedIssuerWallet ? <CompactAddress value={expectedIssuerWallet} label="Organization wallet" /> : <strong>—</strong>}</div>
+                      <div><span>Organization secure account</span><strong>Securely managed by Privy</strong></div>
                     </div>
-                    <div className="issuer-redemption-inline-alert is-danger"><AlertTriangle size={17} /><span>Add enough USDT to the organization wallet for this redemption, then refresh. The investor will be able to redeem once funds are available.</span></div>
+                    <div className="issuer-redemption-inline-alert is-danger"><AlertTriangle size={17} /><span>Add enough USDT to the organization secure account for this redemption, then refresh. Confirmation becomes available once the balance is sufficient.</span></div>
                   </>
                 ) : null}
 
                 {paymentReady ? (
-                  <div className="issuer-redemption-inline-alert is-success"><CheckCircle2 size={17} /><span>No action is needed from you. The investor can now choose Redeem and sign the redemption transaction.</span></div>
+                  <>
+                    <div className="issuer-redemption-payment-summary">
+                      <div><span>Investor receives</span><strong>{paymentAmount !== '—' ? `${paymentAmount} USDT` : 'Unavailable'}</strong></div>
+                      <div><span>Investor secure account</span><strong>{redemption?.investorWalletAddress ? 'Linked to investor profile' : 'Not available'}</strong></div>
+                      <div><span>Organization secure account</span><strong>Securely managed by Privy</strong></div>
+                    </div>
+                    {!wallet.isConnected ? <div className="issuer-redemption-inline-alert is-warning"><AlertTriangle size={17} /><span>Open the approved Privy secure account to confirm this redemption.</span></div> : !correctIssuerWallet ? <div className="issuer-redemption-inline-alert is-danger"><AlertTriangle size={17} /><span>Use the approved Privy secure account before confirming this redemption.</span></div> : !correctChain ? <div className="issuer-redemption-inline-alert is-warning"><AlertTriangle size={17} /><span>Your Privy secure account needs a quick setup check before continuing.</span></div> : <div className="issuer-redemption-inline-alert is-success"><CheckCircle2 size={17} /><span>USDT payment permission, balance, and the Privy secure account are ready.</span></div>}
+                    <Button
+                      loading={action === 'redeem'}
+                      disabled={Boolean(action) || Boolean(fundingError) || !wallet.isConnected || !correctIssuerWallet || Boolean(submittedRedemptionHash)}
+                      onClick={handleExecuteRedemption}
+                      icon={RotateCcw}
+                    >
+                      {submittedRedemptionHash ? 'Redemption submitted' : 'Review and confirm redemption'}
+                    </Button>
+                    <small className="issuer-redemption-action-note">Confirming this redemption will remove the redeemed asset units from the investor and send the stated USDT amount from the organization secure account to the investor. Review the amount before you confirm.</small>
+                  </>
                 ) : null}
               </>
             ) : status === 'ISSUER_REJECTED' ? (
@@ -530,7 +759,7 @@ export default function IssuerRedemptionDetailPage() {
             {decision === 'approve' ? <CheckCircle2 size={24} /> : <XCircle size={24} />}
             <div>
               <strong>{decision === 'approve' ? 'Approve this redemption request' : 'End this redemption request'}</strong>
-              <p>{decision === 'approve' ? 'This accepts the investor’s request. Once the redemption is ready, the investor signs the final Redeem transaction.' : 'Reject only if this investor redemption should not proceed. No settlement will be processed.'}</p>
+              <p>{decision === 'approve' ? 'This accepts the investor’s request. Once USDT readiness is verified, you will review and confirm the final redemption securely with Privy.' : 'Reject only if this investor redemption should not proceed. No settlement will be processed.'}</p>
             </div>
           </div>
 

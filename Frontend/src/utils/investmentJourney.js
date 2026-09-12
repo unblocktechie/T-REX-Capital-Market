@@ -157,7 +157,7 @@ export const getInvestmentJourney = ({
           tone: 'danger',
           title: 'Final approval needs attention',
           message: 'The investor finished the required checks, but the final approval could not be completed.',
-          next: 'Review the message below and retry or check the existing approval before creating another transaction.',
+          next: 'Review the message below and retry, or check the existing approval before submitting another action.',
           owner: 'You',
           actionKey: 'registry',
           attention: true,

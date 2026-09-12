@@ -100,6 +100,7 @@ export const TREX_PLATFORM_CONTROLLER_ABI = [
     name: 'redeem',
     stateMutability: 'nonpayable',
     inputs: [
+      { name: 'investor', type: 'address' },
       { name: 'token', type: 'address' },
       { name: 'tokenAmount', type: 'uint256' },
     ],
@@ -180,7 +181,7 @@ const chainFor = (value) => {
   const chainId = parseChainId(value || web3Config.requiredChain.id);
   const chain = web3Config.supportedChains.find((candidate) => candidate.id === chainId);
   if (!chain) {
-    const error = new Error('This transaction uses a network that is not available in the application.');
+    const error = new Error('This action cannot be completed with the current secure account settings.');
     error.code = 'UNSUPPORTED_CHAIN';
     throw error;
   }
@@ -204,7 +205,7 @@ const configuredPaymentTokenAddress = () => requiredAddress(
 
 const activeWallet = async ({ connector, connectedAddress, expectedAddress, chainId, purpose }) => {
   if (!connector?.getProvider || !isAddress(connectedAddress || '')) {
-    const error = new Error(`Connect the required wallet before ${purpose}.`);
+    const error = new Error(`Open your Privy secure account before ${purpose}.`);
     error.code = 'WALLET_NOT_CONNECTED';
     throw error;
   }
@@ -214,7 +215,7 @@ const activeWallet = async ({ connector, connectedAddress, expectedAddress, chai
   const connected = getAddress(connectedAddress);
   const provider = await connector.getProvider();
   if (!provider?.request) {
-    const error = new Error('The connected wallet is unavailable. Reconnect it and try again.');
+    const error = new Error('Your Privy secure account is unavailable. Sign in with Privy and try again.');
     error.code = 'WALLET_PROVIDER_UNAVAILABLE';
     throw error;
   }
@@ -222,27 +223,27 @@ const activeWallet = async ({ connector, connectedAddress, expectedAddress, chai
   const accounts = await provider.request({ method: 'eth_accounts' });
   const providerAddress = Array.isArray(accounts) ? accounts[0] : '';
   if (!isAddress(providerAddress || '')) {
-    const error = new Error('Reconnect the required wallet before continuing.');
+    const error = new Error('Restore access to your Privy secure account before continuing.');
     error.code = 'WALLET_NOT_CONNECTED';
     throw error;
   }
 
   const account = getAddress(providerAddress);
   if (account !== expected) {
-    const error = new Error('Switch to the wallet assigned to this account before continuing.');
+    const error = new Error('Use the Privy secure account linked to this T-REX profile before continuing.');
     error.code = 'WALLET_MISMATCH';
     error.expectedAddress = expected;
     throw error;
   }
   if (account !== connected) {
-    const error = new Error('Your active wallet account changed. Reconnect the correct wallet and try again.');
+    const error = new Error('Your active Privy secure account changed. Restore the account linked to this T-REX profile and try again.');
     error.code = 'WALLET_ACCOUNT_CHANGED';
     throw error;
   }
 
   const providerChainId = parseChainId(await provider.request({ method: 'eth_chainId' }));
   if (providerChainId !== chain.id) {
-    const error = new Error(`Switch your wallet to ${chain.name} and try again.`);
+    const error = new Error(`Your Privy secure account needs a quick setup check. Open the account control and try again.`);
     error.code = 'WRONG_WALLET_NETWORK';
     error.requiredChainId = chain.id;
     throw error;
@@ -393,7 +394,7 @@ const quoteOperation = async ({ mode, chainId, tokenAddress, tokenAmountRaw, tok
   const { paymentToken, paymentTokenDecimals } = await paymentTokenMetadata(publicClient);
 
   if (issuer !== tokenInfo.issuer || quoteTokenDecimals !== tokenInfo.tokenDecimals || price !== tokenInfo.price) {
-    const error = new Error('The token pricing details changed while this transaction was being prepared. Refresh and try again.');
+    const error = new Error('The investment price changed while this action was being prepared. Refresh and try again.');
     error.code = 'PLATFORM_QUOTE_CHANGED';
     throw error;
   }
@@ -501,7 +502,7 @@ const approveMaximumAllowance = async ({
   controller,
   onStep,
 }) => {
-  onStep?.({ stage: 'approval-signature', message: 'Approve USDT in your wallet.' });
+  onStep?.({ stage: 'approval-signature', message: 'Allow USDT payments securely with Privy.' });
   const simulation = await publicClient.simulateContract({
     account,
     address: paymentToken,
@@ -516,12 +517,12 @@ const approveMaximumAllowance = async ({
     confirmations: 1,
   });
   if (receipt.status !== 'success') {
-    const error = new Error('The USDT approval transaction did not succeed. No token purchase or redemption was submitted.');
+    const error = new Error('The USDT payment permission was not confirmed. No investment or redemption was submitted.');
     error.code = 'PAYMENT_APPROVAL_REVERTED';
     error.transactionHash = approvalTxHash;
     throw error;
   }
-  onStep?.({ stage: 'approval-confirmed', txHash: approvalTxHash, message: 'USDT spending approval confirmed.' });
+  onStep?.({ stage: 'approval-confirmed', txHash: approvalTxHash, message: 'USDT payment permission confirmed.' });
   return approvalTxHash;
 };
 
@@ -538,7 +539,7 @@ export async function approvePlatformPurchaseSpending({
   chainId,
   onStep,
 }) {
-  const investor = requiredAddress(investorWalletAddress, 'Registered investor wallet');
+  const investor = requiredAddress(investorWalletAddress, 'Investor Privy secure account');
   const chain = chainFor(chainId);
   const wallet = await activeWallet({
     connector,
@@ -563,7 +564,7 @@ export async function approvePlatformPurchaseSpending({
   });
   const refreshed = await getPlatformPaymentApprovalState({ chainId: chain.id, owner: investor });
   if (!refreshed.spendingApproved) {
-    const error = new Error('USDT spending was approved, but the updated permission could not be verified. Refresh and try again.');
+    const error = new Error('USDT payment permission was confirmed, but the updated status could not be verified. Refresh and try again.');
     error.code = 'PAYMENT_APPROVAL_NOT_UPDATED';
     error.transactionHash = approvalTxHash;
     throw error;
@@ -584,7 +585,7 @@ export async function submitPlatformPurchase({
   onStep,
 }) {
   const quote = await quotePlatformPurchase({ chainId, tokenAddress, tokenAmountRaw, tokenAmount });
-  const investor = requiredAddress(investorWalletAddress, 'Registered investor wallet');
+  const investor = requiredAddress(investorWalletAddress, 'Investor Privy secure account');
   const wallet = await activeWallet({
     connector,
     connectedAddress,
@@ -608,12 +609,12 @@ export async function submitPlatformPurchase({
   }
 
   if (!paymentState.allowanceSufficient) {
-    const error = new Error('Approve USDT before you make this investment.');
+    const error = new Error('Allow USDT payments before you make this investment.');
     error.code = 'PAYMENT_APPROVAL_REQUIRED';
     throw error;
   }
 
-  onStep?.({ stage: 'purchase-signature', message: 'Confirm the investment in your wallet.' });
+  onStep?.({ stage: 'purchase-signature', message: 'Review and confirm your investment securely with Privy.' });
   const simulation = await wallet.publicClient.simulateContract({
     account: wallet.account,
     address: quote.controller,
@@ -622,7 +623,7 @@ export async function submitPlatformPurchase({
     args: [quote.tokenAddress, quote.tokenAmountRaw],
   });
   const txHash = await wallet.walletClient.writeContract(simulation.request);
-  onStep?.({ stage: 'purchase-submitted', txHash, message: 'Purchase submitted. Waiting for network confirmation.' });
+  onStep?.({ stage: 'purchase-submitted', txHash, message: 'Investment submitted. Waiting for secure confirmation.' });
 
   return { txHash, quote };
 }
@@ -630,7 +631,7 @@ export async function submitPlatformPurchase({
 export async function waitForPlatformTransactionReceipt({ txHash, chainId, timeout = 180_000 }) {
   const hash = clean(txHash);
   if (!/^0x[a-fA-F0-9]{64}$/.test(hash)) {
-    const error = new Error('The transaction ID is invalid.');
+    const error = new Error('The confirmation ID is invalid.');
     error.code = 'INVALID_TRANSACTION_HASH';
     throw error;
   }
@@ -642,7 +643,7 @@ export async function waitForPlatformTransactionReceipt({ txHash, chainId, timeo
       timeout,
     });
     if (receipt.status !== 'success') {
-      const error = new Error('The transaction was confirmed but did not succeed.');
+      const error = new Error('The action was confirmed but could not be completed.');
       error.code = 'PLATFORM_TRANSACTION_REVERTED';
       error.transactionHash = hash;
       error.transactionSubmitted = true;
@@ -652,7 +653,7 @@ export async function waitForPlatformTransactionReceipt({ txHash, chainId, timeo
     return receipt;
   } catch (error) {
     if (error?.confirmedRevert) throw error;
-    const pending = new Error('The transaction is still waiting for network confirmation.', { cause: error });
+    const pending = new Error('This action is still being confirmed. Please wait before trying again.', { cause: error });
     pending.code = 'PLATFORM_CONFIRMATION_PENDING';
     pending.transactionHash = hash;
     pending.transactionSubmitted = true;
@@ -699,7 +700,7 @@ export async function approvePlatformRedemptionFunding({
 
   // Approval and funding are separate concerns. The issuer can grant the
   // one-time maximum allowance even if the wallet balance for this particular
-  // redemption is not yet available. The investor's redeem() call still checks
+  // redemption is not yet available. The issuer's redeem() call still checks
   // both the live allowance and balance before it is submitted.
   if (funding.issuerAllowanceSufficient) {
     return { approvalTxHash: '', funding, alreadyApproved: true };
@@ -731,22 +732,22 @@ export async function submitPlatformRedemption({
   onStep,
 }) {
   const funding = await getPlatformRedemptionFunding({ chainId, tokenAddress, tokenAmountRaw, tokenAmount });
-  const investor = requiredAddress(investorWalletAddress, 'Registered investor wallet');
+  const investor = requiredAddress(investorWalletAddress, 'Investor Privy secure account');
   const wallet = await activeWallet({
     connector,
     connectedAddress,
-    expectedAddress: investor,
+    expectedAddress: funding.issuer,
     chainId: funding.chain.id,
-    purpose: 'redeeming tokens',
+    purpose: 'executing the redemption',
   });
 
   if (!funding.issuerAllowanceSufficient) {
-    const error = new Error('The issuer is still preparing the USDT for this redemption. No action is required from you yet.');
+    const error = new Error('Allow USDT payments before completing this redemption.');
     error.code = 'ISSUER_ALLOWANCE_REQUIRED';
     throw error;
   }
   if (!funding.issuerBalanceSufficient) {
-    const error = new Error('The issuer is still preparing the funds for this redemption. Please check again later.');
+    const error = new Error(`The organization secure account does not have enough USDT for this redemption. Required: ${funding.paymentAmountFormatted} USDT.`);
     error.code = 'INSUFFICIENT_ISSUER_BALANCE';
     throw error;
   }
@@ -758,18 +759,18 @@ export async function submitPlatformRedemption({
     args: [investor],
   }));
   if (investorTokenBalance < funding.tokenAmountRaw) {
-    const error = new Error(`Your wallet no longer holds enough tokens to complete this redemption. Available: ${formatUnits(investorTokenBalance, funding.tokenDecimals)}.`);
+    const error = new Error(`The investor secure account no longer has enough asset units to complete this redemption. Available: ${formatUnits(investorTokenBalance, funding.tokenDecimals)}.`);
     error.code = 'INSUFFICIENT_INVESTOR_TOKEN_BALANCE';
     throw error;
   }
 
-  onStep?.({ stage: 'redeem-signature', message: 'Confirm the redemption in your wallet.' });
+  onStep?.({ stage: 'redeem-signature', message: 'Review and confirm the redemption securely with Privy.' });
   const simulation = await wallet.publicClient.simulateContract({
     account: wallet.account,
     address: funding.controller,
     abi: TREX_PLATFORM_CONTROLLER_ABI,
     functionName: 'redeem',
-    args: [funding.tokenAddress, funding.tokenAmountRaw],
+    args: [investor, funding.tokenAddress, funding.tokenAmountRaw],
   });
   const txHash = await wallet.walletClient.writeContract(simulation.request);
   onStep?.({ stage: 'redeem-submitted', txHash, message: 'Redemption submitted. Waiting for confirmation.' });
@@ -787,7 +788,7 @@ export async function setPlatformTokenPrice({
 }) {
   const chain = chainFor(chainId);
   const token = requiredAddress(tokenAddress, 'Token contract');
-  const issuer = requiredAddress(issuerWalletAddress, 'Organization wallet');
+  const issuer = requiredAddress(issuerWalletAddress, 'Organization Privy secure account');
   const wallet = await activeWallet({
     connector,
     connectedAddress,
@@ -811,7 +812,7 @@ export async function setPlatformTokenPrice({
     throw error;
   }
 
-  onStep?.({ stage: 'price-signature', message: 'Confirm the current price update in your organization wallet.' });
+  onStep?.({ stage: 'price-signature', message: 'Review and confirm the price update securely with Privy.' });
   const simulation = await wallet.publicClient.simulateContract({
     account: wallet.account,
     address: platformControllerAddress(),
@@ -829,7 +830,7 @@ export async function setPlatformTokenPrice({
     });
   } catch (cause) {
     const error = new Error(
-      'The price transaction was submitted, but its confirmation is still pending. Do not submit another price transaction yet.',
+      'The price update was submitted, but confirmation is still pending. Do not submit another price change yet.',
       { cause },
     );
     error.code = 'PRICE_CONFIRMATION_PENDING';
@@ -853,14 +854,14 @@ export async function setPlatformTokenPrice({
     args: [token],
   }));
   if (confirmedRaw !== priceRaw) {
-    const error = new Error('The price transaction was confirmed, but the latest on-chain price could not be verified. Refresh before trying again.');
+    const error = new Error('The price update was confirmed, but the latest investment price could not be verified. Refresh before trying again.');
     error.code = 'PRICE_VERIFICATION_MISMATCH';
     error.transactionHash = txHash;
     error.transactionSubmitted = true;
     throw error;
   }
 
-  onStep?.({ stage: 'price-confirmed', txHash, message: 'Current price confirmed on the network.' });
+  onStep?.({ stage: 'price-confirmed', txHash, message: 'Current price confirmed.' });
   return {
     txHash,
     tokenAddress: token,

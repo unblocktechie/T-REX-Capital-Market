@@ -40,8 +40,8 @@ This update keeps the existing routes, APIs, wallet guards, investment transacti
 
 ### Redeem
 - Explains the issuer-review/payment-readiness sequence in plain language.
-- Makes it clear when the investor should wait versus when Redeem is ready.
-- Keeps the investor as the signer of the final redemption transaction.
+- Makes it clear when the investor should wait while the issuer reviews and executes Redeem.
+- Keeps the investor limited to creating/confirming the request; the issuer organization wallet signs the final redemption transaction.
 - Moves blockchain network information behind Technical details.
 
 ### Investor profile

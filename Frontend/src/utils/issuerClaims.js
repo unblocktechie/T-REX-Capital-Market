@@ -69,7 +69,7 @@ export const getClaimTopicLabel = (topic, index = 0) =>
  */
 export const buildClaimDigest = (investorIdentityAddress, claimTopic, data) => {
   if (!isAddress(investorIdentityAddress)) {
-    throw new Error('A valid investor identity contract address is required before signing.');
+    throw new Error('A valid investor technical identity reference is required before secure confirmation.');
   }
 
   const normalizedTopic = getClaimTopicValue({ claimTopic });

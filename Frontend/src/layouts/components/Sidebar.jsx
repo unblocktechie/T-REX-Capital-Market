@@ -88,7 +88,7 @@ export function Sidebar() {
             <small>{roleLabel} workspace</small>
             <strong>{workspaceName}</strong>
           </span>
-          <span className="workspace-pill__network">Testnet</span>
+          <span className="workspace-pill__network">Secure environment</span>
         </div>
 
         <nav className="sidebar__nav" aria-label="Primary navigation">

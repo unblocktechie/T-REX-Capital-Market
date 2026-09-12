@@ -37,12 +37,12 @@ const modules = {
     ],
   },
   identity: {
-    eyebrow: 'On-chain identity',
+    eyebrow: 'Investor verification record',
     title: 'Approved investors',
     description: 'Manage verified investors and the credentials that allow them to hold your token.',
     action: 'Add identity',
     cards: [
-      ['Registered identities', '248', 'Wallets linked to verified on-chain identities'],
+      ['Registered identities', '248', 'Approved investor accounts linked to verified profiles'],
       ['Verification providers', '4', 'Approved providers for KYC and investor eligibility'],
       ['Verification expiring', '7', 'Credentials requiring renewal in the next 30 days'],
     ],
@@ -53,7 +53,7 @@ const modules = {
     description: 'Configure modular rules that determine who can hold and transfer tokens.',
     action: 'Add rule',
     cards: [
-      ['Active rules', '8', 'Rules enforced by the compliance contract'],
+      ['Active rules', '8', 'Rules applied automatically to eligible transfers'],
       ['Countries allowed', '32', 'Eligible investor jurisdictions'],
       ['Transfer blocks', '12', 'Non-compliant transfers prevented this month'],
     ],
@@ -71,12 +71,12 @@ const modules = {
   },
   transactions: {
     eyebrow: 'Token operations',
-    title: 'Transactions',
-    description: 'Review token issuance, removals, transfers, freezes and wallet recovery operations.',
+    title: 'Activity',
+    description: 'Review asset issuance, removals, transfers, account restrictions, and recovery activity.',
     action: 'Export activity',
     cards: [
-      ['Total transactions', '1,842', 'All compliant token operations'],
-      ['Pending', '6', 'Transactions awaiting signature or confirmation'],
+      ['Total activity', '1,842', 'All confirmed asset operations'],
+      ['Pending', '6', 'Actions waiting for secure confirmation'],
       ['Blocked', '12', 'Transfers stopped by your configured transfer rules'],
     ],
   },
@@ -105,7 +105,7 @@ const modules = {
   reports: {
     eyebrow: 'Audit and insights',
     title: 'Reports',
-    description: 'Generate issuer, investor, transaction and compliance reports.',
+    description: 'Generate issuer, investor, activity, and compliance reports.',
     action: 'Create report',
     cards: [
       ['Compliance reports', '12', 'Audit-ready eligibility and transfer records'],

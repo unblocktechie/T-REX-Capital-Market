@@ -1,4 +1,4 @@
-import { AlertTriangle, Network, ShieldCheck, WalletCards } from 'lucide-react';
+import { AlertTriangle, ShieldCheck, WalletCards } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -10,28 +10,26 @@ export function SubmissionConfirmationModal({
   onConfirm,
   loading,
   walletAddress,
-  walletBalance,
-  networkName,
 }) {
   const [acknowledged, setAcknowledged] = useState(false);
 
   useEffect(() => {
     setAcknowledged(false);
-  }, [open, walletAddress, networkName]);
+  }, [open, walletAddress]);
 
   return (
     <Modal
       open={open}
       onClose={onClose}
-      title="Confirm organization wallet and submit"
+      title="Confirm organization submission"
       className="sm:max-w-2xl"
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={loading}>
             Cancel
           </Button>
-          <Button onClick={onConfirm} loading={loading} disabled={!acknowledged}>
-            Confirm Wallet & Submit
+          <Button onClick={onConfirm} loading={loading} disabled={!acknowledged || !walletAddress}>
+            Confirm and submit
           </Button>
         </>
       }
@@ -42,7 +40,7 @@ export function SubmissionConfirmationModal({
             <AlertTriangle size={20} />
           </span>
           <p className="m-0">
-            Once submitted, organization information and documents will be locked. The connected wallet will be saved as the organization’s primary issuer wallet.
+            Once submitted, your organization information and documents will be locked for review. Your Privy secure account will be linked to the organization profile for future issuer actions.
           </p>
         </div>
 
@@ -54,28 +52,22 @@ export function SubmissionConfirmationModal({
               </span>
               <div className="min-w-0">
                 <small className="block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
-                  Primary organization wallet
+                  Privy secure account
                 </small>
-                <strong className="mt-1 block truncate font-mono text-base sm:text-lg">
-                  {shortenWalletAddress(walletAddress, 9, 9)}
-                </strong>
+                <strong className="mt-1 block text-base sm:text-lg">Securely managed by Privy</strong>
               </div>
             </div>
             <ShieldCheck className="shrink-0 text-emerald-400" size={23} />
           </div>
-
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-2xl bg-white/[0.07] p-4">
-              <small className="block text-xs text-slate-400">Wallet balance</small>
-              <strong className="mt-1 block text-sm font-semibold">{walletBalance}</strong>
-            </div>
-            <div className="rounded-2xl bg-white/[0.07] p-4">
-              <small className="flex items-center gap-1.5 text-xs text-slate-400">
-                <Network size={13} /> Network
-              </small>
-              <strong className="mt-1 block text-sm font-semibold">{networkName}</strong>
-            </div>
-          </div>
+          <p className="mt-5 mb-0 rounded-2xl bg-white/[0.07] p-4 text-sm leading-6 text-slate-300">
+            Your Privy account is linked to your T-REX profile. You do not need to connect another account or enter an address here.
+          </p>
+          <details className="mt-3 rounded-2xl bg-white/[0.05] p-4 text-sm text-slate-300">
+            <summary className="cursor-pointer font-semibold text-white">View Privy wallet details</summary>
+            <p className="mb-0 mt-3 break-all font-mono text-xs" title={walletAddress}>
+              {walletAddress ? shortenWalletAddress(walletAddress, 9, 9) : 'Wallet address unavailable'}
+            </p>
+          </details>
         </div>
 
         <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:border-[var(--primary-400)] hover:bg-[var(--primary-50)]">
@@ -86,7 +78,7 @@ export function SubmissionConfirmationModal({
             onChange={(event) => setAcknowledged(event.target.checked)}
           />
           <span className="text-sm leading-6 text-slate-700">
-            I confirm that this wallet is controlled by the organization and understand that it will be used to create and manage tokens, approve investors, and authorize future issuer actions.
+            I confirm that this Privy secure account will be used to manage assets, approve investors, and confirm important issuer actions for this organization.
           </span>
         </label>
       </div>

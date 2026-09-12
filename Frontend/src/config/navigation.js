@@ -48,8 +48,8 @@ export const navigationGroups = Object.freeze([
         roles: [ROLES.issuer],
       },
       {
-        label: 'Transaction History',
-        shortLabel: 'Transactions',
+        label: 'Activity History',
+        shortLabel: 'Activity',
         to: ROUTES.transactions,
         icon: History,
         permission: PERMISSIONS.dashboardView,
@@ -130,8 +130,8 @@ export const routeMeta = Object.freeze({
     description: 'Review approved investors and send investment invitations',
   },
   [ROUTES.transactions]: {
-    title: 'Transaction History',
-    description: 'Track confirmed token movements and export transaction records',
+    title: 'Activity History',
+    description: 'Track confirmed investment and asset activity and export records',
   },
   [ROUTES.invitations]: {
     title: 'Invitations',
@@ -146,5 +146,5 @@ export const routeMeta = Object.freeze({
   [ROUTES.applications]: { title: 'My Applications', description: 'Track your investment applications' },
   [ROUTES.portfolio]: { title: 'Portfolio', description: 'See what you hold, its estimated value and your investment history' },
   [ROUTES.assetManagement]: { title: 'Manage Investments', description: 'Invest more, send, or redeem assets you are approved to hold' },
-  [ROUTES.profile]: { title: 'Investor Profile', description: 'Your identity, investment information, documents, and registered wallet' },
+  [ROUTES.profile]: { title: 'Investor Profile', description: 'Your identity, investment information, documents, and Privy secure account' },
 });

@@ -12,13 +12,13 @@ import { CreateInvestorProfileModal } from '@/components/investor/CreateInvestor
 import { InvestorDocumentList } from '@/components/investor/InvestorDocumentReview';
 import { InvestorLayout } from '@/components/investor/InvestorLayout';
 import { InvestorActionBar } from '@/components/investor/InvestorPrimitives';
-import { WalletCard } from '@/components/investor/WalletCard';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { useInvestorOnboarding } from '@/hooks/useInvestorOnboarding';
 import { useCityOptions, useCountryOptions, useStateOptions } from '@/hooks/useLocationOptions';
-import { useWalletConnection } from '@/hooks/useWalletConnection';
+import { useAuthStore } from '@/store/auth.store';
 import { getErrorMessage } from '@/utils/error';
+import { shortenWalletAddress } from '@/utils/wallet';
 import { isInvestorOnboardingReady } from '@/validations/investor.schemas';
 
 const displayLabel = (options, value) =>
@@ -60,7 +60,7 @@ export default function ReviewSubmitStep() {
     submitting,
     downloadDocument,
   } = useInvestorOnboarding();
-  const connectedWallet = useWalletConnection();
+  const privyWalletAddress = useAuthStore((authState) => authState.user?.privyWalletAddress || '');
   const [modalOpen, setModalOpen] = useState(state.currentStep === 5);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [submissionError, setSubmissionError] = useState('');
@@ -83,40 +83,13 @@ export default function ReviewSubmitStep() {
     identity.stateProvince,
     identity.city ? [{ value: identity.city, label: identity.cityName || identity.city }] : [],
   );
-  const activeWallet = useMemo(
-    () => ({
-      isConnected: Boolean(connectedWallet.isConnected && connectedWallet.address),
-      isCorrectNetwork: connectedWallet.isCorrectNetwork,
-      address: connectedWallet.address || '',
-      displayAddress: connectedWallet.shortAddress || connectedWallet.address || 'Not connected',
-      network:
-        connectedWallet.chain?.name ||
-        (connectedWallet.isConnected ? 'Unsupported network' : 'Not connected'),
-      balance: connectedWallet.balanceLabel || 'Balance unavailable',
-      connectorName: connectedWallet.connector?.name || '',
-    }),
-    [
-      connectedWallet.address,
-      connectedWallet.balanceLabel,
-      connectedWallet.chain?.name,
-      connectedWallet.connector?.name,
-      connectedWallet.isConnected,
-      connectedWallet.isCorrectNetwork,
-      connectedWallet.shortAddress,
-    ],
-  );
-
   const openProfileModal = () => {
     if (!ready) {
       toast.error('Complete all required onboarding sections before creating the investor profile.');
       return;
     }
-    if (!activeWallet.isConnected) {
-      toast.error('Connect the primary investor wallet before continuing.');
-      return;
-    }
-    if (!activeWallet.isCorrectNetwork) {
-      toast.error('Switch the connected wallet to the supported network before continuing.');
+    if (!privyWalletAddress) {
+      toast.error('Your Privy secure account is not linked yet. Complete Privy email verification before continuing.');
       return;
     }
     setSubmissionError('');
@@ -133,9 +106,9 @@ export default function ReviewSubmitStep() {
   const createProfileAndSubmit = async () => {
     if (submitting) return;
     setSubmissionError('');
-    setLoadingMessage('Finalizing your investor onboarding with the connected wallet…');
+    setLoadingMessage('Creating your investor profile and linking your Privy secure account…');
     try {
-      const { result } = await submitInvestor(activeWallet.address);
+      const { result } = await submitInvestor();
       setModalOpen(false);
       const reference = result?.profileReference || '';
       toast.success(reference ? `Investor profile ${reference} created successfully.` : 'Investor profile created successfully.');
@@ -160,10 +133,24 @@ export default function ReviewSubmitStep() {
       <Card className="investor-review-action-card">
         <span className="eyebrow">Final action</span>
         <h2>Create your investor profile</h2>
-        <p>Connect the primary wallet, review the entered information, and submit the completed onboarding record.</p>
-        <WalletCard wallet={activeWallet} />
-        <Button className="button--full" onClick={openProfileModal} disabled={!ready || !activeWallet.isConnected || !activeWallet.isCorrectNetwork || submitting} icon={ShieldCheck}>
-          Create Investor Profile
+        <p>Review your information, then create your profile. Your Privy secure account is already linked.</p>
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <small className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Privy secure account</small>
+          <strong className="mt-2 block text-sm text-slate-950">
+            {privyWalletAddress ? 'Securely managed by Privy' : 'Secure account not linked'}
+          </strong>
+          <p className="mt-2 mb-0 text-xs leading-5 text-slate-500">You do not need to connect another account during onboarding.</p>
+          {privyWalletAddress ? (
+            <details className="mt-3 text-xs text-slate-600">
+              <summary className="cursor-pointer font-semibold text-slate-800">View Privy wallet details</summary>
+              <p className="mt-2 mb-0 break-all font-mono" title={privyWalletAddress}>
+                {shortenWalletAddress(privyWalletAddress, 9, 9)}
+              </p>
+            </details>
+          ) : null}
+        </div>
+        <Button className="button--full" onClick={openProfileModal} disabled={!ready || !privyWalletAddress || submitting} icon={ShieldCheck}>
+          Create my profile
         </Button>
         <small>Last updated: {lastUpdated}</small>
       </Card>
@@ -182,7 +169,7 @@ export default function ReviewSubmitStep() {
       <InvestorLayout
         eyebrow="Identification → Questionnaire → Review and Submit"
         title="Review and Submit"
-        description="Confirm each section before linking the primary wallet and creating the investor profile."
+        description="Confirm each section before creating your investor profile. Your Privy secure account is already linked."
         side={actionPanel}
         wide
       >
@@ -237,7 +224,7 @@ export default function ReviewSubmitStep() {
 
         <div className="investor-review-confirmation">
           <CheckCircle2 size={20} />
-          <p><strong>Review complete?</strong><span>Connect the wallet in the action panel and create your investor profile.</span></p>
+          <p><strong>Review complete?</strong><span>Your Privy secure account is already linked. Create your investor profile when the details are correct.</span></p>
         </div>
 
         <InvestorActionBar>
@@ -252,7 +239,7 @@ export default function ReviewSubmitStep() {
         loading={submitting}
         loadingMessage={loadingMessage}
         error={submissionError}
-        wallet={activeWallet}
+        walletAddress={privyWalletAddress}
         ready={ready}
         profileCreated={false}
       />

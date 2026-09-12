@@ -51,7 +51,7 @@ export default function SupplyPricingPage() {
         <div><dt>Maximum investment</dt><dd>{data.maximumInvestment ? formatMoney(data.maximumInvestment, data.currency) : '—'}</dd></div>
       </dl>
       <InfoCallout title="Pricing context" icon={Coins}>
-        This summary is calculated from current form values and does not include blockchain network fees.
+        This summary is calculated from your current entries and does not include any network fee shown during final confirmation.
       </InfoCallout>
     </section>
   );

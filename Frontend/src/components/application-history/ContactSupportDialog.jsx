@@ -20,12 +20,12 @@ const SUBJECT_OPTIONS = [
   {
     value: 'Investor Verification',
     label: 'Investor Verification',
-    description: 'Help with required investor verification or wallet signing.',
+    description: 'Help with required investor verification or a Privy secure confirmation.',
   },
   {
-    value: 'Transaction Issue',
-    label: 'Transaction Issue',
-    description: 'Pending, failed, or unexpected blockchain transactions.',
+    value: 'Investment Confirmation Issue',
+    label: 'Investment Confirmation Issue',
+    description: 'Pending, failed, or unexpected investment confirmations.',
   },
   {
     value: 'Other',
@@ -61,9 +61,9 @@ export function ContactSupportDialog({ open, onClose, context = {} }) {
 
   const attachedDetails = useMemo(() => ([
     ['Investor account / user ID', context.userId],
-    ['Investor wallet address', context.walletAddress],
-    ['On-chain identity address', context.onchainIdAddress],
-    ['Token address', context.tokenAddress],
+    ['Privy wallet address', context.walletAddress],
+    ['Technical identity reference', context.onchainIdAddress],
+    ['Technical asset address', context.tokenAddress],
     ['Token name', context.tokenName],
     ['Application ID', context.applicationId],
     ['Current application status', context.applicationStatus],
@@ -196,7 +196,7 @@ export function ContactSupportDialog({ open, onClose, context = {} }) {
             <span className="support-contact-context__icon"><Info size={16} /></span>
             <span className="support-contact-context__copy">
               <strong>Application details included automatically</strong>
-              <small>No need to re-enter your wallet, token, identity, or application information.</small>
+              <small>No need to re-enter your secure account, investment, identity, or application information.</small>
             </span>
             <ChevronDown size={17} className="support-contact-context__chevron" aria-hidden="true" />
           </button>

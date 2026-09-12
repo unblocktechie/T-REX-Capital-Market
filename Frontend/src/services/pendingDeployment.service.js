@@ -199,7 +199,7 @@ const saveRecord = ({
   });
 
   if (!saved) {
-    throw new Error('This browser could not securely store the deployment transaction hash.');
+    throw new Error('This browser could not securely store the asset creation confirmation.');
   }
 
   return record;

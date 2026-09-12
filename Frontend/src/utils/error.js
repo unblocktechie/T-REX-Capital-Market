@@ -1,3 +1,5 @@
+import { getRetryAfterMs } from '@/utils/retry';
+
 const firstValidationMessage = (errors) => {
   if (!errors) return null;
   if (Array.isArray(errors)) {
@@ -25,13 +27,25 @@ export const sanitizeUserFacingMessage = (message) => {
     .replace(/\bclaim topics?\b/gi, (match) => match.toLowerCase().endsWith('s') ? 'verification requirements' : 'verification requirement')
     .replace(/\bidentity registry\b/gi, 'approved investor registry')
     .replace(/\badd(?:ed|ing)? to (?:the )?registry\b/gi, 'approve investor')
-    .replace(/\bONCHAINID\b/g, 'on-chain identity')
+    .replace(/\bONCHAINID\b/g, 'technical identity reference')
     .replace(/\bdeployment transaction\b/gi, 'token-creation transaction')
     .replace(/\bdeployment\b/gi, 'token creation')
     .replace(/\bgas fee\b/gi, 'network fee');
 };
 
 export const getErrorMessage = (error, fallback = 'Something went wrong. Please try again.') => {
+  if (error?.userMessage) return sanitizeUserFacingMessage(error.userMessage);
+
+  if (error?.response?.status === 429) {
+    const retryAfterMs = getRetryAfterMs(error);
+    const retryHint = Number.isFinite(retryAfterMs) && retryAfterMs > 0
+      ? ` Try again in about ${Math.max(1, Math.ceil(retryAfterMs / 1000))} seconds.`
+      : ' Please wait a moment and try again.';
+    return error?.__retryExhausted
+      ? `The service is temporarily busy. We retried automatically, but the request is still rate limited.${retryHint}`
+      : `The service is temporarily busy.${retryHint}`;
+  }
+
   if (!error?.response && error?.code === 'ERR_NETWORK') {
     return "We're experiencing a temporary issue. Please try again in a few moments.";
   }

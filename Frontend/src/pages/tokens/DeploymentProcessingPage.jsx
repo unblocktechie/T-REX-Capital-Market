@@ -143,7 +143,7 @@ const createBackendSyncError = (cause, transactionHash, message) => {
     message ||
       getTokenApiErrorMessage(
         cause,
-        'The blockchain transaction was submitted, but token verification could not continue.',
+        'The asset setup was submitted, but the final verification could not continue.',
       ),
   );
   error.code = 'BACKEND_DEPLOYMENT_SYNC_FAILED';
@@ -233,7 +233,7 @@ const deploymentErrorPresentation = (error, transactionSubmitted) => {
 
   if (backendCode === 'RPC_UNAVAILABLE') {
     return {
-      title: 'Blockchain verification is temporarily unavailable',
+      title: 'Asset verification is temporarily unavailable',
       message:
         'The Sepolia network is temporarily unavailable. Retry the status check only; do not send another wallet transaction.',
       canRetry: true,
@@ -242,9 +242,9 @@ const deploymentErrorPresentation = (error, transactionSubmitted) => {
   }
   if (isWalletTransportFailure(error)) {
     return {
-      title: 'MetaMask did not respond',
+      title: 'Privy wallet did not respond',
       message:
-        'Open and unlock MetaMask, confirm this site is connected to the approved organization wallet, then try creating the token again. No blockchain transaction was sent.',
+        'Confirm that you are signed in with Privy and your organization secure account is ready, then try creating the asset again. No asset setup action was submitted.',
       canRetry: true,
       retryMode: 'deployment',
     };
@@ -254,7 +254,7 @@ const deploymentErrorPresentation = (error, transactionSubmitted) => {
     return {
       title: 'Wallet connection expired',
       message:
-        'The approved organization wallet is no longer connected to this browser tab. Return to review, reconnect MetaMask, and try again.',
+        'The organization’s Privy secure account is unavailable in this browser session. Sign in with Privy and try again.',
       canRetry: true,
       retryMode: 'deployment',
     };
@@ -288,7 +288,7 @@ const deploymentErrorPresentation = (error, transactionSubmitted) => {
       title: 'Transaction submitted — verification pending',
       message:
         error?.message ||
-        'Your token-creation transaction has already been submitted. Retry only the status check; do not submit another blockchain transaction.',
+        'Your asset creation has already been submitted. Retry only the status check; do not submit it again.',
       canRetry: true,
       retryMode: 'backend-sync',
     };
@@ -331,7 +331,7 @@ const deploymentErrorPresentation = (error, transactionSubmitted) => {
     return {
       title: transactionSubmitted ? 'Status check timed out' : 'Token verification timed out',
       message: transactionSubmitted
-        ? 'The blockchain transaction is confirmed, but the final status check timed out. Retry the status check only.'
+        ? 'The asset creation was confirmed, but the final status check timed out. Retry the status check only.'
         : 'Token validation timed out. Refresh the token status before trying again.',
       canRetry: true,
       retryMode: transactionSubmitted ? 'backend-sync' : 'deployment',
@@ -475,7 +475,7 @@ export default function DeploymentProcessingPage() {
       ) {
         throw mandatoryStepError({
           message:
-            'The token record cannot be finalized until transfer activation and the required price confirmation are verified on-chain.',
+            'The asset record cannot be finalized until transfer access and the required price are confirmed.',
           code: !priceConfirmed
             ? 'TOKEN_PRICE_CONFIRMATION_REQUIRED'
             : 'TOKEN_CONFIGURATION_FAILED',
@@ -527,7 +527,7 @@ export default function DeploymentProcessingPage() {
             status: 'syncing',
             title: 'Token verification is in progress',
             description:
-              'The transaction is already on Sepolia. We are checking its confirmation and token-creation result; MetaMask will not open again.',
+              'The transaction is already on Sepolia. We are checking its confirmation and token-creation result; no additional Privy approval will be requested.',
           },
         });
 
@@ -626,7 +626,7 @@ export default function DeploymentProcessingPage() {
       toast.success('Asset setup completed', {
         id: 'token-deployment-recorded',
         description:
-          'All required blockchain steps were confirmed and the final live state was verified.',
+          'All required setup steps were confirmed and the final asset status was verified.',
       });
 
       navigate(ROUTES.tokenSuccess(tokenUid || confirmedHash), { replace: true });
@@ -649,7 +649,7 @@ export default function DeploymentProcessingPage() {
       const deployHash = assertValidTransactionHash(transactionHash);
       const approvedWallet = organization.walletAddress || tokenInformation.treasuryWallet;
       if (!approvedWallet) {
-        throw new Error('The approved organization wallet could not be loaded.');
+        throw new Error('The approved organization secure account could not be loaded.');
       }
 
       setDeployment({
@@ -662,9 +662,9 @@ export default function DeploymentProcessingPage() {
         walletAction: {
           key: 'configuration-reconcile',
           status: 'syncing',
-          title: 'Checking the confirmed token state',
+          title: 'Checking the confirmed asset status',
           description:
-            'We are reading the token contract before deciding whether another wallet action is needed.',
+            'We are checking the confirmed asset status before deciding whether another Privy confirmation is needed.',
         },
       });
 
@@ -950,7 +950,7 @@ export default function DeploymentProcessingPage() {
                           : 'Transaction 3 of 3: Confirm token price',
                     description:
                       stage === 'price-confirmed'
-                        ? 'The configured price is confirmed on-chain.'
+                        ? 'The configured price is confirmed.'
                         : stage === 'price-confirming'
                           ? 'Waiting for network confirmation.'
                           : 'Approve this transaction to make the configured price active for purchases and redemptions.',
@@ -1161,7 +1161,7 @@ export default function DeploymentProcessingPage() {
           throw new Error('The approved organization record could not be loaded.');
         }
         if (!approvedWallet) {
-          throw new Error('The approved organization wallet could not be loaded.');
+          throw new Error('The approved organization secure account could not be loaded.');
         }
 
         setDeployment({
@@ -1171,7 +1171,7 @@ export default function DeploymentProcessingPage() {
             status: 'syncing',
             title: 'Preparing token creation',
             description:
-              'Checking your token settings, organization permissions, network and wallet before MetaMask opens.',
+              'Checking your token settings, organization permissions, network and Privy wallet before requesting approval.',
           },
         });
 
@@ -1270,7 +1270,7 @@ export default function DeploymentProcessingPage() {
             throw new Error('The active token-creation attempt belongs to a different network.');
           }
           if (activeWallet && activeWallet !== approvedWallet.toLowerCase()) {
-            throw new Error('The active token-creation attempt belongs to a different organization wallet.');
+            throw new Error('The active asset-creation attempt belongs to a different organization secure account.');
           }
 
           setBackendState({
@@ -1331,7 +1331,7 @@ export default function DeploymentProcessingPage() {
                 status: 'syncing',
                 title: 'Resuming token creation',
                 description:
-                  'The transaction ID is already recorded. We will verify it without opening MetaMask again.',
+                  'The transaction ID is already recorded. We will verify it without requesting another Privy approval.',
               },
             });
 
@@ -1433,15 +1433,15 @@ export default function DeploymentProcessingPage() {
         }
 
         // Wallet validation is required only when a new transaction may be sent. Submitted
-        // attempts above resume through the backend without reopening MetaMask.
+        // attempts above resume through the backend without requesting another Privy approval.
         if (!wallet.isConnected || !wallet.connector) {
-          throw new Error('Connect the approved organization wallet before creating the token.');
+          throw new Error('Open the approved Privy secure account before creating the asset.');
         }
         if (!wallet.isCorrectNetwork) {
-          throw new Error(`Switch the connected wallet to ${wallet.requiredChain.name}.`);
+          throw new Error(`Your Privy secure account needs a quick setup check before asset creation can continue.`);
         }
         if (wallet.address?.toLowerCase() !== approvedWallet.toLowerCase()) {
-          throw new Error('Reconnect the approved organization wallet before creating the token.');
+          throw new Error('Restore the approved Privy secure account before creating the asset.');
         }
 
         if (!deploymentAttemptUid) {
@@ -1976,7 +1976,7 @@ export default function DeploymentProcessingPage() {
 
         if (deploymentDetected && tokenUid) {
           throw new Error(
-            'A token record was found, but its confirmed creation transaction ID is unavailable. The token will not be treated as complete until the on-chain state can be reconciled.',
+            'An asset record was found, but its confirmed creation reference is unavailable. The asset will not be treated as complete until the final status can be verified.',
           );
         }
       } catch (error) {
@@ -2162,7 +2162,7 @@ export default function DeploymentProcessingPage() {
               status: 'syncing',
               title: 'Checking token status again',
               description:
-                'Verification will resume from the existing transaction ID. MetaMask will not open and no additional network fee will be charged.',
+                'Verification will resume from the existing transaction ID. No additional Privy approval or network fee will be requested.',
             },
           });
 
@@ -2269,7 +2269,7 @@ export default function DeploymentProcessingPage() {
   };
 
   const walletActionStatus = {
-    'awaiting-signature': 'Open MetaMask',
+    'awaiting-signature': 'Approve in Privy',
     confirming: 'Waiting for Sepolia',
     confirmed: 'Confirmed',
     failed: 'Needs attention',
@@ -2334,7 +2334,7 @@ export default function DeploymentProcessingPage() {
               ? "We found an existing token-creation transaction and are linking it to your account. No additional wallet transaction is required."
               : deployment.status === 'error'
                 ? backendSyncPending
-                  ? 'The blockchain transaction already exists. Retry only the status check; another wallet transaction will not be sent.'
+                  ? 'The asset creation already exists. Retry only the status check; no new secure confirmation will be requested.'
                   : configurationRetryPending
                     ? 'The asset already exists. We will check the live transfer state first and retry only the missing activation step when needed.'
                     : priceRetryPending
@@ -2342,7 +2342,7 @@ export default function DeploymentProcessingPage() {
                       : 'Review the message below before retrying. Never send a duplicate transaction when a hash is already pending.'
                 : backendSyncPending
                   ? 'The submitted transaction and token-creation result are being checked before your token is marked ready.'
-                  : `MetaMask may request ${walletActionCount} approvals: create the asset, activate approved transfers${configuredInitialPrice ? ', and confirm the asset price' : ''}. Keep this page open until Sepolia confirms every required action.`}
+                  : `Privy may request ${walletActionCount} approvals: create the asset, activate approved transfers${configuredInitialPrice ? ', and confirm the asset price' : ''}. Keep this page open until Sepolia confirms every required action.`}
           </p>
         </div>
 
@@ -2359,7 +2359,7 @@ export default function DeploymentProcessingPage() {
             </div>
             <p>{deployment.walletAction.description}</p>
             {deployment.walletAction.gasRequired ? (
-              <small>MetaMask will show the network fee before you approve this transaction.</small>
+              <small>Privy will show the transaction details before you approve this transaction.</small>
             ) : null}
           </div>
         ) : null}
@@ -2396,7 +2396,7 @@ export default function DeploymentProcessingPage() {
                 Check sync status
               </Button>
             ) : (
-              <span>No new wallet approval or blockchain transaction will be requested.</span>
+              <span>No new Privy confirmation or asset creation action will be requested.</span>
             )
           ) : deployment.status === 'error' ? (
             <>
@@ -2421,7 +2421,7 @@ export default function DeploymentProcessingPage() {
             </>
           ) : (
             <span>
-              MetaMask will show any required network fee before you approve a transaction.
+              Privy will show the transaction details before you approve a transaction.
             </span>
           )}
         </div>

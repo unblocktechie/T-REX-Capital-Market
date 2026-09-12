@@ -165,14 +165,14 @@ export const validateAgents = (agents, expectedWallet = '') => {
   TOKEN_CREATION_AGENT_ROLES.forEach((role) => {
     const agent = agents[role.key];
     if (!agent?.address?.trim()) {
-      errors[role.key] = `${role.name} wallet is required.`;
+      errors[role.key] = `${role.name} account is required.`;
     } else if (!isAddress(agent.address.trim())) {
-      errors[role.key] = 'Enter a valid wallet address.';
+      errors[role.key] = 'Enter a valid account address.';
     } else if (
       expectedWallet &&
       agent.address.trim().toLowerCase() !== expectedWallet.trim().toLowerCase()
     ) {
-      errors[role.key] = 'This role must use the approved organization wallet.';
+      errors[role.key] = 'This role must use the approved organization secure account.';
     }
   });
   return errors;
@@ -244,7 +244,7 @@ export const buildReviewChecklist = (state, wallet, expectedWallet = '') => {
     },
     {
       id: 'network',
-      label: 'Required network connected',
+      label: 'Secure account setup ready',
       status: !wallet.isConnected ? 'pending' : wallet.isCorrectNetwork ? 'valid' : 'error',
     },
     {

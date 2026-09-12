@@ -16,13 +16,8 @@ export const authApi = {
       })
       .then(unwrap),
 
-  verifyEmail: ({ token }) =>
-    apiClient
-      .post(AUTH_ENDPOINTS.verifyEmail, { token }, { skipGlobalLoader: true })
-      .then(unwrap),
-
-  resendVerification: ({ email }) =>
-    apiClient.post(AUTH_ENDPOINTS.resendVerification, { email }).then(unwrap),
+  completePrivySignup: ({ email, identityToken }) =>
+    apiClient.post(AUTH_ENDPOINTS.completePrivySignup, { email, identityToken }).then(unwrap),
 
   forgotPassword: ({ email }) =>
     apiClient.post(AUTH_ENDPOINTS.forgotPassword, { email }).then(unwrap),

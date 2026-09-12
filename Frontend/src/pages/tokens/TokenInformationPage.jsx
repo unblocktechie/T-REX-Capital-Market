@@ -300,7 +300,7 @@ export default function TokenInformationPage() {
                 value={data.treasuryWallet}
                 readOnly
                 disabled={organizationLoading || backend.isLocked}
-                placeholder="Approved organization wallet"
+                placeholder="Approved organization secure account"
                 spellCheck="false"
                 error={fieldError('treasuryWallet')}
               />

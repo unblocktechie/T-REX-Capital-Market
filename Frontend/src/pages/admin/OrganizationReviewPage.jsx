@@ -108,13 +108,13 @@ export default function OrganizationReviewPage() {
   const copyWallet = async () => {
     if (!organization.wallet?.address) return;
     await navigator.clipboard.writeText(organization.wallet.address);
-    toast.success('Wallet address copied');
+    toast.success('Privy wallet address copied');
   };
 
   const copyOnChainId = async () => {
     if (!organization.wallet?.contractAddress) return;
     await navigator.clipboard.writeText(organization.wallet.contractAddress);
-    toast.success('On-chain ID copied');
+    toast.success('Technical identity reference copied');
   };
 
   return (
@@ -141,7 +141,7 @@ export default function OrganizationReviewPage() {
 
       <div className="grid min-w-0 gap-6 2xl:grid-cols-[minmax(0,1fr)_360px]">
         <main className="min-w-0 space-y-6">
-          <AdminPanel title="Entity summary" description="Organization data returned by the complete admin organization endpoint.">
+          <AdminPanel title="Entity summary" description="Review the organization details submitted with this application.">
             <dl className="grid gap-x-6 gap-y-5 sm:grid-cols-2 xl:grid-cols-3">
               <EntityDetail icon={Building2} label="Legal entity name" value={organization.legalName || organization.name} />
               <EntityDetail icon={BadgeCheck} label="Registration number" value={organization.registrationNumber} />
@@ -156,7 +156,7 @@ export default function OrganizationReviewPage() {
             {organization.businessActivity ? <div className="mt-5 rounded-2xl bg-slate-50 p-4"><span className="text-[10px] font-semibold tracking-[0.12em] text-slate-400 uppercase">Business activity</span><p className="mt-2 mb-0 text-sm leading-6 text-slate-700">{organization.businessActivity}</p></div> : null}
           </AdminPanel>
 
-          <AdminPanel title="Submitted documents" description="Uploaded files submitted by the organization for review.">
+          <AdminPanel title="Submitted documents" description="Review the files provided with this organization application.">
             {documents.length ? (
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {documents.map((document) => (
@@ -166,61 +166,50 @@ export default function OrganizationReviewPage() {
             ) : <EmptySection text="No organization documents are available for this review." />}
           </AdminPanel>
 
-          <AdminPanel title="Beneficial owners" description="Ownership records included in the complete organization response.">
+          <AdminPanel title="Beneficial owners" description="Review the ownership information provided with this application.">
             {owners.length ? <div className="space-y-3">{owners.map((owner, index) => <OwnerCard key={owner.id || `${owner.name}-${index}`} owner={owner} />)}</div> : <EmptySection text="No beneficial owners are available for this review." />}
           </AdminPanel>
 
-          <AdminPanel title="Organization wallet" description="Wallet address submitted with the organization application.">
+          <AdminPanel title="Privy secure account" description="Review the secure account linked to this organization profile.">
             {organization.wallet?.address ? (
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 sm:p-5">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-start gap-3">
+                  <ShieldCheck className="mt-0.5 size-5 shrink-0 text-emerald-700" />
                   <div className="min-w-0">
-                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700"><ShieldCheck className="size-4" />Organization wallet available</span>
-                    <p className="mt-2 mb-0 break-all font-mono text-sm font-semibold text-slate-950">{organization.wallet.address}</p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <button type="button" onClick={copyWallet} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-emerald-200 bg-white px-3 text-xs font-semibold text-emerald-700"><Copy className="size-4" />Copy</button>
-                    <a href={`https://sepolia.etherscan.io/address/${organization.wallet.address}`} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-emerald-700 px-3 text-xs font-semibold text-white"><ExternalLink className="size-4" />Explorer</a>
+                    <span className="text-xs font-semibold text-emerald-700">Securely managed by Privy</span>
+                    <p className="mt-1 mb-0 text-sm leading-6 text-slate-700">This Privy secure account is linked to the organization’s T-REX profile.</p>
                   </div>
                 </div>
-                <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                  <WalletDetail label="Network" value={organization.wallet.network || 'Sepolia'} />
-                  <WalletDetail label="Chain ID" value={organization.wallet.chainId || '11155111'} />
-                  <WalletDetail label="Status" value="Connected" />
-                </div>
-                {organization.wallet.contractAddress ? (
-                  <div className="mt-4 rounded-2xl border border-emerald-200 bg-white p-4">
-                    <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="min-w-0 flex-1">
-                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
-                          <Fingerprint className="size-4" />On-chain ID
-                        </span>
-                        <p className="mt-2 mb-0 break-all font-mono text-xs leading-5 font-semibold text-slate-950 sm:text-sm">
-                          {organization.wallet.contractAddress}
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={copyOnChainId}
-                          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700"
-                        >
-                          <Copy className="size-4" />Copy
-                        </button>
-                        <a
-                          href={`https://sepolia.etherscan.io/address/${organization.wallet.contractAddress}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 text-xs font-semibold text-white"
-                        >
-                          <ExternalLink className="size-4" />Contract
-                        </a>
+                <details className="mt-4 rounded-2xl border border-emerald-200 bg-white p-4">
+                  <summary className="cursor-pointer text-sm font-semibold text-slate-900">View account details</summary>
+                  <div className="mt-4 space-y-4">
+                    <div className="min-w-0">
+                      <span className="text-xs font-semibold text-slate-500">Privy wallet address</span>
+                      <p className="mt-2 mb-0 break-all font-mono text-xs font-semibold text-slate-950 sm:text-sm">{organization.wallet.address}</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button type="button" onClick={copyWallet} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-emerald-200 bg-white px-3 text-xs font-semibold text-emerald-700"><Copy className="size-4" />Copy address</button>
+                        <a href={`https://sepolia.etherscan.io/address/${organization.wallet.address}`} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-emerald-700 px-3 text-xs font-semibold text-white"><ExternalLink className="size-4" />View technical record</a>
                       </div>
                     </div>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <WalletDetail label="Network" value={organization.wallet.network || 'Sepolia'} />
+                      <WalletDetail label="Chain ID" value={organization.wallet.chainId || '11155111'} />
+                      <WalletDetail label="Status" value="Ready" />
+                    </div>
+                    {organization.wallet.contractAddress ? (
+                      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700"><Fingerprint className="size-4" />Technical identity reference</span>
+                        <p className="mt-2 mb-0 break-all font-mono text-xs leading-5 font-semibold text-slate-950 sm:text-sm">{organization.wallet.contractAddress}</p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button type="button" onClick={copyOnChainId} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white px-3 text-xs font-semibold text-emerald-700"><Copy className="size-4" />Copy reference</button>
+                          <a href={`https://sepolia.etherscan.io/address/${organization.wallet.contractAddress}`} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 text-xs font-semibold text-white"><ExternalLink className="size-4" />View technical record</a>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
-                ) : null}
+                </details>
               </div>
-            ) : <EmptySection text="No wallet address was returned for this organization." />}
+            ) : <EmptySection text="No Privy secure account was returned for this organization." />}
           </AdminPanel>
 
           <AdminPanel title="Application timeline" description="Submission and final decision events available for this application.">

@@ -25,7 +25,7 @@ This update keeps Invest, Send, and Redeem protected from duplicate wallet submi
 ## Redemption
 
 - The off-chain redemption request and issuer decision are unchanged.
-- Once the investor-signed `redeem()` transaction is observed, its hash is polled against the canonical verifier.
+- Once the issuer-signed `redeem(investor, token, tokenAmount)` transaction is observed, its hash is polled against the canonical verifier.
 - On `CONFIRMED`, the current request is treated as completed locally, the observed hash is cleared, history refreshes, and a new redemption request can be started immediately even if a legacy detail refresh is briefly behind.
 - On `FAILED` or a definitive verifier mismatch, the submitted-hash lock is released without automatically sending another wallet transaction.
 

@@ -33,10 +33,10 @@ import { getErrorMessage } from '@/utils/error';
 const PAGE_SIZE = 10;
 
 const ACTIVITY_FILTERS = [
-  { value: 'all', label: 'All activity', description: 'Show all recorded blockchain activity' },
-  { value: 'INVEST', label: 'Investments', description: 'Investor purchases confirmed on-chain' },
+  { value: 'all', label: 'All activity', description: 'Show all recorded investment and asset activity' },
+  { value: 'INVEST', label: 'Investments', description: 'Investor purchases that have been confirmed' },
   { value: 'TRANSFER', label: 'Token transfers', description: 'Tokens sent between approved wallets' },
-  { value: 'REDEMPTION', label: 'Redemptions', description: 'Investor redemptions confirmed on-chain' },
+  { value: 'REDEMPTION', label: 'Redemptions', description: 'Investor redemptions that have been confirmed' },
 ];
 
 const DATE_FILTERS = [
@@ -57,9 +57,9 @@ const activityMeta = {
 const normalizeSearch = (value) => String(value || '').trim().toLowerCase();
 
 const formatActivityDate = (timestamp) => {
-  if (!timestamp) return { date: 'Date unavailable', time: 'Confirmed on-chain' };
+  if (!timestamp) return { date: 'Date unavailable', time: 'Confirmed' };
   const date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) return { date: 'Date unavailable', time: 'Confirmed on-chain' };
+  if (Number.isNaN(date.getTime())) return { date: 'Date unavailable', time: 'Confirmed' };
   return {
     date: new Intl.DateTimeFormat('en-US', {
       month: 'short',
@@ -320,7 +320,7 @@ export default function IssuerTransactionHistoryPage() {
           <span className="issuer-redemptions-eyebrow">Token activity</span>
           <h1>Transaction History</h1>
           <p>
-            Track canonical blockchain activity for {tokenName}{tokenSymbol ? ` (${tokenSymbol})` : ''}. Search or filter the list, then export the current view when you need a record.
+            Track confirmed activity for {tokenName}{tokenSymbol ? ` (${tokenSymbol})` : ''}. Search or filter the list, then export the current view when you need a record.
           </p>
         </div>
         <div className="issuer-transaction-history-header__actions">

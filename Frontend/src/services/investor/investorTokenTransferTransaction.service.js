@@ -58,20 +58,20 @@ const requiredAddress = (value, label) => {
 
 async function activeRegisteredWallet({ connector, connectedAddress, investorWalletAddress, chainId }) {
   if (!connector?.getProvider || !isAddress(connectedAddress || '')) {
-    throw new Error('Connect your registered investor wallet before continuing.');
+    throw new Error('Open the Privy secure account linked to your investor profile before continuing.');
   }
 
   const chain = chainFor(chainId);
-  const registeredAddress = requiredAddress(investorWalletAddress, 'Registered investor wallet');
+  const registeredAddress = requiredAddress(investorWalletAddress, 'Investor Privy secure account');
   const provider = await connector.getProvider();
   if (!provider?.request) throw new Error('The connected wallet is unavailable. Reconnect it and try again.');
 
   const accounts = await provider.request({ method: 'eth_accounts' });
   const providerAddress = Array.isArray(accounts) ? accounts[0] : '';
-  if (!isAddress(providerAddress || '')) throw new Error('Reconnect your registered investor wallet before continuing.');
+  if (!isAddress(providerAddress || '')) throw new Error('Restore the Privy secure account linked to your investor profile before continuing.');
 
   if (getAddress(providerAddress) !== registeredAddress) {
-    const error = new Error('Switch to the wallet registered for this investment before continuing.');
+    const error = new Error('Use the Privy secure account linked to this investment before continuing.');
     error.code = 'WALLET_MISMATCH';
     throw error;
   }
@@ -83,7 +83,7 @@ async function activeRegisteredWallet({ connector, connectedAddress, investorWal
 
   const providerChainId = parseChainId(await provider.request({ method: 'eth_chainId' }));
   if (providerChainId !== chain.id) {
-    const error = new Error(`Switch your wallet to ${chain.name} and try again.`);
+    const error = new Error(`Your Privy secure account needs a quick setup check. Open the account control and try again.`);
     error.code = 'WRONG_WALLET_NETWORK';
     error.requiredChainId = chain.id;
     throw error;
@@ -115,7 +115,7 @@ export async function submitInvestorTokenTransfer({
 }) {
   const contractAddress = requiredAddress(tokenAddress, 'Token contract');
   const recipientAddress = requiredAddress(recipientWalletAddress, 'Recipient wallet');
-  const registeredAddress = requiredAddress(investorWalletAddress, 'Registered investor wallet');
+  const registeredAddress = requiredAddress(investorWalletAddress, 'Investor Privy secure account');
   if (recipientAddress === registeredAddress) throw new Error('Choose a recipient wallet different from your registered investment wallet.');
 
   let rawAmount;

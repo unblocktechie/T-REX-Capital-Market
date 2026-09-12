@@ -81,15 +81,15 @@ const TRANSFER_POLL_INTERVAL_MS = 5_000;
 
 const HISTORY_STATUS_OPTIONS = Object.freeze([
   { value: 'all', label: 'All statuses', description: 'Show every token transfer' },
-  { value: 'SUBMITTED', label: 'Submitted', description: 'Sent to the network and waiting for confirmation' },
-  { value: 'CONFIRMED', label: 'Confirmed', description: 'Confirmed successfully on the blockchain' },
-  { value: 'FAILED', label: 'Failed', description: 'The blockchain transaction reverted' },
+  { value: 'SUBMITTED', label: 'Submitted', description: 'Submitted and waiting for confirmation' },
+  { value: 'CONFIRMED', label: 'Confirmed', description: 'Completed and recorded successfully' },
+  { value: 'FAILED', label: 'Failed', description: 'The transfer could not be completed' },
 ]);
 
 const HISTORY_DIRECTION_OPTIONS = Object.freeze([
   { value: 'all', label: 'All activity', description: 'Sent and received transfers' },
-  { value: 'sent', label: 'Sent', description: 'Tokens sent from your wallet' },
-  { value: 'received', label: 'Received', description: 'Tokens received by your wallet' },
+  { value: 'sent', label: 'Sent', description: 'Units sent from your secure account' },
+  { value: 'received', label: 'Received', description: 'Units received by your secure account' },
 ]);
 
 const clean = (value) => String(value ?? '').trim();
@@ -263,14 +263,14 @@ const transferStatusMeta = (state, { hasPreparedIntent = false } = {}) => {
       return {
         label: 'Checking',
         title: 'Checking transfer details',
-        detail: 'Your recipient and transfer amount are being verified before your wallet opens.',
+        detail: 'We are checking the recipient and amount before Privy asks you to confirm.',
         tone: 'pending',
         Icon: Clock3,
       };
     case TRANSFER_STATE.WALLET_CONFIRMATION:
       return {
-        label: 'Wallet Confirmation',
-        title: 'Confirm the transfer in your wallet',
+        label: 'Secure Confirmation',
+        title: 'Review and confirm the transfer',
         detail: 'Review the prepared recipient and token amount, then confirm when you are ready.',
         tone: 'pending',
         Icon: WalletCards,
@@ -279,7 +279,7 @@ const transferStatusMeta = (state, { hasPreparedIntent = false } = {}) => {
       return {
         label: 'Submitted',
         title: 'Transfer submitted',
-        detail: 'Your transaction was submitted. The transfer will remain pending until it is fully verified.',
+        detail: 'Your transfer was submitted. It will remain pending until confirmation is complete.',
         tone: 'pending',
         Icon: Clock3,
       };
@@ -287,7 +287,7 @@ const transferStatusMeta = (state, { hasPreparedIntent = false } = {}) => {
       return {
         label: 'Pending',
         title: 'Transfer is being finalized',
-        detail: 'Your transaction has already been submitted. No additional wallet transaction is required while verification continues.',
+        detail: 'Your transfer has already been submitted. No additional action is needed while confirmation continues.',
         tone: 'pending',
         Icon: Clock3,
       };
@@ -311,7 +311,7 @@ const transferStatusMeta = (state, { hasPreparedIntent = false } = {}) => {
       return {
         label: 'Needs Review',
         title: 'Transfer needs review',
-        detail: 'This transfer cannot be finalized automatically right now. No additional wallet transaction is required.',
+        detail: 'This transfer cannot be finalized automatically right now. No additional action is required.',
         tone: 'neutral',
         Icon: Info,
       };
@@ -325,8 +325,8 @@ const transferStatusMeta = (state, { hasPreparedIntent = false } = {}) => {
       };
     case TRANSFER_STATE.CANCELLED:
       return {
-        label: 'Wallet Cancelled',
-        title: 'Wallet request cancelled',
+        label: 'Confirmation Cancelled',
+        title: 'Secure confirmation cancelled',
         detail: 'Your prepared transfer is still saved. You can continue with the same transfer details when ready.',
         tone: 'neutral',
         Icon: XCircle,
@@ -336,15 +336,15 @@ const transferStatusMeta = (state, { hasPreparedIntent = false } = {}) => {
       return hasPreparedIntent
         ? {
             label: 'Prepared',
-            title: 'Transfer ready for wallet confirmation',
-            detail: 'The recipient and amount have been verified. Continue to submit this prepared transfer from your registered wallet.',
+            title: 'Transfer ready for confirmation',
+            detail: 'The recipient and amount have been checked. Continue to review and confirm this transfer with Privy.',
             tone: 'success',
             Icon: ShieldCheck,
           }
         : {
             label: 'Ready',
             title: 'Ready to send',
-            detail: 'Enter the recipient and amount. They will be verified before your wallet opens.',
+            detail: 'Enter the recipient and amount. We will check both before Privy asks you to confirm.',
             tone: 'neutral',
             Icon: ShieldCheck,
           };
@@ -456,9 +456,9 @@ export default function SendTokenPage({
 
   const recipientError = useMemo(() => {
     if (!recipient.trim()) return '';
-    if (!isAddress(recipient.trim())) return 'Enter a valid recipient wallet address.';
+    if (!isAddress(recipient.trim())) return 'Enter a valid recipient account address.';
     if (sameAddress(recipient, context.investorWalletAddress)) {
-      return 'Choose a recipient wallet different from your registered investment wallet.';
+      return 'Choose a recipient account address different from your Privy secure account.';
     }
     return '';
   }, [context.investorWalletAddress, recipient]);
@@ -475,7 +475,7 @@ export default function SendTokenPage({
       return `Enter a valid ${token?.symbol || 'token'} amount.`;
     }
     if (balanceAvailable && amountRaw !== null && amountRaw > tokenWalletRawBalance) {
-      return `The transfer amount cannot exceed your available wallet balance of ${tokenWalletBalance || '0'} ${token?.symbol || 'tokens'}.`;
+      return `The transfer amount cannot exceed your available balance of ${tokenWalletBalance || '0'} ${token?.symbol || 'tokens'}.`;
     }
     return '';
   }, [amount, amountRaw, balanceAvailable, normalizedAmount, token?.symbol, tokenDecimals, tokenWalletBalance, tokenWalletRawBalance]);
@@ -566,7 +566,7 @@ export default function SendTokenPage({
           clearObservedWalletTransaction(observed);
           setTxHash('');
           setTransferState(TRANSFER_STATE.FAILED);
-          setTransferError('The blockchain transfer reverted. You can submit a new transfer when ready.');
+          setTransferError('The transfer could not be completed. You can submit a new transfer when ready.');
         }
       } catch {
         // Keep the local hash. The indexer can recover it later without another
@@ -630,7 +630,7 @@ export default function SendTokenPage({
       setTransferRecord(canonicalMatch);
       setTransferState(TRANSFER_STATE.FAILED);
       setTxHash('');
-      setTransferError('The blockchain transfer reverted. Review the recipient and amount, then send a new transfer when ready.');
+      setTransferError('The transfer could not be completed. Review the recipient and amount, then send a new transfer when ready.');
     }
   }, [
     context.chainId,
@@ -678,7 +678,7 @@ export default function SendTokenPage({
           setTransferRecord(canonicalTransactionAsTransfer({ ...next, transactionHash: next?.transactionHash || knownHash }));
           setTxHash('');
           setTransferState(TRANSFER_STATE.FAILED);
-          setTransferError('The blockchain transfer reverted. Review the details and submit a new transfer when ready.');
+          setTransferError('The transfer could not be completed. Review the details and submit a new transfer when ready.');
           loadHistory({ quiet: true });
           return;
         }
@@ -689,7 +689,7 @@ export default function SendTokenPage({
           setTransferRecord(null);
           setTxHash('');
           setTransferState(TRANSFER_STATE.FAILED);
-          setTransferError('This transaction could not be verified for the selected transfer. Review the details and try a new transfer when ready.');
+          setTransferError('This confirmation could not be matched to the selected transfer. Review the details and try a new transfer when ready.');
           return;
         }
       } finally {
@@ -753,22 +753,22 @@ export default function SendTokenPage({
   const checkRecipient = () => {
     if (!recipient.trim() || recipientError) {
       setAddressChecked(false);
-      toast.error(recipientError || 'Enter a recipient wallet address to continue.');
+      toast.error(recipientError || 'Enter a recipient account address to continue.');
       return;
     }
     setAddressChecked(true);
     toast.success('Recipient address ready', {
-      description: 'The recipient will be checked for transfer eligibility before your wallet opens.',
+      description: 'We will check the recipient's eligibility before Privy asks you to confirm.',
     });
   };
 
   const validateFormForNewIntent = () => {
     if (!walletGuard.ready) {
-      toast.error('Connect the investor wallet linked to your profile on the required network to continue.');
+      toast.error('Your Privy secure account needs attention. Open it from the header and follow the prompt to continue.');
       return false;
     }
     if (!addressChecked || recipientError || !isAddress(recipient.trim())) {
-      toast.error(recipientError || 'Enter and validate a recipient wallet address.');
+      toast.error(recipientError || 'Enter and check a recipient account address.');
       return false;
     }
     if (!normalizedAmount || !isPositiveDecimal(normalizedAmount) || amountError) {
@@ -804,7 +804,7 @@ export default function SendTokenPage({
         tokenAmountRaw: amountRaw?.toString?.(),
         tokenDecimals,
       });
-      if (!validTransactionHash(hash)) throw new Error('Your wallet did not return a valid transaction ID. Check wallet activity before trying again.');
+      if (!validTransactionHash(hash)) throw new Error('We did not receive a valid confirmation ID. Check your Privy account details before trying again.');
 
       saveObservedWalletTransaction({
         chainId,
@@ -825,7 +825,7 @@ export default function SendTokenPage({
         createdAt: new Date().toISOString(),
       }));
       toast.success('Transfer submitted', {
-        description: 'Your wallet sent the transfer. No additional wallet action is needed while history synchronizes.',
+        description: 'Your transfer was submitted. No additional action is needed while your history updates.',
       });
 
       try {
@@ -846,8 +846,8 @@ export default function SendTokenPage({
         } else if (status === 'FAILED') {
           clearObservedWalletTransaction({ chainId, txHash: hash, expectedAction: 'TRANSFER' });
           setTransferState(TRANSFER_STATE.FAILED);
-          setTransferError('The blockchain transfer reverted. You can review the details and submit a new transfer.');
-          toast.error('Transfer failed', { description: 'The blockchain transaction reverted. No automatic retry was sent.' });
+          setTransferError('The transfer could not be completed. Review the details and submit a new transfer when ready.');
+          toast.error('Transfer failed', { description: 'The transfer could not be completed. No automatic retry was sent.' });
         }
       } catch (syncError) {
         const statusCode = Number(syncError?.response?.status);
@@ -856,12 +856,12 @@ export default function SendTokenPage({
           setTransferRecord(null);
           setTxHash('');
           setTransferState(TRANSFER_STATE.FAILED);
-          setTransferError(getErrorMessage(syncError, 'The submitted transaction does not match this transfer.'));
-          toast.error('Transaction could not be matched', { description: getErrorMessage(syncError, 'The submitted transaction does not match this transfer.') });
+          setTransferError(getErrorMessage(syncError, 'The submitted confirmation does not match this transfer.'));
+          toast.error('Transfer could not be matched', { description: getErrorMessage(syncError, 'The submitted confirmation does not match this transfer.') });
         } else {
           setTransferState(TRANSFER_STATE.CONFIRMING);
-          setTransferError('Your transfer is on the blockchain and history is still synchronizing. Do not send it again.');
-          toast.info('Transfer sent — history is still syncing', { description: 'The backend/indexer can recover this transaction automatically.' });
+          setTransferError('Your transfer was submitted successfully and history is still updating. Do not send it again.');
+          toast.info('Transfer submitted — history is updating', { description: 'Your transfer record will update automatically. Do not submit it again.' });
         }
       }
       loadHistory({ quiet: true });
@@ -869,10 +869,10 @@ export default function SendTokenPage({
       if (isInvestorTokenTransferWalletRejection(sendError)) {
         setTransferState(TRANSFER_STATE.CANCELLED);
         setTransferError('');
-        toast.info('Wallet request cancelled. No transfer was submitted.');
+        toast.info('Secure confirmation cancelled. No transfer was submitted.');
       } else {
         setTransferState(TRANSFER_STATE.FAILED);
-        const message = getErrorMessage(sendError, 'The wallet could not submit this transfer.');
+        const message = getErrorMessage(sendError, 'Your Privy secure account could not submit this transfer.');
         setTransferError(message);
         toast.error('Unable to send', { description: message });
       }
@@ -901,10 +901,10 @@ export default function SendTokenPage({
         clearObservedWalletTransaction({ chainId, txHash: knownHash, expectedAction: 'TRANSFER' });
         setTxHash('');
         setTransferState(TRANSFER_STATE.FAILED);
-        setTransferError('The blockchain transfer reverted.');
+        setTransferError('The transfer could not be completed.');
       } else {
         setTransferState(TRANSFER_STATE.CONFIRMING);
-        setTransferError('The transaction is submitted and is still waiting for canonical confirmation. No new wallet action is required.');
+        setTransferError('The transfer is submitted and still waiting for confirmation. No new action is required.');
       }
       loadHistory({ quiet: true });
     } catch (retryError) {
@@ -914,10 +914,10 @@ export default function SendTokenPage({
         setTransferRecord(null);
         setTxHash('');
         setTransferState(TRANSFER_STATE.FAILED);
-        setTransferError('This transaction could not be verified for the selected transfer. You can submit a new transfer when ready.');
+        setTransferError('This confirmation could not be matched to the selected transfer. You can submit a new transfer when ready.');
       } else {
-        setTransferError('The transaction is already submitted, but synchronization is temporarily unavailable. Do not send it again.');
-        toast.info('Still synchronizing', { description: 'No new wallet transaction is required.' });
+        setTransferError('The transfer is already submitted, but your history is temporarily unavailable. Do not send it again.');
+        toast.info('Still synchronizing', { description: 'No new transfer is required.' });
       }
     } finally {
       setRetryingVerification(false);
@@ -980,7 +980,7 @@ export default function SendTokenPage({
   const ctaLabel = transferState === TRANSFER_STATE.PREPARING
     ? 'Checking Transfer'
     : transferState === TRANSFER_STATE.WALLET_CONFIRMATION
-      ? 'Confirm in Wallet'
+      ? 'Confirm securely with Privy'
       : [TRANSFER_STATE.TRANSACTION_SUBMITTED, TRANSFER_STATE.CONFIRMING].includes(transferState)
         ? 'Finalizing Transfer'
         : transferState === TRANSFER_STATE.COMPLETED
@@ -990,18 +990,18 @@ export default function SendTokenPage({
             : transferState === TRANSFER_STATE.MANUAL_REVIEW
               ? 'Transfer Under Review'
               : replacementAllowed
-                ? 'Send Replacement Transaction'
+                ? 'Submit transfer again'
                 : hasPreparedIntent || transferState === TRANSFER_STATE.CANCELLED
                   ? 'Continue Transfer'
                   : 'Send Tokens';
 
   const ctaFootnote = knownHash && pendingIntent && !replacementAllowed
-    ? 'This transfer is already submitted. Do not submit another wallet transaction while verification is in progress.'
+    ? 'This transfer is already submitted. Do not submit it again while confirmation is in progress.'
     : replacementAllowed
-      ? 'A previous transaction could not be used. Continue only because a new wallet transaction is required for this saved transfer.'
+      ? 'A previous confirmation could not be used. Continue only because this saved transfer needs to be submitted again.'
       : hasPreparedIntent || transferState === TRANSFER_STATE.CANCELLED
         ? 'This transfer is already prepared. Continuing uses the same verified recipient and amount.'
-        : 'Your recipient and amount are verified before your wallet opens.';
+        : 'We check the recipient and amount before Privy asks you to confirm.';
 
   const historyCurrentPage = Math.min(Math.max(historyMeta.page || historyPage, 1), Math.max(historyMeta.totalPages, 1));
   const historyHasPending = history.some((row) => normalizeStatus(row?.status) === TRANSFER_STATUS.PENDING_TRANSFER);
@@ -1012,7 +1012,7 @@ export default function SendTokenPage({
         <InvestorTokenActionHeader
           eyebrow="Token action"
           title="Send your investment"
-          description="Send units to another approved investor. We check the recipient before your wallet asks you to confirm."
+          description="Send units to another approved investor. We check the recipient before you confirm securely with Privy."
         />
       ) : null}
 
@@ -1022,10 +1022,10 @@ export default function SendTokenPage({
 
           <Card className="investor-token-action-card">
             <div className="investor-token-action-card__heading">
-              <div><span>From</span><h2>Your registered investment wallet</h2></div>
+              <div><span>From</span><h2>Your Privy secure account</h2></div>
               <WalletCards size={19} />
             </div>
-            <LockedAddressField label="Registered investment wallet" value={context.investorWalletAddress} />
+            <LockedAddressField label="Privy secure account" value={context.investorWalletAddress} />
           </Card>
 
           <Card className="investor-token-action-card">
@@ -1035,11 +1035,11 @@ export default function SendTokenPage({
             </div>
             <div className="investor-token-action-recipient-row">
               <label className={`investor-token-action-text-field ${addressChecked && !recipientError ? 'is-checked' : ''} ${recipientError ? 'is-invalid' : ''} ${formLocked ? 'is-locked' : ''}`}>
-                <span className="sr-only">Recipient wallet address</span>
+                <span className="sr-only">Recipient account address</span>
                 <input
                   value={recipient}
                   onChange={handleRecipientChange}
-                  placeholder="Recipient investment wallet (0x…)"
+                  placeholder="Recipient account address (0x…)"
                   spellCheck="false"
                   autoComplete="off"
                   aria-invalid={Boolean(recipientError)}
@@ -1056,7 +1056,7 @@ export default function SendTokenPage({
               </Button>
             </div>
             {recipientError ? <p className="investor-token-action-field-error">{recipientError}</p> : null}
-            <p className="investor-token-action-helper">Enter the recipient’s approved investment wallet. We check that they can receive this asset before you continue.</p>
+            <p className="investor-token-action-helper">Enter the recipient’s approved account address. We check that they can receive this asset before you continue.</p>
           </Card>
 
           <Card className="investor-token-action-card">
@@ -1084,7 +1084,7 @@ export default function SendTokenPage({
               <strong>{token.symbol}</strong>
             </label>
             {amountError ? <p className="investor-token-action-field-error">{amountError}</p> : null}
-            <p className="investor-token-action-field-hint">Enter the number of units to send. We check your available balance again before your wallet asks you to confirm.</p>
+            <p className="investor-token-action-field-hint">Enter the number of units to send. We check your available balance again before you confirm securely with Privy.</p>
           </Card>
 
           <Card className="investor-token-action-card">
@@ -1092,8 +1092,8 @@ export default function SendTokenPage({
             <div className="investor-token-action-checks">
               <TokenActionCheck
                 icon={UserRoundCheck}
-                label="Recipient wallet"
-                detail="We first check that the wallet address is valid."
+                label="Recipient account"
+                detail="We first check that the account address is valid."
                 status={addressChecked && !recipientError ? 'Ready' : 'Check needed'}
                 tone={addressChecked && !recipientError ? 'success' : 'neutral'}
               />
@@ -1122,7 +1122,6 @@ export default function SendTokenPage({
             <div className="investor-token-order-row"><span>{activeTransferUid ? 'Price used' : 'Current price per unit'}</span><strong>{transferPriceExact ? `${formatExactAmount(transferPriceExact)} ${token.currency || 'USDT'}` : '—'}</strong></div>
             <div className="investor-token-order-row investor-token-order-row--primary"><span>Estimated value</span><strong>{estimatedTransferValue === null ? '—' : `${estimatedTransferValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${token.currency || 'USDT'}`}</strong></div>
             <div className="investor-token-order-row"><span>Recipient</span><strong className="investor-token-order-address">{recipient || 'Not entered'}</strong></div>
-            <div className="investor-token-order-row"><span>Network</span><strong>{walletGuard.targetNetworkLabel}</strong></div>
             <div className="investor-token-order-row">
               <span>Your current holding</span>
               <strong>
@@ -1142,7 +1141,7 @@ export default function SendTokenPage({
                 <span>Confirmation reference</span>
                 <strong>
                   {explorerUrl ? (
-                    <a href={explorerUrl} target="_blank" rel="noopener noreferrer" title={`View transaction on ${explorerName}`}>
+                    <a href={explorerUrl} target="_blank" rel="noopener noreferrer" title={`View technical confirmation details on ${explorerName}`}>
                       {shortHash(knownHash)} <ExternalLink size={13} aria-hidden="true" />
                     </a>
                   ) : shortHash(knownHash)}
@@ -1222,7 +1221,7 @@ export default function SendTokenPage({
               value={historySearch}
               onChange={(event) => setHistorySearch(event.target.value)}
               maxLength={100}
-              placeholder="Search by reference or wallet"
+              placeholder="Search by reference or account address"
             />
           </label>
           <div className="investor-token-transfer-history__filters">
@@ -1277,7 +1276,7 @@ export default function SendTokenPage({
               <span role="columnheader">Amount</span>
               <span role="columnheader">Counterparty</span>
               <span role="columnheader">Status</span>
-              <span role="columnheader">Transaction</span>
+              <span role="columnheader">Confirmation ID</span>
             </div>
 
             {history.map((row, index) => {
@@ -1305,9 +1304,9 @@ export default function SendTokenPage({
                   <span className="investor-token-purchase-history__cell" data-label="Status" role="cell">
                     <span className={`investor-token-purchase-history__badge is-${rowStatus.tone}`}>{rowStatus.label}</span>
                   </span>
-                  <span className="investor-token-purchase-history__cell" data-label="Transaction" role="cell">
+                  <span className="investor-token-purchase-history__cell" data-label="Confirmation ID" role="cell">
                     {rowHash && rowExplorerUrl ? (
-                      <a href={rowExplorerUrl} target="_blank" rel="noreferrer" className="investor-token-purchase-history__hash" title="View transfer transaction">
+                      <a href={rowExplorerUrl} target="_blank" rel="noreferrer" className="investor-token-purchase-history__hash" title="View transfer details">
                         {shortHash(rowHash)} <ExternalLink size={13} />
                       </a>
                     ) : rowHash ? <strong>{shortHash(rowHash)}</strong> : <span className="investor-token-purchase-history__muted">—</span>}

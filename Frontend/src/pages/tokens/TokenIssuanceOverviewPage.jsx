@@ -44,7 +44,7 @@ const roadmap = [
   {
     title: 'Review & Create',
     description: 'Review all your settings and create the asset when everything is ready.',
-    impact: 'Your final settings are checked before the asset is created and recorded on the blockchain.',
+    impact: 'Your final settings are checked before the asset is created and securely recorded.',
     icon: Rocket,
   },
 ];
@@ -181,7 +181,7 @@ export default function TokenIssuanceOverviewPage() {
             <div>
               <h3>Fast, Automatic Processing</h3>
               <p>
-                Once an investment meets your requirements, it can be processed automatically and securely recorded on the blockchain.
+                Once an investment meets your requirements, it can be processed and securely recorded.
               </p>
             </div>
           </section>

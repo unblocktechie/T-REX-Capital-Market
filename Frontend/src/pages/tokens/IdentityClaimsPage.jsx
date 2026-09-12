@@ -289,7 +289,7 @@ export default function IdentityClaimsPage() {
                 <ShieldCheck size={15} /> These checks are automatically enforced when the asset is transferred.
               </span>
               <HelpDetails className="claims-technical-details" title="View technical details">
-                Investor eligibility is represented by verified on-chain identity claims and enforced by the ERC-3643 token controls.
+                Investor eligibility is recorded using verified credentials. The asset rules check those credentials before an investor can participate.
               </HelpDetails>
             </div>
           </aside>

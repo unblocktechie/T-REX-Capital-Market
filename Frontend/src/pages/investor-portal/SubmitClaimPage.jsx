@@ -908,25 +908,25 @@ export default function SubmitClaimPage() {
     }
 
     if (!wallet.isConnected || !wallet.address || !wallet.connector) {
-      const message = 'Connect your registered investor wallet before completing this verification.';
+      const message = 'Open the Privy secure account linked to your investor profile before completing this verification.';
       updateClaimUi(claimId, {
         status: CLAIM_UI_STATUS.PENDING,
-        noticeTitle: 'Wallet connection required',
+        noticeTitle: 'Privy secure account required',
         message,
         noticeTone: 'error',
       });
-      toast.error('Wallet connection required', { description: message });
+      toast.error('Privy secure account required', { description: message });
       return;
     }
 
     if (registeredWallet && !addressesEqual(wallet.address, registeredWallet)) {
       updateClaimUi(claimId, {
         status: CLAIM_UI_STATUS.PENDING,
-        noticeTitle: 'Registered wallet required',
+        noticeTitle: 'Approved secure account required',
         message: WALLET_MISMATCH_MESSAGE,
         noticeTone: 'error',
       });
-      toast.error('Registered wallet required', { description: WALLET_MISMATCH_MESSAGE });
+      toast.error('Approved secure account required', { description: WALLET_MISMATCH_MESSAGE });
       return;
     }
 
@@ -1092,7 +1092,7 @@ export default function SubmitClaimPage() {
             error?.code === 'WRONG_WALLET_NETWORK'
               ? 'Wrong network'
               : error?.code === 'WALLET_MISMATCH'
-                ? 'Registered wallet required'
+                ? 'Approved secure account required'
                 : 'Approval not submitted',
           message,
           noticeTone: 'error',

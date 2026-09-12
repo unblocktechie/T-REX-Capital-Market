@@ -243,7 +243,7 @@ export default function IssuerInvestorSubscriptionReviewPage() {
         recovery.txHash,
       );
       // A 200/202 response means the API accepted the exact hash. PENDING is a normal
-      // verification state, so MetaMask must not be opened again.
+      // verification state, so Privy wallet must not be opened again.
       issuerRegistryRecoveryStore.removeForUser(user, interestUid, recovery.txHash);
       return {
         ...(serverRegistration || {}),
@@ -262,7 +262,7 @@ export default function IssuerInvestorSubscriptionReviewPage() {
 
       if (error?.response?.status === 422) {
         // Keep the exact signed hash. A verification failure must never turn into an
-        // automatic second MetaMask registration transaction. A later reload/login can
+        // automatic second Privy wallet registration transaction. A later reload/login can
         // retry Confirm with this same hash after the verification issue is resolved.
         return {
           ...(serverRegistration || {}),
@@ -477,7 +477,7 @@ export default function IssuerInvestorSubscriptionReviewPage() {
             return resumed;
           }
           // 503/network errors keep the same hash pending and schedule Confirm retry
-          // with this exact hash. MetaMask is never opened again for this operation.
+          // with this exact hash. Privy wallet is never opened again for this operation.
           if (confirmError?.response?.status === 503 || confirmError?.code === 'ERR_NETWORK') {
             resumed = { ...latest, confirmationRetryNeeded: true };
             setRegistryRegistration(resumed);
@@ -587,7 +587,7 @@ export default function IssuerInvestorSubscriptionReviewPage() {
       throw new Error('Final approval is not ready yet. Check the status again in a moment.');
     }
 
-    // Preserve a known hash before Confirm as well as immediately after MetaMask. This
+    // Preserve a known hash before Confirm as well as immediately after Privy wallet. This
     // covers existing operations loaded from the API and guarantees 503/reload recovery
     // can retry only this exact hash without broadcasting a second registration.
     try {
@@ -659,7 +659,7 @@ export default function IssuerInvestorSubscriptionReviewPage() {
       if (isRegistryConfirmed(preparedRegistration)) return;
 
       // Any existing hash belongs to the current operation. Confirm that same hash or
-      // poll its status; never reopen MetaMask just because verification previously failed.
+      // poll its status; never reopen Privy wallet just because verification previously failed.
       if (hasRegistryTransaction(preparedRegistration)) {
         await confirmRegistryTransaction(preparedRegistration);
         return;
@@ -679,7 +679,7 @@ export default function IssuerInvestorSubscriptionReviewPage() {
       }
 
       // Prepare is idempotent. The API is authoritative for all registerIdentity args.
-      // 201 PENDING or 200 PENDING without a hash may proceed to MetaMask.
+      // 201 PENDING or 200 PENDING without a hash may proceed to Privy wallet.
       const preparedResult = await issuerInvestorSubscriptionsService.prepareRegistryRegistration(
         registryInterestUid,
       );
@@ -696,7 +696,7 @@ export default function IssuerInvestorSubscriptionReviewPage() {
       }
 
       // 200 PENDING with a stored hash resumes the existing operation. Confirm the same
-      // hash and never ask MetaMask to submit a duplicate registration transaction.
+      // hash and never ask Privy wallet to submit a duplicate registration transaction.
       if (hasRegistryTransaction(preparedRegistration)) {
         await confirmRegistryTransaction(preparedRegistration);
         return;
@@ -749,7 +749,7 @@ export default function IssuerInvestorSubscriptionReviewPage() {
         recoveryStorageError = storageError;
       }
 
-      // Confirm accepts only the unchanged MetaMask transaction hash. A 202/PENDING
+      // Confirm accepts only the unchanged Privy wallet transaction hash. A 202/PENDING
       // response is normal and moves the UI into status polling without another wallet call.
       await confirmRegistryTransaction(submittedRegistration);
     } catch (error) {
@@ -768,7 +768,7 @@ export default function IssuerInvestorSubscriptionReviewPage() {
         stopRegistryPolling();
         setRegistryMessage(verificationMessage);
         toast.error(verificationMessage);
-        // Do not delete the saved hash and do not open MetaMask again automatically.
+        // Do not delete the saved hash and do not open Privy wallet again automatically.
         // A later Check Status, reload, or sign-in retries Confirm with the same hash.
         return;
       }

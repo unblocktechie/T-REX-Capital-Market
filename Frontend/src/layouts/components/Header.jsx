@@ -1,3 +1,4 @@
+import { usePrivy } from '@privy-io/react-auth';
 import { useEffect, useRef, useState } from 'react';
 import { Building2, ChevronDown, LogOut, Menu, UserRound } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -19,6 +20,7 @@ const formatRole = (role) => {
 
 export function Header({ onboardingOnly = false }) {
   const { user } = useAuth();
+  const { authenticated: privyAuthenticated, logout: privyLogout } = usePrivy();
   const location = useLocation();
   const navigate = useNavigate();
   const toggleSidebar = useUiStore((state) => state.toggleSidebar);
@@ -38,7 +40,7 @@ export function Header({ onboardingOnly = false }) {
     user?.role === ROLES.investor && location.pathname === ROUTES.dashboard
       ? { title: 'Investor Dashboard', description: 'Your next actions, applications, and investments' }
       : user?.role === ROLES.investor && location.pathname === ROUTES.profile
-        ? { title: 'Investor Profile', description: 'Your identity, eligibility information, documents, and registered wallet' }
+        ? { title: 'Investor Profile', description: 'Your identity, eligibility information, documents, and Privy secure account' }
         : user?.role === ROLES.investor && location.pathname === ROUTES.investors
           ? { title: 'Investor Onboarding', description: 'Set up your investor profile and eligibility' }
           : null;
@@ -88,6 +90,7 @@ export function Header({ onboardingOnly = false }) {
     setIsLoggingOut(true);
     try {
       await authService.logout();
+      if (privyAuthenticated) await privyLogout();
       navigate(ROUTES.login, { replace: true });
     } finally {
       setIsLoggingOut(false);

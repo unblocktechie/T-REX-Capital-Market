@@ -78,11 +78,11 @@ export async function signInvestorTokenRedemptionAuthorization({
   preparedRedemption,
 }) {
   if (!connector?.getProvider) {
-    throw new Error('Connect your registered investor wallet before continuing.');
+    throw new Error('Open the Privy secure account linked to your investor profile before continuing.');
   }
 
-  const registeredAddress = requiredAddress(registeredWalletAddress, 'Registered investor wallet');
-  const connected = requiredAddress(connectedAddress, 'Connected wallet');
+  const registeredAddress = requiredAddress(registeredWalletAddress, 'Investor Privy secure account');
+  const connected = requiredAddress(connectedAddress, 'Privy secure account');
   const chain = chainFor(chainId);
   const { domain, types, message, primaryType } = requiredTypedData(preparedRedemption);
 
@@ -94,12 +94,12 @@ export async function signInvestorTokenRedemptionAuthorization({
   const accounts = await provider.request({ method: 'eth_accounts' });
   const activeProviderAddress = Array.isArray(accounts) ? accounts[0] : '';
   if (!isAddress(activeProviderAddress || '')) {
-    throw new Error('Reconnect your registered investor wallet before continuing.');
+    throw new Error('Restore the Privy secure account linked to your investor profile before continuing.');
   }
 
   const activeAddress = getAddress(activeProviderAddress);
   if (activeAddress !== registeredAddress) {
-    const error = new Error('Switch to the wallet registered for this investment before continuing.');
+    const error = new Error('Use the Privy secure account linked to this investment before continuing.');
     error.code = 'WALLET_MISMATCH';
     throw error;
   }
@@ -111,7 +111,7 @@ export async function signInvestorTokenRedemptionAuthorization({
 
   const providerChainId = parseChainId(await provider.request({ method: 'eth_chainId' }));
   if (providerChainId !== chain.id) {
-    const error = new Error(`Switch your wallet to ${chain.name} and try again.`);
+    const error = new Error(`Your Privy secure account needs a quick setup check. Open the account control and try again.`);
     error.code = 'WRONG_WALLET_NETWORK';
     error.requiredChainId = chain.id;
     throw error;

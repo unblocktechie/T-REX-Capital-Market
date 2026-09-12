@@ -391,20 +391,10 @@ export function useOrganization({ enabled: queryEnabled = true } = {}) {
   );
 
   const submit = useCallback(
-    async ({ walletAddress, walletChainId, walletNetwork }) => {
-      const mapped = setOrganization(
-        await organizationApi.submit({ walletAddress }),
-      );
-
-      const organizationWithWallet = {
-        ...mapped,
-        walletAddress: mapped.walletAddress || walletAddress,
-        walletChainId: mapped.walletChainId || walletChainId || null,
-        walletNetwork: mapped.walletNetwork || walletNetwork || '',
-      };
-
-      queryClient.setQueryData(organizationQueryKey, organizationWithWallet);
-      return organizationWithWallet;
+    async () => {
+      const mapped = setOrganization(await organizationApi.submit());
+      queryClient.setQueryData(organizationQueryKey, mapped);
+      return mapped;
     },
     [queryClient, setOrganization],
   );

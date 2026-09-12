@@ -238,7 +238,7 @@ export default function PortfolioPage() {
 
     if (!registeredWalletAddress) {
       setWalletBalances(Object.fromEntries(
-        items.map((token) => [token.tokenUid, walletBalanceState('unavailable', '', 'Registered wallet unavailable')]),
+        items.map((token) => [token.tokenUid, walletBalanceState('unavailable', '', 'Privy secure account unavailable')]),
       ));
     } else {
       Promise.all(items.map(async (token) => {
@@ -256,7 +256,7 @@ export default function PortfolioPage() {
           });
           return [tokenUid, walletBalanceState('ready', formatUnits(rawBalance, decimals))];
         } catch {
-          return [tokenUid, walletBalanceState('unavailable', '', 'Live wallet balance unavailable')];
+          return [tokenUid, walletBalanceState('unavailable', '', 'Current balance unavailable')];
         }
       })).then((entries) => {
         if (active) setWalletBalances(Object.fromEntries(entries));
@@ -272,7 +272,7 @@ export default function PortfolioPage() {
         const price = await getPlatformTokenPrice({ tokenAddress: token.tokenAddress, chainId: token.chainId });
         const value = String(price.currentTokenPrice || '').trim();
         if (!value || /^0(?:\.0+)?$/.test(value)) {
-          return [tokenUid, { status: 'unavailable', value: '', reason: 'Current price is not active on-chain' }];
+          return [tokenUid, { status: 'unavailable', value: '', reason: 'Current price is unavailable' }];
         }
         return [tokenUid, { status: 'ready', value, reason: '' }];
       } catch {
@@ -346,7 +346,7 @@ export default function PortfolioPage() {
         <div>
           <span className="eyebrow">Your token holdings</span>
           <h1>Portfolio</h1>
-          <p>Review live balances in your registered wallet together with current token prices and completed investment totals.</p>
+          <p>Review the units held in your Privy secure account, current prices, and completed investment totals.</p>
         </div>
         <Button
           variant="secondary"
@@ -373,7 +373,7 @@ export default function PortfolioPage() {
         <Card className="investor-portfolio-summary__card">
           <span className="investor-portfolio-summary__icon"><WalletCards size={20} /></span>
           <div>
-            <span>Estimated wallet value</span>
+            <span>Estimated current value</span>
             <strong>{loading || overview.estimatedWalletValue === null ? '—' : `${overview.estimatedWalletValue} USDT`}</strong>
             <small>{loading ? 'Checking live balances' : `Live balance × current price, ${summaryScope}`}</small>
           </div>
@@ -391,7 +391,7 @@ export default function PortfolioPage() {
           <div>
             <span>Portfolio assets</span>
             <strong>{loading ? '—' : meta.total}</strong>
-            <small>{loading ? 'Completed investment positions' : `${overview.verifiedBalances} of ${items.length} visible wallet balance${items.length === 1 ? '' : 's'} verified`}</small>
+            <small>{loading ? 'Completed investment positions' : `${overview.verifiedBalances} of ${items.length} visible balance${items.length === 1 ? '' : 's'} verified`}</small>
           </div>
         </Card>
       </section>
@@ -400,8 +400,8 @@ export default function PortfolioPage() {
         <div className="investor-portfolio-price-note" role="note">
           <Info size={17} />
           <div>
-            <strong>Wallet balance is the source of truth for what you currently hold</strong>
-            <span>Wallet balances and current prices are read live from the blockchain. Total invested and purchase counts include only completed purchases made through T-REX Capital Market. Direct wallet transfers can change your balance without changing that purchase history, so the page avoids performance estimates when the cost basis cannot be guaranteed.</span>
+            <strong>Your Privy secure account shows what you currently hold</strong>
+            <span>Your current balances and prices are checked live. Total invested and purchase counts include completed investments made through T-REX Capital Market. Transfers made outside T-REX can change your current balance without changing your purchase history, so performance estimates are shown only when the cost basis can be confirmed.</span>
           </div>
         </div>
       ) : null}
@@ -438,7 +438,7 @@ export default function PortfolioPage() {
             <Card className="investor-portfolio-list">
               <div className="investor-portfolio-list__head" aria-hidden="true">
                 <span>Asset</span>
-                <span>Wallet balance</span>
+                <span>Current balance</span>
                 <span>Estimated value</span>
                 <span>Current price</span>
                 <span>Platform investment</span>
@@ -466,7 +466,7 @@ export default function PortfolioPage() {
                     </div>
 
                     <div className="investor-portfolio-cell investor-portfolio-balance">
-                      <span className="investor-portfolio-cell__label">Wallet balance</span>
+                      <span className="investor-portfolio-cell__label">Current balance</span>
                       <strong>
                         {balanceState.status === 'loading'
                           ? 'Checking…'
@@ -474,13 +474,13 @@ export default function PortfolioPage() {
                             ? tokenAmount(balanceState.balance, symbol)
                             : 'Unavailable'}
                       </strong>
-                      <small>{balanceState.status === 'ready' ? 'Live registered-wallet balance' : balanceState.reason || 'Refresh to check balance'}</small>
+                      <small>{balanceState.status === 'ready' ? 'Live balance from your Privy secure account' : balanceState.reason || 'Refresh to check balance'}</small>
                     </div>
 
                     <div className="investor-portfolio-cell investor-portfolio-current-value">
                       <span className="investor-portfolio-cell__label">Estimated value</span>
                       <strong>{estimatedValue === null ? '—' : `${estimatedValue} USDT`}</strong>
-                      <small>{balanceState.status === 'ready' && currentPrice ? 'Wallet balance × live current price' : currentPriceState.reason || 'Available after live balance and price are verified'}</small>
+                      <small>{balanceState.status === 'ready' && currentPrice ? 'Current balance × live current price' : currentPriceState.reason || 'Available after live balance and price are verified'}</small>
                     </div>
 
                     <div className="investor-portfolio-cell investor-portfolio-token-price">

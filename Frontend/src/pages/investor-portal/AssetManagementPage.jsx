@@ -196,8 +196,8 @@ export default function AssetManagementPage() {
             {activeTab === 'invest'
               ? 'Choose how many units to buy. If USDT approval is needed, you will complete it once before investing.'
               : activeTab === 'send'
-                ? 'Enter the approved recipient wallet and amount. We check eligibility before your wallet asks you to confirm.'
-                : 'Choose how many units to redeem. The issuer prepares the USDT, then you sign the final redemption when it is ready.'}
+                ? 'Enter the approved recipient account address and amount. We check eligibility before you confirm securely with Privy.'
+                : 'Choose how many units to redeem. The issuer reviews your request and completes the final redemption after approval.'}
           </span>
         </div>
       </Card>

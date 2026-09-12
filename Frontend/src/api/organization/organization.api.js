@@ -92,15 +92,9 @@ export const organizationApi = Object.freeze({
       skipGlobalLoader: true,
     }),
 
-  submit: ({ walletAddress }) =>
+  submit: () =>
     apiClient
-      .post(
-        ORGANIZATION_ENDPOINTS.submit,
-        {
-          walletAddress,
-        },
-        { skipGlobalLoader: true },
-      )
+      .post(ORGANIZATION_ENDPOINTS.submit, {}, { skipGlobalLoader: true })
       .then(unwrap),
 
   markUserNotified: () =>

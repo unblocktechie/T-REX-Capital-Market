@@ -1041,7 +1041,7 @@ function InvestorDashboardPage() {
               <details className="investor-technical-details investor-technical-details--compact">
                 <summary>Technical details</summary>
                 <div>
-                  <span>Blockchain identity</span>
+                  <span>Technical identity reference</span>
                   <strong title={profile.onchainId || undefined}>{profile.onchainId ? `${profile.onchainId.slice(0, 8)}…${profile.onchainId.slice(-6)}` : 'Not available'}</strong>
                   <button type="button" onClick={copyIdentity}><Copy size={13} /> Copy reference</button>
                 </div>
@@ -1177,9 +1177,9 @@ function InvestorDashboardPage() {
           <div className="investor-dashboard-live__account-block">
             <span className="investor-dashboard-live__account-icon"><WalletCards size={18} /></span>
             <div>
-              <small>Primary wallet</small>
-              <strong title={walletAddress || undefined}>{displayWallet}</strong>
-              <span>{walletAddress ? (connectedMatches ? walletConnection.chain?.name || 'Connected' : 'Linked to investor profile') : 'No wallet is linked to this investor profile'}</span>
+              <small>Privy secure account</small>
+              <strong>{walletAddress ? 'Securely managed by Privy' : 'Not linked yet'}</strong>
+              <span>{walletAddress ? 'Your Privy account is linked to your T-REX profile' : 'Complete Privy secure account setup to continue'}</span>
             </div>
           </div>
           <Button className="button--full" variant="secondary" onClick={() => navigate(ROUTES.profile)}>

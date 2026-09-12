@@ -44,7 +44,7 @@ export const getInvestorClaimWalletErrorMessage = (error) => {
     code === -32002 ||
     /already pending|request of type.*already pending|wallet request.*pending/.test(text)
   ) {
-    return 'A wallet request is already open. Complete or close it in MetaMask, then try again.';
+    return 'A Privy wallet request is already open. Complete or close it, then try again.';
   }
 
   if (/insufficient funds|insufficient balance/.test(text)) {
@@ -104,12 +104,12 @@ export async function submitInvestorClaimTransaction({
   const issuerIdentityAddress = preparedClaim?.issuerIdentityAddress;
 
   if (!connector?.getProvider) throw new Error('Reconnect your investor wallet before submitting this claim.');
-  if (!isAddress(connectedAddress || '')) throw new Error('Connect a valid investor wallet before submitting this claim.');
+  if (!isAddress(connectedAddress || '')) throw new Error('Open the Privy secure account linked to your investor profile before submitting this verification.');
   if (!isAddress(investorIdentityAddress || '')) throw new Error('The investor ONCHAINID returned by claim preparation is invalid.');
   if (!isAddress(issuerIdentityAddress || '')) throw new Error('The issuer ONCHAINID returned by claim preparation is invalid.');
 
   // Parse and validate the backend-prepared transaction values before interacting
-  // with the wallet provider. If the prepare response is malformed, MetaMask should
+  // with the wallet provider. If the prepare response is malformed, the Privy wallet should
   // never be asked to create a transaction.
   const claimTopic = requiredInteger(preparedClaim?.claimTopic, 'Claim topic');
   const scheme = requiredInteger(preparedClaim?.scheme ?? preparedClaim?.claimScheme ?? 1, 'Claim scheme');
@@ -176,7 +176,7 @@ export async function submitInvestorClaimTransaction({
   });
 
   // Use the injected wallet's EIP-1193 eth_sendTransaction method directly.
-  // This keeps signing and broadcasting inside MetaMask and avoids the intermittent
+  // This keeps signing and broadcasting inside the Privy wallet and avoids the intermittent
   // custom-provider path that was surfacing an eth_sendRawTransaction "Method not found"
   // error on the first attempt for some accounts. No raw signed transaction is created
   // or sent by the application.
@@ -193,7 +193,7 @@ export async function submitInvestorClaimTransaction({
   });
 
   if (!validTransactionHash(txHash)) {
-    const error = new Error('Your wallet did not return a valid transaction ID. Please check MetaMask and try again.');
+    const error = new Error('Your wallet did not return a valid transaction ID. Please check the Privy wallet prompt and try again.');
     error.code = 'INVALID_WALLET_TRANSACTION_HASH';
     throw error;
   }

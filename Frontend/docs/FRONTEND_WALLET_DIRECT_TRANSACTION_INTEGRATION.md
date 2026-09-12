@@ -34,9 +34,9 @@ Backend-prepared `transactionRequest`, transfer create, transfer confirm, and tr
 
 ## Redemption
 
-The off-chain request/authorization/issuer decision APIs remain. Issuer USDT allowance remains a separate direct wallet approval. When ready, the investor directly signs `PlatformController.redeem(token, amount)`.
+The off-chain request/authorization/issuer decision APIs remain. Issuer USDT allowance remains a separate direct wallet approval. When ready, the issuer organization wallet directly signs `PlatformController.redeem(investor, token, amount)`.
 
-The returned redemption hash is stored in the generic observed-wallet transaction store, then canonical confirmation is called with `expectedAction: REDEMPTION`. The legacy redemption request is refreshed after canonical confirmation. No backend issuer payment confirmation call is used.
+The returned issuer redemption hash is stored in the generic observed-wallet transaction store, then canonical confirmation is called with `expectedAction: REDEMPTION`. The legacy redemption request is refreshed after canonical confirmation. No standalone issuer USDT payment transaction is used.
 
 ## Canonical transaction API
 

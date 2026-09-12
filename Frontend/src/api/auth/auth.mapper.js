@@ -97,6 +97,9 @@ export const normalizeAuthSession = (payload) => {
       company: firstDefined(source?.company, source?.organizationName, source?.organization?.name, ''),
       emailVerified: firstDefined(source?.emailVerified, claims?.emailVerified, claims?.email_verified),
       isActive: firstDefined(source?.isActive, claims?.isActive, true),
+      privyUserId: firstDefined(source?.privyUserId, claims?.privyUserId, ''),
+      privyWalletId: firstDefined(source?.privyWalletId, claims?.privyWalletId, ''),
+      privyWalletAddress: firstDefined(source?.privyWalletAddress, claims?.privyWalletAddress, ''),
     },
   };
 };

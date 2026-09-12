@@ -59,7 +59,7 @@ export function AdminOrganizationList({
         </>
       ) : (
         <div role="row" className="hidden grid-cols-[minmax(250px,1.55fr)_150px_165px_minmax(190px,1fr)_72px] items-center gap-4 border-b border-slate-200 px-4 pb-3 text-[10px] font-semibold tracking-[0.14em] text-slate-400 uppercase xl:grid">
-          {['Organization', 'Submitted', 'Status', 'Organization wallet', 'View'].map((label) => (
+          {['Organization', 'Submitted', 'Status', 'Privy secure account', 'View'].map((label) => (
             <span key={label} className={label === 'View' ? 'text-center' : ''}>{label}</span>
           ))}
         </div>
@@ -121,15 +121,15 @@ function DesktopColumnFilters({ filters, onSearchChange, onStatusChange, onWalle
       </div>
 
       <div className="min-w-0">
-        <ColumnLabel>Organization wallet</ColumnLabel>
+        <ColumnLabel>Privy secure account</ColumnLabel>
         <label className="mt-2 flex min-h-11 min-w-0 items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3.5 transition focus-within:border-blue-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-500/10">
           <WalletCards className="size-4 shrink-0 text-slate-400" />
           <input
             value={filters.walletSearch}
             onChange={(event) => onWalletSearchChange(event.target.value)}
             type="search"
-            aria-label="Filter organizations by wallet address"
-            placeholder="Filter wallet address"
+            aria-label="Filter organizations by Privy wallet address"
+            placeholder="Filter Privy wallet address"
             className="min-w-0 flex-1 border-0 bg-transparent font-mono text-xs font-medium text-slate-800 outline-none placeholder:font-sans placeholder:text-slate-400"
           />
         </label>
@@ -173,8 +173,8 @@ function MobileListFilters({ filters, onSearchChange, onStatusChange, onWalletSe
           value={filters.walletSearch}
           onChange={(event) => onWalletSearchChange(event.target.value)}
           type="search"
-          aria-label="Filter organizations by wallet address"
-          placeholder="Filter wallet address"
+          aria-label="Filter organizations by Privy wallet address"
+          placeholder="Filter Privy wallet address"
           className="min-w-0 flex-1 bg-transparent font-mono text-sm font-medium text-slate-800 outline-none placeholder:font-sans placeholder:text-slate-400"
         />
       </label>
@@ -292,13 +292,13 @@ function OrganizationRow({ organization, index, onRowClick }) {
           <AdminStatusBadge status={organization.status} compact />
         </div>
         <div className="min-w-0 sm:col-span-1">
-          <span className="mb-1 block text-[10px] font-semibold tracking-wide text-slate-400 uppercase xl:hidden">Organization wallet</span>
+          <span className="mb-1 block text-[10px] font-semibold tracking-wide text-slate-400 uppercase xl:hidden">Privy secure account</span>
           <span
             className={cn(
               'inline-flex max-w-full items-start gap-2 rounded-2xl px-3 py-2 font-mono text-xs font-semibold leading-5',
               organization.wallet?.address ? 'bg-slate-100 text-slate-700' : 'bg-amber-50 text-amber-700',
             )}
-            title={organization.wallet?.address || 'Wallet not provided'}
+            title={organization.wallet?.address ? 'Privy secure account linked' : 'Privy secure account not provided'}
           >
             <WalletCards className="mt-0.5 size-3.5 shrink-0" />
             {organization.wallet?.address ? (

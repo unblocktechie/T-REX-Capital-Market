@@ -50,7 +50,7 @@ export function IssuerRegistryRecoveryBootstrap() {
 
           // Always resume the existing operation with its stored hash. This is important for
           // registrations that previously returned a verification error before a server fix:
-          // sign-in/reload retries Confirm and never opens MetaMask or broadcasts a new tx.
+          // sign-in/reload retries Confirm and never opens Privy wallet or broadcasts a new tx.
           await issuerInvestorSubscriptionsService.confirmRegistryRegistration(
             record.interestUid,
             operationId,
@@ -64,7 +64,7 @@ export function IssuerRegistryRecoveryBootstrap() {
             issuerRegistryRecoveryStore.removeForUser(user, record.interestUid, record.txHash);
           }
           // Keep recovery for 422, 503, and network failures. A 422 must never cause an
-          // automatic replacement MetaMask transaction; a later reload/sign-in retries the
+          // automatic replacement Privy wallet transaction; a later reload/sign-in retries the
           // same hash after the verification issue is resolved.
         } finally {
           inFlightRef.current.delete(key);

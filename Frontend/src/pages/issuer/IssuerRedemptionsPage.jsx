@@ -29,8 +29,8 @@ const PAGE_SIZE = 5;
 const FILTERS = [
   { value: 'all', label: 'All redemptions', description: 'Show every redemption request' },
   { value: 'PENDING_ISSUER_APPROVAL', label: 'Needs your review', description: 'Requests waiting for your approve or reject decision' },
-  { value: 'TOKENS_LOCKED', label: 'Waiting for investor', description: 'Issuer checks are ready and the investor must sign Redeem' },
-  { value: 'PAYMENT_SUBMITTED', label: 'Investor transaction submitted', description: 'The investor redemption transaction is confirming' },
+  { value: 'TOKENS_LOCKED', label: 'Ready for issuer', description: 'Issuer checks are ready and the organization can review and confirm the redemption' },
+  { value: 'PAYMENT_SUBMITTED', label: 'Redemption submitted', description: 'The redemption is being confirmed' },
   { value: 'BURN_SUBMITTED', label: 'Finalizing redemption', description: 'Redemption is being completed' },
   { value: 'COMPLETED', label: 'Completed', description: 'Finished redemptions' },
   { value: 'MANUAL_REVIEW', label: 'Support review required', description: 'Requests that need additional support' },
@@ -161,7 +161,7 @@ export default function IssuerRedemptionsPage() {
         <div>
           <span className="issuer-redemptions-eyebrow">Investor redemption requests</span>
           <h1>Redemptions</h1>
-          <p>Review investor redemption requests, approve or reject each request, and track progress until the investor completes the final redemption.</p>
+          <p>Review investor redemption requests, approve or reject each request, then review and confirm approved redemptions securely with Privy.</p>
         </div>
         <Button variant="secondary" size="sm" icon={RefreshCw} loading={refreshing} onClick={() => load({ quiet: true })}>Refresh</Button>
       </header>

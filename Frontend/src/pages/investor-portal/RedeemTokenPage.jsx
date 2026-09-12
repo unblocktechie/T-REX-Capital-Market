@@ -35,12 +35,9 @@ import { investorPortfolioService } from '@/services/investor/investorPortfolioS
 import {
   clearObservedWalletTransaction,
   listObservedWalletTransactions,
-  saveObservedWalletTransaction,
 } from '@/services/investor/observedWalletTransactionStore';
 import {
   getPlatformRedemptionFunding,
-  isPlatformWalletRejection,
-  submitPlatformRedemption,
 } from '@/services/blockchain/trexPlatformController.service';
 import {
   isInvestorRedemptionWalletRejection,
@@ -68,8 +65,8 @@ const REDEMPTION_HISTORY_FILTERS = Object.freeze([
   { value: 'all', label: 'All statuses', description: 'Show every redemption' },
   { value: 'PENDING_INVESTOR_AUTHORIZATION', label: 'Action Required', description: 'Please confirm your redemption request to continue.' },
   { value: 'PENDING_ISSUER_APPROVAL', label: 'Waiting for issuer', description: 'The issuer is reviewing your redemption request.' },
-  { value: 'TOKENS_LOCKED', label: 'Ready to redeem', description: 'The issuer has approved the request. You can sign Redeem when USDT is ready.' },
-  { value: 'PAYMENT_SUBMITTED', label: 'Redemption submitted', description: 'Your Redeem transaction is confirming. No additional wallet action is needed.' },
+  { value: 'TOKENS_LOCKED', label: 'Issuer processing', description: 'The issuer approved the request and is preparing the final redemption.' },
+  { value: 'PAYMENT_SUBMITTED', label: 'Redemption submitted', description: 'The issuer submitted the redemption and it is being confirmed.' },
   { value: 'BURN_SUBMITTED', label: 'Finalizing Redemption', description: 'Your redemption is being finalized. No action is required from you.' },
   { value: 'COMPLETED', label: 'Completed', description: 'Your redemption has been completed successfully.' },
   { value: 'ISSUER_REJECTED', label: 'Rejected', description: 'Your redemption request was not approved.' },
@@ -199,10 +196,13 @@ const investorRedemptionStatusMeta = (status) => {
       return { label: 'Issuer approved', tooltip: 'The issuer approved your request. We are preparing the redemption for you.' };
     case 'TOKEN_LOCK_SUBMITTED':
       return { label: 'Processing', tooltip: 'Your redemption is being processed. No action is required from you.' };
+    case 'READY_TO_REDEEM':
+    case 'APPROVED':
+    case 'AWAITING_INVESTOR_REDEMPTION':
     case 'TOKENS_LOCKED':
-      return { label: 'Ready to redeem', tooltip: 'Your request is approved. When payment is ready, you will sign the Redeem transaction.' };
+      return { label: 'Issuer processing', tooltip: 'Your request is approved. The issuer will complete the final redemption.' };
     case 'PAYMENT_SUBMITTED':
-      return { label: 'Redemption submitted', tooltip: 'Your Redeem transaction was submitted and is being confirmed. No additional wallet action is needed.' };
+      return { label: 'Redemption submitted', tooltip: 'The issuer submitted the redemption and it is being confirmed. No action is required from you.' };
     case 'PAYMENT_CONFIRMED':
       return { label: 'Finalizing Redemption', tooltip: 'Your payment has been confirmed and your redemption is being finalized.' };
     case 'BURN_SUBMITTED':
@@ -496,8 +496,8 @@ export default function RedeemTokenPage({
   const [busyAction, setBusyAction] = useState('');
   const [flowError, setFlowError] = useState('');
   const [redemptionFunding, setRedemptionFunding] = useState(null);
-  const [redemptionFundingLoading, setRedemptionFundingLoading] = useState(false);
-  const [redemptionFundingError, setRedemptionFundingError] = useState('');
+  const [, setRedemptionFundingLoading] = useState(false);
+  const [, setRedemptionFundingError] = useState('');
   const [submittedRedemptionHash, setSubmittedRedemptionHash] = useState('');
   const [redemptionHistory, setRedemptionHistory] = useState([]);
   const [redemptionHistoryMeta, setRedemptionHistoryMeta] = useState({});
@@ -514,7 +514,6 @@ export default function RedeemTokenPage({
   const recoveryLoadedRef = useRef('');
   const completedPortfolioRefreshRef = useRef('');
   const operationLockRef = useRef(false);
-  const redemptionTxRecoveryRef = useRef('');
 
   useEffect(() => {
     if (!openHistoryActionUid) return undefined;
@@ -613,13 +612,6 @@ export default function RedeemTokenPage({
       && (
         !activeRedemption
         || awaitingAuthorization
-        || (
-          directRedeemReady
-          && !submittedRedemptionHash
-          && !redemptionFundingLoading
-          && redemptionFunding?.issuerAllowanceSufficient
-          && redemptionFunding?.issuerBalanceSufficient
-        )
       ),
   );
 
@@ -814,7 +806,7 @@ export default function RedeemTokenPage({
           clearObservedWalletTransaction(observed);
           if (status === 'FAILED') {
             setSubmittedRedemptionHash('');
-            setFlowError('The blockchain redemption did not complete. You can review the request and submit a new Redeem transaction when it is ready.');
+            setFlowError('The redemption did not complete. Review the request and submit it again when it is ready.');
             await refreshRedemption(redemptionUid).catch(() => null);
           } else {
             await refreshRedemption(redemptionUid).catch(() => null);
@@ -872,7 +864,7 @@ export default function RedeemTokenPage({
         if (status === 'FAILED') {
           clearObservedWalletTransaction({ chainId, txHash, expectedAction: 'REDEMPTION' });
           setSubmittedRedemptionHash('');
-          setFlowError('The blockchain redemption reverted. Review the request and submit a new Redeem transaction when ready.');
+          setFlowError('The redemption could not be completed. Review the request and submit it again when ready.');
           await refreshRedemption(redemptionUid).catch(() => null);
           if (!cancelled) setRedemptionHistoryRefreshVersion((value) => value + 1);
           return;
@@ -882,7 +874,7 @@ export default function RedeemTokenPage({
         if (!cancelled && statusCode >= 400 && statusCode < 500) {
           clearObservedWalletTransaction({ chainId, txHash, expectedAction: 'REDEMPTION' });
           setSubmittedRedemptionHash('');
-          setFlowError('This transaction could not be verified for the selected redemption. Review the request and try Redeem again when ready.');
+          setFlowError('This confirmation could not be matched to the selected redemption. Review the request and try again when ready.');
           return;
         }
       } finally {
@@ -1072,108 +1064,11 @@ export default function RedeemTokenPage({
     return applied;
   }, [applyRedemption, context.chainId, context.investorWalletAddress, normalizedAmount, walletGuard.targetChainId, walletGuard.wallet.address, walletGuard.wallet.connector]);
 
-  const executeApprovedRedemption = useCallback(async () => {
-    if (!directRedeemReady || !redemptionUid) return null;
-    if (submittedRedemptionHash) {
-      toast.info('Redemption already submitted', { description: 'No additional wallet action is needed while the blockchain transaction is synchronized.' });
-      return null;
-    }
-
-    const tokenAddress = clean(redemption?.tokenAddress) || context.tokenAddress;
-    const tokenAmount = canonicalDecimal(redemption?.tokenAmount || normalizedAmount);
-    const tokenAmountRaw = clean(redemption?.tokenAmountRaw);
-    const chainId = Number(redemption?.chainId || context.chainId || walletGuard.targetChainId);
-
-    const result = await submitPlatformRedemption({
-      connector: walletGuard.wallet.connector,
-      connectedAddress: walletGuard.wallet.address,
-      investorWalletAddress: clean(redemption?.investorWalletAddress) || context.investorWalletAddress,
-      chainId,
-      tokenAddress,
-      tokenAmountRaw,
-      tokenAmount,
-      onStep: ({ stage }) => {
-        if (stage === 'redeem-signature') {
-          toast.info('Sign Redeem transaction', { description: 'You are signing the redemption from your investor wallet. The issuer does not sign this transaction.' });
-        }
-      },
-    });
-
-    const txHash = clean(result?.txHash);
-    if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) throw new Error('The redemption transaction ID was not returned. Check your wallet activity before trying again.');
-
-    saveObservedWalletTransaction({
-      chainId,
-      txHash,
-      tokenUid,
-      expectedAction: 'REDEMPTION',
-      interestUid,
-      redemptionUid,
-    });
-    setSubmittedRedemptionHash(txHash);
-    // Keep only the off-chain request recovery data in the legacy redemption
-    // store. Wallet transaction recovery now belongs to the canonical observed
-    // transaction store above.
-    persistRecovery({ redemptionUid, tokenUid, tokenAmount, txHash: '' });
-    toast.success('Redemption submitted', {
-      description: 'Your wallet transaction was sent. Do not submit it again while the platform synchronizes the confirmed result.',
-    });
-
-    try {
-      const observed = await investmentApi.confirmObservedTransaction({
-        chainId,
-        txHash,
-        tokenUid,
-        expectedAction: 'REDEMPTION',
-      });
-      const status = normalizeStatus(observed?.status);
-      if (status === 'CONFIRMED') {
-        clearObservedWalletTransaction({ chainId, txHash, expectedAction: 'REDEMPTION' });
-        await refreshRedemption(redemptionUid).catch(() => null);
-        markRedemptionCompletedFromChain(txHash);
-        setRedemptionHistoryRefreshVersion((value) => value + 1);
-        toast.success('Redemption confirmed', { description: 'The redemption is complete and in your history. You can start a new redemption request now.' });
-      } else if (status === 'FAILED') {
-        clearObservedWalletTransaction({ chainId, txHash, expectedAction: 'REDEMPTION' });
-        setSubmittedRedemptionHash('');
-        setFlowError('The blockchain redemption reverted. No automatic retry was sent.');
-        toast.error('Redemption failed', { description: 'Review the request and try again only when you are ready.' });
-      }
-    } catch (syncError) {
-      const statusCode = Number(syncError?.response?.status);
-      if (statusCode >= 400 && statusCode < 500) {
-        clearObservedWalletTransaction({ chainId, txHash, expectedAction: 'REDEMPTION' });
-        setSubmittedRedemptionHash('');
-        setFlowError(getErrorMessage(syncError, 'The submitted transaction could not be matched to this redemption.'));
-        toast.error('Transaction could not be matched', { description: getErrorMessage(syncError, 'The submitted transaction could not be matched to this redemption.') });
-      } else {
-        toast.info('Redemption sent — history is still syncing', { description: 'The backend/indexer will recover this transaction automatically. No new wallet action is required.' });
-      }
-    }
-    return result;
-  }, [
-    context.chainId,
-    context.investorWalletAddress,
-    context.tokenAddress,
-    directRedeemReady,
-    interestUid,
-    markRedemptionCompletedFromChain,
-    normalizedAmount,
-    persistRecovery,
-    redemption,
-    redemptionUid,
-    refreshRedemption,
-    submittedRedemptionHash,
-    tokenUid,
-    walletGuard.targetChainId,
-    walletGuard.wallet.address,
-    walletGuard.wallet.connector,
-  ]);
 
   const handleRedeem = async () => {
     if (operationLockRef.current) return;
     if (!walletGuard.ready) {
-      toast.error('Connect the registered investor wallet on the required network to continue.');
+      toast.error('Your Privy secure account needs attention. Open it from the header and follow the prompt to continue.');
       return;
     }
     if (!normalizedAmount || amountError || amountRaw === null || amountRaw <= 0n) {
@@ -1184,37 +1079,15 @@ export default function RedeemTokenPage({
       toast.info('Checking your token balance. Please wait a moment.');
       return;
     }
-    if (activeRedemption && !awaitingAuthorization && !directRedeemReady) return;
-    if (directRedeemReady && submittedRedemptionHash) {
-      toast.info('Your redemption transaction is already submitted and is being synchronized.');
-      return;
-    }
+    if (activeRedemption && !awaitingAuthorization) return;
 
     operationLockRef.current = true;
-    setBusyAction(directRedeemReady ? 'REDEEM' : awaitingAuthorization ? 'AUTHORIZE' : 'PREPARE');
+    setBusyAction(awaitingAuthorization ? 'AUTHORIZE' : 'PREPARE');
     setFlowError('');
     setServerAmountError('');
     let preparedRequest = awaitingAuthorization ? redemption : null;
 
     try {
-      if (directRedeemReady) {
-        if (redemptionFundingLoading) {
-          toast.info('Checking redemption funding. Please wait a moment.');
-          return;
-        }
-        if (redemptionFundingError) throw new Error(redemptionFundingError);
-        if (!redemptionFunding?.issuerAllowanceSufficient || !redemptionFunding?.issuerBalanceSufficient) {
-          toast.info('Redemption is not ready yet', {
-            description: redemptionFunding?.issuerAllowanceSufficient
-              ? 'The issuer is preparing the required funds. No action is required from you yet.'
-              : 'The issuer is preparing this redemption. No action is required from you yet.',
-          });
-          return;
-        }
-        await executeApprovedRedemption();
-        return;
-      }
-
       const prepared = preparedRequest || await prepareRedemption();
       preparedRequest = prepared;
       if (normalizeStatus(prepared?.status) !== 'PENDING_INVESTOR_AUTHORIZATION') {
@@ -1235,8 +1108,8 @@ export default function RedeemTokenPage({
         });
       }
     } catch (redeemError) {
-      if (isInvestorRedemptionWalletRejection(redeemError) || isPlatformWalletRejection(redeemError)) {
-        toast.info('Wallet confirmation was cancelled. Your existing redemption request remains available when you are ready.');
+      if (isInvestorRedemptionWalletRejection(redeemError)) {
+        toast.info('Secure confirmation was cancelled. Your redemption request remains available when you are ready.');
         return;
       }
 
@@ -1371,7 +1244,7 @@ export default function RedeemTokenPage({
     );
   }
 
-  const currentStatusLabel = redemptionStatus ? friendlyStatus(redemptionStatus) : 'Ready to redeem';
+  const currentStatusLabel = redemptionStatus ? friendlyStatus(redemptionStatus) : 'Ready to request';
   const serverFlowError = redemptionServerError(redemption);
   const currentConfirmationProgress = confirmationProgressOf(redemption, `${flowError} ${serverFlowError}`);
   const visibleFlowError = redemptionStatus === 'ISSUER_REJECTED'
@@ -1381,13 +1254,7 @@ export default function RedeemTokenPage({
       )) || '';
   const inputLocked = activeRedemption;
   const buttonLabel = directRedeemReady
-    ? submittedRedemptionHash
-      ? 'Redemption submitted'
-      : redemptionFundingLoading
-        ? 'Checking payment readiness'
-        : redemptionFunding?.issuerAllowanceSufficient && redemptionFunding?.issuerBalanceSufficient
-          ? 'Redeem'
-          : 'Waiting for issuer'
+    ? 'Waiting for issuer'
     : awaitingAuthorization
       ? 'Confirm request'
       : activeRedemption
@@ -1422,7 +1289,7 @@ export default function RedeemTokenPage({
         <InvestorTokenActionHeader
           eyebrow="Token action"
           title="Redeem your investment"
-          description="Choose how many units you want to redeem. The issuer reviews the request and prepares payment; you only sign the final redemption when it is ready."
+          description="Choose how many units you want to redeem. The issuer reviews your request and completes the final redemption after approval."
         />
       ) : null}
 
@@ -1431,8 +1298,8 @@ export default function RedeemTokenPage({
           <InvestorTokenIdentityCard token={token} readyLabel="Approved investor" />
 
           <Card className="investor-token-action-card">
-            <div className="investor-token-action-card__heading"><div><span>From</span><h2>Your registered investment wallet</h2></div><WalletCards size={19} /></div>
-            <LockedAddressField label="Registered investment wallet" value={preparedInvestorWallet} />
+            <div className="investor-token-action-card__heading"><div><span>From</span><h2>Your Privy secure account</h2></div><WalletCards size={19} /></div>
+            <LockedAddressField label="Privy secure account" value={preparedInvestorWallet} />
           </Card>
 
           <Card className="investor-token-action-card">
@@ -1502,7 +1369,7 @@ export default function RedeemTokenPage({
             <div className="investor-token-order-row"><span>{activeRedemption ? 'Price used' : 'Current price per unit'}</span><strong>{tokenPriceExact ? `$${formatExactTokenAmount(tokenPriceExact)} ${token.currency || ''}` : '—'}</strong></div>
             <div className="investor-token-order-row"><span>Units to redeem</span><strong>{normalizedAmount ? `${formatExactTokenAmount(normalizedAmount)} ${token.symbol}` : '—'}</strong></div>
             <div className="investor-token-order-row investor-token-order-row--primary"><span>Estimated USDT you receive</span><strong>{estimatedValue ? `$${estimatedValue} ${token.currency || ''}` : '—'}</strong></div>
-            <details className="investor-technical-details investor-token-summary-technical"><summary>Technical details</summary><div><span>Blockchain network</span><strong>{walletGuard.targetNetworkLabel}</strong></div></details>
+            <details className="investor-technical-details investor-token-summary-technical"><summary>Technical details</summary><div><span>Network</span><strong>{walletGuard.targetNetworkLabel}</strong></div></details>
             <div className="investor-token-order-row">
               <span>Your current holding</span>
               <strong>
@@ -1525,16 +1392,14 @@ export default function RedeemTokenPage({
             <div className="investor-token-action-note" role="status">
               <Info size={17} />
               <p>{directRedeemReady
-                ? submittedRedemptionHash
-                  ? 'Your redemption has been submitted. Nothing else is needed from you while it is being confirmed.'
-                  : redemptionFunding?.issuerAllowanceSufficient && redemptionFunding?.issuerBalanceSufficient
-                    ? 'Your redemption is ready. Choose Redeem and confirm it in your registered wallet. Your units are redeemed and the USDT is sent to that same wallet.'
-                    : redemptionFunding?.issuerAllowanceSufficient
-                      ? 'The issuer is preparing the required funds. Nothing is required from you right now.'
-                      : 'The issuer is preparing this redemption. Nothing is required from you right now.'
-                : 'The issuer is reviewing your request. Nothing is required from you right now. When payment is ready, the Redeem button will become available.'}</p>
+                ? 'Your request is approved. The issuer is preparing the final redemption. Nothing else is required from you.'
+                : activeRedemption && !awaitingAuthorization
+                  ? 'Your redemption is in progress. The issuer will complete it; no additional confirmation is required from you.'
+                  : 'Submit your redemption request for issuer review. After approval, the issuer completes the final redemption.'}</p>
             </div>
-            <RegisteredInvestorWalletGate guard={walletGuard} actionLabel={directRedeemReady ? 'complete this redemption' : awaitingAuthorization ? 'confirm this request' : 'request a redemption'} />
+            {!activeRedemption || awaitingAuthorization ? (
+              <RegisteredInvestorWalletGate guard={walletGuard} actionLabel={awaitingAuthorization ? 'confirm this request' : 'request a redemption'} />
+            ) : null}
             <Button
               className="investor-token-order-card__cta"
               icon={RotateCcw}
@@ -1545,26 +1410,16 @@ export default function RedeemTokenPage({
               {buttonLabel}
             </Button>
             <small className="investor-token-order-card__footnote">
-              {!walletGuard.ready
-                ? 'Connect your registered investment wallet to continue.'
-                : tokenWalletBalanceLoading
-                  ? 'Checking your available holding before redemption.'
-                  : amountError
-                    ? amountError
-                    : directRedeemReady
-                      ? submittedRedemptionHash
-                        ? 'This redemption is already submitted and updates automatically.'
-                        : redemptionFundingLoading
-                          ? 'Checking whether the issuer payment is ready.'
-                          : redemptionFundingError
-                            ? redemptionFundingError
-                            : redemptionFunding?.issuerAllowanceSufficient && redemptionFunding?.issuerBalanceSufficient
-                              ? 'Payment is ready. Choose Redeem and confirm the final redemption from your registered investor wallet.'
-                              : redemptionFunding?.issuerAllowanceSufficient
-                              ? 'Waiting for the issuer to make the required funds available.'
-                              : 'Waiting for the issuer to finish preparing this redemption. Redeem will become available automatically.'
-                      : activeRedemption && !awaitingAuthorization
-                        ? 'This redemption is in progress. Nothing else is required from you right now.'
+              {activeRedemption && !awaitingAuthorization
+                ? directRedeemReady
+                  ? 'Waiting for the issuer to complete the final redemption.'
+                  : 'This redemption is in progress and updates automatically. Nothing else is required from you.'
+                : !walletGuard.ready
+                  ? 'Open your Privy secure account and follow the prompt to continue.'
+                  : tokenWalletBalanceLoading
+                    ? 'Checking your available holding before redemption.'
+                    : amountError
+                      ? amountError
                       : awaitingAuthorization
                         ? 'Confirm your existing request. We will not create a duplicate request.'
                         : 'Enter an amount to request a redemption. We will check it again before submitting.'}
@@ -1603,7 +1458,7 @@ export default function RedeemTokenPage({
               value={redemptionHistorySearch}
               onChange={(event) => setRedemptionHistorySearch(event.target.value)}
               maxLength={100}
-              placeholder="Search redemption ID, amount or transaction ID"
+              placeholder="Search redemption ID, amount or confirmation ID"
             />
           </label>
           <div className="investor-token-purchase-history__filter">
@@ -1650,7 +1505,7 @@ export default function RedeemTokenPage({
               <span role="columnheader">Redemption Date</span>
               <span role="columnheader">Redemption Amount</span>
               <span role="columnheader">Redemption Status</span>
-              <span role="columnheader">Redemption Transaction ID</span>
+              <span role="columnheader">Redemption confirmation ID</span>
               <span role="columnheader">Redemption ID</span>
               <span role="columnheader" className="investor-token-redemption-history__action-heading">Action</span>
             </div>
@@ -1695,15 +1550,15 @@ export default function RedeemTokenPage({
                       <InvestorRedemptionProgress progress={rowConfirmationProgress} compact />
                     </span>
                   </span>
-                  <span className="investor-token-purchase-history__cell" data-label="Redemption Transaction ID" role="cell">
+                  <span className="investor-token-purchase-history__cell" data-label="Redemption confirmation ID" role="cell">
                     {rowPaymentHashUrl ? (
                       <a
                         href={rowPaymentHashUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="investor-token-purchase-history__hash"
-                        title={`View redemption transaction on ${rowExplorerName}`}
-                        aria-label={`View redemption transaction ${rowPaymentHash} on ${rowExplorerName}`}
+                        title={`View redemption confirmation details on ${rowExplorerName}`}
+                        aria-label={`View redemption confirmation details ${rowPaymentHash} on ${rowExplorerName}`}
                       >
                         {shortHash(rowPaymentHash)} <ExternalLink size={13} aria-hidden="true" />
                       </a>

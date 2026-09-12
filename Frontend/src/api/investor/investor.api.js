@@ -59,13 +59,9 @@ export const investorApi = Object.freeze({
       skipGlobalLoader: true,
     }),
 
-  submit: ({ walletAddress }) =>
+  submit: () =>
     apiClient
-      .post(
-        INVESTOR_ENDPOINTS.submit,
-        { walletAddress },
-        { skipGlobalLoader: true },
-      )
+      .post(INVESTOR_ENDPOINTS.submit, {}, { skipGlobalLoader: true })
       .then(unwrap),
 
   getClaims: (interestId) =>

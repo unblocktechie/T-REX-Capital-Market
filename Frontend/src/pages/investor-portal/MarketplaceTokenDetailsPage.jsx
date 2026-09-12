@@ -412,7 +412,7 @@ export default function MarketplaceTokenDetailsPage() {
             <div className="marketplace-registry-grid">
               <div><span>Token standard</span><strong>{token.standard || '—'}</strong></div>
               <div><span>Decimal precision</span><strong>{displayNumber(token.decimals)}</strong></div>
-              {token.onchainId ? <div><span>Blockchain identity</span><strong>{token.onchainId}</strong><button type="button" aria-label="Copy blockchain identity" onClick={() => copyValue(token.onchainId, 'Blockchain identity')}><Copy size={14} /></button></div> : null}
+              {token.onchainId ? <div><span>Technical identity reference</span><strong>{token.onchainId}</strong><button type="button" aria-label="Copy technical identity reference" onClick={() => copyValue(token.onchainId, 'Technical identity reference')}><Copy size={14} /></button></div> : null}
               {token.registryAddress ? <div><span>Approved investor registry</span><strong>{token.registryAddress}</strong><button type="button" aria-label="Copy registry address" onClick={() => copyValue(token.registryAddress, 'Approved investor registry address')}><Copy size={14} /></button></div> : null}
             </div>
           </details>
@@ -469,7 +469,7 @@ export default function MarketplaceTokenDetailsPage() {
             }}
             actionLoading={actionLoading}
           />
-          <Card className="marketplace-help-card"><span className="marketplace-help-card__icon"><HelpCircle size={18} /></span><div><strong>Need to update your information?</strong><p>Open your profile to review your identity, eligibility information, registered wallet, and documents.</p><button type="button" onClick={() => navigate(`${ROUTES.profile}?token=${encodeURIComponent(token.id)}`)}><Mail size={14} /> View my profile</button></div></Card>
+          <Card className="marketplace-help-card"><span className="marketplace-help-card__icon"><HelpCircle size={18} /></span><div><strong>Need to update your information?</strong><p>Open your profile to review your identity, eligibility information, Privy secure account, and documents.</p><button type="button" onClick={() => navigate(`${ROUTES.profile}?token=${encodeURIComponent(token.id)}`)}><Mail size={14} /> View my profile</button></div></Card>
           <Card className="marketplace-network-card marketplace-network-card--friendly"><span><Building2 size={16} /> How this investment is protected</span>{token.currentInvestors != null ? <p><UsersRound size={14} /> {number.format(token.currentInvestors)} investors currently registered</p> : null}<p><Banknote size={14} /> Purchases are priced in {token.currency || 'USDT'}</p><p><WalletCards size={14} /> Investor approval is checked before transfers</p></Card>
         </aside>
       </div>

@@ -76,7 +76,7 @@ export default function DeploymentSuccessPage() {
     if (token.isPending) return undefined;
     if (!tokenContractAddress) {
       setChainReadiness('unavailable');
-      setChainIssue({ step: 'configuration', message: 'The token contract address is unavailable for the final on-chain check.' });
+      setChainIssue({ step: 'configuration', message: 'The asset reference is unavailable for the final status check.' });
       return undefined;
     }
 
@@ -117,7 +117,7 @@ export default function DeploymentSuccessPage() {
         setChainReadiness('unavailable');
         setChainIssue({
           step: 'configuration',
-          message: error?.message || 'The final on-chain state could not be verified.',
+          message: error?.message || 'The final asset status could not be verified.',
         });
       });
 
@@ -140,7 +140,7 @@ export default function DeploymentSuccessPage() {
       status: 'error',
       activeStage: 3,
       transactionHash,
-      error: chainIssue?.message || 'The final on-chain state needs attention.',
+      error: chainIssue?.message || 'The final asset status needs attention.',
       canRetry: true,
       retryMode,
       pendingSync: {

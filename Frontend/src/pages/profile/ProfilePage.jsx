@@ -279,7 +279,7 @@ function InvestorProfilePage() {
         <div>
           <span className="eyebrow">Investor identity</span>
           <h1>Your investor profile</h1>
-          <p>Review the information issuers use to confirm your identity and investment eligibility. You can also check your registered wallet and documents here.</p>
+          <p>Review the information issuers use to confirm your identity and investment eligibility. You can also check your Privy secure account and documents here.</p>
         </div>
         <span className="investor-profile-status"><CheckCircle2 size={16} /> Profile ready</span>
       </header>
@@ -306,12 +306,8 @@ function InvestorProfilePage() {
             <strong>{profile.profileId || 'Created'}</strong>
           </div>
           <div>
-            <span><WalletCards size={17} /> Registered investment wallet</span>
-            {isAddress(walletAddress, { strict: false }) ? (
-              <CompactAddress value={walletAddress} label="Registered investment wallet" leading={5} trailing={5} />
-            ) : (
-              <strong>{walletAddress}</strong>
-            )}
+            <span><WalletCards size={17} /> Privy secure account</span>
+            <strong>Securely managed by Privy</strong>
           </div>
           <div>
             <span><FileCheck2 size={17} /> Documents provided</span>
@@ -322,16 +318,22 @@ function InvestorProfilePage() {
             <strong>{submittedLabel}</strong>
           </div>
           <details className="investor-technical-details investor-profile-technical-details">
-            <summary>Technical wallet details</summary>
+            <summary>View account details</summary>
             <div className="investor-profile-technical-grid">
-              <span>Blockchain identity</span>
+              <span>Privy wallet address</span>
+              {isAddress(walletAddress, { strict: false }) ? (
+                <CompactAddress value={walletAddress} label="Privy wallet address" leading={5} trailing={5} />
+              ) : (
+                <strong>{walletAddress || 'Not available'}</strong>
+              )}
+              <span>Technical identity reference</span>
               {profile.onchainId && isAddress(profile.onchainId, { strict: false }) ? (
-                <CompactAddress value={profile.onchainId} label="Blockchain identity address" leading={5} trailing={5} />
+                <CompactAddress value={profile.onchainId} label="Technical identity reference" leading={5} trailing={5} />
               ) : (
                 <strong>{profile.onchainId || 'Not available'}</strong>
               )}
-              <span>Connected network</span><strong>{walletNetwork}</strong>
-              <span>Wallet balance</span><strong>{walletBalance}</strong>
+              <span>Network</span><strong>{walletNetwork}</strong>
+              <span>Available balance</span><strong>{walletBalance}</strong>
             </div>
           </details>
         </div>

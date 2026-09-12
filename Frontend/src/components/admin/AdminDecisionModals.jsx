@@ -49,7 +49,7 @@ export function ApproveOrganizationModal({ open, onClose, organization, onConfir
         checked={confirmed}
         onChange={setConfirmed}
         tone="emerald"
-        label="I confirm that the organization details, beneficial owners, uploaded documents, and organization wallet have been reviewed and this application can be approved."
+        label="I confirm that the organization details, beneficial owners, uploaded documents, and Privy secure account have been reviewed and this application can be approved."
       />
     </Modal>
   );
@@ -60,7 +60,7 @@ const rejectionReasons = [
   'Ownership information incomplete',
   'AML or sanctions concern',
   'Jurisdiction does not meet policy',
-  'Wallet ownership could not be verified',
+  'Secure account ownership could not be verified',
   'Other compliance concern',
 ];
 

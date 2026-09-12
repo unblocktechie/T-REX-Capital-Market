@@ -50,14 +50,14 @@ export function DeploymentConfirmationModal({ open, onClose, onConfirm, data, wa
             disabled={!acknowledged}
             loading={loading}
           >
-            Continue to Wallet
+            Confirm securely with Privy
           </Button>
         </>
       }
     >
       <div className="issuance-modal-stack">
         <InfoCallout title="You are creating one asset" tone="warning" icon={AlertTriangle}>
-          Your wallet will ask you to approve {walletActionCount} separate setup actions, one at a time. These do not create multiple assets. Each approved action may have its own network fee.
+          Privy will ask you to confirm {walletActionCount} setup actions, one at a time. These actions create one asset. Review any fee shown before you confirm each action.
         </InfoCallout>
 
         <div className="issuance-wallet-transactions" aria-label="Actions you will approve">
@@ -149,16 +149,16 @@ export function DeploymentConfirmationModal({ open, onClose, onConfirm, data, wa
             onChange={(event) => setAcknowledged(event.target.checked)}
           />
           <span>
-            <strong>I have reviewed these settings and confirm this is the approved organization account.</strong>
+            <strong>I have reviewed these settings and confirm this is the approved organization secure account.</strong>
             <small>
-              My wallet will ask me to approve {walletActionCount} setup actions. I can review any network fee before confirming each action.
+              Privy will ask me to confirm {walletActionCount} setup actions. I can review any fee before I confirm each action.
             </small>
           </span>
         </label>
 
         <div className="issuance-confirmation-security-note">
           <ShieldCheck size={16} aria-hidden="true" />
-          <span>Each step is recorded only after the blockchain confirms it successfully.</span>
+          <span>Each step is recorded only after it is securely confirmed.</span>
         </div>
       </div>
     </Modal>

@@ -7,8 +7,8 @@ export const TOKEN_ISSUANCE_STEPS = Object.freeze([
     shortLabel: 'Asset Details',
     label: 'Asset Details',
     description: 'Add the basic information investors will see.',
-    guidance: 'Enter the asset name, symbol, price, payment wallet, and description. We save this information before you move on.',
-    impact: 'These details identify your asset and are used when the token is created on the blockchain.',
+    guidance: 'Enter the asset name, symbol, price, payment account, and description. We save this information before you move on.',
+    impact: 'These details identify your asset and are used when the investment offering is created.',
     icon: FileCheck2,
   },
   {
@@ -48,7 +48,7 @@ export const TOKEN_ISSUANCE_STEPS = Object.freeze([
     label: 'Review & Create',
     description: 'Check every choice before creating the asset.',
     guidance: 'Read the plain-language summary and fix anything that does not match your intended offering. Technical details remain available when you need them.',
-    impact: 'When you create the asset, your approved organization account will confirm the required setup actions and the final settings will be recorded on the blockchain.',
+    impact: 'When you create the asset, your approved organization account will confirm the required setup actions and the final settings will be securely recorded.',
     icon: BadgeCheck,
   },
 ]);
@@ -102,10 +102,10 @@ export const DEFAULT_CLAIM_TOPICS = Object.freeze([
 export const AGENT_ROLES = Object.freeze([
   {
     key: 'tokenAgent',
-    name: 'Token Operations Wallet',
-    description: 'Authorized wallet for issuing tokens and approved emergency controls. Technical ERC-3643 role: Token Agent.',
+    name: 'Asset Operations Account',
+    description: 'Authorized account for issuing asset units and approved emergency controls. Technical role details are available when needed.',
     required: true,
-    permissions: ['Issue tokens', 'Remove tokens', 'Pause transfers', 'Resume transfers', 'Freeze wallet', 'Unfreeze wallet'],
+    permissions: ['Issue tokens', 'Remove tokens', 'Pause transfers', 'Resume transfers', 'Freeze account', 'Unfreeze account'],
   },
   {
     key: 'identityRegistryAgent',
@@ -130,10 +130,10 @@ export const AGENT_ROLES = Object.freeze([
   },
   {
     key: 'recoveryAgent',
-    name: 'Wallet Recovery Manager',
-    description: 'Supports approved wallet recovery and forced-transfer operations.',
+    name: 'Account Recovery Manager',
+    description: 'Supports approved account recovery and exceptional transfer operations.',
     required: false,
-    permissions: ['Recover wallet', 'Forced transfer', 'Freeze lost wallet'],
+    permissions: ['Recover account', 'Forced transfer', 'Freeze lost account'],
   },
 ]);
 
@@ -182,7 +182,7 @@ export const COUNTRY_OPTIONS = Object.freeze([
 ]);
 
 export const DEPLOYMENT_STAGES = Object.freeze([
-  'Checking your organization wallet and Sepolia network',
+  'Checking your Privy secure account',
   'Preparing investor verification and transfer rules',
   'Preparing secure token creation',
   'Confirming token creation and transfer access',

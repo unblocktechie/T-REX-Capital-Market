@@ -6,15 +6,38 @@ import { tokenService } from '@/services/token.service';
 import { useAuthStore } from '@/store/auth.store';
 import { useUiStore } from '@/store/ui.store';
 import { queryClient } from '@/lib/queryClient';
+import { getRetryDelayMs, isRateLimitError, wait } from '@/utils/retry';
 
 let interceptorIds = null;
 let authNotFoundRedirectInProgress = false;
 
+const RATE_LIMIT_MAX_RETRIES = 3;
+
+const retryRateLimitedRequest = async (error) => {
+  const config = error?.config;
+  if (!config || !isRateLimitError(error) || config.signal?.aborted) return null;
+
+  const retryCount = Number(config.__rateLimitRetryCount || 0);
+  const maxRetries = Number(config.rateLimitMaxRetries ?? RATE_LIMIT_MAX_RETRIES);
+  if (retryCount >= maxRetries) {
+    error.__retryExhausted = retryCount > 0;
+    error.__retryAttempts = retryCount + 1;
+    return null;
+  }
+
+  const delayMs = getRetryDelayMs(error, retryCount + 1, {
+    baseDelayMs: 800,
+    maxDelayMs: 10_000,
+  });
+  config.__rateLimitRetryCount = retryCount + 1;
+  await wait(delayMs, config.signal);
+  return apiClient.request(config);
+};
+
 const PUBLIC_AUTH_ENDPOINTS = [
   '/auth/login',
   '/auth/signup',
-  '/auth/resend-verification',
-  '/auth/verify-email',
+  '/auth/privy/complete-signup',
   '/auth/forgot-password',
   '/auth/verify-reset-token',
   '/auth/reset-password',
@@ -23,8 +46,7 @@ const PUBLIC_AUTH_ENDPOINTS = [
 const ACCOUNT_LOOKUP_ENDPOINTS = [
   ['/auth/login', 'login'],
   ['/auth/forgot-password', 'forgot-password'],
-  ['/auth/resend-verification', 'resend-verification'],
-  ['/auth/verify-email', 'verify-email'],
+  ['/auth/privy/complete-signup', 'privy-complete-signup'],
   ['/auth/verify-reset-token', 'verify-reset-token'],
   ['/auth/reset-password', 'reset-password'],
 ];
@@ -56,27 +78,6 @@ const getRequestEmail = (config = {}) => {
   }
 
   return '';
-};
-
-const getResponseMessage = (error) => {
-  const payload = error?.response?.data;
-  return String(
-    payload?.message ||
-      (typeof payload?.error === 'string' ? payload.error : payload?.error?.message) ||
-      '',
-  );
-};
-
-const isEmailVerificationRequiredLoginError = (error) => {
-  const isLoginRequest = String(error?.config?.url || '').includes('/auth/login');
-  const isForbidden = error?.response?.status === HTTP_STATUS.forbidden;
-  const message = getResponseMessage(error);
-
-  return (
-    isLoginRequest &&
-    isForbidden &&
-    /(?:verify|verification).*email|email.*(?:verify|verification)/i.test(message)
-  );
 };
 
 const finishTrackedRequest = (config) => {
@@ -116,8 +117,11 @@ export const setupAxiosInterceptors = () => {
       finishTrackedRequest(response.config);
       return response;
     },
-    (error) => {
+    async (error) => {
       finishTrackedRequest(error.config);
+
+      const retriedResponse = await retryRateLimitedRequest(error);
+      if (retriedResponse) return retriedResponse;
 
       const status = error.response?.status;
       const hadSession =
@@ -126,14 +130,6 @@ export const setupAxiosInterceptors = () => {
       const isNotFound = status === HTTP_STATUS.notFound;
       const isPublicRequest = isPublicAuthRequest(error.config?.url);
       const accountLookupSource = getAccountLookupSource(error.config?.url);
-      const emailVerificationRequired = isEmailVerificationRequiredLoginError(error);
-
-      if (emailVerificationRequired) {
-        // The login page redirects to the verification screen and owns the user-facing recovery UI.
-        // Suppress the generic red error toast for this expected account state.
-        error.__skipGlobalErrorToast = true;
-      }
-
       if (
         isNotFound &&
         isPublicRequest &&

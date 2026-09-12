@@ -1,308 +1,203 @@
-import { useMutation } from '@tanstack/react-query';
-import {
-  ArrowRight,
-  CircleAlert,
-  CircleCheck,
-  Mail,
-  MailCheck,
-  ShieldCheck,
-} from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowRight, CircleCheck, MailCheck, ShieldCheck } from 'lucide-react';
+import { useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { authApi, authService } from '@/api/auth';
+import { authService } from '@/api/auth';
 import { AuthButton } from '@/components/auth/AuthButton';
-import { Input } from '@/components/ui/Input';
+import { AuthRecoveryNotice } from '@/components/auth/AuthRecoveryNotice';
+import { OTPInput } from '@/components/forms/OTPInput';
 import { ROUTES } from '@/config/routes';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { usePrivyEmailAuth } from '@/hooks/usePrivyEmailAuth';
 import { resolveAuthenticatedLandingRoute } from '@/services/auth-landing.service';
-
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const VERIFICATION_TOKEN_PATTERN = /^[A-Fa-f0-9]{64}$/;
-const SUCCESS_REDIRECT_DELAY = 900;
-
-const VERIFY_STATES = Object.freeze({
-  inbox: 'INBOX',
-  ready: 'READY',
-  verifying: 'VERIFYING',
-  success: 'SUCCESS',
-  invalid: 'INVALID',
-  inactive: 'INACTIVE',
-  failed: 'FAILED',
-});
+import { getErrorMessage } from '@/utils/error';
 
 export default function VerifyEmailPage() {
-  useDocumentTitle('Verify email');
+  useDocumentTitle('Verify with Privy');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const hasTokenParam = searchParams.has('token');
-  const token = searchParams.get('token')?.trim() || '';
-  const email = searchParams.get('email')?.trim() || '';
-  const verificationRequired = searchParams.get('reason') === 'verification-required';
-  const tokenIsValid = VERIFICATION_TOKEN_PATTERN.test(token);
-  const [state, setState] = useState(() => {
-    if (!hasTokenParam) return VERIFY_STATES.inbox;
-    return tokenIsValid ? VERIFY_STATES.ready : VERIFY_STATES.invalid;
-  });
-  const [resendEmail, setResendEmail] = useState(email);
-  const [landingRoute, setLandingRoute] = useState(ROUTES.dashboard);
-  const redirectTimerRef = useRef(null);
-  const verifyInFlightRef = useRef(false);
+  const email = String(searchParams.get('email') || '').trim().toLowerCase();
+  const [code, setCode] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [successWallet, setSuccessWallet] = useState('');
+  const [resumeAvailable, setResumeAvailable] = useState(false);
+  const pendingIdentityRef = useRef(null);
+  const {
+    beginEmailVerification,
+    verifyEmailCode,
+    ensureIdentityTokenWithWallet,
+    recoveryState,
+  } = usePrivyEmailAuth();
 
-  const hasEmailInUrl = EMAIL_PATTERN.test(email);
-  const canResend = EMAIL_PATTERN.test(resendEmail.trim());
-  const isVerifying = state === VERIFY_STATES.verifying;
+  const completeSignup = async (identity) => {
+    pendingIdentityRef.current = identity;
+    const session = await authService.completePrivySignup({
+      email,
+      identityToken: identity.identityToken,
+    });
+    setSuccessWallet(identity.walletAddress);
+    pendingIdentityRef.current = null;
+    setResumeAvailable(false);
+    toast.success('Email verified. Your Privy secure account is linked to your T-REX profile.');
+    navigate(resolveAuthenticatedLandingRoute(session?.user?.role), { replace: true });
+  };
 
-  const resend = useMutation({
-    mutationFn: authApi.resendVerification,
-    onSuccess: (data) => {
-      if (String(data?.status || '').toUpperCase() === 'ALREADY_VERIFIED') {
-        toast.success('User is already verified. You can log in.');
-        navigate(ROUTES.login, { replace: true });
-        return;
-      }
-
-      toast.success('A new verification email has been sent.');
-    },
-  });
-
-  useEffect(
-    () => () => {
-      if (redirectTimerRef.current) window.clearTimeout(redirectTimerRef.current);
-    },
-    [],
-  );
-
-  useEffect(() => {
-    verifyInFlightRef.current = false;
-    if (!hasTokenParam) {
-      setState(VERIFY_STATES.inbox);
-      return;
-    }
-    setState(tokenIsValid ? VERIFY_STATES.ready : VERIFY_STATES.invalid);
-  }, [hasTokenParam, token, tokenIsValid]);
-
-  const verifyAndContinue = async () => {
-    if (!tokenIsValid || isVerifying || verifyInFlightRef.current) return;
-
-    verifyInFlightRef.current = true;
-    setState(VERIFY_STATES.verifying);
-
+  const resend = async () => {
+    if (!email || resending || submitting) return;
+    setResending(true);
+    setResumeAvailable(false);
+    pendingIdentityRef.current = null;
+    setCode('');
     try {
-      // Verification returns a complete authenticated session. Do not call /auth/login.
-      const session = await authService.verifyEmail({ token });
-      const destination = resolveAuthenticatedLandingRoute(session?.user?.role);
-      setLandingRoute(destination);
-      setState(VERIFY_STATES.success);
-
-      // Remove the one-time token from visible browser history as soon as it is consumed.
-      window.history.replaceState(window.history.state, '', ROUTES.verifyEmail);
-
-      redirectTimerRef.current = window.setTimeout(() => {
-        navigate(destination, { replace: true });
-      }, SUCCESS_REDIRECT_DELAY);
+      await beginEmailVerification(email);
+      toast.success('Privy sent a new verification code.');
     } catch (error) {
-      const status = error?.response?.status;
-
-      verifyInFlightRef.current = false;
-
-      if (status === 400 || status === 422) {
-        setState(VERIFY_STATES.invalid);
-        return;
-      }
-
-      if (status === 403) {
-        setState(VERIFY_STATES.inactive);
-        return;
-      }
-
-      setState(VERIFY_STATES.failed);
+      toast.error(getErrorMessage(error, 'Unable to send a new Secure verification with Privy code.'));
+    } finally {
+      setResending(false);
     }
   };
 
-  const resendControls = useMemo(
-    () => (
-      <div className="grid gap-3">
-        {!hasEmailInUrl ? (
-          <Input
-            label="Email address"
-            className="text-left"
-            type="email"
-            autoComplete="email"
-            placeholder="you@company.com"
-            leading={Mail}
-            value={resendEmail}
-            onChange={(event) => setResendEmail(event.target.value)}
-          />
-        ) : null}
-        <AuthButton
-          type="button"
-          loading={resend.isPending}
-          disabled={!canResend}
-          className="w-full"
-          onClick={() => resend.mutate({ email: resendEmail.trim() })}
-        >
-          Resend verification email
-        </AuthButton>
-      </div>
-    ),
-    [canResend, hasEmailInUrl, resend, resendEmail],
-  );
+  const verify = async () => {
+    if (code.length !== 6 || !email || submitting) return;
+    setSubmitting(true);
+    let identity = null;
+    try {
+      identity = await verifyEmailCode(code);
+      await completeSignup(identity);
+    } catch (error) {
+      const canResume = Boolean(identity || error?.privyAuthenticated);
+      setResumeAvailable(canResume);
+      if (!canResume) setCode('');
+      toast.error(getErrorMessage(error, 'The Secure verification with Privy code is invalid or expired.'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
-  if (state === VERIFY_STATES.success) {
+  const resumeSecureSetup = async () => {
+    if (!email || submitting) return;
+    setSubmitting(true);
+    try {
+      const identity = pendingIdentityRef.current || (await ensureIdentityTokenWithWallet());
+      await completeSignup(identity);
+    } catch (error) {
+      setResumeAvailable(true);
+      toast.error(getErrorMessage(error, 'Unable to finish setting up your Privy secure account.'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (!email) {
     return (
-      <div
-        className="verification-result verification-result--success"
-        role="status"
-        aria-live="polite"
-      >
-        <div className="verification-result__icon" aria-hidden="true">
-          <span className="verification-result__ring" />
+      <div className="verification-result verification-result--error" role="alert">
+        <h2>Signup email is missing</h2>
+        <p>Return to signup and enter your account details again.</p>
+        <Link className="verification-result__back" to={ROUTES.signup}>
+          Back to signup
+        </Link>
+      </div>
+    );
+  }
+
+  if (successWallet) {
+    return (
+      <div className="verification-result verification-result--success" role="status">
+        <div className="verification-result__icon">
           <CircleCheck size={34} />
         </div>
         <span className="verification-result__eyebrow">
-          <ShieldCheck size={14} /> Email verified
+          <ShieldCheck size={14} /> Privy verified
         </span>
-        <h2>Email verified — redirecting…</h2>
+        <h2>Your secure account is ready to use</h2>
         <p>
-          Your account is verified and you are signed in. We are opening your T-REX Capital Market
-          workspace now.
+          Your secure account is managed by Privy and linked to your T-REX profile.
         </p>
-        <div className="verification-result__redirect" aria-hidden="true">
-          <span />
-        </div>
-        <button
-          className="verification-result__link border-0 bg-transparent p-0"
-          type="button"
-          onClick={() => {
-            if (redirectTimerRef.current) window.clearTimeout(redirectTimerRef.current);
-            navigate(landingRoute, { replace: true });
-          }}
-        >
-          Continue now
-          <ArrowRight size={17} />
-        </button>
-      </div>
-    );
-  }
-
-  if (state === VERIFY_STATES.invalid) {
-    return (
-      <div className="verification-result verification-result--error" role="alert">
-        <div className="verification-result__icon" aria-hidden="true">
-          <CircleAlert size={31} />
-        </div>
-        <span className="verification-result__eyebrow">Link unavailable</span>
-        <h2>Invalid or expired verification link</h2>
-        <p>
-          This link cannot be used. Request a new verification email and use the newest link from
-          your inbox.
-        </p>
-        {resendControls}
-        <Link className="verification-result__back" to={ROUTES.login}>
-          Go to sign in
-        </Link>
-      </div>
-    );
-  }
-
-  if (state === VERIFY_STATES.inactive) {
-    return (
-      <div className="verification-result verification-result--error" role="alert">
-        <div className="verification-result__icon" aria-hidden="true">
-          <CircleAlert size={31} />
-        </div>
-        <span className="verification-result__eyebrow">Account unavailable</span>
-        <h2>Account inactive</h2>
-        <p>Your email cannot be verified because this account is inactive. Please contact support.</p>
-        <Link className="verification-result__back" to={ROUTES.login}>
-          Go to sign in
-        </Link>
-      </div>
-    );
-  }
-
-  if (state === VERIFY_STATES.failed) {
-    return (
-      <div className="verification-result verification-result--error" role="alert">
-        <div className="verification-result__icon" aria-hidden="true">
-          <CircleAlert size={31} />
-        </div>
-        <span className="verification-result__eyebrow">Verification interrupted</span>
-        <h2>We could not verify your email</h2>
-        <p>Something interrupted verification. Your link has not been retried automatically.</p>
-        <AuthButton type="button" className="w-full" onClick={verifyAndContinue}>
-          Try verification again
-        </AuthButton>
-        <Link className="verification-result__back" to={ROUTES.login}>
-          Go to sign in
-        </Link>
-      </div>
-    );
-  }
-
-  if (state === VERIFY_STATES.ready || state === VERIFY_STATES.verifying) {
-    return (
-      <div className="verification-result verification-result--inbox" aria-live="polite">
-        <div className="verification-result__icon" aria-hidden="true">
-          <MailCheck size={30} />
-        </div>
-        <span className="verification-result__eyebrow">Secure email verification</span>
-        <h2>Verify your email</h2>
-        <p>
-          Select the button below to verify your email and sign in. Verification only starts when
-          you choose to continue.
-        </p>
-        <AuthButton
-          type="button"
-          loading={isVerifying}
-          disabled={!tokenIsValid || isVerifying}
-          className="w-full"
-          onClick={verifyAndContinue}
-        >
-          {isVerifying ? 'Verifying email…' : 'Verify and continue'}
-          {!isVerifying ? <ArrowRight className="size-[18px]" aria-hidden="true" /> : null}
-        </AuthButton>
-        <Link className="verification-result__back" to={ROUTES.login}>
-          Go to sign in
-        </Link>
       </div>
     );
   }
 
   return (
-    <div className="verification-result verification-result--inbox">
-      <div className="verification-result__icon" aria-hidden="true">
-        <MailCheck size={30} />
+    <div className="mx-auto w-full max-w-[430px]">
+      <div className="mb-5 text-center">
+        <div className="mx-auto mb-3 grid size-12 place-items-center rounded-2xl bg-[var(--primary-50)] text-[var(--primary-600)]">
+          <MailCheck size={24} />
+        </div>
+        <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--primary-500)]">
+          Secure verification with Privy
+        </span>
+        <h2 className="my-2 font-[var(--font-display)] text-3xl text-[var(--text)]">
+          {resumeAvailable ? 'Finish secure account setup' : 'Enter your email code'}
+        </h2>
+        <p className="m-0 text-sm leading-6 text-[var(--text-soft)]">
+          {resumeAvailable ? (
+            <>
+              Your email is already verified. Privy is finishing your secure account setup, so you can
+              continue without entering another code.
+            </>
+          ) : (
+            <>
+              Privy sent a 6-digit code to <strong>{email}</strong>. After you confirm the code, Privy
+              will prepare your secure account and link it to your T-REX profile.
+            </>
+          )}
+        </p>
       </div>
-      <span className="verification-result__eyebrow">
-        {verificationRequired ? 'Email verification required' : 'One final step'}
-      </span>
-      <h2>{verificationRequired ? 'Verify your email to continue' : 'Check your inbox'}</h2>
-      {verificationRequired ? (
-        <p>
-          Your account is ready, but your email still needs to be verified. If your previous link
-          expired, send a new verification email
-          {hasEmailInUrl ? (
-            <>
-              {' '}to <strong>{email}</strong>
-            </>
-          ) : null}
-          , then open the newest link and select <strong>Verify and continue</strong>.
-        </p>
-      ) : (
-        <p>
-          We sent a verification link
-          {hasEmailInUrl ? (
-            <>
-              {' '}to <strong>{email}</strong>
-            </>
-          ) : null}
-          . Open the email, then select <strong>Verify and continue</strong> on the verification page.
-        </p>
-      )}
-      {resendControls}
-      <Link className="verification-result__back" to={ROUTES.login}>
+
+      <div className="grid gap-4">
+        {resumeAvailable ? (
+          <div className="rounded-xl border border-[color-mix(in_srgb,var(--success-500)_24%,transparent)] bg-[color-mix(in_srgb,var(--success-500)_7%,transparent)] px-3.5 py-3 text-[13px] leading-5 text-[var(--text-soft)]">
+            <strong className="block text-[var(--text)]">Your verification progress is saved</strong>
+            Your email is already verified. Continue to finish setting up your secure account. You do
+            not need another code.
+          </div>
+        ) : (
+          <OTPInput value={code} onChange={setCode} length={6} />
+        )}
+
+        <AuthRecoveryNotice state={recoveryState} />
+
+        {resumeAvailable ? (
+          <AuthButton
+            type="button"
+            className="w-full"
+            loading={submitting}
+            onClick={resumeSecureSetup}
+          >
+            Resume secure setup <ArrowRight className="size-[18px]" />
+          </AuthButton>
+        ) : (
+          <AuthButton
+            type="button"
+            className="w-full"
+            loading={submitting}
+            disabled={code.length !== 6}
+            onClick={verify}
+          >
+            Confirm securely with Privy <ArrowRight className="size-[18px]" />
+          </AuthButton>
+        )}
+
+        <button
+          type="button"
+          className="text-sm font-semibold text-[var(--primary-600)]"
+          disabled={resending || submitting}
+          onClick={resend}
+        >
+          {resending
+            ? 'Sending code…'
+            : resumeAvailable
+              ? 'Send a new code instead'
+              : 'Resend Privy verification code'}
+        </button>
+      </div>
+
+      <p className="mt-5 mb-0 text-center text-xs leading-5 text-[var(--text-muted)]">
+        Privy verifies your email and securely manages the account linked to your T-REX profile.
+      </p>
+      <Link className="mt-4 block text-center text-sm font-semibold" to={ROUTES.login}>
         Go to sign in
       </Link>
     </div>

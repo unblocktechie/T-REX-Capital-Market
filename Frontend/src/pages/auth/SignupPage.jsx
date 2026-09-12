@@ -17,10 +17,12 @@ import { toast } from 'sonner';
 import { authApi } from '@/api/auth';
 import { PasswordStrength } from '@/components/forms/PasswordStrength';
 import { AuthButton } from '@/components/auth/AuthButton';
+import { AuthRecoveryNotice } from '@/components/auth/AuthRecoveryNotice';
 import { Input } from '@/components/ui/Input';
 import { PasswordInput } from '@/components/ui/PasswordInput';
 import { ROUTES } from '@/config/routes';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { usePrivyEmailAuth } from '@/hooks/usePrivyEmailAuth';
 import { authRedirectService } from '@/services/auth-redirect.service';
 import { cn } from '@/utils/cn';
 import { signupSchema } from '@/validations/auth.schemas';
@@ -46,7 +48,7 @@ const accountTypes = [
     value: 'issuer',
     title: 'I am an Issuer',
     description:
-      'Create compliant token offerings, manage investor eligibility and operate digital securities.',
+      'Create compliant investment offerings, manage investor eligibility, and oversee issued assets.',
     helper: 'For funds, sponsors, startups and asset owners',
     icon: Building2,
   },
@@ -54,7 +56,7 @@ const accountTypes = [
     value: 'investor',
     title: 'I am an Investor',
     description:
-      'Explore compliant offerings, complete identity verification and manage your investment access.',
+      'Explore investment opportunities, complete identity checks, and manage your investment access.',
     helper: 'For individual and institutional investors',
     icon: TrendingUp,
   },
@@ -64,6 +66,7 @@ export default function SignupPage() {
   useDocumentTitle('Create account');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { beginEmailVerification, recoveryState } = usePrivyEmailAuth();
   const accountNotFound = searchParams.get('reason') === 'account-not-found';
   const [redirectContext] = useState(() =>
     accountNotFound ? authRedirectService.getAccountNotFoundContext() : null,
@@ -96,10 +99,17 @@ export default function SignupPage() {
 
   const signup = useMutation({
     mutationFn: authApi.register,
-    onSuccess: (_data, variables) => {
-      toast.success(
-        `${variables.role === 'issuer' ? 'Issuer' : 'Investor'} account created. Check your email for the verification link.`,
-      );
+    onSuccess: async (_data, variables) => {
+      try {
+        await beginEmailVerification(variables.email);
+        toast.success(
+          `${variables.role === 'issuer' ? 'Issuer' : 'Investor'} account saved. Privy sent a verification code to your email.`,
+        );
+      } catch (error) {
+        toast.error('Your account was saved, but Privy could not send the verification code.', {
+          description: error?.message || 'Open the verification page and request a new code.',
+        });
+      }
       navigate(`${ROUTES.verifyEmail}?email=${encodeURIComponent(variables.email)}`);
     },
   });
@@ -118,7 +128,7 @@ export default function SignupPage() {
           Create your account
         </h2>
         <p className="m-0 text-sm leading-[22px] text-[var(--text-soft)]">
-          Choose how you will use the platform, then complete your secure profile.
+          Choose how you will use the platform. Privy will verify your email and securely manage the account linked to your T-REX profile.
         </p>
       </div>
 
@@ -278,6 +288,7 @@ export default function SignupPage() {
           Create {selectedRole ? `${selectedRole} ` : ''}account
           <ArrowRight className="size-[18px] shrink-0 self-center" aria-hidden="true" />
         </AuthButton>
+        <AuthRecoveryNotice state={recoveryState} />
       </form>
       <p className="mt-3 mb-0 text-center text-sm text-[var(--text-soft)]">
         Already have an account?{' '}

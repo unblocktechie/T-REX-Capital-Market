@@ -51,7 +51,7 @@ const publicClientFor = (chainIdValue) => {
   const chainId = parseChainId(chainIdValue);
   const chain = web3Config.supportedChains.find((item) => item.id === chainId);
   if (!chain) {
-    throw new Error('This registration uses a network that is not available in the application.');
+    throw new Error('This investor approval cannot be completed with the current secure account settings.');
   }
 
   if (!publicClients.has(chain.id)) {
@@ -76,7 +76,7 @@ export async function getIssuerRegistryTransactionConfirmationProgress({
 }) {
   const normalizedHash = String(txHash || '').trim();
   if (!isTransactionHash(normalizedHash)) {
-    throw new Error('The transaction ID is unavailable. Refresh and try again.');
+    throw new Error('The confirmation ID is unavailable. Refresh and try again.');
   }
 
   const required = Number(requiredConfirmations);
@@ -149,18 +149,18 @@ export async function submitIssuerRegistryRegistrationTransaction({
   preparedRegistration,
 }) {
   if (!connector?.getProvider) {
-    throw new Error('Connect your Organization Wallet before approving this investor.');
+    throw new Error('Open your Privy secure account before approving this investor.');
   }
   if (!isAddress(connectedAddress || '')) {
-    throw new Error('Connect your Organization Wallet before approving this investor.');
+    throw new Error('Open your Privy secure account before approving this investor.');
   }
 
   const approvedOrganizationWallet = requiredAddress(
     organizationWalletAddress,
-    'Approved organization wallet',
+    'Approved organization secure account',
   );
   if (getAddress(connectedAddress) !== getAddress(approvedOrganizationWallet)) {
-    const error = new Error('The connected wallet is not your approved organization wallet. Change wallets before continuing.');
+    const error = new Error('Use the Privy secure account linked to this organization before continuing.');
     error.code = 'ORGANIZATION_WALLET_MISMATCH';
     throw error;
   }
@@ -168,7 +168,7 @@ export async function submitIssuerRegistryRegistrationTransaction({
   const chainId = parseChainId(preparedRegistration?.chainId);
   const chain = web3Config.supportedChains.find((item) => item.id === chainId);
   if (!chain) {
-    throw new Error('This registration uses a network that is not available in the application.');
+    throw new Error('This investor approval cannot be completed with the current secure account settings.');
   }
 
   // Every transaction-critical value comes from the idempotent preparation endpoint.
@@ -179,17 +179,17 @@ export async function submitIssuerRegistryRegistrationTransaction({
   );
   const investorWalletAddress = requiredAddress(
     preparedRegistration?.investorWalletAddress,
-    'Investor wallet address',
+    'Investor Privy wallet address',
   );
   const onchainIdentityAddress = requiredAddress(
     preparedRegistration?.onchainIdentityAddress,
-    'Investor on-chain identity address',
+    'Investor technical identity reference',
   );
   const country = requiredCountry(preparedRegistration?.country);
 
   const provider = await connector.getProvider();
   if (!provider?.request) {
-    throw new Error('The connected wallet is unavailable. Reconnect it and try again.');
+    throw new Error('Your Privy secure account is unavailable. Sign in with Privy and try again.');
   }
 
   // Do not call eth_requestAccounts here. The issuer explicitly starts the real
@@ -197,23 +197,23 @@ export async function submitIssuerRegistryRegistrationTransaction({
   const accounts = await provider.request({ method: 'eth_accounts' });
   const activeProviderAddress = Array.isArray(accounts) ? accounts[0] : '';
   if (!isAddress(activeProviderAddress || '')) {
-    throw new Error('Reconnect your Organization Wallet before approving this investor.');
+    throw new Error('Restore your Privy secure account before approving this investor.');
   }
 
   if (getAddress(activeProviderAddress) !== getAddress(connectedAddress)) {
-    const error = new Error('Your active wallet account changed. Reconnect your organization wallet and try again.');
+    const error = new Error('Your active Privy secure account changed. Restore the organization account linked to T-REX and try again.');
     error.code = 'WALLET_ACCOUNT_CHANGED';
     throw error;
   }
   if (getAddress(activeProviderAddress) !== getAddress(approvedOrganizationWallet)) {
-    const error = new Error('The active wallet is not your approved organization wallet. Change wallets before continuing.');
+    const error = new Error('The active Privy secure account is not the approved organization account. Restore the correct account before continuing.');
     error.code = 'ORGANIZATION_WALLET_MISMATCH';
     throw error;
   }
 
   const providerChainId = parseChainId(await provider.request({ method: 'eth_chainId' }));
   if (providerChainId !== chainId) {
-    const error = new Error(`Switch your wallet to ${chain.name} and try again.`);
+    const error = new Error(`Your Privy secure account needs a quick setup check. Open the account control and try again.`);
     error.code = 'WRONG_WALLET_NETWORK';
     error.requiredChainId = chainId;
     throw error;
@@ -226,7 +226,7 @@ export async function submitIssuerRegistryRegistrationTransaction({
     transport: custom(provider),
   });
 
-  // Return the wallet-provided hash exactly as submitted. MetaMask may internally use
+  // Return the wallet-provided hash exactly as submitted. Privy wallet may internally use
   // delegated execution, so the resulting transaction.to is intentionally not inspected
   // or required to equal the Identity Registry address in the frontend.
   return walletClient.writeContract({

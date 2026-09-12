@@ -18,7 +18,7 @@ const requiredText = (value, label) => {
 const normalizeChainId = (value) => {
   const chainId = Number(value);
   if (!Number.isSafeInteger(chainId) || chainId <= 0) {
-    throw new Error('A valid blockchain chain ID is required.');
+    throw new Error('A valid network setting is required.');
   }
   return chainId;
 };

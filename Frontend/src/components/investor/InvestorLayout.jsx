@@ -36,7 +36,7 @@ export function InvestorSecurityCard({ title = 'Your information stays private',
       <ul>
         <li><CheckCircle2 size={16} /> Data handling messages are clearly disclosed</li>
         <li><CheckCircle2 size={16} /> Only file metadata is stored in the draft</li>
-        <li><LockKeyhole size={16} /> Wallet ownership confirmation is required</li>
+        <li><LockKeyhole size={16} /> Your Privy secure account must be ready</li>
       </ul>
     </Card>
   );

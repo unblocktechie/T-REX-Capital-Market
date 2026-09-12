@@ -75,7 +75,7 @@ export const hasConfirmedDeploymentEvidence = (token) => {
 
 export const createAlreadyDeployedError = () => {
   const error = new Error(
-    'This token already has a confirmed deployment record. A second blockchain transaction was blocked.',
+    'This asset already has a confirmed creation record. A duplicate creation attempt was blocked.',
   );
   error.code = 'TOKEN_ALREADY_DEPLOYED';
   return error;
@@ -87,8 +87,8 @@ export const getDuplicateTokenMessage = ({ tokenName = '', tokenSymbol = '' } = 
   const identity = [name && `“${name}”`, symbol && `(${symbol})`].filter(Boolean).join(' ');
 
   return identity
-    ? `A token using ${identity} already exists. Return to Token Information and enter a unique token name and symbol. No duplicate blockchain transaction was sent.`
-    : 'A token with the same name or symbol already exists. Return to Token Information and use unique details. No duplicate blockchain transaction was sent.';
+    ? `A token using ${identity} already exists. Return to Token Information and enter a unique token name and symbol. No duplicate asset creation action was submitted.`
+    : 'A token with the same name or symbol already exists. Return to Token Information and use unique details. No duplicate asset creation action was submitted.';
 };
 
 export const getDuplicateTokenFieldErrors = (error, { assumeDuplicate = false } = {}) => {

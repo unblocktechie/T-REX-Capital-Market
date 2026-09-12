@@ -111,9 +111,9 @@ export default function OrganizationOverviewPage() {
     if (!organizationWallet) return;
     try {
       await navigator.clipboard.writeText(organizationWallet);
-      toast.success('Organization wallet copied');
+      toast.success('Privy wallet address copied');
     } catch {
-      toast.error('Unable to copy organization wallet');
+      toast.error('Unable to copy the Privy wallet address');
     }
   };
 
@@ -233,55 +233,33 @@ export default function OrganizationOverviewPage() {
           <header className="org-wallet-card__header">
             <div>
               <span className="org-wallet-card__eyebrow">Secure management account</span>
-              <h2>Approved Organization Wallet</h2>
+              <h2>Privy secure account</h2>
             </div>
             <span
               className={`org-wallet-card__status ${
                 organizationWallet ? 'org-wallet-card__status--active' : 'org-wallet-card__status--inactive'
               }`}
             >
-              <ShieldCheck size={14} /> {organizationWallet ? 'Active' : 'Unavailable'}
+              <ShieldCheck size={14} /> {organizationWallet ? 'Ready' : 'Unavailable'}
             </span>
           </header>
 
           <div className="org-wallet-card__body">
-            <section className="org-wallet-card__address" aria-label="Primary issuer wallet">
+            <section className="org-wallet-card__address" aria-label="Privy secure account status">
               <span className="org-wallet-card__icon" aria-hidden="true">
                 <Wallet size={20} />
               </span>
               <div className="org-wallet-card__address-copy">
-                <small>Approved wallet</small>
-                <strong title={organizationWallet || undefined}>
-                  {organizationWallet
-                    ? shortenWalletAddress(organizationWallet, 9, 9)
-                    : 'Wallet address unavailable'}
-                </strong>
+                <small>Securely managed by Privy</small>
+                <strong>{organizationWallet ? 'Linked to your T-REX organization profile' : 'Secure account unavailable'}</strong>
                 <p>
-                  This is the wallet your organization approved. It is used to create and manage assets,
-                  approve investors, and confirm important issuer actions.
+                  Your organization uses this Privy secure account to manage assets, approve investors,
+                  and confirm important issuer actions. You do not need to connect another account.
                 </p>
               </div>
-              {organizationWallet ? (
-                <button
-                  type="button"
-                  className="org-wallet-card__copy-button"
-                  onClick={copyWalletAddress}
-                  aria-label="Copy organization wallet address"
-                  title="Copy organization wallet address"
-                >
-                  <Copy size={16} />
-                </button>
-              ) : null}
             </section>
 
             <div className="org-wallet-card__meta">
-              <article>
-                <span><Network size={17} /></span>
-                <div>
-                  <small>Blockchain network</small>
-                  <strong>{walletNetworkName}</strong>
-                </div>
-              </article>
               <article>
                 <span><ShieldCheck size={17} /></span>
                 <div>
@@ -292,7 +270,40 @@ export default function OrganizationOverviewPage() {
             </div>
 
             <details className="org-wallet-card__technical">
-              <summary>View technical details</summary>
+              <summary>View account details</summary>
+              {organizationWallet ? (
+                <article className="org-wallet-card__contract">
+                  <div className="org-wallet-card__contract-copy">
+                    <span className="org-wallet-card__contract-label">
+                      <Wallet size={15} /> Privy wallet address
+                    </span>
+                    <strong title={organizationWallet}>
+                      {shortenWalletAddress(organizationWallet, 9, 9)}
+                    </strong>
+                    <p>This technical address identifies the secure account managed by Privy.</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="org-wallet-card__copy-button org-wallet-card__copy-button--contract"
+                    onClick={copyWalletAddress}
+                    aria-label="Copy Privy wallet address"
+                    title="Copy Privy wallet address"
+                  >
+                    <Copy size={16} />
+                  </button>
+                </article>
+              ) : null}
+
+              <article className="org-wallet-card__contract">
+                <div className="org-wallet-card__contract-copy">
+                  <span className="org-wallet-card__contract-label">
+                    <Network size={15} /> Network
+                  </span>
+                  <strong>{walletNetworkName}</strong>
+                  <p>This network detail is provided for technical support and verification.</p>
+                </div>
+              </article>
+
               <article className="org-wallet-card__contract">
                 <div className="org-wallet-card__contract-copy">
                   <span className="org-wallet-card__contract-label">
@@ -301,7 +312,7 @@ export default function OrganizationOverviewPage() {
                   <strong title={contractAddress || undefined}>
                     {contractAddress || 'Not assigned yet'}
                   </strong>
-                  <p>This blockchain record securely links the approved wallet to your verified organization.</p>
+                  <p>This technical record links the approved secure account to your verified organization.</p>
                 </div>
                 {contractAddress ? (
                   <button
@@ -315,6 +326,26 @@ export default function OrganizationOverviewPage() {
                   </button>
                 ) : null}
               </article>
+
+              {walletExplorerUrl || contractExplorerUrl ? (
+                <div className="org-wallet-card__actions">
+                  {walletExplorerUrl ? (
+                    <a href={walletExplorerUrl} target="_blank" rel="noreferrer">
+                      <ExternalLink size={15} /> View Privy wallet record
+                    </a>
+                  ) : null}
+                  {contractExplorerUrl ? (
+                    <a
+                      className="org-wallet-card__action--contract"
+                      href={contractExplorerUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <ExternalLink size={15} /> View verification record
+                    </a>
+                  ) : null}
+                </div>
+              ) : null}
             </details>
           </div>
 
@@ -323,25 +354,6 @@ export default function OrganizationOverviewPage() {
               <small>Registered in</small>
               <b>{primaryJurisdiction}</b>
             </div>
-            {walletExplorerUrl || contractExplorerUrl ? (
-              <div className="org-wallet-card__actions">
-                {walletExplorerUrl ? (
-                  <a href={walletExplorerUrl} target="_blank" rel="noreferrer">
-                    <ExternalLink size={15} /> View on blockchain
-                  </a>
-                ) : null}
-                {contractExplorerUrl ? (
-                  <a
-                    className="org-wallet-card__action--contract"
-                    href={contractExplorerUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    <ExternalLink size={15} /> View verification record
-                  </a>
-                ) : null}
-              </div>
-            ) : null}
           </footer>
         </Card>
       </section>

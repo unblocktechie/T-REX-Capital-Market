@@ -10,14 +10,20 @@ const persistSession = (payload, remember = false) => {
 };
 
 export const authService = {
-  async login({ remember = false, ...credentials }) {
+  async prepareLogin({ remember = false, ...credentials }) {
+    const response = await authApi.login(credentials);
+    if (response?.accessToken) return persistSession(response, remember);
+    return { ...response, remember };
+  },
+
+  async completeLogin({ remember = false, ...credentials }) {
     const response = await authApi.login(credentials);
     return persistSession(response, remember);
   },
 
-  async verifyEmail({ token }) {
-    const response = await authApi.verifyEmail({ token });
-    return persistSession(response, false);
+  async completePrivySignup({ email, identityToken, remember = false }) {
+    const response = await authApi.completePrivySignup({ email, identityToken });
+    return persistSession(response, remember);
   },
 
   async logout() {

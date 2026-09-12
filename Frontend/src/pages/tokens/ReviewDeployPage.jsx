@@ -139,11 +139,11 @@ export default function ReviewDeployPage() {
 
     try {
       await wallet.switchChain(wallet.requiredChain.id);
-      toast.success(`Switched to ${wallet.requiredChain.name}`, {
-        description: 'Your organization wallet is now on the required network.',
+      toast.success('Privy secure account is ready', {
+        description: 'Your secure account is ready for asset creation.',
       });
     } catch (error) {
-      toast.error('Unable to switch network', {
+      toast.error('Secure account setup needs attention', {
         description: `${getWalletErrorMessage(
           error,
         )} Open the organization wallet menu to reconnect if needed.`,
@@ -175,7 +175,7 @@ export default function ReviewDeployPage() {
               ? 'The asset already exists. We will check the live transfer state and continue only the missing setup step.'
               : retryMode === 'price-confirmation'
                 ? 'The asset already exists. We will check the live price and continue only the missing price step.'
-                : 'An existing token-creation attempt will be resumed safely. MetaMask will open only if no transaction has already been submitted.',
+                : 'An existing token-creation attempt will be resumed safely. Privy approval is requested only when no transaction has already been submitted.',
         },
       });
       navigate(ROUTES.tokenDeploying);
@@ -204,9 +204,9 @@ export default function ReviewDeployPage() {
         walletAction: {
           key: 'session-recovery',
           status: 'syncing',
-          title: 'Existing blockchain transaction found',
+          title: 'Existing asset setup found',
           description:
-            'The saved transaction ID will be checked against the existing token-creation attempt. MetaMask will not open again.',
+            'The saved transaction ID will be checked against the existing token-creation attempt. No additional Privy approval will be requested.',
         },
       });
       toast.info('Continuing token creation', {
@@ -222,7 +222,7 @@ export default function ReviewDeployPage() {
       deployment.status !== 'success' &&
       !isDeploymentFailed
     ) {
-      toast.error('A blockchain transaction has already been submitted.', {
+      toast.error('An asset setup action has already been submitted.', {
         description:
           'Finish checking the existing token-creation transaction instead of sending another one.',
       });
@@ -584,14 +584,14 @@ export default function ReviewDeployPage() {
                   <Network size={21} />
                 </span>
                 <div className="review-deployment-network__content">
-                  <small>Connected network</small>
-                  <strong>{connectedNetworkLabel}</strong>
+                  <small>Privy secure account</small>
+                  <strong>{wallet.isConnected ? (wallet.isCorrectNetwork ? 'Ready to use' : 'Needs attention') : 'Sign in with Privy'}</strong>
                   <span>
                     {wallet.isConnected
                       ? wallet.isCorrectNetwork
-                        ? 'Account and network are ready'
-                        : `${networkLabel} is required to create the asset`
-                      : `Connect your approved account to ${networkLabel}`}
+                        ? 'Your secure account is ready for asset creation'
+                        : 'Your secure account needs a quick setup check'
+                      : 'Sign in with Privy to restore the approved organization account'}
                   </span>
                 </div>
                 {wallet.isConnected && !wallet.isCorrectNetwork ? (
@@ -606,7 +606,7 @@ export default function ReviewDeployPage() {
                     ) : (
                       <Network size={15} />
                     )}
-                    Switch to {wallet.requiredChain.name}
+                    Prepare secure account
                   </button>
                 ) : (
                   <StatusBadge status={wallet.isConnected ? 'valid' : 'pending'}>
@@ -619,16 +619,14 @@ export default function ReviewDeployPage() {
             {wallet.isConnected &&
             tokenInformation.treasuryWallet &&
             wallet.address?.toLowerCase() !== tokenInformation.treasuryWallet.toLowerCase() ? (
-              <InfoCallout title="Authorized wallet required" tone="warning" icon={ShieldCheck}>
+              <InfoCallout title="Approved secure account required" tone="warning" icon={ShieldCheck}>
                 Reconnect with the approved organization account shown in Asset Details before creating this asset.
               </InfoCallout>
             ) : null}
 
             {wallet.isConnected && !wallet.isCorrectNetwork ? (
-              <InfoCallout title="Network required" tone="warning" icon={Network}>
-                Use the Switch to {wallet.requiredChain?.name || 'required network'} button
-                above. If the wallet does not open, use the Organization Wallet menu to reconnect and
-                try again.
+              <InfoCallout title="Secure account setup required" tone="warning" icon={Network}>
+                Use Prepare secure account above. If Privy does not open, restore your secure account from the header and try again.
               </InfoCallout>
             ) : null}
 
@@ -637,7 +635,7 @@ export default function ReviewDeployPage() {
               <div>
                 <strong>Review before creating</strong>
                 <p>
-                  Creating the asset records its core settings on the network. The asset name, symbol, decimal places, and some technical settings may not be changeable after confirmation.
+                  Creating the asset securely records its core settings. The asset name, symbol, decimal places, and some technical settings may not be changeable after confirmation.
                 </p>
               </div>
             </div>
@@ -666,7 +664,7 @@ export default function ReviewDeployPage() {
               </Button>
             </div>
             <small className="review-deployment-panel__note">
-              Your approved organization account will ask you to confirm the required creation actions. MetaMask will show any network fee before you approve them.
+              Privy will ask you to review and confirm the required creation actions. Review each action and any fee shown before you confirm.
             </small>
           </section>
         </div>

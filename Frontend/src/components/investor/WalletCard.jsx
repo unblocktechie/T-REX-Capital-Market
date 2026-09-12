@@ -7,8 +7,8 @@ export function WalletCard({ wallet }) {
       <div className="investor-wallet-card investor-wallet-card--empty">
         <span><WalletCards size={23} /></span>
         <div>
-          <strong>Connect your primary investor wallet</strong>
-          <p>The connected wallet will be verified and linked to the investor profile.</p>
+          <strong>Prepare your Privy secure account</strong>
+          <p>Privy securely manages this account and links it to your investor profile.</p>
         </div>
         <WalletControl context="investor" prominent expanded />
       </div>
@@ -20,20 +20,16 @@ export function WalletCard({ wallet }) {
       <div className="investor-wallet-card__heading">
         <span><WalletCards size={21} /></span>
         <div>
-          <small>Primary investor wallet</small>
-          <strong title={wallet.address}>{wallet.displayAddress}</strong>
+          <small>Privy secure account</small>
+          <strong>Securely managed by Privy</strong>
         </div>
         <em className={wallet.isCorrectNetwork ? 'is-ready' : 'is-warning'}>
           <CheckCircle2 size={14} />
-          {wallet.isCorrectNetwork ? 'Ready' : 'Switch network'}
+          {wallet.isCorrectNetwork ? 'Ready' : 'Needs attention'}
         </em>
       </div>
 
       <dl>
-        <div>
-          <dt><Network size={14} /> Network</dt>
-          <dd>{wallet.network}</dd>
-        </div>
         <div>
           <dt>Available balance</dt>
           <dd>{wallet.balance}</dd>
@@ -42,9 +38,23 @@ export function WalletCard({ wallet }) {
 
       <p className="investor-wallet-card__note">
         {wallet.isCorrectNetwork
-          ? 'Wallet ownership is confirmed and ready for investor profile creation.'
-          : 'Open the wallet control in the header and switch to the required network before continuing.'}
+          ? 'Your Privy secure account is ready for investor profile creation.'
+          : 'Open your Privy secure account in the header and follow the prompt before continuing.'}
       </p>
+
+      <details className="investor-technical-details">
+        <summary>View account details</summary>
+        <dl>
+          <div>
+            <dt>Privy wallet address</dt>
+            <dd title={wallet.address}>{wallet.displayAddress}</dd>
+          </div>
+          <div>
+            <dt><Network size={14} /> Network</dt>
+            <dd>{wallet.network}</dd>
+          </div>
+        </dl>
+      </details>
     </div>
   );
 }
