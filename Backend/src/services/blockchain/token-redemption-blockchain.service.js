@@ -66,7 +66,7 @@ class TokenRedemptionBlockchainService {
     this.transferTopic = this.usdtInterface.getEvent('Transfer').topicHash;
   }
 
-  confirmations() { return Math.max(1, Number(this.config.redemptionConfirmations || 2)); }
+  confirmations() { return Math.max(1, Number(this.config.redemptionConfirmations || 1)); }
 
   async withProvider(work) {
     if (!this.config.sepoliaRpcUrl) throw new RedemptionBlockchainError('RPC_UNAVAILABLE', 'Blockchain RPC is not configured.', { transient: true });

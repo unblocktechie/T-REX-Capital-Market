@@ -107,7 +107,7 @@ address), `onchainIdReference` (same address), `contractTxnHash`, `contractTxnMe
 
 If the on-chain call fails, the endpoint returns **`502 INVESTOR_IDENTITY_CREATION_FAILED`**
 (with a secret-redacted `contractTxnMessage`) and the record **stays `draft`** — the failed tx
-hash/message are recorded so the user can retry. Requires `SEPOLIA_RPC_URL`,
+hash/message are recorded so the user can retry. Requires `BLOCKCHAIN_RPC_URL`,
 `IDENTITY_FACTORY_ADDRESS`, and `DEPLOYER_PRIVATE_KEY` to be configured.
 
 ## Data model

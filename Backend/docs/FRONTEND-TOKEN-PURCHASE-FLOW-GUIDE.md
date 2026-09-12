@@ -215,7 +215,8 @@ fields for name, symbol, image, price, issuer, chain, addresses, restrictions, a
 Use the nested `portfolio` object for `totalPurchasedTokenAmount`, `totalInvestedUsdtAmount`,
 `totalRedeemedTokenAmount`, `netTokenAmount`, `averagePurchasePrice`, counts, and activity dates.
 
-The endpoint contains only tokens having at least one completed purchase. It excludes pending,
-failed, and expired purchase amounts. The net amount subtracts only completed redemptions. Use
+The endpoint contains tokens having canonical confirmed investment, transfer, or redemption activity. It excludes
+submitted, failed, orphaned, and non-canonical transactions. All purchase, redemption, transfer, and net totals
+come from the canonical `blockchainTransaction` ledger used by the V2 direct wallet flow. Use
 `imageUrl` as an authenticated relative API URL, and use `tokenUid` to navigate to the existing
 marketplace token-details route.

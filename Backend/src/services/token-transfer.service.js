@@ -305,7 +305,7 @@ class TokenTransferService {
     await this.repository.recordTransaction(transferUid, normalized, 'RECEIVED');
     try {
       const verified = await this.blockchain.verify(normalized, this.expected(row), {
-        confirmations: Math.max(1, Number(this.config.transferConfirmations || 2)),
+        confirmations: Math.max(1, Number(this.config.transferConfirmations || 1)),
       });
       await this.transactionRunner(async (connection) => {
         const changed = await this.repository.confirm(transferUid, verified, connection);

@@ -36,8 +36,10 @@ const tokenClaims = Joi.object({
 const tokenCompliance = Joi.object({
   maxInvestors: Joi.number().integer().min(1).max(1000000000).allow(null),
   maxBalancePerInvestor: Joi.number().positive().precision(18).allow(null),
-  countryRestrictionMode: Joi.string().valid('allowlist', 'blocklist').allow(null),
-  countryUids: Joi.array().items(uid.required()).unique().max(250).required(),
+  // Omitting both restriction fields represents an empty blocklist: no country is
+  // restricted. Every country UID that is supplied must still be a valid UUID.
+  countryRestrictionMode: Joi.string().valid('allowlist', 'blocklist').allow(null).default('blocklist'),
+  countryUids: Joi.array().items(uid).unique().max(250).default([]),
   isDraft: Joi.boolean().required(),
 });
 

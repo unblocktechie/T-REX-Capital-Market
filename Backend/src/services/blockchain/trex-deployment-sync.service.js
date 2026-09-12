@@ -142,7 +142,7 @@ class TrexDeploymentSyncService {
     }
 
     const offset = Math.max(1, Math.trunc(await this.getNumber(SETTING_KEYS.blockOffset, 500)));
-    const confirmationBlocks = Math.max(0, Math.trunc(await this.getNumber(SETTING_KEYS.confirmationBlocks, 2)));
+    const confirmationBlocks = Math.max(0, Math.trunc(await this.getNumber(SETTING_KEYS.confirmationBlocks, 1)));
     const startBlock = Math.max(0, Math.trunc(await this.getNumber(SETTING_KEYS.startBlock, 0)));
     let lastSync = Math.max(0, Math.trunc(await this.getNumber(SETTING_KEYS.lastSyncBlock, 0)));
 

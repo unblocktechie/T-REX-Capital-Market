@@ -46,7 +46,7 @@ class TokenPurchaseBlockchainService {
     this.transferTopic = this.usdtInterface.getEvent('Transfer').topicHash;
   }
 
-  confirmations() { return Math.max(1, Number(this.config.purchaseConfirmations || 2)); }
+  confirmations() { return Math.max(1, Number(this.config.purchaseConfirmations || 1)); }
 
   async withProvider(work) {
     if (!this.config.sepoliaRpcUrl) throw new PurchaseBlockchainError('RPC_UNAVAILABLE', 'Blockchain RPC is not configured.', { transient: true });
@@ -232,7 +232,7 @@ class TokenPurchaseBlockchainService {
     confirmations = this.confirmations(),
     timeoutMs = Number(this.config.transactionTimeoutMs || 120000),
   } = {}) {
-    const required = Math.max(1, Number(confirmations || 2));
+    const required = Math.max(1, Number(confirmations || 1));
     try {
       const receipt = await this.withProvider((provider) => provider.waitForTransaction(
         txHash, required, Math.max(1000, Number(timeoutMs || 120000)),

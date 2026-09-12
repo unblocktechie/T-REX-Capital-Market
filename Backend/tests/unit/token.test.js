@@ -19,7 +19,7 @@ const organization = {
   walletAddress: '0x1111111111111111111111111111111111111111',
 };
 const issuer = { userUid: 'user-1', roleName: 'Issuer' };
-const PLATFORM_CONTROLLER = '0x40e81FAA4e6D54ae0632DF146939bB5858359271';
+const PLATFORM_CONTROLLER = '0x972E9CEf9eA9d3A9d7f3261bb8e16bA59E76a0FB';
 const LEGACY_PLATFORM_CONTROLLER = '0x9BEFDF75Dc94bbB36532c5d7A74daab28714f579';
 
 test('token information trims names, uppercases symbols, and accepts only supported decimals', () => {
@@ -55,6 +55,18 @@ test('maximum balance per investor accepts an absolute token amount above 100', 
 
   assert.equal(result.error, undefined);
   assert.equal(result.value.maxBalancePerInvestor, 10000);
+});
+
+test('compliance schema defaults omitted restriction fields to an empty blocklist', () => {
+  const result = schemas.tokenCompliance.validate({
+    maxInvestors: 2000,
+    maxBalancePerInvestor: 10000,
+    isDraft: false,
+  });
+
+  assert.equal(result.error, undefined);
+  assert.equal(result.value.countryRestrictionMode, 'blocklist');
+  assert.deepEqual(result.value.countryUids, []);
 });
 
 test('current token price update accepts a positive value with up to 18 decimals', () => {
@@ -254,6 +266,86 @@ test('compliance restrictions persist ISO 3166-1 numeric codes from country mast
   assert.equal(persistedCountries[0].numericCode, '840');
   assert.equal(result.countryRestrictions[0].iso3166NumericCode, '840');
   assert.equal(result.token.currentStep, 'governance');
+});
+
+test('completed compliance treats omitted restriction fields as no restricted countries', async () => {
+  let persistedCountries;
+  const service = new TokenService({
+    repository: {
+      findByUserUid: async () => ({ tokenUid: 'token-1', status: 'draft', currentStep: 'compliance' }),
+      replaceCountryRestrictions: async (_tokenUid, countries) => {
+        persistedCountries = countries;
+        return [];
+      },
+      updateByUserUid: async (userUid, fields) => ({ userUid, ...fields }),
+    },
+    organizationRepository: { findByUserUid: async () => organization },
+    locationRepository: { findCountries: async () => [] },
+    transactionRunner: (callback) => callback({ transaction: true }),
+  });
+
+  const result = await service.saveCompliance(issuer, {
+    maxInvestors: 2000,
+    maxBalancePerInvestor: 10000,
+    isDraft: false,
+  });
+
+  assert.deepEqual(persistedCountries, []);
+  assert.deepEqual(result.countryRestrictions, []);
+  assert.equal(result.token.countryRestrictionMode, 'blocklist');
+  assert.equal(result.token.currentStep, 'governance');
+});
+
+test('completed compliance rejects an empty allowlist because it would exclude every country', async () => {
+  const service = new TokenService({
+    repository: {
+      findByUserUid: async () => ({ tokenUid: 'token-1', status: 'draft', currentStep: 'compliance' }),
+    },
+    organizationRepository: { findByUserUid: async () => organization },
+  });
+
+  await assert.rejects(
+    service.saveCompliance(issuer, {
+      maxInvestors: 2000,
+      maxBalancePerInvestor: 10000,
+      countryRestrictionMode: 'allowlist',
+      countryUids: [],
+      isDraft: false,
+    }),
+    /at least one country is required when using an allowlist/i,
+  );
+});
+
+test('deployment readiness accepts no country rows for blocklist mode but not allowlist mode', async () => {
+  const service = new TokenService({
+    repository: {
+      listClaimTopics: async () => [{ claimTopicUid: 'claim-1', value: 1 }],
+      listCountryRestrictions: async () => [],
+    },
+    imageService: { resolve: () => __filename },
+  });
+  const token = {
+    tokenName: 'Acme Security Token',
+    tokenSymbol: 'ACME',
+    decimals: 18,
+    initialTokenPrice: 1,
+    treasuryWalletAddress: organization.walletAddress,
+    imageStorageKey: 'token.webp',
+    trustedClaimIssuerWalletAddress: organization.walletAddress,
+    maxInvestors: 2000,
+    maxBalancePerInvestor: 10000,
+    countryRestrictionMode: 'blocklist',
+    tokenAgentWalletAddress: PLATFORM_CONTROLLER,
+    identityManagerWalletAddress: organization.walletAddress,
+  };
+
+  const result = await service.assertTokenReadyForDeployment(token, organization);
+  assert.deepEqual(result.countryRestrictions, []);
+
+  await assert.rejects(
+    service.assertTokenReadyForDeployment({ ...token, countryRestrictionMode: 'allowlist' }, organization),
+    /at least one active country is required when using an allowlist/i,
+  );
 });
 
 test('final token submission verifies the frontend transaction and marks the only token deployed', async () => {

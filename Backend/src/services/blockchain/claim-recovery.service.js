@@ -18,7 +18,7 @@ const SETTING_KEYS = {
 
 const DEFAULTS = {
   blockOffset: 1000,
-  confirmationBlocks: 2,
+  confirmationBlocks: 1,
   lookbackBlocks: 200000,
   batchSize: 100,
 };

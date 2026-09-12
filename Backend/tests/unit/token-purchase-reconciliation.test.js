@@ -116,7 +116,7 @@ test('runner expires no-hash intents only after the USDT indexer reaches the saf
   };
   const checkpointRepository = {
     ensureCheckpoint: async () => {}, acquireLease: async () => true,
-    findCheckpoint: async () => ({ lastIndexedBlock: 98, startBlock: 1 }),
+    findCheckpoint: async () => ({ lastIndexedBlock: 99, startBlock: 1 }),
     releaseLease: async () => {},
   };
   const service = new TokenPurchaseReconciliationService({

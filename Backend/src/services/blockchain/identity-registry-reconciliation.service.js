@@ -23,7 +23,7 @@ const SETTING_KEYS = {
   recoveryLookbackBlocks: 'RegistryRecoveryLookbackBlocks',
 };
 const DEFAULTS = {
-  intervalSeconds: 15, blockOffset: 1000, confirmationBlocks: 2, addressBatchSize: 100,
+  intervalSeconds: 15, blockOffset: 1000, confirmationBlocks: 1, addressBatchSize: 100,
   eventBatchSize: 200, leaseSeconds: 120, maxChunksPerRun: 20, recoveryBatchSize: 100,
   recoveryLookbackBlocks: 200000,
 };

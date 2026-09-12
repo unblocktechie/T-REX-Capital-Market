@@ -34,12 +34,12 @@ independently of any frontend state.
 | `TrexDeploymentSyncInterval` | `60` | Runner interval in minutes. |
 | `TrexDeploymentLastSyncBlock` | `0` | Checkpoint — last fully processed block. Never rescans the whole chain. |
 | `TrexDeploymentBlockOffset` | `500` | Blocks per `eth_getLogs` request (prevents RPC range/timeout limits). |
-| `TrexDeploymentConfirmationBlocks` | `2` | Reorg buffer; only blocks up to `latest - this` are processed. |
+| `TrexDeploymentConfirmationBlocks` | `1` | Arc deterministic-finality buffer; only blocks up to `latest - this` are processed. |
 | `TrexDeploymentStartBlock` | `0` | Optional first-run start block. Set to the factory deploy block for full recovery; `0` starts one offset window behind the safe head. |
 | `TrexDeploymentSyncEnabled` | `true` | On/off switch (DB-level). |
 
-Blockchain config is reused from the existing env: `SEPOLIA_RPC_URL`, chain `11155111`, and
-`TREX_FACTORY_ADDRESS` (`0xe221247C52ece62027eb7D01D0f522d7363Fe875`). No RPC URL or key is
+Blockchain config is reused from the existing env: `BLOCKCHAIN_RPC_URL`, Arc Testnet chain `5042002`, and
+`TREX_FACTORY_ADDRESS` (`0x667ce07e2C17CeB4089823B7d542494B6c2aA042`). No RPC URL or key is
 hardcoded.
 
 ## Processing flow

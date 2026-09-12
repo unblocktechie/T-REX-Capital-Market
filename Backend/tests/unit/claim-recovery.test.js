@@ -202,8 +202,8 @@ test('RPC failure bubbles up and leaves the submission unchanged', async () => {
 // ------------------------------------------------------------- run()
 
 test('run() uses latestBlock - confirmationBlocks as the upper bound (reorg-safe)', async () => {
-  // Matching event sits at 1999, above safe head (2000 - 2 = 1998) -> must not be found.
-  const ctx = makeService({ latestBlock: 2000, logs: [mkLog(INVESTOR, { blockNumber: 1999 })] });
+  // Matching event sits at 2000, above Arc's safe head (2000 - 1 = 1999) -> must not be found.
+  const ctx = makeService({ latestBlock: 2000, logs: [mkLog(INVESTOR, { blockNumber: 2000 })] });
   const result = await ctx.service.run();
   assert.equal(result.recovered, 0);
   assert.equal(ctx.state.recovered, null);

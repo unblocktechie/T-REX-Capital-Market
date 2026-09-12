@@ -50,7 +50,7 @@ class BlockchainTransactionService {
   }
 
   requiredConfirmations() {
-    return Math.max(1, Number(this.config.transactionIndexerConfirmations || this.config.confirmations || 2));
+    return Math.max(1, Number(this.config.transactionIndexerConfirmations || this.config.confirmations || 1));
   }
 
   provider() {

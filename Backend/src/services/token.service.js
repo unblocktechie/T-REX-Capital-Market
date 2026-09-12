@@ -110,9 +110,10 @@ class TokenService {
 
   // Reusable pre-deployment eligibility gate. Verifies every configuration field,
   // that issuer-managed governance wallets equal the approved organization wallet, that the
-  // Token Agent stored when this token was created is valid, that at least
-  // one claim topic and one country restriction exist, and that the optimized image
-  // is still present. Returns the loaded claim topics and country restrictions.
+  // Token Agent stored when this token was created is valid, that at least one claim
+  // topic exists, that allowlists are not empty, and that the optimized image is still
+  // present. An empty blocklist intentionally means no country is restricted. Returns
+  // the loaded claim topics and country restrictions.
   async assertTokenReadyForDeployment(token, organization) {
     requiredFields(token, DEPLOYMENT_REQUIRED_FIELDS, 'Token form');
     for (const field of ORGANIZATION_WALLET_FIELDS) {
@@ -128,7 +129,9 @@ class TokenService {
       this.repository.listCountryRestrictions(token.tokenUid),
     ]);
     if (!claimTopics.length) throw ApiError.badRequest('At least one active claim topic is required.');
-    if (!countryRestrictions.length) throw ApiError.badRequest('At least one active country restriction is required.');
+    if (token.countryRestrictionMode === 'allowlist' && !countryRestrictions.length) {
+      throw ApiError.badRequest('At least one active country is required when using an allowlist.');
+    }
     if (!fs.existsSync(this.imageService.resolve(token.imageStorageKey))) {
       throw ApiError.badRequest('The optimized token image is no longer available.');
     }
@@ -267,16 +270,20 @@ class TokenService {
     const organization = await this.approvedOrganization(user);
     const current = await this.getOrCreate(user, organization);
     this.assertEditable(current);
+    // The frontend omits these fields when the issuer selects no restricted
+    // countries. Normalize that state to an empty blocklist (allow every country).
+    const countryRestrictionMode = input.countryRestrictionMode || 'blocklist';
+    const countryUids = Array.isArray(input.countryUids) ? input.countryUids : [];
     if (!input.isDraft) {
-      requiredFields(input, [
+      requiredFields({ ...input, countryRestrictionMode }, [
         'maxInvestors', 'maxBalancePerInvestor', 'countryRestrictionMode',
       ], 'Token compliance rules');
-      if (!input.countryUids.length) {
-        throw ApiError.badRequest('At least one country restriction is required.');
+      if (countryRestrictionMode === 'allowlist' && !countryUids.length) {
+        throw ApiError.badRequest('At least one country is required when using an allowlist.');
       }
     }
-    const countries = await this.locationRepository.findCountries(input.countryUids);
-    if (countries.length !== input.countryUids.length) {
+    const countries = await this.locationRepository.findCountries(countryUids);
+    if (countries.length !== countryUids.length) {
       throw ApiError.badRequest('One or more selected restriction countries are invalid or inactive.');
     }
     if (countries.some((country) => !/^\d{3}$/.test(country.numericCode || ''))) {
@@ -288,7 +295,7 @@ class TokenService {
       const token = await this.repository.updateByUserUid(user.userUid, {
         maxInvestors: input.maxInvestors,
         maxBalancePerInvestor: input.maxBalancePerInvestor,
-        countryRestrictionMode: input.countryRestrictionMode,
+        countryRestrictionMode,
         currentStep: input.isDraft ? current.currentStep : 'governance',
         isDraft: true,
         status: 'draft',

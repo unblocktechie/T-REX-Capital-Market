@@ -49,7 +49,7 @@ and does not perform a USDT conversion. It stores normalized authoritative value
     "functionName": "transfer",
     "args": ["0xRecipient", "125"],
     "from": "0xSender",
-    "chainId": 11155111
+    "chainId": 5042002
   }
 }
 ```
@@ -136,13 +136,13 @@ Operational tables are `tokenTransfer`, `tokenTransferTransaction`,
 ## Configuration
 
 ```env
-TRANSFER_CONFIRMATIONS=2
-TRANSFER_INDEXER_CONFIRMATIONS=2
+TRANSFER_CONFIRMATIONS=1
+TRANSFER_INDEXER_CONFIRMATIONS=1
 TRANSFER_INTENT_TTL_MINUTES=15
 TRANSFER_INDEXER_START_BLOCK=0
 TRANSFER_WORKER_ENABLED=true
 ```
 
-Both interactive verification and the background indexer use the standardized two-block threshold.
+Both interactive verification and the background indexer use Arc's one-block deterministic-finality threshold.
 Set `TRANSFER_INDEXER_START_BLOCK` to the earliest deployed platform token block to avoid
 unnecessary historical scanning.

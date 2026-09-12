@@ -28,7 +28,7 @@ Issuer JWT for the new issuer-executed `REDEMPTION`:
 
 ```json
 {
-  "chainId": 11155111,
+  "chainId": 5042002,
   "txHash": "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
   "tokenUid": "02647af2-e585-4c03-8984-108e1e44c616",
   "expectedAction": "INVEST"

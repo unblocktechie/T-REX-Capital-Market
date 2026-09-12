@@ -21,7 +21,7 @@ const deploymentAddressFields = {
 };
 
 const requireConfiguration = (config) => {
-  if (!config.sepoliaRpcUrl) throw new Error('Missing blockchain configuration: SEPOLIA_RPC_URL.');
+  if (!config.sepoliaRpcUrl) throw new Error('Missing blockchain configuration: BLOCKCHAIN_RPC_URL.');
   if (!config.trexFactoryAddress) throw new Error('Missing blockchain configuration: TREX_FACTORY_ADDRESS.');
   if (!ethers.isAddress(config.trexFactoryAddress)) {
     throw new Error('TREX_FACTORY_ADDRESS is not a valid EVM address.');

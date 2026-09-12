@@ -82,7 +82,7 @@ class ClaimSubmissionVerifierService {
       if (Number(receipt.status) !== 1) {
         throw new ClaimVerificationError('TRANSACTION_FAILED', 'The transaction did not execute successfully.');
       }
-      const requiredConfirmations = Math.max(1, Number(this.config.confirmations || 2));
+      const requiredConfirmations = Math.max(1, Number(this.config.confirmations || 1));
       if (requiredConfirmations > 1 && typeof receipt.confirmations === 'function') {
         const confirmations = Number(await receipt.confirmations());
         if (confirmations < requiredConfirmations) {

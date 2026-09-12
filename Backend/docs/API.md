@@ -457,7 +457,7 @@ A completed step requires at least one active claim topic and `organizationActsA
 `identityManagerWalletAddress` must be a valid EVM address matching the approved organization's
 `walletAddress` case-insensitively. The backend automatically stores
 For a newly created token, `tokenAgentWalletAddress = PLATFORM_CONTROLLER_ADDRESS` (default
-`0x40e81FAA4e6D54ae0632DF146939bB5858359271`). The frontend must treat this field as read-only
+`0x972E9CEf9eA9d3A9d7f3261bb8e16bA59E76a0FB`). The frontend must treat this field as read-only
 and should omit it from the request. A client-supplied Token Agent value is ignored. Existing token
 rows keep the Token Agent assigned when they were created.
 
@@ -533,7 +533,7 @@ Approve:
 }
 ```
 
-Approval first checks the configured Sepolia OnchainID factory for the organization's submitted `walletAddress`. If no identity exists, the API creates one with the deterministic salt `org-{organizationUid}` and waits for the configured confirmations. A successful response includes:
+Approval first checks the configured Arc Testnet OnchainID factory for the organization's submitted `walletAddress`. If no identity exists, the API creates one with the deterministic salt `org-{organizationUid}` and waits for the configured confirmations. A successful response includes:
 
 ```json
 {
@@ -642,11 +642,11 @@ for execution or recovery. See `docs/BLOCKCHAIN-TRANSACTION-INDEXER.md` and
 ## Investor token purchase (USDT)
 
 - `GET /investments/me/portfolio?page=1&limit=20&search=` returns one row per token for which the
-  authenticated investor has at least one `COMPLETED` purchase. Search covers token name, symbol,
+  authenticated investor has canonical confirmed investment, transfer, or redemption activity. Search covers token name, symbol,
   token address, and issuer company. Each row includes full marketplace token metadata, image URL,
   chain ID, issuer information, country restrictions, required claim topics, and portfolio totals.
-  The totals include purchase/redemption counts, tokens purchased, USDT invested, completed tokens
-  redeemed, remaining database-derived net token amount, average purchase price, and activity dates.
+  Totals are aggregated from canonical `blockchainTransaction` rows and include confirmed investments,
+  redemptions, incoming/outgoing transfers, remaining net token amount, average purchase price, and activity dates.
 
 - `GET /investments/tokens/{tokenUid}/purchases?page=1&limit=20&search=&status=all` returns the
   authenticated investor's legacy purchase history. It is retained read-only for production-data

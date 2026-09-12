@@ -104,7 +104,7 @@ Manager address:
 Send to `PUT /api/v1/tokens/me/governance`. `identityManagerWalletAddress` must exactly represent
 the organization wallet (comparison is case-insensitive). The response and subsequent
 `GET /tokens/me` returns `tokenAgentWalletAddress` as the Platform Controller assigned when that
-token was created. New tokens use `0x40e81FAA4e6D54ae0632DF146939bB5858359271` by default. Existing
+token was created. New tokens use `0x972E9CEf9eA9d3A9d7f3261bb8e16bA59E76a0FB` by default. Existing
 tokens retain their previously stored Token Agent. Render it as read-only in review screens and use
 that backend value when building the TREX deployment transaction.
 
@@ -133,7 +133,7 @@ First send the TREX deployment transaction from the connected frontend wallet an
 }
 ```
 
-Do not send contract addresses from browser state. The backend independently reads the Sepolia receipt, decodes the factory's `TREXSuiteDeployed` event, and returns the authoritative addresses. Success returns `status: deployed` with `platformAgentWallet`, the six suite addresses, `deployTxHash`, `deployedAtBlock`, and `deployedAt`.
+Do not send contract addresses from browser state. The backend independently reads the Arc Testnet receipt, decodes the factory's `TREXSuiteDeployed` event, and returns the authoritative addresses. Success returns `status: deployed` with `platformAgentWallet`, the six suite addresses, `deployTxHash`, `deployedAtBlock`, and `deployedAt`.
 
 If the API returns `422 TOKEN_DEPLOYMENT_VERIFICATION_FAILED`, show `message` to the user and reload `GET /tokens/me`. The stored token will have `status: deploymentFailed` and `contractTxnMessage`; the user may retry deployment. A `deployed` token's creation fields are read-only, but its owning issuer may update `currentTokenPrice` through the dedicated price endpoint below.
 

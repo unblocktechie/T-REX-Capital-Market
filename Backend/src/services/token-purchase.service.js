@@ -243,8 +243,8 @@ class TokenPurchaseService {
           portfolio: {
             interestUid,
             investorWalletAddress,
-            usdtContractAddress,
-            usdtDecimals: Number(usdtDecimals),
+            usdtContractAddress: usdtContractAddress || this.config.purchaseUsdtAddress || null,
+            usdtDecimals: Number(usdtDecimals ?? this.config.purchaseUsdtDecimals ?? 6),
             purchaseCount: Number(purchaseCount),
             redemptionCount: Number(redemptionCount || 0),
             totalPurchasedTokenAmount: String(totalPurchasedTokenAmount),
@@ -261,7 +261,7 @@ class TokenPurchaseService {
             receivedTransferCount: Number(receivedTransferCount || 0),
             netTokenAmount: String(netTokenAmount),
             netTokenAmountRaw: String(netTokenAmountRaw),
-            averagePurchasePrice: String(averagePurchasePrice),
+            averagePurchasePrice: averagePurchasePrice == null ? null : String(averagePurchasePrice),
             firstPurchaseAt,
             latestPurchaseAt,
             latestRedemptionAt: latestRedemptionAt || null,
@@ -330,7 +330,7 @@ class TokenPurchaseService {
     try {
       await this.repository.recordTransaction(purchaseUid, 'PAYMENT', normalized, 'RECEIVED');
       const verified = await this.blockchain.verifyPayment(normalized, this.expected(row), {
-        confirmations: Math.max(1, Number(this.config.purchasePaymentConfirmations || 2)),
+        confirmations: Math.max(1, Number(this.config.purchasePaymentConfirmations || 1)),
       });
       await this.transactionRunner(async (connection) => {
         const changed = await this.repository.confirmPayment(purchaseUid, verified, connection);

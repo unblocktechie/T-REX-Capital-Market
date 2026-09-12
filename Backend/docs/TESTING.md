@@ -240,7 +240,7 @@ Approval example:
 curl -X PATCH http://localhost:3000/api/v1/admin/organizations/ORGANIZATION_UID/status -H "Authorization: Bearer ADMIN_TOKEN" -H "Content-Type: application/json" -d '{"status":"approved"}'
 ```
 
-Before testing, configure `SEPOLIA_RPC_URL`, `IDENTITY_FACTORY_ADDRESS`, `DEPLOYER_PRIVATE_KEY`, and `DEPLOYER_ADDRESS` with a funded Sepolia deployer. Never use the exposed sample key; rotate it first.
+Before testing, configure `BLOCKCHAIN_RPC_URL`, `IDENTITY_FACTORY_ADDRESS`, `DEPLOYER_PRIVATE_KEY`, and `DEPLOYER_ADDRESS` with a funded Arc Testnet deployer. Never use an exposed sample key; rotate it first.
 
 Expected after a new identity transaction: `200`, `status: approved`, `canResubmit: false`, `rejectionReason: null`, and populated `contractAddress`, `contractTxnHash`, and `contractTxnMessage`. Repeating safely after an identity already exists reuses the factory result and may return a null transaction hash.
 
@@ -309,7 +309,7 @@ curl -X PUT http://localhost:3000/api/v1/tokens/me/governance \
 ```
 
 Expected: the response contains
-`tokenAgentWalletAddress: 0x40e81FAA4e6D54ae0632DF146939bB5858359271`. A different valid
+`tokenAgentWalletAddress: 0x972E9CEf9eA9d3A9d7f3261bb8e16bA59E76a0FB`. A different valid
 Identity Manager wallet must return `400`. A legacy client-supplied Token Agent is ignored.
 
 Review and submit:
@@ -323,7 +323,7 @@ curl -X POST http://localhost:3000/api/v1/tokens/me/submit \
   -d '{"transactionHash":"0xPASTE_64_HEX_CHARACTER_DEPLOYMENT_HASH"}'
 ```
 
-Before submitting, configure `TREX_FACTORY_ADDRESS` with the Sepolia TREX factory used by the frontend. Expected: `status: deployed`, `currentStep: deployed`, `isDraft: false`, all deployment addresses and block metadata populated, and all later mutation attempts return `409`. The unique organization constraint prevents another token row.
+Before submitting, configure `TREX_FACTORY_ADDRESS` with the Arc Testnet TREX factory used by the frontend. Expected: `status: deployed`, `currentStep: deployed`, `isDraft: false`, all deployment addresses and block metadata populated, and all later mutation attempts return `409`. The unique organization constraint prevents another token row.
 
 Failure check: submit a confirmed failed transaction or a successful hash without the configured factory's `TREXSuiteDeployed` event. Expected: `422 TOKEN_DEPLOYMENT_VERIFICATION_FAILED`; `GET /tokens/me` then returns `status: deploymentFailed`, the attempted `deployTxHash`, and a diagnostic `contractTxnMessage`. A new valid transaction hash can be submitted afterward.
 
@@ -453,7 +453,7 @@ Their transaction-orchestration POST endpoints and runners are retired.
 
 ## Legacy investor token purchase and mint settlement
 
-1. Configure Sepolia RPC, platform signer, and `PURCHASE_USDT_ADDRESS`. Confirm the platform wallet
+1. Configure the Arc Testnet RPC, platform signer, and `PURCHASE_USDT_ADDRESS`. Confirm the platform wallet
    is a Token Agent for the deployed token and use an investor interest with status `registered`.
 2. Create an intent:
 
@@ -523,9 +523,9 @@ Their transaction-orchestration POST endpoints and runners are retired.
 
 11. Apply `database/migrations/20260910_add_investor_portfolio_permission.sql` and call
     `GET /api/v1/investments/me/portfolio?page=1&limit=20&search=`. Expect only tokens with at least
-    one `COMPLETED` purchase for the authenticated investor. Verify token name, symbol, image URL,
+    one canonical confirmed investment, transfer, or redemption involving the authenticated investor. Verify token name, symbol, image URL,
     token/registry addresses, chain ID, issuer, restrictions, required claims, purchase totals, USDT
-    totals, completed-redemption totals, net token amount, average price, counts, and dates. Search
+    totals, confirmed-redemption and transfer totals, net token amount, average price, counts, and dates. Search
     by token name, symbol, token address, and issuer company. Confirm a second investor cannot see
     the first investor's portfolio.
 

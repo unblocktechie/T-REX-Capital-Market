@@ -738,7 +738,7 @@ paths:
   /api/v1/investments/me/portfolio:
     get:
       tags: [Token Purchases]
-      summary: List the authenticated investor's aggregated completed-token portfolio
+      summary: List the authenticated investor's portfolio from confirmed canonical transactions
       security: [{ bearerAuth: [] }]
       parameters:
         - { $ref: '#/components/parameters/Page' }
@@ -1280,7 +1280,7 @@ components:
       required: [chainId, txHash, tokenUid, expectedAction]
       additionalProperties: false
       properties:
-        chainId: { type: integer, example: 11155111 }
+        chainId: { type: integer, example: 5042002 }
         txHash:
           type: string
           pattern: '^0x[a-fA-F0-9]{64}$'

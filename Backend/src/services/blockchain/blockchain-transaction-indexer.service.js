@@ -19,7 +19,7 @@ const SETTING_KEYS = Object.freeze({
 const DEFAULTS = Object.freeze({
   intervalSeconds: 15,
   blockOffset: 1000,
-  confirmationBlocks: 2,
+  confirmationBlocks: 1,
   addressBatchSize: 100,
   leaseSeconds: 180,
   maxChunksPerRun: 10,

@@ -21,7 +21,7 @@ const SETTING_KEYS = {
 const DEFAULTS = {
   intervalSeconds: 15,
   blockOffset: 1000,
-  confirmationBlocks: 2,
+  confirmationBlocks: 1,
   addressBatchSize: 100,
   eventBatchSize: 200,
   leaseSeconds: 180,

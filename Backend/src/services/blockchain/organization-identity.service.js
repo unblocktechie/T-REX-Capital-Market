@@ -6,7 +6,7 @@ const zeroAddress = ethers.ZeroAddress.toLowerCase();
 
 const requireConfiguration = (config) => {
   const missing = [];
-  if (!config.sepoliaRpcUrl) missing.push('SEPOLIA_RPC_URL');
+  if (!config.sepoliaRpcUrl) missing.push('BLOCKCHAIN_RPC_URL');
   if (!config.deployerPrivateKey) missing.push('DEPLOYER_PRIVATE_KEY');
   if (!config.identityFactoryAddress) missing.push('IDENTITY_FACTORY_ADDRESS');
   if (missing.length) {

@@ -10,7 +10,7 @@ class TokenPurchaseRepository {
     const limitSql = sqlInteger(safeLimit, { min: 1, name: 'limit' });
     const offsetSql = sqlInteger(offset, { name: 'offset' });
     const conditions = ['1=1'];
-    const params = [userUid, userUid, userUid, userUid];
+    const params = [userUid, userUid];
     const normalizedSearch = String(search || '').trim().toLowerCase();
     if (normalizedSearch) {
       const pattern = `%${normalizedSearch}%`;
@@ -20,49 +20,88 @@ class TokenPurchaseRepository {
     }
     const where = conditions.join(' AND ');
     const from = `FROM (
-        SELECT p.\`tokenUid\`, MAX(p.\`organizationUid\`) AS \`purchaseOrganizationUid\`,
-               MAX(p.\`interestUid\`) AS \`interestUid\`, MAX(p.\`chainId\`) AS \`chainId\`,
-               MAX(p.\`investorWalletAddress\`) AS \`investorWalletAddress\`,
-               MAX(p.\`usdtContractAddress\`) AS \`usdtContractAddress\`,
-               MAX(p.\`usdtDecimals\`) AS \`usdtDecimals\`, COUNT(*) AS \`purchaseCount\`,
-               SUM(p.\`tokenAmount\`) AS \`totalPurchasedTokenAmount\`,
-               SUM(CAST(p.\`tokenAmountRaw\` AS DECIMAL(65,0))) AS \`totalPurchasedTokenAmountRaw\`,
-               SUM(p.\`usdtAmount\`) AS \`totalInvestedUsdtAmount\`,
-               SUM(CAST(p.\`usdtAmountRaw\` AS DECIMAL(65,0))) AS \`totalInvestedUsdtAmountRaw\`,
-               MIN(p.\`createdAt\`) AS \`firstPurchaseAt\`,
-               MAX(COALESCE(p.\`mintConfirmedAt\`, p.\`updatedAt\`)) AS \`latestPurchaseAt\`
-        FROM \`tokenPurchase\` p
-        WHERE p.\`investorUserUid\` = ? AND p.\`status\` = 'COMPLETED' AND p.\`isDeleted\` = 0
-        GROUP BY p.\`tokenUid\`
+        SELECT bt.\`tokenUid\`, MAX(bt.\`organizationUid\`) AS \`purchaseOrganizationUid\`,
+               MAX(bt.\`chainId\`) AS \`chainId\`, MAX(i.\`walletAddress\`) AS \`investorWalletAddress\`,
+               SUM(CASE WHEN bt.\`type\` = 'INVEST'
+                 AND LOWER(bt.\`fromWallet\`) = LOWER(i.\`walletAddress\`) THEN 1 ELSE 0 END) AS \`purchaseCount\`,
+               SUM(CASE WHEN bt.\`type\` = 'INVEST'
+                 AND LOWER(bt.\`fromWallet\`) = LOWER(i.\`walletAddress\`)
+                 THEN bt.\`tokenAmountFormatted\` ELSE 0 END) AS \`totalPurchasedTokenAmount\`,
+               SUM(CASE WHEN bt.\`type\` = 'INVEST'
+                 AND LOWER(bt.\`fromWallet\`) = LOWER(i.\`walletAddress\`)
+                 THEN CAST(bt.\`tokenAmountRaw\` AS DECIMAL(65,0)) ELSE 0 END) AS \`totalPurchasedTokenAmountRaw\`,
+               SUM(CASE WHEN bt.\`type\` = 'INVEST'
+                 AND LOWER(bt.\`fromWallet\`) = LOWER(i.\`walletAddress\`)
+                 THEN COALESCE(bt.\`usdtAmountFormatted\`, 0) ELSE 0 END) AS \`totalInvestedUsdtAmount\`,
+               SUM(CASE WHEN bt.\`type\` = 'INVEST'
+                 AND LOWER(bt.\`fromWallet\`) = LOWER(i.\`walletAddress\`)
+                 THEN CAST(COALESCE(bt.\`usdtAmountRaw\`, '0') AS DECIMAL(65,0)) ELSE 0 END) AS \`totalInvestedUsdtAmountRaw\`,
+               SUM(CASE WHEN bt.\`type\` = 'REDEMPTION'
+                 AND LOWER(bt.\`toWallet\`) = LOWER(i.\`walletAddress\`) THEN 1 ELSE 0 END) AS \`redemptionCount\`,
+               SUM(CASE WHEN bt.\`type\` = 'REDEMPTION'
+                 AND LOWER(bt.\`toWallet\`) = LOWER(i.\`walletAddress\`)
+                 THEN bt.\`tokenAmountFormatted\` ELSE 0 END) AS \`totalRedeemedTokenAmount\`,
+               SUM(CASE WHEN bt.\`type\` = 'REDEMPTION'
+                 AND LOWER(bt.\`toWallet\`) = LOWER(i.\`walletAddress\`)
+                 THEN CAST(bt.\`tokenAmountRaw\` AS DECIMAL(65,0)) ELSE 0 END) AS \`totalRedeemedTokenAmountRaw\`,
+               SUM(CASE WHEN bt.\`type\` = 'TRANSFER'
+                 AND LOWER(bt.\`fromWallet\`) = LOWER(i.\`walletAddress\`) THEN 1 ELSE 0 END) AS \`sentTransferCount\`,
+               SUM(CASE WHEN bt.\`type\` = 'TRANSFER'
+                 AND LOWER(bt.\`fromWallet\`) = LOWER(i.\`walletAddress\`)
+                 THEN bt.\`tokenAmountFormatted\` ELSE 0 END) AS \`totalSentTokenAmount\`,
+               SUM(CASE WHEN bt.\`type\` = 'TRANSFER'
+                 AND LOWER(bt.\`fromWallet\`) = LOWER(i.\`walletAddress\`)
+                 THEN CAST(bt.\`tokenAmountRaw\` AS DECIMAL(65,0)) ELSE 0 END) AS \`totalSentTokenAmountRaw\`,
+               SUM(CASE WHEN bt.\`type\` = 'TRANSFER'
+                 AND LOWER(bt.\`toWallet\`) = LOWER(i.\`walletAddress\`) THEN 1 ELSE 0 END) AS \`receivedTransferCount\`,
+               SUM(CASE WHEN bt.\`type\` = 'TRANSFER'
+                 AND LOWER(bt.\`toWallet\`) = LOWER(i.\`walletAddress\`)
+                 THEN bt.\`tokenAmountFormatted\` ELSE 0 END) AS \`totalReceivedTokenAmount\`,
+               SUM(CASE WHEN bt.\`type\` = 'TRANSFER'
+                 AND LOWER(bt.\`toWallet\`) = LOWER(i.\`walletAddress\`)
+                 THEN CAST(bt.\`tokenAmountRaw\` AS DECIMAL(65,0)) ELSE 0 END) AS \`totalReceivedTokenAmountRaw\`,
+               MIN(CASE WHEN bt.\`type\` = 'INVEST'
+                 AND LOWER(bt.\`fromWallet\`) = LOWER(i.\`walletAddress\`)
+                 THEN COALESCE(bt.\`blockTimestamp\`, bt.\`confirmedAt\`) END) AS \`firstPurchaseAt\`,
+               MAX(CASE WHEN bt.\`type\` = 'INVEST'
+                 AND LOWER(bt.\`fromWallet\`) = LOWER(i.\`walletAddress\`)
+                 THEN COALESCE(bt.\`blockTimestamp\`, bt.\`confirmedAt\`) END) AS \`latestPurchaseAt\`,
+               MAX(CASE WHEN bt.\`type\` = 'REDEMPTION'
+                 AND LOWER(bt.\`toWallet\`) = LOWER(i.\`walletAddress\`)
+                 THEN COALESCE(bt.\`blockTimestamp\`, bt.\`confirmedAt\`) END) AS \`latestRedemptionAt\`,
+               MAX(CASE WHEN bt.\`type\` = 'TRANSFER'
+                 AND LOWER(bt.\`fromWallet\`) = LOWER(i.\`walletAddress\`)
+                 THEN COALESCE(bt.\`blockTimestamp\`, bt.\`confirmedAt\`) END) AS \`latestSentAt\`,
+               MAX(CASE WHEN bt.\`type\` = 'TRANSFER'
+                 AND LOWER(bt.\`toWallet\`) = LOWER(i.\`walletAddress\`)
+                 THEN COALESCE(bt.\`blockTimestamp\`, bt.\`confirmedAt\`) END) AS \`latestReceivedAt\`,
+               MAX(COALESCE(bt.\`blockTimestamp\`, bt.\`confirmedAt\`)) AS \`latestActivityAt\`
+        FROM \`blockchainTransaction\` bt
+        INNER JOIN \`investorMaster\` i
+          ON i.\`userUid\` = ? AND i.\`status\` = 'submitted'
+          AND i.\`isActive\` = 1 AND i.\`isDeleted\` = 0
+        WHERE bt.\`status\` = 'CONFIRMED' AND bt.\`isCanonical\` = 1
+          AND bt.\`isActive\` = 1 AND bt.\`isDeleted\` = 0
+          AND (
+            (bt.\`type\` = 'INVEST' AND LOWER(bt.\`fromWallet\`) = LOWER(i.\`walletAddress\`))
+            OR (bt.\`type\` = 'TRANSFER' AND (
+              LOWER(bt.\`fromWallet\`) = LOWER(i.\`walletAddress\`)
+              OR LOWER(bt.\`toWallet\`) = LOWER(i.\`walletAddress\`)
+            ))
+            OR (bt.\`type\` = 'REDEMPTION' AND LOWER(bt.\`toWallet\`) = LOWER(i.\`walletAddress\`))
+          )
+        GROUP BY bt.\`tokenUid\`
       ) portfolio
       INNER JOIN \`tokenMaster\` t ON t.\`tokenUid\` = portfolio.\`tokenUid\` AND t.\`isDeleted\` = 0
       INNER JOIN \`organizationMaster\` o
         ON o.\`organizationUid\` = t.\`organizationUid\` AND o.\`isDeleted\` = 0
       LEFT JOIN \`countryMaster\` oc ON oc.\`countryUid\` = o.\`countryUid\`
-      LEFT JOIN (
-        SELECT r.\`tokenUid\`, SUM(r.\`tokenAmount\`) AS \`totalRedeemedTokenAmount\`,
-               SUM(CAST(r.\`tokenAmountRaw\` AS DECIMAL(65,0))) AS \`totalRedeemedTokenAmountRaw\`,
-               COUNT(*) AS \`redemptionCount\`, MAX(r.\`updatedAt\`) AS \`latestRedemptionAt\`
-        FROM \`tokenRedemption\` r
-        WHERE r.\`investorUserUid\` = ? AND r.\`status\` = 'COMPLETED' AND r.\`isDeleted\` = 0
-        GROUP BY r.\`tokenUid\`
-      ) redeemed ON redeemed.\`tokenUid\` = portfolio.\`tokenUid\`
-      LEFT JOIN (
-        SELECT x.\`tokenUid\`, SUM(x.\`tokenAmount\`) AS \`totalSentTokenAmount\`,
-               SUM(CAST(x.\`tokenAmountRaw\` AS DECIMAL(65,0))) AS \`totalSentTokenAmountRaw\`,
-               COUNT(*) AS \`sentTransferCount\`, MAX(x.\`verifiedAt\`) AS \`latestSentAt\`
-        FROM \`tokenTransfer\` x
-        WHERE x.\`senderUserUid\` = ? AND x.\`status\` = 'COMPLETED' AND x.\`isDeleted\` = 0
-        GROUP BY x.\`tokenUid\`
-      ) sent ON sent.\`tokenUid\` = portfolio.\`tokenUid\`
-      LEFT JOIN (
-        SELECT x.\`tokenUid\`, SUM(x.\`tokenAmount\`) AS \`totalReceivedTokenAmount\`,
-               SUM(CAST(x.\`tokenAmountRaw\` AS DECIMAL(65,0))) AS \`totalReceivedTokenAmountRaw\`,
-               COUNT(*) AS \`receivedTransferCount\`, MAX(x.\`verifiedAt\`) AS \`latestReceivedAt\`
-        FROM \`tokenTransfer\` x
-        WHERE x.\`recipientUserUid\` = ? AND x.\`status\` = 'COMPLETED' AND x.\`isDeleted\` = 0
-        GROUP BY x.\`tokenUid\`
-      ) received ON received.\`tokenUid\` = portfolio.\`tokenUid\``;
+      LEFT JOIN \`tokenInvestmentInterest\` interest ON interest.\`interestUid\` = (
+        SELECT ii.\`interestUid\` FROM \`tokenInvestmentInterest\` ii
+        WHERE ii.\`investorUserUid\` = ? AND ii.\`tokenUid\` = portfolio.\`tokenUid\`
+          AND ii.\`isDeleted\` = 0
+        ORDER BY ii.\`createdAt\` DESC LIMIT 1
+      )`;
     const select = `SELECT t.\`tokenUid\`, t.\`organizationUid\`, t.\`tokenName\`, t.\`tokenSymbol\`,
         t.\`decimals\`, t.\`initialTokenPrice\`, t.\`currentTokenPrice\`,
         COALESCE(t.\`currentTokenPrice\`, t.\`initialTokenPrice\`) AS \`tokenPrice\`,
@@ -77,31 +116,29 @@ class TokenPurchaseRepository {
         t.\`createdAt\`, t.\`updatedAt\`, o.\`legalCompanyName\`,
         o.\`walletAddress\` AS \`organizationWalletAddress\`,
         oc.\`countryName\` AS \`organizationCountryName\`, oc.\`countryCode\` AS \`organizationCountryCode\`,
-        portfolio.\`interestUid\`, portfolio.\`chainId\`, portfolio.\`investorWalletAddress\`,
-        portfolio.\`usdtContractAddress\`, portfolio.\`usdtDecimals\`, portfolio.\`purchaseCount\`,
+        interest.\`interestUid\`, portfolio.\`chainId\`, portfolio.\`investorWalletAddress\`,
+        NULL AS \`usdtContractAddress\`, NULL AS \`usdtDecimals\`, portfolio.\`purchaseCount\`,
         CAST(portfolio.\`totalPurchasedTokenAmount\` AS CHAR) AS \`totalPurchasedTokenAmount\`,
         CAST(portfolio.\`totalPurchasedTokenAmountRaw\` AS CHAR) AS \`totalPurchasedTokenAmountRaw\`,
         CAST(portfolio.\`totalInvestedUsdtAmount\` AS CHAR) AS \`totalInvestedUsdtAmount\`,
         CAST(portfolio.\`totalInvestedUsdtAmountRaw\` AS CHAR) AS \`totalInvestedUsdtAmountRaw\`,
-        CAST(COALESCE(redeemed.\`totalRedeemedTokenAmount\`, 0) AS CHAR) AS \`totalRedeemedTokenAmount\`,
-        CAST(COALESCE(redeemed.\`totalRedeemedTokenAmountRaw\`, 0) AS CHAR) AS \`totalRedeemedTokenAmountRaw\`,
-        CAST(COALESCE(sent.\`totalSentTokenAmount\`, 0) AS CHAR) AS \`totalSentTokenAmount\`,
-        CAST(COALESCE(sent.\`totalSentTokenAmountRaw\`, 0) AS CHAR) AS \`totalSentTokenAmountRaw\`,
-        CAST(COALESCE(received.\`totalReceivedTokenAmount\`, 0) AS CHAR) AS \`totalReceivedTokenAmount\`,
-        CAST(COALESCE(received.\`totalReceivedTokenAmountRaw\`, 0) AS CHAR) AS \`totalReceivedTokenAmountRaw\`,
-        CAST(GREATEST(portfolio.\`totalPurchasedTokenAmount\` + COALESCE(received.\`totalReceivedTokenAmount\`, 0)
-          - COALESCE(redeemed.\`totalRedeemedTokenAmount\`, 0) - COALESCE(sent.\`totalSentTokenAmount\`, 0), 0) AS CHAR) AS \`netTokenAmount\`,
-        CAST(GREATEST(portfolio.\`totalPurchasedTokenAmountRaw\` + COALESCE(received.\`totalReceivedTokenAmountRaw\`, 0)
-          - COALESCE(redeemed.\`totalRedeemedTokenAmountRaw\`, 0) - COALESCE(sent.\`totalSentTokenAmountRaw\`, 0), 0) AS CHAR) AS \`netTokenAmountRaw\`,
+        CAST(portfolio.\`totalRedeemedTokenAmount\` AS CHAR) AS \`totalRedeemedTokenAmount\`,
+        CAST(portfolio.\`totalRedeemedTokenAmountRaw\` AS CHAR) AS \`totalRedeemedTokenAmountRaw\`,
+        CAST(portfolio.\`totalSentTokenAmount\` AS CHAR) AS \`totalSentTokenAmount\`,
+        CAST(portfolio.\`totalSentTokenAmountRaw\` AS CHAR) AS \`totalSentTokenAmountRaw\`,
+        CAST(portfolio.\`totalReceivedTokenAmount\` AS CHAR) AS \`totalReceivedTokenAmount\`,
+        CAST(portfolio.\`totalReceivedTokenAmountRaw\` AS CHAR) AS \`totalReceivedTokenAmountRaw\`,
+        CAST(GREATEST(portfolio.\`totalPurchasedTokenAmount\` + portfolio.\`totalReceivedTokenAmount\`
+          - portfolio.\`totalRedeemedTokenAmount\` - portfolio.\`totalSentTokenAmount\`, 0) AS CHAR) AS \`netTokenAmount\`,
+        CAST(GREATEST(portfolio.\`totalPurchasedTokenAmountRaw\` + portfolio.\`totalReceivedTokenAmountRaw\`
+          - portfolio.\`totalRedeemedTokenAmountRaw\` - portfolio.\`totalSentTokenAmountRaw\`, 0) AS CHAR) AS \`netTokenAmountRaw\`,
         CAST(portfolio.\`totalInvestedUsdtAmount\` / NULLIF(portfolio.\`totalPurchasedTokenAmount\`, 0) AS CHAR) AS \`averagePurchasePrice\`,
-        COALESCE(redeemed.\`redemptionCount\`, 0) AS \`redemptionCount\`,
-        COALESCE(sent.\`sentTransferCount\`, 0) AS \`sentTransferCount\`,
-        COALESCE(received.\`receivedTransferCount\`, 0) AS \`receivedTransferCount\`,
-        portfolio.\`firstPurchaseAt\`, portfolio.\`latestPurchaseAt\`, redeemed.\`latestRedemptionAt\`,
-        sent.\`latestSentAt\`, received.\`latestReceivedAt\``;
+        portfolio.\`redemptionCount\`, portfolio.\`sentTransferCount\`,
+        portfolio.\`receivedTransferCount\`, portfolio.\`firstPurchaseAt\`, portfolio.\`latestPurchaseAt\`,
+        portfolio.\`latestRedemptionAt\`, portfolio.\`latestSentAt\`, portfolio.\`latestReceivedAt\``;
     const [rows, countRows] = await Promise.all([
       execute(`${select} ${from} WHERE ${where}
-        ORDER BY portfolio.\`latestPurchaseAt\` DESC, t.\`tokenName\` ASC LIMIT ${limitSql} OFFSET ${offsetSql}`,
+        ORDER BY portfolio.\`latestActivityAt\` DESC, t.\`tokenName\` ASC LIMIT ${limitSql} OFFSET ${offsetSql}`,
       params, executor),
       execute(`SELECT COUNT(*) AS \`total\` ${from} WHERE ${where}`, params, executor),
     ]);

@@ -106,7 +106,7 @@ Content-Type: application/json
 
 ```json
 {
-  "chainId": 11155111,
+  "chainId": 5042002,
   "txHash": "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
   "tokenUid": "02647af2-e585-4c03-8984-108e1e44c616",
   "expectedAction": "INVEST"
@@ -135,13 +135,13 @@ The endpoint returns HTTP `200` for a valid observed transaction whose current c
   "message": "Transaction submitted and awaiting blockchain confirmations.",
   "data": {
     "transactionUid": "7d02a540-c1d1-4e24-8f83-1018d85facf7",
-    "chainId": 11155111,
+    "chainId": 5042002,
     "tokenUid": "02647af2-e585-4c03-8984-108e1e44c616",
     "transactionHash": "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
     "type": "INVEST",
     "status": "SUBMITTED",
     "confirmationCount": 1,
-    "requiredConfirmations": 2
+    "requiredConfirmations": 1
   }
 }
 ```
@@ -440,7 +440,7 @@ Advance checkpoint only after the complete range succeeds
 - A checkpoint block-hash mismatch marks affected records `ORPHANED`, rewinds, and rescans.
 - A database lease prevents multiple backend instances from advancing the same indexer concurrently.
 
-The default interval is 15 seconds and the current confirmation default is 2 blocks. Both values
+The default interval is 15 seconds and the Arc Testnet confirmation default is 1 block. Both values
 are configurable. Frontend code must not assume the indexer will always complete in exactly 15
 seconds because RPC latency, block production, confirmation waiting, backfill, and backlog can add
 time.

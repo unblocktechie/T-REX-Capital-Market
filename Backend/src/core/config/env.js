@@ -92,29 +92,34 @@ const env = Object.freeze({
     virusScanTimeoutMs: Number(process.env.TOKEN_IMAGE_VIRUS_SCAN_TIMEOUT_MS || 30000),
   },
   blockchain: {
-    sepoliaRpcUrl: process.env.SEPOLIA_RPC_URL,
-    sepoliaFallbackRpcUrls: csv(process.env.SEPOLIA_FALLBACK_RPC_URLS),
+    // Legacy property names are retained internally for compatibility with existing
+    // service/test configuration objects. New deployments use chain-neutral env names.
+    sepoliaRpcUrl: process.env.BLOCKCHAIN_RPC_URL
+      || process.env.SEPOLIA_RPC_URL
+      || 'https://rpc.testnet.arc.network',
+    sepoliaFallbackRpcUrls: csv(
+      process.env.BLOCKCHAIN_FALLBACK_RPC_URLS || process.env.SEPOLIA_FALLBACK_RPC_URLS,
+    ),
     deployerPrivateKey: process.env.DEPLOYER_PRIVATE_KEY,
-    deployerAddress: process.env.DEPLOYER_ADDRESS,
+    deployerAddress: process.env.DEPLOYER_ADDRESS
+      || '0x849F887daec1B14c161ec377C95549ef83dDf3ff',
     // Backend-authoritative Token Agent assigned to every newly configured TREX token.
     platformControllerAddress: process.env.PLATFORM_CONTROLLER_ADDRESS
-      || '0x40e81FAA4e6D54ae0632DF146939bB5858359271',
-    identityFactoryAddress: process.env.IDENTITY_FACTORY_ADDRESS,
-    trexFactoryAddress: process.env.TREX_FACTORY_ADDRESS,
-    confirmations: Number(process.env.BLOCKCHAIN_CONFIRMATIONS || 2),
-    // Registry confirmation is intentionally conservative because CONFIRMED is authoritative.
-    registryConfirmations: Number(process.env.REGISTRY_CONFIRMATIONS || 2),
-    // MetaMask may wrap registerIdentity through its audited Delegation Manager. Only explicitly
+      || '0x972E9CEf9eA9d3A9d7f3261bb8e16bA59E76a0FB',
+    identityFactoryAddress: process.env.IDENTITY_FACTORY_ADDRESS
+      || '0xA30A9FC6d6ea2Fa3fa3F01265a3C1253125481D8',
+    trexFactoryAddress: process.env.TREX_FACTORY_ADDRESS
+      || '0x667ce07e2C17CeB4089823B7d542494B6c2aA042',
+    // Arc has deterministic BFT finality, so one committed block is authoritative.
+    confirmations: Number(process.env.BLOCKCHAIN_CONFIRMATIONS || 1),
+    registryConfirmations: Number(process.env.REGISTRY_CONFIRMATIONS || 1),
+    // A wallet provider may wrap registerIdentity through an audited Delegation Manager. Only explicitly
     // configured executors are accepted; the nested target, value, function and arguments are
     // still decoded and verified against the pending operation.
-    registryDelegationManagerAddresses: csv(
-      process.env.REGISTRY_DELEGATION_MANAGER_ADDRESSES
-        || '0xdb9B1e94B5b69Df7e401DDbedE43491141047dB3',
-    ),
+    registryDelegationManagerAddresses: csv(process.env.REGISTRY_DELEGATION_MANAGER_ADDRESSES),
     transactionDelegationManagerAddresses: csv(
       process.env.TRANSACTION_DELEGATION_MANAGER_ADDRESSES
-        || process.env.REGISTRY_DELEGATION_MANAGER_ADDRESSES
-        || '0xdb9B1e94B5b69Df7e401DDbedE43491141047dB3',
+        || process.env.REGISTRY_DELEGATION_MANAGER_ADDRESSES,
     ),
     registryRecoveryLookbackBlocks: Number(process.env.REGISTRY_RECOVERY_LOOKBACK_BLOCKS || 200000),
     registryRecoveryBlockOffset: Number(process.env.REGISTRY_RECOVERY_BLOCK_OFFSET || 20000),
@@ -130,19 +135,20 @@ const env = Object.freeze({
     // and the maximum blocks to look back when no start block is configured.
     reconcileBlockOffset: Number(process.env.RECONCILE_BLOCK_OFFSET || 9000),
     reconcileMaxLookbackBlocks: Number(process.env.RECONCILE_MAX_LOOKBACK_BLOCKS || 1000000),
-    // Chain configuration for the deployment-attempt flow. Sepolia = 11155111.
-    chainId: Number(process.env.BLOCKCHAIN_CHAIN_ID || 11155111),
-    supportedChainIds: csvNumbers(process.env.SUPPORTED_CHAIN_IDS || process.env.BLOCKCHAIN_CHAIN_ID || '11155111'),
-    networkName: process.env.BLOCKCHAIN_NETWORK_NAME || 'sepolia',
+    // Chain configuration for the deployment-attempt flow. Arc Testnet = 5042002.
+    chainId: Number(process.env.BLOCKCHAIN_CHAIN_ID || 5042002),
+    supportedChainIds: csvNumbers(process.env.SUPPORTED_CHAIN_IDS || process.env.BLOCKCHAIN_CHAIN_ID || '5042002'),
+    networkName: process.env.BLOCKCHAIN_NETWORK_NAME || 'arc-testnet',
     // How long a pending (pre-broadcast) deployment attempt stays valid.
     deploymentAttemptTtlMinutes: Number(process.env.DEPLOYMENT_ATTEMPT_TTL_MINUTES || 20),
     // Master switch for the background deployment-sync runner (overrides the DB setting when false).
     deploymentSyncEnabled: booleanValue(process.env.TREX_DEPLOYMENT_SYNC_ENABLED, true),
-    purchaseUsdtAddress: process.env.PURCHASE_USDT_ADDRESS || '0x8fC7e68897bd74c4B6340d2DC857a7ED2677aF6A',
+    purchaseUsdtAddress: process.env.PURCHASE_USDT_ADDRESS || '0x3600000000000000000000000000000000000000',
+    purchaseUsdtDecimals: Number(process.env.PURCHASE_USDT_DECIMALS || 6),
     // The interactive confirm API may accept a successfully mined payment earlier than the
     // conservative worker finality threshold so it can submit the platform mint immediately.
-    purchasePaymentConfirmations: Number(process.env.PURCHASE_PAYMENT_CONFIRMATIONS || 2),
-    purchaseConfirmations: Number(process.env.PURCHASE_CONFIRMATIONS || 2),
+    purchasePaymentConfirmations: Number(process.env.PURCHASE_PAYMENT_CONFIRMATIONS || 1),
+    purchaseConfirmations: Number(process.env.PURCHASE_CONFIRMATIONS || 1),
     // A payment intent with no submitted hash is abandoned after this period. The worker
     // applies an additional indexed-chain grace period before changing it to EXPIRED.
     purchaseIntentTtlMinutes: Number(process.env.PURCHASE_INTENT_TTL_MINUTES || 15),
@@ -151,22 +157,22 @@ const env = Object.freeze({
     // Manual issuer-funded redemption. Payment and all platform token actions are independently
     // verified at the conservative redemption confirmation threshold.
     redemptionUsdtAddress: process.env.REDEMPTION_USDT_ADDRESS
-      || process.env.PURCHASE_USDT_ADDRESS || '0x8fC7e68897bd74c4B6340d2DC857a7ED2677aF6A',
-    redemptionConfirmations: Number(process.env.REDEMPTION_CONFIRMATIONS || 2),
+      || process.env.PURCHASE_USDT_ADDRESS || '0x3600000000000000000000000000000000000000',
+    redemptionConfirmations: Number(process.env.REDEMPTION_CONFIRMATIONS || 1),
     redemptionAuthorizationTtlMinutes: Number(process.env.REDEMPTION_AUTHORIZATION_TTL_MINUTES || 30),
     redemptionIndexerStartBlock: Number(process.env.REDEMPTION_INDEXER_START_BLOCK || 0),
     redemptionWorkerEnabled: booleanValue(process.env.REDEMPTION_WORKER_ENABLED, true),
     // Investor-to-investor ERC-3643 transfers. Interactive confirmation can be low for local
     // UX while the global fallback indexer remains behind a conservative safe head.
-    transferConfirmations: Number(process.env.TRANSFER_CONFIRMATIONS || 2),
-    transferIndexerConfirmations: Number(process.env.TRANSFER_INDEXER_CONFIRMATIONS || 2),
+    transferConfirmations: Number(process.env.TRANSFER_CONFIRMATIONS || 1),
+    transferIndexerConfirmations: Number(process.env.TRANSFER_INDEXER_CONFIRMATIONS || 1),
     transferIntentTtlMinutes: Number(process.env.TRANSFER_INTENT_TTL_MINUTES || 15),
     transferIndexerStartBlock: Number(process.env.TRANSFER_INDEXER_START_BLOCK || 0),
     transferWorkerEnabled: booleanValue(process.env.TRANSFER_WORKER_ENABLED, true),
     // Canonical read-only history for wallet-executed Platform Controller and token transactions.
     transactionIndexerEnabled: booleanValue(process.env.TRANSACTION_INDEXER_ENABLED, true),
     transactionIndexerStartBlock: Number(process.env.TRANSACTION_INDEXER_START_BLOCK || 0),
-    transactionIndexerConfirmations: Number(process.env.TRANSACTION_INDEXER_CONFIRMATIONS || process.env.BLOCKCHAIN_CONFIRMATIONS || 2),
+    transactionIndexerConfirmations: Number(process.env.TRANSACTION_INDEXER_CONFIRMATIONS || process.env.BLOCKCHAIN_CONFIRMATIONS || 1),
   },
 });
 

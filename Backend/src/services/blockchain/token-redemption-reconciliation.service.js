@@ -13,7 +13,7 @@ const REDEMPTION_SETTING_KEYS = Object.freeze({
   expirationBatchSize: 'RedemptionExpirationBatchSize',
 });
 const REDEMPTION_DEFAULTS = Object.freeze({
-  intervalSeconds: 15, blockOffset: 1000, confirmationBlocks: 2, leaseSeconds: 180,
+  intervalSeconds: 15, blockOffset: 1000, confirmationBlocks: 1, leaseSeconds: 180,
   batchSize: 50, eventBatchSize: 200, maxChunksPerRun: 10, expirationBatchSize: 50,
 });
 

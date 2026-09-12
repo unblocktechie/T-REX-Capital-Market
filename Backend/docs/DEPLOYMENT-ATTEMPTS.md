@@ -45,7 +45,7 @@ Create (or idempotently return) a pending deployment attempt.
 
 Auth: Bearer (Issuer). Request:
 ```json
-{ "chainId": 11155111, "walletAddress": "0x...", "idempotencyKey": "unique-client-value" }
+{ "chainId": 5042002, "walletAddress": "0x...", "idempotencyKey": "unique-client-value" }
 ```
 Optional: `networkName` (string), `metadata` (object, non-critical).
 
@@ -58,7 +58,7 @@ Optional: `networkName` (string), `metadata` (object, non-critical).
     "deploymentAttemptUid": "uuid",
     "tokenUid": "uuid",
     "status": "pending",
-    "chainId": 11155111,
+    "chainId": 5042002,
     "walletAddress": "0x... (checksummed)",
     "expiresAt": "2026-08-04T07:30:00.000Z",
     "canInitiateTransaction": true
@@ -78,7 +78,7 @@ Record the broadcast transaction hash. Does **not** mark the token deployed.
 
 Request:
 ```json
-{ "transactionHash": "0x...", "chainId": 11155111, "walletAddress": "0x..." }
+{ "transactionHash": "0x...", "chainId": 5042002, "walletAddress": "0x..." }
 ```
 `200`:
 ```json
@@ -117,7 +117,7 @@ Gateway builds), calls `factory.getToken(salt)`, and:
 
 This requires the owner to be the approved organization wallet and the token name to match what
 was deployed. Configure the lookup start block with `TREX_FACTORY_START_BLOCK` (the factory
-deploy block) to avoid scanning Sepolia from genesis.
+deploy block) to avoid scanning Arc Testnet from genesis.
 
 ### GET `/api/v1/tokens/me/deployment-attempts/active`
 Resume state after a refresh.
@@ -132,7 +132,7 @@ Resume state after a refresh.
     "canCreateNew": false,
     "attempt": {
       "deploymentAttemptUid": "uuid", "status": "submitted", "transactionHash": "0x...",
-      "chainId": 11155111, "walletAddress": "0x...", "expiresAt": null,
+      "chainId": 5042002, "walletAddress": "0x...", "expiresAt": null,
       "submittedAt": "...", "canInitiateTransaction": false
     }
   }
@@ -171,7 +171,7 @@ without re-verifying or redeploying.
 
 ## Independent blockchain verification
 
-Verification uses the configured Sepolia RPC (`SEPOLIA_RPC_URL`, chain `11155111`) and the
+Verification uses the configured Arc Testnet RPC (`BLOCKCHAIN_RPC_URL`, chain `5042002`) and the
 existing `TokenDeploymentReceiptService`. The backend never trusts frontend-supplied
 success, contract address, block number, sender, chain, confirmation count, or event data.
 It confirms: the receipt exists with the required confirmations, `status === 1`, the
@@ -183,9 +183,9 @@ another token. RPC URLs and keys come only from environment configuration.
 ## Configuration
 
 ```
-BLOCKCHAIN_CHAIN_ID=11155111
-SUPPORTED_CHAIN_IDS=11155111
-BLOCKCHAIN_NETWORK_NAME=sepolia
+BLOCKCHAIN_CHAIN_ID=5042002
+SUPPORTED_CHAIN_IDS=5042002
+BLOCKCHAIN_NETWORK_NAME=arc-testnet
 DEPLOYMENT_ATTEMPT_TTL_MINUTES=20
 ```
 
