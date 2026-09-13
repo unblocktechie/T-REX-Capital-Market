@@ -7075,3 +7075,46 @@
     font-size: 15px;
   }
 }
+
+/* Currency-aware amount field -------------------------------------------------
+   Keeps the familiar numeric input while adding a compact, non-interactive
+   USDC visual cue. The icon sits inside the control without affecting input
+   semantics, validation, or touch targets. */
+.issuance-currency-input {
+  position: relative;
+  min-width: 0;
+}
+
+.issuance-currency-input__icon {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.issuance-currency-input__control {
+  padding-left: 44px;
+}
+
+.issuance-currency-input:focus-within .issuance-currency-input__icon .token-icon {
+  box-shadow: 0 0 0 3px color-mix(in srgb, #2775ca 10%, transparent);
+}
+
+.issuance-currency-input:has(.issuance-currency-input__control:disabled) .issuance-currency-input__icon {
+  opacity: 0.62;
+}
+
+@media (max-width: 420px) {
+  .issuance-currency-input__icon {
+    left: 10px;
+  }
+
+  .issuance-currency-input__control {
+    padding-left: 42px;
+  }
+}

@@ -37,11 +37,20 @@ export function RadioCardGroup({ legend, options, value, onChange, error, column
   );
 }
 
-export function CheckboxCardGroup({ legend, options, value = [], onChange, error, columns = 2, required = false, compact = false }) {
+export function CheckboxCardGroup({ legend, options, value = [], onChange, error, columns = 2, required = false, compact = false, exclusiveValues = [] }) {
   const toggle = (optionValue) => {
-    const next = value.includes(optionValue)
-      ? value.filter((item) => item !== optionValue)
-      : [...value, optionValue];
+    const selected = value.includes(optionValue);
+    const isExclusive = exclusiveValues.includes(optionValue);
+    let next;
+
+    if (selected) {
+      next = value.filter((item) => item !== optionValue);
+    } else if (isExclusive) {
+      next = [optionValue];
+    } else {
+      next = [...value.filter((item) => !exclusiveValues.includes(item)), optionValue];
+    }
+
     onChange(next);
   };
 
@@ -55,7 +64,14 @@ export function CheckboxCardGroup({ legend, options, value = [], onChange, error
         {options.map((option) => {
           const selected = value.includes(option.value);
           return (
-            <label key={option.value} className={cn('investor-choice-card', selected && 'is-selected')}>
+            <label
+              key={option.value}
+              className={cn(
+                'investor-choice-card',
+                option.fullWidth && 'investor-choice-card--full',
+                selected && 'is-selected',
+              )}
+            >
               <input
                 type="checkbox"
                 value={option.value}
@@ -66,7 +82,10 @@ export function CheckboxCardGroup({ legend, options, value = [], onChange, error
               <span className="investor-choice-card__marker investor-choice-card__marker--square" aria-hidden="true">
                 {selected ? <Check size={14} /> : null}
               </span>
-              <span><strong>{option.label}</strong></span>
+              <span>
+                <strong>{option.label}</strong>
+                {option.description ? <small>{option.description}</small> : null}
+              </span>
             </label>
           );
         })}

@@ -33,7 +33,7 @@ The shared Axios client continues to own JWT injection, session-expiry behavior,
 - Country, state/province, and city are cascading dropdowns backed by the same location APIs used in organization onboarding.
 - Location dropdowns store backend UIDs and the identity save payload sends `countryUid`, `stateUid`, and `cityUid`; labels are retained only for review/display and recovery compatibility.
 - Country/state/city/gender values must match the current server-provided options.
-- Compliance requires all documented fields, at least one investment category, and server-supported option values.
+- Compliance requires all documented fields and server-supported option values. Investors with prior experience must select at least one investment category; investors with no prior experience can explicitly select **None**, which sets years of experience to `0`. If the backend exposes a no-experience category, that backend value is sent; otherwise the UI sends an empty category list with `yearsOfExperience: 0`.
 - At least one successful KYC identity document and one successful accreditation document are required before final submission.
 - Upload files are limited to PDF/JPG/JPEG/PNG and 10 MB each.
 - Wallet connection/network checks remain in the existing UI; the backend revalidates the wallet on submit.

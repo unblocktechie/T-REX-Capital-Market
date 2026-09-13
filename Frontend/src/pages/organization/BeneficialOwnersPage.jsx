@@ -84,6 +84,30 @@ export default function BeneficialOwnersPage() {
     (total, owner) => total + (Number(owner?.ownershipPercentage) || 0),
     0,
   );
+  const hasOwnershipValues = owners.some(
+    (owner) => owner?.ownershipPercentage !== '' && owner?.ownershipPercentage != null,
+  );
+  const ownershipTotalIsExact =
+    owners.length > 0 &&
+    owners.every((owner) => {
+      const raw = owner?.ownershipPercentage;
+      if (raw === '' || raw == null) return false;
+      const value = Number(raw);
+      return (
+        Number.isFinite(value) &&
+        value > 1 &&
+        value <= 100 &&
+        Number(value.toFixed(2)) === value
+      );
+    }) &&
+    owners.reduce(
+      (total, owner) => total + Math.round(Number(owner.ownershipPercentage) * 100),
+      0,
+    ) === 10000;
+  const formattedOwnershipTotal = ownershipTotal.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4,
+  });
 
   const navigateWithoutGuard = useOrganizationNavigationGuard(form.formState.isDirty);
 
@@ -154,9 +178,18 @@ export default function BeneficialOwnersPage() {
           <div className="org-ubo-toolbar">
             <div>
               <span>Total disclosed ownership</span>
-              <strong className={ownershipTotal > 100 ? 'is-error' : ''}>
-                {ownershipTotal.toFixed(2)}%
+              <strong
+                className={
+                  hasOwnershipValues ? (ownershipTotalIsExact ? 'is-valid' : 'is-error') : ''
+                }
+              >
+                {formattedOwnershipTotal}%
               </strong>
+              <small className={ownershipTotalIsExact ? 'is-valid' : hasOwnershipValues ? 'is-error' : ''}>
+                {ownershipTotalIsExact
+                  ? 'Complete — ownership totals exactly 100.00%.'
+                  : 'Each UBO must be greater than 1.00%, and all UBOs together must total exactly 100.00%.'}
+              </small>
             </div>
             <Button
               type="button"

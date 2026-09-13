@@ -275,8 +275,8 @@ export default function SignupPage() {
             {...register('terms')}
           />
           <span>
-            I agree to the <a href="/terms">Terms</a> and{' '}
-            <a href="/privacy">Privacy Policy</a>.
+            I agree to the <span className="text-[var(--primary-600)]">Terms</span> and{' '}
+            <span className="text-[var(--primary-600)]">Privacy Policy</span>.
           </span>
         </label>
         {errors.terms ? (

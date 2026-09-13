@@ -1,15 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { STORAGE_KEYS } from '@/constants';
 import { getJwtExpirationTime, tokenService } from '@/services/token.service';
 import { useAuthStore } from '@/store/auth.store';
 import { queryClient } from '@/lib/queryClient';
-import { TrexLoader } from '@/components/loaders/TrexLoader';
 
 const MAX_TIMEOUT = 2_147_000_000;
 
 export function AuthBootstrap({ children }) {
-  const [ready, setReady] = useState(false);
-
   useEffect(() => {
     let expiryTimer;
 
@@ -58,8 +55,9 @@ export function AuthBootstrap({ children }) {
       }
     });
 
+    // The store is hydrated synchronously before the first React render, so this
+    // refresh cannot briefly expose the wrong route or a boot-screen flash.
     restore();
-    setReady(true);
     window.addEventListener('storage', handleStorage);
 
     return () => {
@@ -68,17 +66,6 @@ export function AuthBootstrap({ children }) {
       unsubscribe();
     };
   }, []);
-
-  if (!ready) {
-    return (
-      <TrexLoader
-        variant="boot"
-        eyebrow="Secure workspace"
-        title="Preparing T-REX Capital Market"
-        message="Restoring your protected session and workspace settings…"
-      />
-    );
-  }
 
   return children;
 }

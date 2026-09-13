@@ -542,6 +542,26 @@ button.org-stepper__button {
   color: var(--danger-500);
 }
 
+.org-ubo-toolbar strong.is-valid {
+  color: var(--success-500);
+}
+
+.org-ubo-toolbar small {
+  max-width: 560px;
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.org-ubo-toolbar small.is-error {
+  color: var(--danger-500);
+}
+
+.org-ubo-toolbar small.is-valid {
+  color: var(--success-500);
+}
+
 .org-ubo-list {
   display: grid;
   gap: 14px;

@@ -6,4 +6,7 @@ export const featureFlags = Object.freeze({
   mockApi: env.features.mockApi,
   userManagement: true,
   auditTrail: false,
+  // TEMPORARY: hide Contact Us action buttons without removing their handlers/dialogs.
+  // Set this to true when "Get Help" and "Invite to Invest" should be visible again.
+  contactSupportActions: false,
 });

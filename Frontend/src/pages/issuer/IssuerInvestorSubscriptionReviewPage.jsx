@@ -14,6 +14,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { getAddress, isAddress } from 'viem';
 import { toast } from 'sonner';
 import { ApplicationHistory } from '@/components/application-history/ApplicationHistory';
+import { ContactSupportDialog } from '@/components/application-history/ContactSupportDialog';
 import { InvestmentJourneyTracker } from '@/components/application-history/InvestmentJourneyTracker';
 import { CompactAddress } from '@/components/common/CompactAddress';
 import { SecureDocumentPreviewModal } from '@/components/common/SecureDocumentPreviewModal';
@@ -21,6 +22,7 @@ import { AppStatusBadge } from '@/components/common/AppStatusBadge';
 import { RejectInterestModal, VerifyIdentityClaimsModal } from '@/components/issuer/IssuerInterestDecisionModals';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { featureFlags } from '@/config/featureFlags';
 import { ROUTES } from '@/config/routes';
 import { web3Config } from '@/config/web3';
 import { useAuth } from '@/hooks/useAuth';
@@ -57,7 +59,7 @@ const REGISTRY_STATUS_POLL_INTERVAL_MS = 5_000;
 const REGISTRY_REQUIRED_CONFIRMATIONS = web3Config.requiredConfirmations;
 const REGISTRY_SUCCESS_MESSAGE = 'Final approval is complete. This investor can now invest in this asset.';
 const REGISTRY_PENDING_MESSAGE = 'Final approval was submitted. We are confirming the investor’s access now.';
-const REGISTRY_INVITE_TOOLTIP = 'Send the investor an email letting them know they are ready to invest.';
+const REGISTRY_INVITE_TOOLTIP = 'Open Contact Us with this investor and application context attached.';
 
 const normalizeRegistryStatus = (status) => String(status || '').trim().toUpperCase();
 const isRegistryConfirmed = (registration) => normalizeRegistryStatus(registration?.status) === 'CONFIRMED';
@@ -91,6 +93,7 @@ export default function IssuerInvestorSubscriptionReviewPage() {
   const [selectedDocument, setSelectedDocument] = useState(null);
   const [decisionModal, setDecisionModal] = useState(null);
   const [decisionLoading, setDecisionLoading] = useState(false);
+  const [contactSupportOpen, setContactSupportOpen] = useState(false);
   const [registryRegistration, setRegistryRegistration] = useState(null);
   const [registryStatusLoading, setRegistryStatusLoading] = useState(false);
   const [registryActionLoading, setRegistryActionLoading] = useState(false);
@@ -637,15 +640,7 @@ export default function IssuerInvestorSubscriptionReviewPage() {
     return nextRegistration;
   };
 
-  const handleInviteToPurchase = () => {
-    const email = String(request?.email || '').trim();
-    if (!email) {
-      toast.error('Investor email address is unavailable.');
-      return;
-    }
-
-    window.location.href = `mailto:${encodeURIComponent(email)}`;
-  };
+  const handleInviteToPurchase = () => setContactSupportOpen(true);
 
   const handleRegistryAction = async () => {
     if (!registryInterestUid || registryActionInFlightRef.current) return;
@@ -837,6 +832,17 @@ export default function IssuerInvestorSubscriptionReviewPage() {
   const submissionNumber = request.submissionNumber || history?.timeline?.reduce((max, event) => Math.max(max, Number(event?.submissionNumber) || 0), 0) || null;
   const registryTransactionPending = hasRegistryTransaction(registryRegistration)
     && !isRegistryConfirmed(registryRegistration);
+  const supportContext = {
+    name: request.investorName,
+    email: request.email,
+    userId: request.investorUserUid || request.investorUid,
+    walletAddress: request.walletAddress || registryRegistration?.investorWalletAddress,
+    onchainIdAddress: request.investorIdentityAddress || registryRegistration?.onchainIdentityAddress,
+    tokenAddress: request.token?.tokenAddress,
+    tokenName: [request.tokenName, request.tokenSymbol ? `(${request.tokenSymbol})` : ''].filter(Boolean).join(' '),
+    applicationId: request.interestUid || request.requestReference || requestId,
+    applicationStatus: effectiveStatus,
+  };
 
   return (
     <div className="page-stack issuer-investor-review-page issuer-application-activity-page">
@@ -888,25 +894,31 @@ export default function IssuerInvestorSubscriptionReviewPage() {
                   <strong>Investor Access Enabled</strong>
                 </div>
                 <p>{REGISTRY_SUCCESS_MESSAGE}</p>
-                <div className="issuer-registry-invite">
-                  <Button
-                    type="button"
-                    icon={Mail}
-                    onClick={handleInviteToPurchase}
-                    disabled={!String(request?.email || '').trim()}
-                    aria-describedby="issuer-registry-invite-tooltip"
-                    title={REGISTRY_INVITE_TOOLTIP}
-                  >
-                    Invite to Invest
-                  </Button>
-                  <span
-                    id="issuer-registry-invite-tooltip"
-                    className="issuer-registry-invite__tooltip"
-                    role="tooltip"
-                  >
-                    {REGISTRY_INVITE_TOOLTIP}
-                  </span>
-                </div>
+                {/*
+                  Temporarily hidden via feature flag. The existing invite handler and
+                  Contact Us dialog stay in place so the action can be restored safely.
+                */}
+                {featureFlags.contactSupportActions ? (
+                  <div className="issuer-registry-invite">
+                    <Button
+                      type="button"
+                      icon={Mail}
+                      onClick={handleInviteToPurchase}
+                      aria-haspopup="dialog"
+                      aria-describedby="issuer-registry-invite-tooltip"
+                      title={REGISTRY_INVITE_TOOLTIP}
+                    >
+                      Invite to Invest
+                    </Button>
+                    <span
+                      id="issuer-registry-invite-tooltip"
+                      className="issuer-registry-invite__tooltip"
+                      role="tooltip"
+                    >
+                      {REGISTRY_INVITE_TOOLTIP}
+                    </span>
+                  </div>
+                ) : null}
               </div>
             ) : (
               <div className="issuer-registry-action">
@@ -1055,6 +1067,11 @@ export default function IssuerInvestorSubscriptionReviewPage() {
         investorName={request.investorName}
         assetName={[request.tokenName, request.tokenSymbol ? `(${request.tokenSymbol})` : ''].filter(Boolean).join(' ')}
         onVerified={handleClaimsVerified}
+      />
+      <ContactSupportDialog
+        open={contactSupportOpen}
+        onClose={() => setContactSupportOpen(false)}
+        context={supportContext}
       />
     </div>
   );

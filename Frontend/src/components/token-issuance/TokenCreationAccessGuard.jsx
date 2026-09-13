@@ -1,5 +1,5 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { TrexLoader } from '@/components/loaders/TrexLoader';
+import { WorkspaceRouteLoader } from '@/components/loaders/DelayedTrexLoader';
 import { ROUTES } from '@/config/routes';
 import { useMyToken } from '@/hooks/useMyToken';
 import { useTokenIssuanceStore } from '@/store/tokenIssuance.store';
@@ -15,15 +15,7 @@ export function TokenCreationAccessGuard() {
   const token = useMyToken({ enabled: !isActiveSubmission });
 
   if (token.isPending && !isActiveSubmission) {
-    return (
-      <TrexLoader
-        variant="route"
-        compact
-        eyebrow="Checking token status"
-        title="Opening your token workspace"
-        message="Confirming whether a token has already been created…"
-      />
-    );
+    return <WorkspaceRouteLoader />;
   }
 
   if (token.isDeployed && !isActiveSubmission) {

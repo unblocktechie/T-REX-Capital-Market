@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { tokenApi } from '@/api/tokens';
+import { TokenIcon } from '@/components/common/TokenIcon';
 import {
   FieldWrapper,
   HelpDetails,
@@ -261,30 +262,36 @@ export default function TokenInformationPage() {
               hint="Enter the starting price for one unit of the asset. Example: 10 means one unit starts at 10 USDC."
               htmlFor="initial-token-price"
             >
-              <TextInput
-                id="initial-token-price"
-                type="number"
-                min="0.00000001"
-                step="any"
-                inputMode="decimal"
-                value={supplyPricing.initialPrice}
-                onKeyDown={(event) => {
-                  if (['-', '+', 'e', 'E'].includes(event.key)) event.preventDefault();
-                }}
-                onChange={(event) => {
-                  const nextValue = event.target.value;
-                  if (nextValue !== '' && Number(nextValue) < 0) return;
-                  clearServerError('initialPrice');
-                  updateSection('supplyPricing', {
-                    initialPrice: nextValue,
-                    currency: 'USDC',
-                  });
-                }}
-                onBlur={() => blur('initialPrice')}
-                placeholder="0.00"
-                error={fieldError('initialPrice')}
-                disabled={backend.isLocked}
-              />
+              <div className="issuance-currency-input">
+                <span className="issuance-currency-input__icon" aria-hidden="true">
+                  <TokenIcon symbol="USDC" name="USD Coin" size="sm" />
+                </span>
+                <TextInput
+                  id="initial-token-price"
+                  className="issuance-currency-input__control"
+                  type="number"
+                  min="0.00000001"
+                  step="any"
+                  inputMode="decimal"
+                  value={supplyPricing.initialPrice}
+                  onKeyDown={(event) => {
+                    if (['-', '+', 'e', 'E'].includes(event.key)) event.preventDefault();
+                  }}
+                  onChange={(event) => {
+                    const nextValue = event.target.value;
+                    if (nextValue !== '' && Number(nextValue) < 0) return;
+                    clearServerError('initialPrice');
+                    updateSection('supplyPricing', {
+                      initialPrice: nextValue,
+                      currency: 'USDC',
+                    });
+                  }}
+                  onBlur={() => blur('initialPrice')}
+                  placeholder="0.00"
+                  error={fieldError('initialPrice')}
+                  disabled={backend.isLocked}
+                />
+              </div>
             </FieldWrapper>
 
             <FieldWrapper

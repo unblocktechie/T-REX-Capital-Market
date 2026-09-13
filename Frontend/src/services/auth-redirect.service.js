@@ -3,7 +3,22 @@ import { STORAGE_KEYS } from '@/constants/storage';
 const canUseSessionStorage = () =>
   typeof window !== 'undefined' && typeof window.sessionStorage !== 'undefined';
 
+let appNavigator = null;
+
 export const authRedirectService = {
+  setNavigator(navigate) {
+    appNavigator = typeof navigate === 'function' ? navigate : null;
+  },
+
+  navigate(to, options = {}) {
+    if (appNavigator) return appNavigator(to, options);
+    if (typeof window === 'undefined') return undefined;
+
+    if (options.replace !== false) window.location.replace(to);
+    else window.location.assign(to);
+    return undefined;
+  },
+
   setAccountNotFoundContext(context = {}) {
     if (!canUseSessionStorage()) return;
 

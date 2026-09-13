@@ -6,6 +6,7 @@ import {
   INVESTMENT_CAPACITY_OPTIONS,
   INVESTMENT_CATEGORIES,
   NET_WORTH_OPTIONS,
+  NO_INVESTMENT_EXPERIENCE_VALUE,
   SOURCE_OF_WEALTH_OPTIONS,
   INITIAL_INVESTOR_STATE,
 } from '@/constants/investor';
@@ -371,7 +372,9 @@ export const toCompliancePayload = (compliance, isDraft = false) => {
     estimatedNetWorth: compliance.estimatedNetWorth || '',
     annualInvestmentCapacity: compliance.annualInvestmentCapacity || '',
     investmentCategories: Array.isArray(compliance.investmentCategories)
-      ? compliance.investmentCategories
+      ? compliance.investmentCategories.filter(
+          (category) => category !== NO_INVESTMENT_EXPERIENCE_VALUE,
+        )
       : [],
     yearsOfExperience:
       compliance.yearsOfExperience === '' || compliance.yearsOfExperience === undefined

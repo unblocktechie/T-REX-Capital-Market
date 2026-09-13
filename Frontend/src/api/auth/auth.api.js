@@ -4,23 +4,38 @@ import { AUTH_ENDPOINTS } from './auth.endpoints';
 const unwrap = (response) => response.data?.data ?? response.data;
 
 export const authApi = {
-  login: (payload) => apiClient.post(AUTH_ENDPOINTS.login, payload).then(unwrap),
+  login: (payload) =>
+    apiClient
+      .post(AUTH_ENDPOINTS.login, payload, { skipGlobalLoader: true })
+      .then(unwrap),
 
   register: ({ name, fullName, email, password, role, isIssuer }) =>
     apiClient
-      .post(AUTH_ENDPOINTS.signup, {
-        fullName: fullName || name,
-        email,
-        password,
-        isIssuer: typeof isIssuer === 'boolean' ? isIssuer : role === 'issuer',
-      })
+      .post(
+        AUTH_ENDPOINTS.signup,
+        {
+          fullName: fullName || name,
+          email,
+          password,
+          isIssuer: typeof isIssuer === 'boolean' ? isIssuer : role === 'issuer',
+        },
+        { skipGlobalLoader: true },
+      )
       .then(unwrap),
 
   completePrivySignup: ({ email, identityToken }) =>
-    apiClient.post(AUTH_ENDPOINTS.completePrivySignup, { email, identityToken }).then(unwrap),
+    apiClient
+      .post(
+        AUTH_ENDPOINTS.completePrivySignup,
+        { email, identityToken },
+        { skipGlobalLoader: true },
+      )
+      .then(unwrap),
 
   forgotPassword: ({ email }) =>
-    apiClient.post(AUTH_ENDPOINTS.forgotPassword, { email }).then(unwrap),
+    apiClient
+      .post(AUTH_ENDPOINTS.forgotPassword, { email }, { skipGlobalLoader: true })
+      .then(unwrap),
 
   verifyResetToken: async ({ token }) => {
     const data = await apiClient
@@ -32,9 +47,13 @@ export const authApi = {
 
   resetPassword: ({ token, password, newPassword }) =>
     apiClient
-      .post(AUTH_ENDPOINTS.resetPassword, {
-        token,
-        newPassword: newPassword || password,
-      })
+      .post(
+        AUTH_ENDPOINTS.resetPassword,
+        {
+          token,
+          newPassword: newPassword || password,
+        },
+        { skipGlobalLoader: true },
+      )
       .then(unwrap),
 };

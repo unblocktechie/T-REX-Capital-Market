@@ -9,7 +9,6 @@ export const DEFAULT_TREX_PLATFORM_CONTROLLER_ADDRESS =
 const envSchema = z.object({
   VITE_APP_NAME: z.string().default('T-REX Capital Market'),
   VITE_APP_VERSION: z.string().default('1.0.0'),
-  // VITE_API_BASE_URL: z.string().url().default('https://trex-api.farmlink.site/api'),
   VITE_API_BASE_URL: z.string().url().default('http://192.168.29.90:3000/api'),
   VITE_API_VERSION: z.string().default('v1'),
   VITE_SOCKET_URL: z.string().default('ws://192.168.29.90:3000/ws'),

@@ -145,7 +145,10 @@ export const setupAxiosInterceptors = () => {
             source: accountLookupSource,
             email: getRequestEmail(error.config),
           });
-          window.location.assign(`${ROUTES.signup}?reason=account-not-found`);
+          authRedirectService.navigate(`${ROUTES.signup}?reason=account-not-found`, { replace: true });
+          window.setTimeout(() => {
+            authNotFoundRedirectInProgress = false;
+          }, 500);
         }
       }
 
@@ -154,7 +157,7 @@ export const setupAxiosInterceptors = () => {
         queryClient.clear();
         const currentPath = window.location.pathname;
         if (currentPath !== ROUTES.login) {
-          window.location.assign(`${ROUTES.login}?reason=session-expired`);
+          authRedirectService.navigate(`${ROUTES.login}?reason=session-expired`, { replace: true });
         }
       }
 

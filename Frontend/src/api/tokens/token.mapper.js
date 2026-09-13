@@ -496,23 +496,31 @@ export const toClaimsPayload = (identityClaims, isDraft = false) => ({
   isDraft: Boolean(isDraft),
 });
 
-export const toCompliancePayload = (compliance, isDraft = false) => ({
-  maxInvestors:
-    compliance?.maximumInvestors === '' || compliance?.maximumInvestors == null
-      ? null
-      : Number(compliance.maximumInvestors),
-  maxBalancePerInvestor:
-    compliance?.maximumBalance === '' || compliance?.maximumBalance == null
-      ? null
-      : Number(compliance.maximumBalance),
-  countryRestrictionMode: 'blocklist',
-  countryUids: (compliance?.countries || [])
+export const toCompliancePayload = (compliance, isDraft = false) => {
+  const countryUids = (compliance?.countries || [])
     .map((country) =>
       typeof country === 'string' ? '' : text(country?.countryUid, country?.value),
     )
-    .filter(Boolean),
-  isDraft: Boolean(isDraft),
-});
+    .filter(Boolean);
+
+  return {
+    maxInvestors:
+      compliance?.maximumInvestors === '' || compliance?.maximumInvestors == null
+        ? null
+        : Number(compliance.maximumInvestors),
+    maxBalancePerInvestor:
+      compliance?.maximumBalance === '' || compliance?.maximumBalance == null
+        ? null
+        : Number(compliance.maximumBalance),
+    ...(countryUids.length
+      ? {
+          countryRestrictionMode: 'blocklist',
+          countryUids,
+        }
+      : {}),
+    isDraft: Boolean(isDraft),
+  };
+};
 
 export const toGovernancePayload = (agents, isDraft = false) => ({
   tokenAgentWalletAddress: text(agents?.tokenAgent?.address),

@@ -199,7 +199,6 @@ export default function ComplianceRulesPage() {
       continueLabel="Save and Continue"
       continueIcon={ArrowRight}
       continueLoading={saving}
-      continueDisabled={!backend.countryOptions.length}
       stepErrors={{ compliance: submitted ? { ...errors, ...serverErrors } : undefined }}
     >
       <SectionCard

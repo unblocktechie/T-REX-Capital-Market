@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { Navigate, createBrowserRouter } from 'react-router-dom';
-import { TrexLoader } from '@/components/loaders/TrexLoader';
+import { WorkspaceRouteLoader } from '@/components/loaders/DelayedTrexLoader';
 import { TokenCreationAccessGuard } from '@/components/token-issuance/TokenCreationAccessGuard';
 import {
   OrganizationDataGuard,
@@ -87,17 +87,7 @@ function HomeRedirect() {
 }
 
 const withSuspense = (element) => (
-  <Suspense
-    fallback={
-      <TrexLoader
-        variant="route"
-        compact
-        eyebrow="Loading module"
-        title="Opening your workspace"
-        message="Preparing the next secure T-REX module…"
-      />
-    }
-  >
+  <Suspense fallback={<WorkspaceRouteLoader delay={120} />}>
     {element}
   </Suspense>
 );

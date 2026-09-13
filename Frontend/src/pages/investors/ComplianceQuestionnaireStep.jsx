@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowLeft, ArrowRight, Info } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 import { CheckboxCardGroup, RadioCardGroup } from '@/components/investor/ChoiceCards';
@@ -9,6 +9,10 @@ import { InvestorLayout, InvestorSecurityCard } from '@/components/investor/Inve
 import { InvestorActionBar, InvestorFormCard } from '@/components/investor/InvestorPrimitives';
 import { SelectField, TextareaField } from '@/components/organization/OrganizationFields';
 import { Button } from '@/components/ui/Button';
+import {
+  NO_INVESTMENT_EXPERIENCE_OPTION,
+  NO_INVESTMENT_EXPERIENCE_VALUE,
+} from '@/constants/investor';
 import { Input } from '@/components/ui/Input';
 import { useInvestorOnboarding } from '@/hooks/useInvestorOnboarding';
 import { applyApiFieldErrors, getErrorMessage } from '@/utils/error';
@@ -27,12 +31,65 @@ export default function ComplianceQuestionnaireStep() {
     deleteDocument,
   } = useInvestorOnboarding();
   const [selectedAccreditationDocumentType, setSelectedAccreditationDocumentType] = useState('');
+
+  const backendNoExperienceOption = useMemo(
+    () =>
+      options.investmentCategories.find((option) => {
+        const value = String(option.value || '').trim().toLowerCase();
+        const label = String(option.label || '').trim().toLowerCase();
+        return (
+          ['none', 'no_experience', 'no-experience', 'no_prior_experience'].includes(value) ||
+          label === 'none' ||
+          label.includes('no experience') ||
+          label.includes('no investment experience') ||
+          label.includes('no prior')
+        );
+      }) || null,
+    [options.investmentCategories],
+  );
+
+  const investmentCategoryOptions = useMemo(
+    () => [
+      ...options.investmentCategories.filter(
+        (option) => String(option.value) !== String(backendNoExperienceOption?.value || ''),
+      ),
+      NO_INVESTMENT_EXPERIENCE_OPTION,
+    ],
+    [backendNoExperienceOption, options.investmentCategories],
+  );
+
+  const defaultComplianceValues = useMemo(() => {
+    const categories = Array.isArray(state.compliance.investmentCategories)
+      ? state.compliance.investmentCategories
+      : [];
+    const backendNoneValue = backendNoExperienceOption?.value;
+    const mappedCategories = categories.map((value) =>
+      backendNoneValue && String(value) === String(backendNoneValue)
+        ? NO_INVESTMENT_EXPERIENCE_VALUE
+        : value,
+    );
+    const noExperienceFromServer =
+      mappedCategories.length === 0 && String(state.compliance.yearsOfExperience) === '0';
+
+    return {
+      ...state.compliance,
+      investmentCategories: noExperienceFromServer
+        ? [NO_INVESTMENT_EXPERIENCE_VALUE]
+        : mappedCategories,
+    };
+  }, [backendNoExperienceOption, state.compliance]);
+
   const form = useForm({
     resolver: zodResolver(complianceSchema),
-    defaultValues: state.compliance,
+    defaultValues: defaultComplianceValues,
     mode: 'onBlur',
   });
   const previousRwaExperience = useWatch({ control: form.control, name: 'previousRwaExperience' });
+  const investmentCategories =
+    useWatch({ control: form.control, name: 'investmentCategories' }) || [];
+  const noInvestmentExperience = investmentCategories.includes(
+    NO_INVESTMENT_EXPERIENCE_VALUE,
+  );
 
   useEffect(() => {
     const subscription = form.watch((values) => updateSection('compliance', values));
@@ -45,22 +102,57 @@ export default function ComplianceQuestionnaireStep() {
     }
   }, [form, previousRwaExperience]);
 
+  useEffect(() => {
+    if (noInvestmentExperience && form.getValues('yearsOfExperience') !== '0') {
+      form.setValue('yearsOfExperience', '0', {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      });
+    }
+  }, [form, noInvestmentExperience]);
+
   const persist = (values) => {
     const normalized = {
       ...values,
+      investmentCategories: Array.isArray(values.investmentCategories)
+        ? values.investmentCategories
+        : [],
       yearsOfExperience: values.yearsOfExperience.trim(),
       rwaExperienceDescription: values.rwaExperienceDescription?.trim() || '',
     };
     updateSection('compliance', normalized);
-    return normalized;
+
+    const selectedNone = normalized.investmentCategories.includes(
+      NO_INVESTMENT_EXPERIENCE_VALUE,
+    );
+    const categoriesForApi = selectedNone
+      ? backendNoExperienceOption
+        ? [backendNoExperienceOption.value]
+        : []
+      : normalized.investmentCategories;
+
+    return {
+      normalized,
+      valuesForApi: {
+        ...normalized,
+        investmentCategories: categoriesForApi,
+      },
+    };
   };
 
   const continueFlow = form.handleSubmit(
     async (values) => {
-      const normalized = persist(values);
+      const { normalized, valuesForApi } = persist(values);
       const isAllowed = (rows, value) =>
         rows.some((option) => String(option.value) === String(value));
       const invalidFields = [];
+      if (!normalized.investmentCategories.length) {
+        invalidFields.push([
+          'investmentCategories',
+          'Select at least one investment category, or choose None if you have no prior investment experience.',
+        ]);
+      }
       if (!isAllowed(options.sourceOfWealth, normalized.sourceOfWealth)) {
         invalidFields.push(['sourceOfWealth', 'Select a supported source of wealth.']);
       }
@@ -74,7 +166,9 @@ export default function ComplianceQuestionnaireStep() {
         invalidFields.push(['accreditationType', 'Select a supported accreditation category.']);
       }
       const invalidCategories = normalized.investmentCategories.filter(
-        (category) => !isAllowed(options.investmentCategories, category),
+        (category) =>
+          category !== NO_INVESTMENT_EXPERIENCE_VALUE &&
+          !isAllowed(options.investmentCategories, category),
       );
       if (invalidCategories.length) {
         invalidFields.push(['investmentCategories', 'Select only supported investment categories.']);
@@ -88,7 +182,7 @@ export default function ComplianceQuestionnaireStep() {
         return;
       }
       try {
-        await saveCompliance(normalized, false);
+        await saveCompliance(valuesForApi, false);
         setStep(4);
       } catch (error) {
         const hasFieldErrors = applyApiFieldErrors(error, form.setError);
@@ -150,16 +244,44 @@ export default function ComplianceQuestionnaireStep() {
           </div>
         </InvestorFormCard>
 
-        <InvestorFormCard title="C. Investment Experience" description="Select all categories that reflect your prior investing experience." className="investor-form-card--spaced">
+        <InvestorFormCard title="C. Investment Experience" description="Select the categories that reflect your prior investing experience, or choose None if you have no prior experience." className="investor-form-card--spaced">
           <div className="investor-compliance-stack">
             <Controller
               name="investmentCategories"
               control={form.control}
               render={({ field }) => (
-                <CheckboxCardGroup legend="Investment Categories" required compact options={options.investmentCategories} value={field.value} onChange={field.onChange} error={errors.investmentCategories?.message} />
+                <CheckboxCardGroup
+                  legend="Investment Categories"
+                  required
+                  compact
+                  options={investmentCategoryOptions}
+                  value={field.value}
+                  onChange={field.onChange}
+                  exclusiveValues={[NO_INVESTMENT_EXPERIENCE_VALUE]}
+                  error={errors.investmentCategories?.message}
+                />
               )}
             />
-            <Input label="Years of Investment Experience" required type="number" inputMode="numeric" min="0" max="80" step="1" placeholder="e.g. 5" hint="Enter a whole number from 0 to 80." error={errors.yearsOfExperience?.message} {...form.register('yearsOfExperience')} />
+            <Input
+              className={noInvestmentExperience ? 'investor-readonly-field' : undefined}
+              label="Years of Investment Experience"
+              required
+              type="number"
+              inputMode="numeric"
+              min="0"
+              max="80"
+              step="1"
+              placeholder="e.g. 5"
+              readOnly={noInvestmentExperience}
+              aria-readonly={noInvestmentExperience || undefined}
+              hint={
+                noInvestmentExperience
+                  ? 'Set to 0 because None is selected.'
+                  : 'Enter a whole number from 0 to 80.'
+              }
+              error={errors.yearsOfExperience?.message}
+              {...form.register('yearsOfExperience')}
+            />
           </div>
         </InvestorFormCard>
 

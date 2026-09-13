@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { featureFlags } from '@/config/featureFlags';
 import { formatDate } from '@/utils/date';
 import { isRegistryRegistrationConfirmedEvent } from '@/utils/investmentPurchase';
 import { ContactSupportDialog } from './ContactSupportDialog';
@@ -241,13 +242,20 @@ export function ApplicationHistoryItem({
                 <div className={`application-history-message application-history-message--notify-issuer is-${meta.tone}`}>
                   <Clock3 size={16} />
                   <span>Nothing needed from you right now. Your verification is complete and the issuer is handling final approval.</span>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => setContactSupportOpen(true)}
-                  >
-                    Get Help
-                  </Button>
+                  {/*
+                    Temporarily hidden via feature flag. The click handler and Contact Us
+                    dialog remain intact so this action can be restored without rebuilding
+                    the support flow.
+                  */}
+                  {featureFlags.contactSupportActions ? (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setContactSupportOpen(true)}
+                    >
+                      Get Help
+                    </Button>
+                  ) : null}
                 </div>
               </div>
             ) : (

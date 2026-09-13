@@ -337,6 +337,10 @@
   background: var(--primary-50);
 }
 
+.investor-choice-card--full {
+  grid-column: 1 / -1;
+}
+
 .investor-choice-card:has(input:focus-visible) {
   outline: 3px solid color-mix(in srgb, var(--primary-500) 32%, transparent);
   outline-offset: 2px;
@@ -710,6 +714,15 @@
 
 .investor-compliance-stack > .grid {
   max-width: 360px;
+}
+
+.investor-readonly-field > div {
+  background: color-mix(in srgb, var(--surface-muted) 72%, var(--surface));
+}
+
+.investor-readonly-field input[readonly] {
+  cursor: default;
+  color: var(--text-soft);
 }
 
 .investor-info-banner {

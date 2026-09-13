@@ -83,6 +83,16 @@ export const INVESTMENT_CATEGORIES = [
   { value: 'digital_assets', label: 'Digital Assets and DeFi' },
 ];
 
+// UI-only value used when an investor has no prior investment experience.
+// It is never sent to the backend; the API payload mapper strips it out.
+export const NO_INVESTMENT_EXPERIENCE_VALUE = '__no_investment_experience__';
+export const NO_INVESTMENT_EXPERIENCE_OPTION = {
+  value: NO_INVESTMENT_EXPERIENCE_VALUE,
+  label: 'None',
+  description: 'I do not have prior investment experience.',
+  fullWidth: true,
+};
+
 export const ACCREDITATION_DOCUMENT_TYPE_OPTIONS = [
   'Bank Reference Letter',
   'Investment Portfolio Statement',

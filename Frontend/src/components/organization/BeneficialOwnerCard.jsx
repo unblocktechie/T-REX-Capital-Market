@@ -82,10 +82,11 @@ export function BeneficialOwnerCard({
           label="Percentage of Ownership"
           required
           type="number"
-          min="0"
+          min="1.01"
           max="100"
           step="0.01"
-          placeholder="0"
+          placeholder="e.g. 25.00"
+          hint="Enter more than 1.00% using up to 2 decimal places."
           onWheel={(event) => event.currentTarget.blur()}
           trailing={<span className="org-input-suffix">%</span>}
           error={errors?.ownershipPercentage?.message}

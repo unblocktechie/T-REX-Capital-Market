@@ -65,8 +65,13 @@ export const beneficialOwnerSchema = z.object({
     .pipe(
       z
         .number()
-        .min(0, 'Ownership Percentage cannot be less than 0%.')
-        .max(100, 'Ownership Percentage cannot exceed 100%.'),
+        .finite('Enter a valid Ownership Percentage.')
+        .gt(1, 'Ownership Percentage must be greater than 1.00%.')
+        .max(100, 'Ownership Percentage cannot exceed 100%.')
+        .refine(
+          (value) => Number(value.toFixed(2)) === value,
+          'Ownership Percentage can have at most 2 decimal places.',
+        ),
     ),
   relationship: z.string().trim().optional().default(''),
   isPrimary: z.boolean().optional().default(false),
@@ -83,22 +88,27 @@ export const beneficialOwnersSchema = z
     const owners = data.beneficialOwners || [];
     if (!owners.length) return;
 
-    const totalOwnership = owners.reduce(
-      (total, owner) => total + Number(owner.ownershipPercentage || 0),
+    // Every valid percentage is limited to 2 decimal places, so compare in
+    // integer basis points instead of using a floating-point tolerance. This
+    // prevents values such as 100 + 0.001 + 0.0001 from being accepted.
+    const totalOwnershipBasisPoints = owners.reduce(
+      (total, owner) => total + Math.round(Number(owner.ownershipPercentage || 0) * 100),
       0,
     );
+    const requiredBasisPoints = 100 * 100;
 
-    if (Math.abs(totalOwnership - 100) < 0.001) return;
+    if (totalOwnershipBasisPoints === requiredBasisPoints) return;
 
     const fieldIndex = Math.max(0, owners.length - 1);
+    const totalOwnership = totalOwnershipBasisPoints / 100;
     let message;
 
-    if (totalOwnership < 100) {
-      const remaining = 100 - totalOwnership;
-      message = `Total ownership must equal 100%. The current total is ${totalOwnership.toFixed(2)}%; add the remaining ${remaining.toFixed(2)}%.`;
+    if (totalOwnershipBasisPoints < requiredBasisPoints) {
+      const remaining = (requiredBasisPoints - totalOwnershipBasisPoints) / 100;
+      message = `Total ownership must equal exactly 100.00%. The current total is ${totalOwnership.toFixed(2)}%; add the remaining ${remaining.toFixed(2)}%.`;
     } else {
-      const excess = totalOwnership - 100;
-      message = `Total ownership must equal 100%. The current total is ${totalOwnership.toFixed(2)}%; reduce it by ${excess.toFixed(2)}%.`;
+      const excess = (totalOwnershipBasisPoints - requiredBasisPoints) / 100;
+      message = `Total ownership must equal exactly 100.00%. The current total is ${totalOwnership.toFixed(2)}%; reduce it by ${excess.toFixed(2)}%.`;
     }
 
     context.addIssue({

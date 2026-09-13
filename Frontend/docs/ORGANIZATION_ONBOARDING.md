@@ -21,6 +21,12 @@ The browser stores only non-authoritative UI metadata:
 - final-review confirmation checkbox state
 - whether the one-time approved success screen has already been viewed
 
+## UBO ownership validation
+
+- Every UBO ownership percentage must be greater than `1.00%` and can contain at most two decimal places.
+- The combined ownership across all UBOs must equal exactly `100.00%`; validation uses integer basis points rather than floating-point tolerance.
+- The final review revalidates these rules and blocks submission if older saved data does not comply.
+
 ## Status flow
 
 `NOT_STARTED → DRAFT → SUBMITTED/UNDER_REVIEW → APPROVED`

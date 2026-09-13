@@ -15,19 +15,18 @@ import { InvestorLayout } from '@/components/investor/InvestorLayout';
 import { InvestorActionBar } from '@/components/investor/InvestorPrimitives';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { NO_INVESTMENT_EXPERIENCE_VALUE } from '@/constants/investor';
 import { useInvestorOnboarding } from '@/hooks/useInvestorOnboarding';
 import { useCityOptions, useCountryOptions, useStateOptions } from '@/hooks/useLocationOptions';
 import { useAuthStore } from '@/store/auth.store';
 import { getErrorMessage } from '@/utils/error';
 import { isInvestorOnboardingReady } from '@/validations/investor.schemas';
+import { formatDate } from '@/utils/date';
 
 const displayLabel = (options, value) =>
   options.find((option) => String(option.value) === String(value))?.label || value || 'Not provided';
-const displayDate = (value) => {
-  if (!value) return 'Not provided';
-  const date = new Date(`${value}T00:00:00`);
-  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(date);
-};
+const displayDate = (value) =>
+  value ? formatDate(value, 'MMM D, YYYY') : 'Not provided';
 
 function ReviewSection({ title, actionLabel = 'Edit', onEdit, children }) {
   return (
@@ -120,12 +119,19 @@ export default function ReviewSubmitStep() {
     }
   };
 
-  const categories = compliance.investmentCategories
-    .map((value) => displayLabel(options.investmentCategories, value))
-    .join(', ');
-  const lastUpdatedDate = state.lastUpdated ? new Date(state.lastUpdated) : null;
-  const lastUpdated = lastUpdatedDate && !Number.isNaN(lastUpdatedDate.getTime())
-    ? new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(lastUpdatedDate)
+  const categories = compliance.investmentCategories.length
+    ? compliance.investmentCategories
+        .map((value) =>
+          value === NO_INVESTMENT_EXPERIENCE_VALUE
+            ? 'None — no prior investment experience'
+            : displayLabel(options.investmentCategories, value),
+        )
+        .join(', ')
+    : String(compliance.yearsOfExperience) === '0'
+      ? 'None — no prior investment experience'
+      : 'Not provided';
+  const lastUpdated = state.lastUpdated
+    ? formatDate(state.lastUpdated, 'MMM D, YYYY, h:mm A')
     : 'Not saved yet';
 
   const actionPanel = (

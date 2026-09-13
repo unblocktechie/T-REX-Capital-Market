@@ -1,5 +1,5 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { TrexLoader } from '@/components/loaders/TrexLoader';
+import { WorkspaceRouteLoader } from '@/components/loaders/DelayedTrexLoader';
 import { ROUTES } from '@/config/routes';
 import { useOrganization } from '@/hooks/useOrganization';
 import { ORGANIZATION_STATUSES } from '@/services/organizationStorageService';
@@ -9,15 +9,7 @@ export function OrganizationDataGuard() {
   const location = useLocation();
 
   if (isLoading) {
-    return (
-      <TrexLoader
-        variant="route"
-        compact
-        eyebrow="Secure organization profile"
-        title="Loading organization"
-        message="Loading your latest organization verification progress…"
-      />
-    );
+    return <WorkspaceRouteLoader />;
   }
 
   if (error?.response?.status === 403) return <Navigate to={ROUTES.forbidden} replace />;

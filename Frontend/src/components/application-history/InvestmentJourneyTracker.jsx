@@ -11,6 +11,7 @@ import {
   X,
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
+import { featureFlags } from '@/config/featureFlags';
 
 const toneIcon = (tone) => {
   if (tone === 'success') return CheckCircle2;
@@ -88,8 +89,12 @@ const STEP_GUIDANCE = {
     },
     {
       what: 'The investor has completed all required checks and now has access to invest in this asset.',
-      action: 'No approval action is required. You can invite the investor to invest if you want to notify them.',
-      how: 'Use Invite to Invest to notify the investor, or simply wait for them to continue on their own.',
+      action: featureFlags.contactSupportActions
+        ? 'No approval action is required. You can invite the investor to invest if you want to notify them.'
+        : 'No approval action is required. The investor can continue with their investment when ready.',
+      how: featureFlags.contactSupportActions
+        ? 'Use Invite to Invest to notify the investor, or simply wait for them to continue on their own.'
+        : 'No further issuer action is required at this stage.',
       complete: 'You will see Investor access enabled and all journey steps will show Completed.',
       next: 'The investor can proceed with their investment.',
     },

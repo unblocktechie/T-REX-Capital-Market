@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { authApi } from '@/api/auth';
 import { PasswordStrength } from '@/components/forms/PasswordStrength';
 import { AuthButton } from '@/components/auth/AuthButton';
-import { TrexLoader } from '@/components/loaders/TrexLoader';
+import { DelayedTrexLoader } from '@/components/loaders/DelayedTrexLoader';
 import { PasswordInput } from '@/components/ui/PasswordInput';
 import { ROUTES } from '@/config/routes';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
@@ -70,7 +70,8 @@ export default function ResetPasswordPage() {
 
   if (tokenValidation.isPending) {
     return (
-      <TrexLoader
+      <DelayedTrexLoader
+        delay={220}
         variant="verification"
         eyebrow="Password security check"
         title="Validating your reset link"

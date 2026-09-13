@@ -1,5 +1,5 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { TrexLoader } from '@/components/loaders/TrexLoader';
+import { WorkspaceRouteLoader } from '@/components/loaders/DelayedTrexLoader';
 import { ROUTES } from '@/config/routes';
 import { ROLES } from '@/config/permissions';
 import { useAuth } from '@/hooks/useAuth';
@@ -37,15 +37,7 @@ export function OrganizationAccessMiddleware() {
   if (user?.role !== ROLES.issuer) return <Outlet />;
 
   if (isLoading) {
-    return (
-      <TrexLoader
-        variant="route"
-        compact
-        eyebrow="Secure organization onboarding"
-        title="Loading your organization"
-        message="Checking your latest KYB and approval status…"
-      />
-    );
+    return <WorkspaceRouteLoader />;
   }
 
   if (error?.response?.status === 403) {

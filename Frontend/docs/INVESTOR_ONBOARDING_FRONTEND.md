@@ -68,7 +68,7 @@ Legacy drafts are normalized when loaded, and legacy mock document records are d
 ## Validation and Submission
 
 - Identity requires the documented fields, supported server options, and age 18+.
-- Compliance requires the documented questionnaire fields and at least one allowed investment category.
+- Compliance requires the documented questionnaire fields. Investors with experience select at least one allowed investment category; investors with no prior experience can choose **None**, which is mutually exclusive and fixes years of experience at `0`.
 - The UI requires at least one successful KYC document and one successful accreditation document before final submission.
 - The connected wallet must be available on the supported network; the backend performs the final wallet validation.
 - Backend field errors are mapped to matching form controls where possible.

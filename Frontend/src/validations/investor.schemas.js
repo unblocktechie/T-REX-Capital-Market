@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { NO_INVESTMENT_EXPERIENCE_VALUE } from '@/constants/investor';
 
 const namePattern = /^[\p{L}][\p{L}\s'’-]*$/u;
 const today = () => {
@@ -62,7 +63,7 @@ export const complianceSchema = z.object({
   sourceOfWealth: z.string().min(1, 'Primary source of wealth is required.'),
   estimatedNetWorth: z.string().min(1, 'Estimated net worth is required.'),
   annualInvestmentCapacity: z.string().min(1, 'Annual investment capacity is required.'),
-  investmentCategories: z.array(z.string()).min(1, 'Select at least one investment category.'),
+  investmentCategories: z.array(z.string()),
   yearsOfExperience: z
     .string()
     .trim()
@@ -79,6 +80,34 @@ export const complianceSchema = z.object({
       (files) => files.every((file) => file.status === 'success' || file.status === 'verified'),
       'Wait for every accreditation document to finish uploading or remove failed files.',
     ),
+}).superRefine((data, context) => {
+  const categories = data.investmentCategories || [];
+  const noExperienceSelected = categories.includes(NO_INVESTMENT_EXPERIENCE_VALUE);
+  const years = Number(data.yearsOfExperience);
+
+  if (!categories.length && years !== 0) {
+    context.addIssue({
+      code: 'custom',
+      path: ['investmentCategories'],
+      message: 'Select at least one investment category, or choose None if you have no prior investment experience.',
+    });
+  }
+
+  if (noExperienceSelected && categories.length > 1) {
+    context.addIssue({
+      code: 'custom',
+      path: ['investmentCategories'],
+      message: 'None cannot be combined with another investment category.',
+    });
+  }
+
+  if (noExperienceSelected && years !== 0) {
+    context.addIssue({
+      code: 'custom',
+      path: ['yearsOfExperience'],
+      message: 'Years of investment experience must be 0 when None is selected.',
+    });
+  }
 });
 
 export const documentsSchema = z.object({

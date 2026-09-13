@@ -1892,6 +1892,10 @@ b {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .global-loader {
+    transition: none;
+  }
+
   *,
   *::before,
   *::after {
@@ -5297,13 +5301,27 @@ body,
   z-index: 9999;
   display: grid;
   place-items: center;
-  pointer-events: auto;
+  visibility: hidden;
+  pointer-events: none;
+  opacity: 0;
   background:
     radial-gradient(circle at 14% 12%, rgba(59,130,246,0.10), transparent 34%),
     radial-gradient(circle at 86% 80%, rgba(15,23,42,0.10), transparent 34%),
     linear-gradient(180deg, #eef3f8 0%, #f8fafc 24%, #ffffff 100%);
-  backdrop-filter: blur(6px) saturate(1);
-  -webkit-backdrop-filter: blur(6px) saturate(1);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transition:
+    opacity 150ms ease,
+    visibility 0s linear 150ms;
+}
+
+.global-loader--visible {
+  visibility: visible;
+  pointer-events: auto;
+  opacity: 1;
+  transition:
+    opacity 150ms ease,
+    visibility 0s linear 0s;
 }
 
 .verification-result {

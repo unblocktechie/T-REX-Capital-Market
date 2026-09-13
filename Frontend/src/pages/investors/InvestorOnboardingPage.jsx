@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
-import { TrexLoader } from '@/components/loaders/TrexLoader';
+import { WorkspaceRouteLoader } from '@/components/loaders/DelayedTrexLoader';
 import { ROUTES } from '@/config/routes';
 import { InvestorOnboardingProvider } from '@/context/InvestorOnboardingProvider';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
@@ -28,15 +28,7 @@ function InvestorOnboardingFlow() {
   }, [hydration.corrupted, hydration.hasDraft, isLoading, state.currentStep]);
 
   if (isLoading) {
-    return (
-      <TrexLoader
-        variant="route"
-        compact
-        eyebrow="Secure investor profile"
-        title="Loading investor onboarding"
-        message="Loading your latest identity verification and eligibility progress…"
-      />
-    );
+    return <WorkspaceRouteLoader />;
   }
 
   if (loadError?.response?.status === 403) return <Navigate to={ROUTES.forbidden} replace />;

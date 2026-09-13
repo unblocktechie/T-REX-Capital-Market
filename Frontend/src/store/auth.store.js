@@ -1,10 +1,12 @@
 import { create } from 'zustand';
 import { tokenService } from '@/services/token.service';
 
+const initialSession = tokenService.getSession();
+
 export const useAuthStore = create((set, get) => ({
-  user: null,
-  status: 'checking',
-  isAuthenticated: false,
+  user: initialSession?.user || null,
+  status: initialSession?.accessToken && initialSession?.user ? 'authenticated' : 'anonymous',
+  isAuthenticated: Boolean(initialSession?.accessToken && initialSession?.user),
 
   setSession: ({ user, accessToken, tokenType = 'Bearer', expiresIn = null, remember = false }) => {
     tokenService.setSession({ user, accessToken, tokenType, expiresIn, remember });
