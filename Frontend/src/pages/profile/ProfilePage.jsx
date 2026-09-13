@@ -16,7 +16,9 @@ import { investorApi } from '@/api/investor/investor.api';
 import { mapInvestorDocument } from '@/api/investor/investor.mapper';
 import { investmentApi } from '@/api/investments';
 import { mapEligibility } from '@/api/investments/investment.mapper';
+import { ArcNetworkIcon } from '@/components/common/ArcNetworkIcon';
 import { CompactAddress } from '@/components/common/CompactAddress';
+import { TokenIcon } from '@/components/common/TokenIcon';
 import { InvestorDocumentList } from '@/components/investor/InvestorDocumentReview';
 import { TypedDocumentUploader } from '@/components/investor/TypedDocumentUploader';
 import { Button } from '@/components/ui/Button';
@@ -332,8 +334,16 @@ function InvestorProfilePage() {
               ) : (
                 <strong>{profile.onchainId || 'Not available'}</strong>
               )}
-              <span>Network</span><strong>{walletNetwork}</strong>
-              <span>Available balance</span><strong>{walletBalance}</strong>
+              <span>Network</span>
+              <strong className="investor-profile-account-value">
+                {connectedWalletMatches ? <ArcNetworkIcon size="xs" decorative /> : null}
+                <span>{walletNetwork}</span>
+              </strong>
+              <span>Available balance</span>
+              <strong className="investor-profile-account-value">
+                {connectedWalletMatches ? <TokenIcon symbol="USDC" size="xs" /> : null}
+                <span>{walletBalance}</span>
+              </strong>
             </div>
           </details>
         </div>

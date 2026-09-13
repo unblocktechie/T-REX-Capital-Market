@@ -67,8 +67,8 @@ export default function TokenInformationPage() {
   }, [hydrateWalletDefaults, organizationWallet]);
 
   useEffect(() => {
-    if (supplyPricing.currency !== 'USDT') {
-      updateSection('supplyPricing', { currency: 'USDT' });
+    if (supplyPricing.currency !== 'USDC') {
+      updateSection('supplyPricing', { currency: 'USDC' });
     }
   }, [supplyPricing.currency, updateSection]);
 
@@ -123,7 +123,7 @@ export default function TokenInformationPage() {
       });
       updateSection('supplyPricing', {
         initialPrice: String(response?.initialTokenPrice ?? supplyPricing.initialPrice),
-        currency: 'USDT',
+        currency: 'USDC',
       });
       recordBackendSave('token-information', response);
       markStepCompleted('token-information');
@@ -255,10 +255,10 @@ export default function TokenInformationPage() {
             </HelpDetails>
 
             <FieldWrapper
-              label="Starting price per unit (USDT)"
+              label="Starting price per unit (USDC)"
               required
               error={fieldError('initialPrice')}
-              hint="Enter the starting price for one unit of the asset. Example: 10 means one unit starts at 10 USDT."
+              hint="Enter the starting price for one unit of the asset. Example: 10 means one unit starts at 10 USDC."
               htmlFor="initial-token-price"
             >
               <TextInput
@@ -277,7 +277,7 @@ export default function TokenInformationPage() {
                   clearServerError('initialPrice');
                   updateSection('supplyPricing', {
                     initialPrice: nextValue,
-                    currency: 'USDT',
+                    currency: 'USDC',
                   });
                 }}
                 onBlur={() => blur('initialPrice')}

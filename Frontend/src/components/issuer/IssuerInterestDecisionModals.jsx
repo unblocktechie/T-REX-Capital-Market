@@ -87,9 +87,12 @@ export function RejectInterestModal({ open, onClose, topics = [], onConfirm, loa
     [topics],
   );
   const availableClaims = claimOptions.filter((option) => !selectedClaims.includes(option.value));
-  const valid = reasonType === 'DOC_REJECTED'
-    ? selectedClaims.length > 0
-    : reasonType === 'OTHER' && rejectReason.trim().length > 0;
+  const hasRejectionNote = rejectReason.trim().length > 0;
+  const valid = hasRejectionNote && (
+    reasonType === 'DOC_REJECTED'
+      ? selectedClaims.length > 0
+      : reasonType === 'OTHER'
+  );
 
   const addClaim = (value) => {
     if (!value || selectedClaims.includes(value)) return;
@@ -102,12 +105,16 @@ export function RejectInterestModal({ open, onClose, topics = [], onConfirm, loa
   };
 
   const submit = async () => {
-    if (!valid) {
-      setError(reasonType === 'DOC_REJECTED'
-        ? 'Select at least one check that needs updated documents.'
-        : reasonType === 'OTHER'
-          ? 'Provide the reason for rejection.'
-          : 'Choose whether to request changes or decline the request.');
+    if (!reasonType) {
+      setError('Choose whether to request changes or decline the request.');
+      return;
+    }
+    if (reasonType === 'DOC_REJECTED' && !selectedClaims.length) {
+      setError('Select at least one check that needs updated documents.');
+      return;
+    }
+    if (!hasRejectionNote) {
+      setError('Enter a rejection note before submitting this decision.');
       return;
     }
     setError('');
@@ -178,14 +185,17 @@ export function RejectInterestModal({ open, onClose, topics = [], onConfirm, loa
         ) : null}
 
         <label className="issuer-decision-field">
-          <span>Message to investor</span>
+          <span>Rejection note <b aria-hidden="true">*</b></span>
           <textarea
             rows={4}
             value={rejectReason}
             onChange={(event) => { setRejectReason(event.target.value); setError(''); }}
             placeholder={reasonType === 'OTHER' ? 'Explain why this request is being declined…' : 'Explain what the investor needs to update…'}
             disabled={loading}
+            required
+            aria-required="true"
           />
+          <small>This note is required and will be shown to the investor.</small>
         </label>
 
         {error ? <p className="issuer-decision-error" role="alert">{error}</p> : null}

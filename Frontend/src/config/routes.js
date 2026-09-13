@@ -10,6 +10,7 @@ export const ROUTES = Object.freeze({
   marketplaceToken: (tokenId = ':tokenId') => `/app/marketplace/${tokenId}`,
   applications: '/app/applications',
   assetManagement: '/app/asset-management',
+  walletManagement: '/app/wallet',
   applicationDetail: (interestUid = ':interestUid') => `/app/applications/${interestUid}`,
   applicationClaim: (interestUid = ':interestUid') => `/app/applications/${interestUid}/submit-claim`,
   purchaseToken: (interestUid = ':interestUid') => `/app/applications/${interestUid}/purchase`,

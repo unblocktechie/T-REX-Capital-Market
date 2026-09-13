@@ -128,7 +128,7 @@ export default function ReviewDeployPage() {
   const accredited = identityClaims.claimTopics.find((topic) => topic.id === 'accredited');
   const enabledClaims = identityClaims.claimTopics.filter((topic) => topic.enabled);
   const networkLabel =
-    wallet.requiredChain?.name || tokenInformation.network || 'Sepolia Testnet';
+    wallet.requiredChain?.name || tokenInformation.network || 'Arc Testnet';
   const connectedNetworkLabel = wallet.isConnected
     ? wallet.chain?.name ||
       `Unsupported network${wallet.chainId ? ` (Chain ID ${wallet.chainId})` : ''}`
@@ -333,7 +333,7 @@ export default function ReviewDeployPage() {
                 <DetailItem label="Decimal places">{tokenInformation.decimals}</DetailItem>
                 <DetailItem label="Starting price per unit">
                   {supplyPricing.initialPrice
-                    ? formatMoney(supplyPricing.initialPrice, 'USDT')
+                    ? formatMoney(supplyPricing.initialPrice, 'USDC')
                     : '—'}
                 </DetailItem>
                 <DetailItem label="Approved organization account" full>

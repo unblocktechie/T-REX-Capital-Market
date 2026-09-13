@@ -18,6 +18,7 @@ import { formatUnits, parseUnits } from 'viem';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { investmentApi } from '@/api/investments';
+import { CurrencyAmount } from '@/components/common/CurrencyAmount';
 import { env } from '@/config/env';
 import {
   InvestorTokenActionHeader,
@@ -209,7 +210,7 @@ const purchaseHistoryStatusMeta = (status, canonicalStatus = '') => {
       return {
         label: 'Payment Received',
         tone: 'confirmed',
-        tooltip: 'Your USDT payment was received successfully. Your investment record is being updated.',
+        tooltip: 'Your USDC payment was received successfully. Your investment record is being updated.',
       };
     case PURCHASE_STATUS.MINT_SUBMITTED:
       return {
@@ -470,7 +471,7 @@ export default function PurchaseTokenPage({
     if (!investorWalletAddress || !chainId) {
       setUsdtSpendingApproved(false);
       setUsdtApprovalLoading(false);
-      setUsdtApprovalError('Your USDT payment permission cannot be checked until your Privy secure account is ready.');
+      setUsdtApprovalError('Your USDC payment permission cannot be checked until your Privy secure account is ready.');
       return false;
     }
 
@@ -492,7 +493,7 @@ export default function PurchaseTokenPage({
     } catch (approvalError) {
       if (usdtApprovalRequestRef.current !== requestId) return false;
       setUsdtSpendingApproved(false);
-      setUsdtApprovalError(getErrorMessage(approvalError, 'We could not check your USDT payment permission. Please try again.'));
+      setUsdtApprovalError(getErrorMessage(approvalError, 'We could not check your USDC payment permission. Please try again.'));
       return false;
     } finally {
       if (usdtApprovalRequestRef.current === requestId) setUsdtApprovalLoading(false);
@@ -568,6 +569,14 @@ export default function PurchaseTokenPage({
   const paymentTxHash = paymentHashOf(purchase) || broadcastTxHash;
   const purchaseStatus = normalizeStatus(purchase?.status);
   const isCompleted = purchaseStatus === PURCHASE_STATUS.COMPLETED;
+
+  useEffect(() => {
+    if (!isCompleted) return;
+    setTokenAmountInput('');
+    setPlatformQuote(null);
+    setPlatformQuoteError('');
+  }, [isCompleted]);
+
   const explorerUrlFor = useCallback((txHash, chainIdOverride) => {
     if (!validTransactionHash(txHash)) return '';
     const chainId = Number(chainIdOverride || purchase?.chainId || context.chainId);
@@ -790,11 +799,11 @@ export default function PurchaseTokenPage({
       return;
     }
     if (usdtApprovalLoading) {
-      toast.info('Checking your existing USDT payment permission. Please wait a moment.');
+      toast.info('Checking your existing USDC payment permission. Please wait a moment.');
       return;
     }
     if (usdtSpendingApproved) {
-      toast.success('Your USDT payment permission is already active. You can continue to review your investment.');
+      toast.success('Your USDC payment permission is already active. You can continue to review your investment.');
       return;
     }
 
@@ -810,9 +819,9 @@ export default function PurchaseTokenPage({
         chainId: preparedChainId || walletGuard.targetChainId,
         onStep: ({ stage }) => {
           if (stage === 'approval-signature') {
-            toast.info('Allow USDT payments', {
+            toast.info('Allow USDC payments', {
               id: 'purchase-usdt-approval-step',
-              description: 'This one-time permission lets you make investments using USDT. It does not make an investment by itself.',
+              description: 'This one-time permission lets you make investments using USDC. It does not make an investment by itself.',
             });
           } else if (stage === 'approval-confirming') {
             toast.info('Payment permission submitted', {
@@ -825,16 +834,16 @@ export default function PurchaseTokenPage({
 
       const approved = Boolean(approval?.spendingApproved) || await refreshUsdtSpendingApproval({ silent: true });
       if (!approved) {
-        throw new Error('Your USDT payment permission was submitted but could not be confirmed. Refresh and try again.');
+        throw new Error('Your USDC payment permission was submitted but could not be confirmed. Refresh and try again.');
       }
 
       setUsdtSpendingApproved(true);
       setUsdtApprovalError('');
-      toast.success('USDT payments allowed', {
+      toast.success('USDC payments allowed', {
         id: 'purchase-usdt-approval-step',
         description: approval?.alreadyApproved
-          ? 'Your USDT payment permission is already active. You can continue to review your investment.'
-          : 'Your payment permission is active. You can now review and confirm investments using USDT while this permission remains sufficient.',
+          ? 'Your USDC payment permission is already active. You can continue to review your investment.'
+          : 'Your payment permission is active. You can now review and confirm investments using USDC while this permission remains sufficient.',
       });
     } catch (approvalError) {
       if (isInvestorPurchaseWalletRejection(approvalError)) {
@@ -859,12 +868,12 @@ export default function PurchaseTokenPage({
       return;
     }
     if (usdtApprovalLoading) {
-      toast.info('Checking your USDT payment permission. Please wait a moment.');
+      toast.info('Checking your USDC payment permission. Please wait a moment.');
       return;
     }
     if (!usdtSpendingApproved) {
-      toast.info('USDT payment permission is required', {
-        description: 'Choose Allow payments first. This one-time permission lets you make investments using USDT. You will always review and confirm an investment before funds are used.',
+      toast.info('USDC payment permission is required', {
+        description: 'Choose Allow payments first. This one-time permission lets you make investments using USDC. You will always review and confirm an investment before funds are used.',
       });
       return;
     }
@@ -986,9 +995,9 @@ export default function PurchaseTokenPage({
         toast.info('Investment cancelled. No investment was submitted.');
       } else if (clean(walletError?.code) === 'PAYMENT_APPROVAL_REQUIRED') {
         setUsdtSpendingApproved(false);
-        setUsdtApprovalError('Your current USDT allowance is no longer enough for this investment.');
-        toast.error('USDT payment permission required', {
-          description: 'Allow USDT payments, then review your investment again.',
+        setUsdtApprovalError('Your current USDC allowance is no longer enough for this investment.');
+        toast.error('USDC payment permission required', {
+          description: 'Allow USDC payments, then review your investment again.',
         });
       } else {
         const fundingIssue = resolveWalletFundingIssue(walletError);
@@ -1056,7 +1065,7 @@ export default function PurchaseTokenPage({
   const paymentContract = clean(purchase?.usdtContractAddress) || env.trex.paymentToken;
   const purchaseBlockedByPrevious = normalizeStatus(purchase?.canonicalStatus) === 'SUBMITTED';
   const purchaseAvailabilityUnverified = false;
-  const actionLabel = usdtSpendingApproved ? 'Review investment' : 'Allow payments';
+  const actionLabel = usdtSpendingApproved ? 'Invest' : 'Allow payments';
   const approvalActionDisabled = Boolean(busyAction)
     || !walletGuard.ready
     || usdtApprovalLoading
@@ -1107,7 +1116,7 @@ export default function PurchaseTokenPage({
           <InvestorTokenActionHeader
             eyebrow="Ready to invest"
             title="Invest"
-            description="Choose how many units you want to buy. We will show the estimated USDT cost before you confirm securely with Privy."
+            description="Choose how many units you want to buy. We will show the estimated USDC cost before you confirm securely with Privy."
           />
           <InvestmentJourneyTracker journey={purchaseJourney} />
         </>
@@ -1126,14 +1135,14 @@ export default function PurchaseTokenPage({
               <ShieldCheck size={19} />
             </div>
             <p className="investor-token-action-helper investor-token-action-helper--prominent">
-              You will pay with USDT from your Privy secure account. Funds are used only after you review and confirm the investment.
+              You will pay with USDC from your Privy secure account. Funds are used only after you review and confirm the investment.
             </p>
             <details className="investor-technical-details investor-token-technical-details">
               <summary>View account &amp; payment details</summary>
               <div className="investor-token-action-address-grid">
                 <LockedAddressField label="Your Privy secure account" value={preparedInvestorWallet} />
                 <LockedAddressField label="Issuer payment account" value={exactTreasury} emptyLabel="Issuer payment account unavailable" />
-                {paymentContract ? <LockedAddressField label="USDT contract" value={paymentContract} /> : null}
+                {paymentContract ? <LockedAddressField label="USDC contract" value={paymentContract} /> : null}
               </div>
               <p>These values come from your approved application and cannot be edited here.</p>
             </details>
@@ -1168,11 +1177,11 @@ export default function PurchaseTokenPage({
               </p>
             ) : null}
             <div className="investor-token-action-calculation">
-              <span>Estimated USDT cost</span>
+              <span>Estimated USDC cost</span>
               <strong>
-                {estimatedPayment > 0
-                  ? `${money.format(estimatedPayment)} ${token.currency || 'USDT'}`
-                  : `0 ${token.currency || 'USDT'}`}
+                <CurrencyAmount symbol={token.currency || 'USDC'}>
+                  {estimatedPayment > 0 ? money.format(estimatedPayment) : '0'}
+                </CurrencyAmount>
               </strong>
             </div>
             {platformQuoteLoading ? <p className="investor-token-action-field-hint">Checking the latest price…</p> : null}
@@ -1219,18 +1228,22 @@ export default function PurchaseTokenPage({
             </div>
             <div className="investor-token-order-row">
               <span>Price per unit</span>
-              <strong>{tokenPriceExact ? `$${displayServerAmount(tokenPriceExact)} ${token.currency || 'USDT'}` : '—'}</strong>
+              <strong>
+                {tokenPriceExact ? (
+                  <CurrencyAmount symbol={token.currency || 'USDC'}>${displayServerAmount(tokenPriceExact)}</CurrencyAmount>
+                ) : '—'}
+              </strong>
             </div>
             <div className="investor-token-order-row investor-token-order-row--primary">
               <span>You will receive</span>
               <strong>{displayServerAmount(currentTokenAmount, '0')} <small>{token.symbol}</small></strong>
             </div>
             <div className="investor-token-order-row">
-              <span>Estimated USDT cost</span>
+              <span>Estimated USDC cost</span>
               <strong>
-                {estimatedPayment > 0
-                  ? `$${money.format(estimatedPayment)} ${token.currency || 'USDT'}`
-                  : '—'}
+                {estimatedPayment > 0 ? (
+                  <CurrencyAmount symbol={token.currency || 'USDC'}>${money.format(estimatedPayment)}</CurrencyAmount>
+                ) : '—'}
               </strong>
             </div>
             <div className="investor-token-order-row">
@@ -1250,11 +1263,11 @@ export default function PurchaseTokenPage({
 
             <div className="investor-token-payment-flow investor-token-payment-flow--single" aria-label="Investment action">
               <div className="investor-token-payment-flow__intro">
-                <strong>{usdtSpendingApproved ? 'Ready to invest' : 'Allow USDT payments for investments'}</strong>
+                <strong>{usdtSpendingApproved ? 'Ready to invest' : 'Allow USDC payments for investments'}</strong>
                 <span>
                   {usdtSpendingApproved
-                    ? 'Your USDT payment permission is already active. Enter the amount you want to buy and review your investment.'
-                    : 'This one-time permission lets you make investments using USDT. You will always review and confirm an investment before funds are used.'}
+                    ? 'Your USDC payment permission is already active. Enter the amount you want to buy and review your investment.'
+                    : 'This one-time permission lets you make investments using USDC. You will always review and confirm an investment before funds are used.'}
                 </span>
               </div>
 
@@ -1279,7 +1292,7 @@ export default function PurchaseTokenPage({
                           : 'Approval required'}
                   </span>
                   <details className="investor-token-payment-step__help">
-                    <summary aria-label={usdtSpendingApproved ? 'About investing' : 'About USDT payment permission'} title="About this action">
+                    <summary aria-label={usdtSpendingApproved ? 'About investing' : 'About USDC payment permission'} title="About this action">
                       <Info size={15} />
                     </summary>
                     <div className="investor-token-payment-step__tooltip" role="note">
@@ -1287,11 +1300,11 @@ export default function PurchaseTokenPage({
                       {usdtSpendingApproved ? (
                         <>
                           <p>Your Privy secure account lets you review and confirm the investment securely.</p>
-                          <p>After this investment is confirmed, you can use Review investment again for another investment.</p>
+                          <p>After this investment is confirmed, you can use Invest again for another investment.</p>
                         </>
                       ) : (
                         <>
-                          <p>This permission does not make an investment or move USDT by itself. It only allows USDT to be used after you review and confirm an investment.</p>
+                          <p>This permission does not make an investment or move USDC by itself. It only allows USDC to be used after you review and confirm an investment.</p>
                           <p>The permission can be reused while it remains sufficient, so you do not need to allow payments again for every investment.</p>
                         </>
                       )}
@@ -1302,9 +1315,9 @@ export default function PurchaseTokenPage({
                 <p className="investor-token-payment-step__copy">
                   {usdtSpendingApproved
                     ? purchaseBlockedByPrevious
-                      ? 'Your current investment is being confirmed. As soon as it completes, Review investment becomes available again automatically.'
-                      : 'Review the amount and estimated cost, then choose Review investment. Confirm securely with Privy before the investment is submitted.'
-                    : 'Choose Allow payments and confirm the permission with Privy. After it is confirmed, this button automatically changes to Review investment.'}
+                      ? 'Your current investment is being confirmed. As soon as it completes, Invest becomes available again automatically.'
+                      : 'Review the amount and estimated cost, then choose Invest. Confirm securely with Privy before the investment is submitted.'
+                    : 'Choose Allow payments and confirm the permission with Privy. After it is confirmed, this button automatically changes to Invest.'}
                 </p>
 
                 {usdtApprovalError && !usdtSpendingApproved ? (
@@ -1325,9 +1338,9 @@ export default function PurchaseTokenPage({
                   {!walletGuard.ready
                     ? 'Your Privy secure account needs attention. Open it from the header and follow the prompt to continue.'
                     : usdtApprovalLoading
-                      ? 'Checking your current USDT payment permission…'
+                      ? 'Checking your current USDC payment permission…'
                       : !usdtSpendingApproved
-                        ? usdtApprovalError || 'Allow USDT payments once to enable investments.'
+                        ? usdtApprovalError || 'Allow USDC payments once to enable investments.'
                         : purchaseBlockedByPrevious
                           ? 'Your submitted investment is still being confirmed. No new action is needed until it completes.'
                           : tokenAmountError
@@ -1340,7 +1353,7 @@ export default function PurchaseTokenPage({
                                   ? platformQuoteError
                                   : busyAction
                                     ? 'Your current secure confirmation is in progress.'
-                                    : 'Choose Review investment, then confirm securely with Privy.'}
+                                    : 'Choose Invest, then confirm securely with Privy.'}
                 </small>
               </section>
             </div>
@@ -1436,7 +1449,7 @@ export default function PurchaseTokenPage({
             <div className="investor-token-purchase-history__table-head" role="row">
               <span role="columnheader">Date</span>
               <span role="columnheader">Token amount</span>
-              <span role="columnheader">USDT amount</span>
+              <span role="columnheader">USDC amount</span>
               <span role="columnheader">Status</span>
               <span role="columnheader">Payment</span>
             </div>
@@ -1455,8 +1468,10 @@ export default function PurchaseTokenPage({
                   <span className="investor-token-purchase-history__cell" data-label="Token amount" role="cell">
                     <strong>{displayServerAmount(row?.tokenAmount)} {token.symbol}</strong>
                   </span>
-                  <span className="investor-token-purchase-history__cell" data-label="USDT amount" role="cell">
-                    <strong>{displayServerAmount(row?.usdtAmount)} USDT</strong>
+                  <span className="investor-token-purchase-history__cell" data-label="USDC amount" role="cell">
+                    <strong>
+                      <CurrencyAmount symbol="USDC">{displayServerAmount(row?.usdtAmount)}</CurrencyAmount>
+                    </strong>
                   </span>
                   <span className="investor-token-purchase-history__cell" data-label="Status" role="cell">
                     <span

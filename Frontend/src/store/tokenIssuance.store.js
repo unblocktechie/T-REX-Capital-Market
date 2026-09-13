@@ -57,7 +57,7 @@ export const createInitialTokenIssuanceState = () => ({
   supplyPricing: {
     totalSupply: '',
     initialPrice: '',
-    currency: 'USDT',
+    currency: 'USDC',
     minimumInvestment: '',
     maximumInvestment: '',
     minimumTokenPurchase: '',
@@ -346,7 +346,7 @@ export const useTokenIssuanceStore = create((set, get) => ({
         supplyPricing: {
           ...initial.supplyPricing,
           ...(mapped.supplyPricing || {}),
-          currency: 'USDT',
+          currency: 'USDC',
         },
         identityClaims: {
           ...initial.identityClaims,
@@ -418,7 +418,7 @@ export const useTokenIssuanceStore = create((set, get) => ({
       supplyPricing: {
         ...state.supplyPricing,
         treasuryWallet: state.supplyPricing.treasuryWallet || address,
-        currency: 'USDT',
+        currency: 'USDC',
       },
       identityClaims: {
         ...state.identityClaims,

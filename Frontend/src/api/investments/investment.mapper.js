@@ -251,7 +251,7 @@ export const mapMarketplaceToken = (raw = {}, { interest = null, eligibility = n
     initialTokenPriceExact,
     nav: numberOrNull(raw?.nav, raw?.netAssetValue, price),
     initialPrice: initialTokenPrice,
-    currency: text(raw?.currency, pricing?.currency, 'USDT').toUpperCase(),
+    currency: text(raw?.currency, pricing?.currency, 'USDC').toUpperCase(),
     description: splitDescription(first(raw?.description, tokenInformation?.description)),
     shortDescription: text(raw?.shortDescription, raw?.description, tokenInformation?.description, tokenInformation?.assetClass),
     issuer: companyName || '—',

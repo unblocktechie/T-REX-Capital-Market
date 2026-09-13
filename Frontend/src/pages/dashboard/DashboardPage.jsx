@@ -22,6 +22,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { dashboardApi } from '@/api/dashboard/dashboard.api';
+import { ArcNetworkIcon } from '@/components/common/ArcNetworkIcon';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -96,7 +97,7 @@ const tokenStatusMeta = (tokenRecord) => {
   if (tokenRecord.hasToken) {
     return { label: 'Setup in progress', tone: 'neutral', description: 'Continue the guided setup to prepare your investment asset.' };
   }
-  return { label: 'Not started', tone: 'neutral', description: 'Create your investment asset after organization verification is complete.' };
+  return { label: 'Not started', tone: 'neutral', description: '' };
 };
 
 const organizationStatusMeta = (organization) => {
@@ -501,13 +502,11 @@ function IssuerDashboardPage() {
           </div>
           <span className="issuer-dashboard-hero-live__eyebrow">{companyName}</span>
           <h2>Welcome back, {user?.name?.split(' ')[0] || 'Issuer'}.</h2>
-          <p>
-            {tokenRecord.isDeployed
-              ? `${tokenName}${tokenSymbol ? ` (${tokenSymbol})` : ''} has been created. Open the asset to review its live price and access settings, or continue to your approved investor list.`
-              : tokenRecord.hasToken
-                ? `${tokenName}${tokenSymbol ? ` (${tokenSymbol})` : ''} is currently ${tokenStatus.label.toLowerCase()}. ${tokenStatus.description}`
-                : tokenStatus.description}
-          </p>
+          {tokenRecord.isDeployed ? (
+            <p>{`${tokenName}${tokenSymbol ? ` (${tokenSymbol})` : ''} has been created. Open the asset to review its live price and access settings, or continue to your approved investor list.`}</p>
+          ) : tokenRecord.hasToken ? (
+            <p>{`${tokenName}${tokenSymbol ? ` (${tokenSymbol})` : ''} is currently ${tokenStatus.label.toLowerCase()}. ${tokenStatus.description}`}</p>
+          ) : null}
           <div className="issuer-dashboard-next-step" role="note">
             <strong>Next:</strong>
             <span>
@@ -599,7 +598,7 @@ function IssuerDashboardPage() {
             <div>
               <span className="eyebrow">Asset setup</span>
               <h2>{tokenRecord.hasToken ? tokenName : 'Investment asset setup'}</h2>
-              <p>{tokenStatus.description}</p>
+              {tokenRecord.hasToken ? <p>{tokenStatus.description}</p> : null}
             </div>
             <Badge tone={tokenStatus.tone}>{tokenStatus.label}</Badge>
           </header>
@@ -1303,7 +1302,12 @@ function InvestorDashboardPage() {
                   <strong>{token.name || 'Token offering'}</strong>
                   <span>{[token.issuer, token.assetClass].filter((value) => value && value !== '—').join(' · ') || 'Created offering'}</span>
                 </span>
-                <ArrowRight size={16} />
+                <span className="investor-dashboard-live__offering-actions">
+                  <span className="investor-dashboard-live__offering-network" aria-label="Arc Testnet" title="Arc Testnet">
+                    <ArcNetworkIcon size="xs" decorative />
+                  </span>
+                  <ArrowRight size={16} aria-hidden="true" />
+                </span>
               </button>
             ))}
           </div>

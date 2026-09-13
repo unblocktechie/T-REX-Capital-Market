@@ -47,30 +47,43 @@ const loadWalletSnapshot = async (embeddedWallet, { force = false } = {}) => {
       shouldRetry: isTransientError,
     });
 
-    // Both calls are read-only. Retry transient/rate-limit failures and share this
-    // single in-flight refresh across every WalletControl mounted on the page.
-    const [providerChainId, value] = await Promise.all([
-      retryAsync(() => provider.request({ method: 'eth_chainId' }), {
+    // The provider chain is transaction-critical, while the balance is display-only.
+    // Resolve the chain first so a temporary public-RPC balance failure cannot make a
+    // correctly configured Privy wallet look like it is on the wrong network.
+    const providerChainId = await retryAsync(
+      () => provider.request({ method: 'eth_chainId' }),
+      {
         maxAttempts: 3,
         baseDelayMs: 650,
         maxDelayMs: 5_000,
         shouldRetry: isTransientError,
-      }),
-      retryAsync(() => publicClient.getBalance({ address }), {
+      },
+    );
+
+    let value;
+    try {
+      value = await retryAsync(() => publicClient.getBalance({ address }), {
         maxAttempts: 3,
         baseDelayMs: 650,
         maxDelayMs: 5_000,
         shouldRetry: isTransientError,
-      }),
-    ]);
+      });
+    } catch {
+      // Balance visibility is best effort. Transaction flows validate their required
+      // amounts separately and must not mistake a balance RPC outage for a network issue.
+      value = undefined;
+    }
 
     const snapshot = {
       chainId: parseHexChainId(providerChainId),
-      balance: {
-        value,
-        decimals: 18,
-        symbol: web3Config.requiredChain.nativeCurrency.symbol,
-      },
+      balance:
+        typeof value === 'bigint'
+          ? {
+              value,
+              decimals: 18,
+              symbol: web3Config.requiredChain.nativeCurrency.symbol,
+            }
+          : undefined,
     };
     walletSnapshotCache = { address: normalizedAddress, updatedAt: Date.now(), snapshot };
     return snapshot;
@@ -127,6 +140,36 @@ export function useWalletConnection() {
     [embeddedWallet],
   );
 
+  const refresh = useCallback(
+    () => refreshWalletState({ force: true }),
+    [refreshWalletState],
+  );
+
+  const getActiveChainId = useCallback(async () => {
+    if (!embeddedWallet) {
+      throw new Error('Your Privy secure account is not available. Sign in again.');
+    }
+
+    const provider = await retryAsync(() => embeddedWallet.getEthereumProvider(), {
+      maxAttempts: 3,
+      baseDelayMs: 500,
+      maxDelayMs: 4_000,
+      shouldRetry: isTransientError,
+    });
+    const providerChainId = await retryAsync(
+      () => provider.request({ method: 'eth_chainId' }),
+      {
+        maxAttempts: 3,
+        baseDelayMs: 650,
+        maxDelayMs: 5_000,
+        shouldRetry: isTransientError,
+      },
+    );
+    const resolvedChainId = parseHexChainId(providerChainId);
+    setChainId(resolvedChainId);
+    return resolvedChainId;
+  }, [embeddedWallet]);
+
   useEffect(() => {
     refreshWalletState().catch(() => undefined);
     if (!embeddedWallet?.address) return undefined;
@@ -179,12 +222,16 @@ export function useWalletConnection() {
   const isConnected = Boolean(
     privyReady && walletsReady && authenticated && embeddedWallet?.address,
   );
+  // Transaction pages can wait until Privy has finished resolving the wallet list,
+  // then perform an authoritative provider refresh before submitting any transaction.
+  const isReady = Boolean(privyReady && walletsReady);
   const isSupportedChain = web3Config.supportedChains.some((chain) => chain.id === chainId);
   const isCorrectNetwork = isConnected && chainId === web3Config.requiredChain.id;
   const chain = web3Config.supportedChains.find((item) => item.id === chainId);
 
   return {
     status: isConnected ? 'connected' : 'disconnected',
+    isReady,
     isConnected,
     isConnecting: false,
     isDisconnected: !isConnected,
@@ -208,6 +255,8 @@ export function useWalletConnection() {
     switchingChainId: undefined,
     balance,
     balanceLabel: isRefreshing && !balance ? 'Loading balance…' : formatWalletBalance(balance),
+    refresh,
+    getActiveChainId,
     shortAddress: shortenWalletAddress(address),
     walletSource: 'privy',
   };

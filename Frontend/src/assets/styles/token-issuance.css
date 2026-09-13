@@ -7036,3 +7036,42 @@
     min-height: 34px;
   }
 }
+
+/* Round 5: settlement/network context on issuer asset details */
+.token-dashboard-header__asset-context {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.token-dashboard-header__price-value {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.token-dashboard-header__price-value > .token-icon {
+  flex: 0 0 auto;
+}
+
+.token-dashboard-header__price-value > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 620px) {
+  .token-dashboard-header__asset-context {
+    gap: 6px;
+  }
+
+  .token-dashboard-header__price-value {
+    font-size: 15px;
+  }
+}

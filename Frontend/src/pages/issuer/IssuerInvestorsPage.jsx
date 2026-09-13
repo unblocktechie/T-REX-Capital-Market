@@ -25,7 +25,7 @@ const INTEREST_STATUS_OPTIONS = [
   { value: 'verifiedByIssuer', label: 'Waiting for Investor', description: 'Your review is complete and the investor must finish verification' },
   { value: 'pending', label: 'Investor Completing Application', description: 'The investor still needs to provide required information' },
   { value: 'approved', label: 'Approved', description: 'Requests that reached approval' },
-  { value: 'rejected', label: 'Not Approved', description: 'Requests that were not approved' },
+  { value: 'rejected', label: 'Rejected', description: 'Requests you have already rejected' },
   { value: 'cancelled', label: 'Cancelled', description: 'Requests that are no longer active' },
 ];
 

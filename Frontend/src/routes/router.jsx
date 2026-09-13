@@ -44,6 +44,7 @@ const SendTokenPage = lazy(() => import('@/pages/investor-portal/SendTokenPage')
 const RedeemTokenPage = lazy(() => import('@/pages/investor-portal/RedeemTokenPage'));
 const SubmitClaimPage = lazy(() => import('@/pages/investor-portal/SubmitClaimPage'));
 const ProfilePage = lazy(() => import('@/pages/profile/ProfilePage'));
+const WalletManagementPage = lazy(() => import('@/pages/wallet/WalletManagementPage'));
 const NotFoundPage = lazy(() => import('@/pages/errors/NotFoundPage'));
 const ForbiddenPage = lazy(() => import('@/pages/errors/ForbiddenPage'));
 const UnauthorizedPage = lazy(() => import('@/pages/errors/UnauthorizedPage'));
@@ -155,6 +156,7 @@ export const router = createBrowserRouter([
             children: [
               { index: true, element: <Navigate to={ROUTES.dashboard} replace /> },
               { path: 'dashboard', element: withSuspense(<DashboardPage />) },
+              { path: 'wallet', element: withSuspense(<WalletManagementPage />) },
               { path: 'investors', element: withSuspense(<InvestorsRoutePage />) },
               {
                 element: <RoleMiddleware roles={[ROLES.issuer]} />,

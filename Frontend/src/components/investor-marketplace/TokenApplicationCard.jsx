@@ -9,7 +9,9 @@ import {
   ShieldCheck,
   UsersRound,
 } from 'lucide-react';
+import { ArcNetworkIcon } from '@/components/common/ArcNetworkIcon';
 import { CountryFlagIcon } from '@/components/common/CountryFlagIcon';
+import { CurrencyAmount } from '@/components/common/CurrencyAmount';
 import { MarketplaceStatusBadge } from './MarketplaceStatusBadge';
 import { useMarketplaceTokenImageUrl } from './MarketplaceTokenImage';
 import { MARKETPLACE_STATUS } from '@/services/investor/investorMarketplaceLocalService';
@@ -64,9 +66,9 @@ const numericValue = (...values) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-const moneyLabel = (value, currency) => {
+const moneyLabel = (value) => {
   if (value == null) return '—';
-  return `$${Number(value).toLocaleString(undefined, { maximumFractionDigits: 6 })}${currency ? ` ${currency}` : ''}`;
+  return `$${Number(value).toLocaleString(undefined, { maximumFractionDigits: 6 })}`;
 };
 
 const deriveAccentHue = (token) => {
@@ -136,7 +138,7 @@ const normalizeCardData = (token = {}) => {
       nestedToken.countryCode,
       '',
     ),
-    currency: String(firstValue(token.currency, nestedToken.currency, 'USDT')).toUpperCase(),
+    currency: String(firstValue(token.currency, nestedToken.currency, 'USDC')).toUpperCase(),
     standard: firstValue(token.standard, token.tokenStandard, nestedToken.standard, 'ERC-3643'),
     status: normalizeApplicationStatus(firstValue(token.applicationStatus, token.interest?.status, token.status)),
   };
@@ -193,6 +195,10 @@ export function TokenApplicationCard({
           </div>
 
           <div className="token-application-card__badges">
+            <span className="token-application-card__network" title="Arc Testnet">
+              <ArcNetworkIcon size="xs" decorative />
+              <span>Arc</span>
+            </span>
             <MarketplaceStatusBadge status={card.status} compact />
           </div>
         </header>
@@ -205,7 +211,11 @@ export function TokenApplicationCard({
           ) : null}
           <div className="token-application-card__metric token-application-card__metric--primary token-application-card__metric--top-left">
             <span>Price per unit</span>
-            <strong><Coins size={19} /> {moneyLabel(card.price, card.currency)}</strong>
+            <strong>
+              {card.price == null ? '—' : (
+                <CurrencyAmount symbol={card.currency}>{moneyLabel(card.price)}</CurrencyAmount>
+              )}
+            </strong>
           </div>
           <div className="token-application-card__metric token-application-card__metric--primary token-application-card__metric--top-right">
             <span>{maxBalanceMetric.label}</span>

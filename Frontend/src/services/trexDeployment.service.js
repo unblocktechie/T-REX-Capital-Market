@@ -13,6 +13,7 @@ import {
 import { DEFAULT_TREX_PLATFORM_CONTROLLER_ADDRESS, env } from '@/config/env';
 import { web3Config } from '@/config/web3';
 import { assertValidTransactionHash } from '@/utils/transactionHash';
+import { requireOrganizationIdentityOnRequiredChain } from '@/services/organizationIdentity.service';
 
 const TREX_GATEWAY_ABI = [
   {
@@ -68,16 +69,6 @@ const TREX_GATEWAY_ABI = [
     stateMutability: 'view',
     inputs: [{ name: 'deployer', type: 'address' }],
     outputs: [{ name: '', type: 'bool' }],
-  },
-];
-
-const IDENTITY_FACTORY_ABI = [
-  {
-    type: 'function',
-    name: 'getIdentity',
-    stateMutability: 'view',
-    inputs: [{ name: '_wallet', type: 'address' }],
-    outputs: [{ name: '', type: 'address' }],
   },
 ];
 
@@ -421,7 +412,7 @@ export async function recoverTrexDeploymentState({ transactionHash, deploymentCo
   try {
     receipt = await publicClient.waitForTransactionReceipt({
       hash: deployHash,
-      confirmations: 1,
+      confirmations: web3Config.requiredConfirmations,
       timeout: 120_000,
     });
   } catch (cause) {
@@ -548,7 +539,7 @@ export async function activateTrexTransfers({
     try {
       const previousReceipt = await publicClient.waitForTransactionReceipt({
         hash: previousHash,
-        confirmations: 1,
+        confirmations: web3Config.requiredConfirmations,
         timeout: 45_000,
       });
       if (receiptSucceeded(previousReceipt)) {
@@ -630,7 +621,7 @@ export async function activateTrexTransfers({
 
     const receipt = await publicClient.waitForTransactionReceipt({
       hash: activationHash,
-      confirmations: 1,
+      confirmations: web3Config.requiredConfirmations,
     });
     if (!receiptSucceeded(receipt)) {
       throw Object.assign(new Error('Transfer activation was confirmed but could not be completed.'), {
@@ -728,6 +719,7 @@ const isWalletTransportTimeout = (error) =>
 
 const deploymentErrorMessage = (error) => {
   if (['TOKEN_CONFIGURATION_FAILED', 'TOKEN_CONFIGURATION_PENDING'].includes(error?.code)) return error.message;
+  if (/^(ORGANIZATION_IDENTITY_|IDENTITY_FACTORY_)/.test(error?.code || '')) return error.message;
   const message = getDeploymentErrorText(error);
 
   if (isWalletTransportTimeout(error)) {
@@ -767,6 +759,7 @@ export async function deployTrexSuite({
   compliance,
   agents,
   deploymentConfig,
+  organizationIdentityReadiness,
   onStageChange,
   onWalletAction,
   onTransactionSubmitted,
@@ -834,7 +827,7 @@ export async function deployTrexSuite({
     deploymentConfig?.identityFactory,
     'ONCHAINID Identity Factory address',
   );
-  // Read, simulate, and confirm through the configured Sepolia RPC. Only the
+  // Read, simulate, and confirm through the configured Arc Testnet RPC. Only the
   // transaction signature is sent through the injected wallet provider. This keeps
   // routine blockchain reads out of the Privy wallet request transport and avoids a stalled
   // wallet connection from leaving the deployment page in a loading state.
@@ -845,14 +838,21 @@ export async function deployTrexSuite({
     transport: custom(provider),
   });
 
-  const [issuerIdentityAddress, factoryAddress, publicDeployment, isApprovedDeployer] =
+  // Organization approval on Sepolia also created an ONCHAINID. Arc is a
+  // separate chain and uses a different Identity Factory address, so a Sepolia
+  // identity stored in the backend cannot be assumed to exist on Arc. Verify
+  // both the Arc Factory mapping and the backend's recorded identity before any
+  // token transaction is opened in Privy.
+  const [identityReadiness, factoryAddress, publicDeployment, isApprovedDeployer] =
     await Promise.all([
-      publicClient.readContract({
-        address: identityFactoryAddress,
-        abi: IDENTITY_FACTORY_ABI,
-        functionName: 'getIdentity',
-        args: [issuerAddress],
-      }),
+      organizationIdentityReadiness?.ready
+        ? Promise.resolve(organizationIdentityReadiness)
+        : requireOrganizationIdentityOnRequiredChain({
+            walletAddress: issuerAddress,
+            recordedIdentityAddress: organization?.contractAddress,
+            identityFactoryAddress,
+            publicClient,
+          }),
       publicClient.readContract({
         address: gatewayAddress,
         abi: TREX_GATEWAY_ABI,
@@ -871,34 +871,12 @@ export async function deployTrexSuite({
       }),
     ]);
 
+  const issuerIdentityAddress = identityReadiness.resolvedIdentityAddress;
+
   if (!publicDeployment && !isApprovedDeployer) {
     throw new Error(
       'Asset creation is not available for this organization secure account.',
     );
-  }
-
-  if (issuerIdentityAddress.toLowerCase() === zeroAddress) {
-    throw new Error(
-      `Issuer ${issuerAddress} has no ONCHAINID identity. Complete the organization approval step first.`,
-    );
-  }
-
-  const organizationOnchainId = String(organization?.contractAddress || '').trim();
-  if (organizationOnchainId) {
-    const approvedOnchainId = requiredAddress(
-      organizationOnchainId,
-      'Organization ONCHAINID address',
-    );
-    if (approvedOnchainId.toLowerCase() !== issuerIdentityAddress.toLowerCase()) {
-      throw new Error(
-        'The organization ONCHAINID does not match the Identity Factory record.',
-      );
-    }
-  }
-
-  const identityCode = await publicClient.getBytecode({ address: issuerIdentityAddress });
-  if (!identityCode || identityCode === '0x') {
-    throw new Error('The organization technical identity reference is not ready. Review the organization setup before continuing.');
   }
 
   const decimals = parseDecimals(tokenInformation?.decimals);
@@ -1065,7 +1043,7 @@ export async function deployTrexSuite({
 
     const receipt = await publicClient.waitForTransactionReceipt({
       hash: transactionHash,
-      confirmations: 1,
+      confirmations: web3Config.requiredConfirmations,
     });
 
     if (!receiptSucceeded(receipt)) {

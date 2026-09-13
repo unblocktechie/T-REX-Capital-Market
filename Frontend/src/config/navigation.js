@@ -1,4 +1,4 @@
-import { Building2, Briefcase, Coins, FileText, History, LayoutDashboard, Mail, RefreshCcw, Store, Users, UsersRound, WalletCards } from 'lucide-react';
+import { Building2, Briefcase, Coins, FileText, History, LayoutDashboard, Mail, RefreshCcw, Store, Users, UsersRound, Wallet, WalletCards } from 'lucide-react';
 import { PERMISSIONS, ROLES } from './permissions';
 import { ROUTES } from './routes';
 
@@ -103,6 +103,14 @@ export const navigationGroups = Object.freeze([
         permission: PERMISSIONS.dashboardView,
         roles: [ROLES.investor],
       },
+      {
+        label: 'Wallet Management',
+        shortLabel: 'Wallet',
+        to: ROUTES.walletManagement,
+        icon: Wallet,
+        permission: PERMISSIONS.dashboardView,
+        roles: [ROLES.issuer, ROLES.investor],
+      },
     ],
   },
 ]);
@@ -146,5 +154,6 @@ export const routeMeta = Object.freeze({
   [ROUTES.applications]: { title: 'My Applications', description: 'Track your investment applications' },
   [ROUTES.portfolio]: { title: 'Portfolio', description: 'See what you hold, its estimated value and your investment history' },
   [ROUTES.assetManagement]: { title: 'Manage Investments', description: 'Invest more, send, or redeem assets you are approved to hold' },
+  [ROUTES.walletManagement]: { title: 'Wallet Management', description: 'View USDC and T-REX token balances in your Privy secure account' },
   [ROUTES.profile]: { title: 'Investor Profile', description: 'Your identity, investment information, documents, and Privy secure account' },
 });

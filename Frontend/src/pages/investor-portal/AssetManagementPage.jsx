@@ -194,7 +194,7 @@ export default function AssetManagementPage() {
           <strong>{activeTab === 'invest' ? 'Invest more' : activeTab === 'send' ? 'Send units' : 'Redeem units'}</strong>
           <span>
             {activeTab === 'invest'
-              ? 'Choose how many units to buy. If USDT approval is needed, you will complete it once before investing.'
+              ? 'Choose how many units to buy. If USDC approval is needed, you will complete it once before investing.'
               : activeTab === 'send'
                 ? 'Enter the approved recipient account address and amount. We check eligibility before you confirm securely with Privy.'
                 : 'Choose how many units to redeem. The issuer reviews your request and completes the final redemption after approval.'}

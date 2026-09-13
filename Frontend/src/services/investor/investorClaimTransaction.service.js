@@ -48,7 +48,7 @@ export const getInvestorClaimWalletErrorMessage = (error) => {
   }
 
   if (/insufficient funds|insufficient balance/.test(text)) {
-    return 'Your registered wallet needs a small amount of Sepolia ETH to pay the network fee.';
+    return 'Your registered wallet needs a small amount of USDC on Arc Testnet to pay the network fee.';
   }
 
   if (
@@ -175,7 +175,7 @@ export async function submitInvestorClaimTransaction({
     ],
   });
 
-  // Use the injected wallet's EIP-1193 eth_sendTransaction method directly.
+  // Use the active wallet provider's EIP-1193 eth_sendTransaction method directly.
   // This keeps signing and broadcasting inside the Privy wallet and avoids the intermittent
   // custom-provider path that was surfacing an eth_sendRawTransaction "Method not found"
   // error on the first attempt for some accounts. No raw signed transaction is created

@@ -1,4 +1,4 @@
-import { Building2, CheckCircle2, MapPin } from 'lucide-react';
+import { Building2, MapPin } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { OrganizationStatusBadge } from './OrganizationStatusBadge';
 import { ORGANIZATION_STATUSES } from '@/services/organizationStorageService';
@@ -29,9 +29,6 @@ export function OrganizationSummaryHeader({ organization }) {
       </div>
       <div className="org-summary-header__status">
         <OrganizationStatusBadge status={ORGANIZATION_STATUSES.VERIFIED} />
-        <small>
-          <CheckCircle2 size={14} /> Registration no. {company.registrationNumber || 'confirmed'}
-        </small>
       </div>
     </Card>
   );

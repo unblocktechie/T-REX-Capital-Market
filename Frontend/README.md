@@ -13,7 +13,7 @@ A responsive React application for issuers and investors to access compliant dig
 - Responsive layouts for desktop, laptop, tablet, mobile and narrow mobile screens
 - Guided issuer dashboard, identity, compliance and investor-management modules
 - Backend-powered organization KYB onboarding with server drafts, location UIDs, UBOs, document vault and final submission
-- Wagmi-powered MetaMask and WalletConnect organization wallet flow restricted to Sepolia testnet
+- Privy embedded-wallet flow restricted to Arc Testnet (chain ID `5042002`)
 
 ## Authentication backend
 
@@ -42,14 +42,14 @@ Organization onboarding integration is documented in [`docs/ORGANIZATION_BACKEND
 
 ## Run locally
 
-Use Node.js `22.22.1` or newer, add a WalletConnect project ID to `.env` when QR/mobile wallet support is required, then run:
+Use Node.js `22.22.1` or newer, configure the Privy application ID and Arc Testnet environment variables in `.env`, then run:
 
 ```bash
 npm install
 npm run dev
 ```
 
-`npm install` generates the dependency lockfile for the newly added Wagmi, Viem, MetaMask Connect, and WalletConnect packages.
+`npm install` installs the React, Privy, Viem, and supporting application dependencies recorded in the lockfile.
 
 Production checks:
 
@@ -92,7 +92,7 @@ The five-step token wizard is connected to the authenticated `/api/v1/tokens/me`
 - `GET /tokens/me` restores the current issuer token form and completed backend step. Browser-local token drafts are not used.
 - Step 1 sends multipart token information and the validated token image to `/tokens/me/information`.
 - Step 2 renders the claim topics returned by `/token-options` and submits their backend UIDs; Steps 3–4 save compliance rules and governance wallets.
-- Step 5 calls `/tokens/me/submit` only after all earlier API saves, local validation, wallet authorization, and Sepolia checks pass.
+- Step 5 calls `/tokens/me/submit` only after all earlier API saves, local validation, wallet authorization, and Arc Testnet checks pass.
 
 The current backend contract marks a successful submission as `readyToDeploy`; it does not yet return deployed smart-contract addresses. The UI therefore presents a truthful ready-to-deploy success state and keeps the submitted configuration read-only.
 
@@ -100,12 +100,17 @@ Bearer authentication continues through the centralized Axios interceptor. Multi
 
 Token wizard values are kept only in memory while the current page session is active and are reset when the authenticated user changes. Refreshing or restarting the wizard always reloads the authoritative form from the backend.
 
-## MetaMask deployment transport
+## Arc Testnet deployment transport
 
-Desktop MetaMask deployment uses the injected browser-extension provider. Public Sepolia reads and transaction confirmation use the configured RPC, while only signed writes use the wallet provider. See `docs/METAMASK_TRANSPORT_TIMEOUT_FIX.md`.
+Public Arc Testnet reads and transaction confirmation use the configured Arc RPC, while signed writes use the authenticated Privy embedded wallet provider. See `docs/METAMASK_TRANSPORT_TIMEOUT_FIX.md` for the transport separation retained by the deployment flow.
 
 ## Investor dashboard live API
 
 The Investor Dashboard now uses the authenticated investor profile, investment interests, invitation inbox, and deployed-token catalogue APIs instead of hardcoded dashboard records. Counts, statuses, recent rows, registered-asset state, profile/ONCHAINID details, and marketplace previews all come from current backend responses. Partial API failures preserve successfully loaded sections and expose a retry action.
 
 See [`docs/INVESTOR_DASHBOARD_LIVE_API.md`](docs/INVESTOR_DASHBOARD_LIVE_API.md) for the exact dashboard data sources and state mapping.
+
+
+## USDC and Arc visual context
+
+Investor-facing portfolio, marketplace, profile, and invest/send/redeem views use the existing data-driven settlement currency together with Arc Testnet visual context. USDC/USDT icons are display-only and do not change transaction values, wallet handling, routing, or smart-contract calls.

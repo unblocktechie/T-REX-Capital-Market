@@ -14,6 +14,7 @@ import { formatUnits, parseUnits } from 'viem';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { investmentApi } from '@/api/investments';
+import { CurrencyAmount } from '@/components/common/CurrencyAmount';
 import {
   InvestorTokenActionHeader,
   InvestorTokenIdentityCard,
@@ -27,6 +28,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { ROUTES } from '@/config/routes';
+import { web3Config } from '@/config/web3';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useInvestorTokenWalletBalance } from '@/hooks/useInvestorTokenWalletBalance';
 import { useRegisteredInvestmentAction } from '@/hooks/useRegisteredInvestmentAction';
@@ -59,7 +61,7 @@ const POLL_INTERVAL_MS = 7_000;
 const MAX_POLL_INTERVAL_MS = 60_000;
 const HISTORY_SEARCH_DEBOUNCE_MS = 400;
 const HISTORY_LIMIT = 5;
-const DEFAULT_REQUIRED_CONFIRMATIONS = 12;
+const DEFAULT_REQUIRED_CONFIRMATIONS = web3Config.requiredConfirmations;
 const FINALIZING_REDEMPTION_CONFIRMATIONS = DEFAULT_REQUIRED_CONFIRMATIONS * 2;
 const REDEMPTION_HISTORY_FILTERS = Object.freeze([
   { value: 'all', label: 'All statuses', description: 'Show every redemption' },
@@ -1351,7 +1353,14 @@ export default function RedeemTokenPage({
             <p id="redeem-amount-help" className="investor-token-action-field-hint">
               Enter the number of units you want to redeem, up to your available holding. We check the amount again before submitting your request.
             </p>
-            <div className="investor-token-action-calculation"><span>Estimated USDT you will receive</span><strong>{estimatedValue ? `$${estimatedValue} ${token.currency || ''}` : '—'}</strong></div>
+            <div className="investor-token-action-calculation">
+              <span>Estimated USDC you will receive</span>
+              <strong>
+                {estimatedValue ? (
+                  <CurrencyAmount symbol={token.currency || 'USDC'}>${estimatedValue}</CurrencyAmount>
+                ) : '—'}
+              </strong>
+            </div>
           </Card>
 
           {redemptionStatus === 'MANUAL_REVIEW' || redemptionStatus === 'ISSUER_REJECTED' || visibleFlowError ? (
@@ -1386,9 +1395,23 @@ export default function RedeemTokenPage({
         <aside className="investor-token-action-aside">
           <Card className="investor-token-order-card">
             <div className="investor-token-order-card__title"><span>Redemption summary</span><RotateCcw size={18} /></div>
-            <div className="investor-token-order-row"><span>{activeRedemption ? 'Price used' : 'Current price per unit'}</span><strong>{tokenPriceExact ? `$${formatExactTokenAmount(tokenPriceExact)} ${token.currency || ''}` : '—'}</strong></div>
+            <div className="investor-token-order-row">
+              <span>{activeRedemption ? 'Price used' : 'Current price per unit'}</span>
+              <strong>
+                {tokenPriceExact ? (
+                  <CurrencyAmount symbol={token.currency || 'USDC'}>${formatExactTokenAmount(tokenPriceExact)}</CurrencyAmount>
+                ) : '—'}
+              </strong>
+            </div>
             <div className="investor-token-order-row"><span>Units to redeem</span><strong>{normalizedAmount ? `${formatExactTokenAmount(normalizedAmount)} ${token.symbol}` : '—'}</strong></div>
-            <div className="investor-token-order-row investor-token-order-row--primary"><span>Estimated USDT you receive</span><strong>{estimatedValue ? `$${estimatedValue} ${token.currency || ''}` : '—'}</strong></div>
+            <div className="investor-token-order-row investor-token-order-row--primary">
+              <span>Estimated USDC you receive</span>
+              <strong>
+                {estimatedValue ? (
+                  <CurrencyAmount symbol={token.currency || 'USDC'}>${estimatedValue}</CurrencyAmount>
+                ) : '—'}
+              </strong>
+            </div>
             <details className="investor-technical-details investor-token-summary-technical"><summary>Technical details</summary><div><span>Network</span><strong>{walletGuard.targetNetworkLabel}</strong></div></details>
             <div className="investor-token-order-row">
               <span>Your current holding</span>

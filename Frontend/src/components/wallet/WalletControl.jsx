@@ -2,18 +2,23 @@ import { CheckCircle2, Copy, Network, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { PrivyMark, PrivyTrustBadge } from '@/components/branding/PrivyBrand';
+import { ArcNetworkIcon } from '@/components/common/ArcNetworkIcon';
+import { TokenIcon } from '@/components/common/TokenIcon';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
+import { web3Config } from '@/config/web3';
 import { useWalletConnection } from '@/hooks/useWalletConnection';
 import { cn } from '@/utils/cn';
 
-export function WalletControl({ prominent = false, expanded = false, onboarding = false, context = 'organization' }) {
+export function WalletControl({ prominent = false, expanded = false, onboarding = false, context = 'organization', balanceOverride = null }) {
   const [open, setOpen] = useState(false);
   const wallet = useWalletConnection();
   const isInvestor = context === 'investor';
   const label = isInvestor ? 'Investor Privy Wallet' : 'Organization Privy Wallet';
   const walletOwnerLabel = isInvestor ? 'investor wallet' : 'organization wallet';
-  const networkName = wallet.chain?.name || wallet.requiredChain?.name || 'Configured network';
+  const activeChain = web3Config.walletViewChains?.find((chain) => chain.id === Number(wallet.chainId)) || wallet.chain;
+  const networkName = activeChain?.name || wallet.requiredChain?.name || 'Configured network';
+  const activeNetworkIsArc = Number(wallet.chainId) === Number(wallet.requiredChain?.id);
 
   const copyAddress = async () => {
     if (!wallet.address) return;
@@ -37,8 +42,10 @@ export function WalletControl({ prominent = false, expanded = false, onboarding 
   const headerAddress = wallet.isConnected
     ? wallet.shortAddress || wallet.address
     : 'Wallet unavailable';
+  const balanceSymbol = balanceOverride?.symbol || wallet.balance?.symbol || wallet.requiredChain?.nativeCurrency?.symbol || 'USDC';
+  const balanceName = balanceOverride?.name || (balanceSymbol === 'USDC' ? 'USD Coin' : balanceSymbol);
   const headerBalance = wallet.isConnected
-    ? `Privy · ${wallet.balanceLabel}`
+    ? balanceOverride?.label || wallet.balanceLabel
     : 'Sign in again to restore access';
 
   return (
@@ -66,8 +73,19 @@ export function WalletControl({ prominent = false, expanded = false, onboarding 
           <strong className={cn('block truncate font-mono text-xs font-semibold', prominent && 'text-white')}>
             {headerAddress}
           </strong>
-          <small className={cn('block truncate text-[10px] font-semibold', prominent ? 'text-white/80' : 'text-slate-500')}>
-            {headerBalance}
+          <small className={cn('block min-w-0 text-[10px] font-semibold', prominent ? 'text-white/80' : 'text-slate-500')}>
+            {wallet.isConnected ? (
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="shrink-0">Privy ·</span>
+                {balanceOverride?.networkKind === 'ethereum'
+                  ? <Network size={13} className="shrink-0" aria-hidden="true" />
+                  : <ArcNetworkIcon size="xs" className="shrink-0" decorative />}
+                <TokenIcon symbol={balanceSymbol} name={balanceName} size="xs" className="shrink-0" />
+                <span className="truncate">{headerBalance}</span>
+              </span>
+            ) : (
+              <span className="block truncate">{headerBalance}</span>
+            )}
           </small>
         </span>
         {wallet.isCorrectNetwork ? <CheckCircle2 size={16} className={prominent ? 'text-white' : 'text-emerald-600'} /> : null}
@@ -100,7 +118,7 @@ export function WalletControl({ prominent = false, expanded = false, onboarding 
               {!wallet.isCorrectNetwork ? (
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
                   <div className="mb-3 flex items-start gap-2">
-                    <Network size={18} className="mt-0.5 shrink-0" />
+                    <ArcNetworkIcon size="sm" className="mt-0.5 shrink-0" decorative />
                     <span>
                       Switch this wallet to <strong>{wallet.requiredChain.name}</strong> before confirming a transaction.
                     </span>
@@ -130,12 +148,22 @@ export function WalletControl({ prominent = false, expanded = false, onboarding 
                   </div>
                   <div className="grid gap-2 sm:grid-cols-2">
                     <div className="rounded-xl bg-slate-50 p-3">
-                      <small className="block text-slate-500">Account balance</small>
-                      <strong>{wallet.balanceLabel}</strong>
+                      <small className="block text-slate-500">
+                        {balanceOverride?.networkName ? `Account balance · ${balanceOverride.networkName}` : 'Account balance'}
+                      </small>
+                      <strong className="mt-1 inline-flex items-center gap-2">
+                        <TokenIcon symbol={balanceSymbol} name={balanceName} size="sm" />
+                        <span>{balanceOverride?.label || wallet.balanceLabel}</span>
+                      </strong>
                     </div>
                     <div className="rounded-xl bg-slate-50 p-3">
                       <small className="block text-slate-500">Network</small>
-                      <strong>{networkName}</strong>
+                      <strong className="mt-1 inline-flex min-w-0 items-center gap-2">
+                        {activeNetworkIsArc
+                          ? <ArcNetworkIcon size="sm" decorative />
+                          : <Network size={16} aria-hidden="true" />}
+                        <span className="truncate">{networkName}</span>
+                      </strong>
                     </div>
                   </div>
                 </div>

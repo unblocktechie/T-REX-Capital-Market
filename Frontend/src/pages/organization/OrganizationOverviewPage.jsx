@@ -195,7 +195,7 @@ export default function OrganizationOverviewPage() {
               <dd>{company.legalName || '—'}</dd>
             </div>
             <div>
-              <dt>Registered address</dt>
+              <dt>Address</dt>
               <dd>
                 {company.address.street || '—'}
                 {(company.address.cityName || company.address.city) ? `, ${company.address.cityName || company.address.city}` : ''}
@@ -210,10 +210,6 @@ export default function OrganizationOverviewPage() {
             <div>
               <dt>Industry</dt>
               <dd>{jurisdiction.industryName || jurisdiction.industry || '—'}</dd>
-            </div>
-            <div>
-              <dt>Registration Number</dt>
-              <dd>{company.registrationNumber || '—'}</dd>
             </div>
             <div>
               <dt>Registered in</dt>

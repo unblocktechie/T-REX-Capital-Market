@@ -35,7 +35,9 @@ export const investorPortfolioService = Object.freeze({
     const rawItems = Array.isArray(response?.data?.portfolio)
       ? response.data.portfolio
       : extractList(response?.data);
-    const items = rawItems.map(mapInvestorPortfolioItem).filter((item) => item.tokenUid);
+    const items = rawItems
+      .map(mapInvestorPortfolioItem)
+      .filter((item) => item.tokenUid || item.tokenAddress || item.symbol || item.name);
     return {
       items,
       meta: normalizeMeta(response?.meta || response?.data?.pagination || {}, {

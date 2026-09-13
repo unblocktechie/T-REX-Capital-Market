@@ -11,8 +11,8 @@ export const connectMockWallet = async () => {
     isConnected: true,
     address: '0x1234567890ABCDEF1234567890ABCDEF12349859',
     displayAddress: '0x1234...9859',
-    network: 'Sepolia',
-    balance: '1.24 ETH',
+    network: 'Arc Testnet',
+    balance: '1.24 USDC',
   };
 };
 

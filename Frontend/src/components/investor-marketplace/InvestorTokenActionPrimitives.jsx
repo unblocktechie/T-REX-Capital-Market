@@ -3,6 +3,8 @@ import { MarketplaceTokenImage } from './MarketplaceTokenImage';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { CompactAddress } from '@/components/common/CompactAddress';
+import { ArcNetworkIcon } from '@/components/common/ArcNetworkIcon';
+import { TokenIcon } from '@/components/common/TokenIcon';
 import { WalletControl } from '@/components/wallet/WalletControl';
 import { toast } from 'sonner';
 import { getWalletErrorMessage } from '@/utils/wallet';
@@ -27,13 +29,25 @@ export function InvestorTokenActionHeader({ eyebrow, title, description, onBack,
 }
 
 export function InvestorTokenIdentityCard({ token, readyLabel = 'Registered investor' }) {
+  const settlementSymbol = String(token?.currency || 'USDC').trim().toUpperCase() || 'USDC';
+
   return (
     <Card className="investor-token-action-identity-card">
       <div className="investor-token-action-identity-card__main">
         <MarketplaceTokenImage token={token} size="md" />
-        <div>
+        <div className="investor-token-action-identity-card__copy">
           <h2>{token?.name || 'Token'}{token?.symbol ? ` (${token.symbol})` : ''}</h2>
           <p>{token?.issuer ? `Issued by ${token.issuer}` : 'Approved investment'}</p>
+          <div className="asset-context-badges investor-token-action-identity-card__badges" aria-label={`${settlementSymbol} on Arc Testnet`}>
+            <span className="asset-context-badge asset-context-badge--currency">
+              <TokenIcon symbol={settlementSymbol} size="xs" />
+              <span>{settlementSymbol}</span>
+            </span>
+            <span className="asset-context-badge asset-context-badge--network">
+              <ArcNetworkIcon size="xs" decorative />
+              <span>Arc Testnet</span>
+            </span>
+          </div>
         </div>
       </div>
       <span className="investor-token-action-ready"><CheckCircle2 size={15} /> {readyLabel}</span>

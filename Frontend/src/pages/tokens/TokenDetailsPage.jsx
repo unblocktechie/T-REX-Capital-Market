@@ -21,6 +21,8 @@ import {
   InfoCallout,
   StatusBadge,
 } from '@/components/token-issuance/IssuancePrimitives';
+import { ArcNetworkIcon } from '@/components/common/ArcNetworkIcon';
+import { TokenIcon } from '@/components/common/TokenIcon';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
@@ -55,10 +57,10 @@ const firstText = (...values) =>
 const formatTokenPrice = (value) => {
   const normalized = String(value ?? '').trim();
   const match = normalized.match(/^(\d+)(?:\.(\d+))?$/);
-  if (!match) return value ? formatMoney(value, 'USDT') : '—';
+  if (!match) return value ? formatMoney(value, 'USDC') : '—';
   const whole = match[1].replace(/^0+(?=\d)/, '').replace(/\B(?=(\d{3})+(?!\d))/g, ',') || '0';
   const fraction = (match[2] || '').replace(/0+$/, '');
-  return `${whole}${fraction ? `.${fraction}` : ''} USDT`;
+  return `${whole}${fraction ? `.${fraction}` : ''} USDC`;
 };
 
 const rawAddress = (raw, ...keys) => {
@@ -520,19 +522,26 @@ export default function TokenDetailsPage() {
                   {onchainPaused ? 'Transfers paused' : 'Transfers active'}
                 </StatusBadge>
               ) : null}
-                          </div>
+            </div>
+            <div className="token-dashboard-header__asset-context" aria-label="Settlement currency and network">
+              <span className="asset-context-badge asset-context-badge--currency">
+                <TokenIcon symbol="USDC" size="xs" />
+                <span>USDC</span>
+              </span>
+              <span className="asset-context-badge asset-context-badge--network">
+                <ArcNetworkIcon size="xs" decorative />
+                <span>Arc Testnet</span>
+              </span>
+            </div>
           </div>
         </div>
-        <div className="token-dashboard-header__actions">
-          {setupNeedsTransferActivation || onchainPriceStatus === 'unset' ? (
+        {setupNeedsTransferActivation || onchainPriceStatus === 'unset' ? (
+          <div className="token-dashboard-header__actions">
             <Button onClick={resumeIncompleteSetup}>
               Finish Setup
             </Button>
-          ) : null}
-          <Button variant="secondary" onClick={() => document.getElementById('asset-technical-details')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })}>
-            View details
-          </Button>
-        </div>
+          </div>
+        ) : null}
         <p className="token-dashboard-header__description">
           {information.description ||
             'Review the price, investor requirements, investment limits, and management access for this asset.'}
@@ -545,7 +554,10 @@ export default function TokenDetailsPage() {
                 <PencilLine size={15} /> Edit
               </button>
             </div>
-            <strong>{formatTokenPrice(currentPrice)}</strong>
+            <strong className="token-dashboard-header__price-value">
+              <TokenIcon symbol="USDC" size="xs" />
+              <span>{formatTokenPrice(currentPrice)}</span>
+            </strong>
             <span>Used for new purchases. Initial price: {formatTokenPrice(initialPrice)}</span>
             {onchainPriceStatus === 'unset' ? <em className="token-dashboard-header__price-note is-warning">Price activation required before trading</em> : null}
             {onchainPriceStatus === 'unavailable' ? <em className="token-dashboard-header__price-note">Live price check unavailable</em> : null}
@@ -858,9 +870,9 @@ export default function TokenDetailsPage() {
           inputMode="decimal"
           autoComplete="off"
           placeholder="Enter new price"
-          trailing={<span className="token-price-editor__currency">USDT</span>}
+          trailing={<span className="token-price-editor__currency">USDC</span>}
           error={priceError || priceValidationError}
-          hint="Enter the USDT price for one asset unit. Example: 704 or 704.50."
+          hint="Enter the USDC price for one asset unit. Example: 704 or 704.50."
           disabled={updatingPrice}
           required
         />

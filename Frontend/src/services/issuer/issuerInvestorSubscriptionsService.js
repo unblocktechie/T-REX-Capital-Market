@@ -7,6 +7,7 @@ import {
   mapInvestmentHistory,
 } from '@/api/investments/investment.mapper';
 import { env } from '@/config/env';
+import { web3Config } from '@/config/web3';
 import {
   getIssuerSubscriptionRequest,
   listIssuerSubscriptionRequests,
@@ -149,7 +150,7 @@ const mockService = {
       subscriptionId: interestUid,
       tokenId: 'mock-token',
       status: 'PENDING',
-      chainId: 11155111,
+      chainId: web3Config.requiredChain.id,
       identityRegistryAddress: '0x0000000000000000000000000000000000000001',
       investorWalletAddress: '0x0000000000000000000000000000000000000002',
       onchainIdentityAddress: '0x0000000000000000000000000000000000000003',

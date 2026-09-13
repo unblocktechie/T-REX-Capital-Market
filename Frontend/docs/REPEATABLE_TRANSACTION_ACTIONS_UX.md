@@ -6,13 +6,13 @@ This update keeps Invest, Send, and Redeem protected from duplicate wallet submi
 
 ## Invest
 
-- USDT approval and Invest now share one action area and one CTA.
+- USDC approval and Invest now share one action area and one CTA.
 - Before approval the CTA is **Approve**.
 - After the allowance check reports sufficient approval, approval guidance is replaced by investment guidance and the same CTA becomes **Invest**.
 - A submitted investment remains locked only while its canonical status is `SUBMITTED`.
 - Canonical confirmation is polled using the observed transaction hash, independent of visible history filters.
 - After `CONFIRMED`, the observed hash is cleared and another investment can be submitted immediately.
-- Investor investment history now contains Date, Token amount, USDT amount, Status, and Payment only.
+- Investor investment history now contains Date, Token amount, USDC amount, Status, and Payment only.
 
 ## Send
 

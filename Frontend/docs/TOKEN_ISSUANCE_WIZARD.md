@@ -28,14 +28,14 @@ The deployment backend should return fields such as:
   "tokenAddress": "0x...",
   "tokenName": "Example Token",
   "symbol": "EXT",
-  "network": "Sepolia",
+  "network": "Arc Testnet",
   "identityRegistryAddress": "0x...",
   "identityRegistryStorageAddress": "0x...",
   "complianceAddress": "0x...",
   "transactionHash": "0x...",
-  "deployedAt": "2026-07-29T00:00:00.000Z",
+  "deployedAt": "2026-09-13T00:00:00.000Z",
   "status": "confirmed",
-  "explorerUrl": "https://sepolia.etherscan.io"
+  "explorerUrl": "https://testnet.arcscan.app"
 }
 ```
 

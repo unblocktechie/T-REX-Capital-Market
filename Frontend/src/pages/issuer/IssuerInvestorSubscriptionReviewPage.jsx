@@ -22,6 +22,7 @@ import { RejectInterestModal, VerifyIdentityClaimsModal } from '@/components/iss
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ROUTES } from '@/config/routes';
+import { web3Config } from '@/config/web3';
 import { useAuth } from '@/hooks/useAuth';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useOrganization } from '@/hooks/useOrganization';
@@ -53,7 +54,7 @@ const filenameFromDisposition = (value, fallback) => {
 };
 
 const REGISTRY_STATUS_POLL_INTERVAL_MS = 5_000;
-const REGISTRY_REQUIRED_CONFIRMATIONS = 12;
+const REGISTRY_REQUIRED_CONFIRMATIONS = web3Config.requiredConfirmations;
 const REGISTRY_SUCCESS_MESSAGE = 'Final approval is complete. This investor can now invest in this asset.';
 const REGISTRY_PENDING_MESSAGE = 'Final approval was submitted. We are confirming the investor’s access now.';
 const REGISTRY_INVITE_TOOLTIP = 'Send the investor an email letting them know they are ready to invest.';

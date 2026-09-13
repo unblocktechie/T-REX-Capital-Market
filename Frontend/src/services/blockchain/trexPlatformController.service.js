@@ -12,7 +12,7 @@ import { env } from '@/config/env';
 import { web3Config } from '@/config/web3';
 
 const MAX_UINT256 = (1n << 256n) - 1n;
-// The app always grants MAX_UINT256 when the investor explicitly enables USDT
+// The app always grants MAX_UINT256 when the investor explicitly enables USDC
 // spending. Some ERC-20 implementations decrement an unlimited allowance while
 // others leave MAX_UINT256 untouched, so treat any allowance that is still in
 // the upper half of uint256 as the same persistent, one-time approval.
@@ -169,12 +169,12 @@ export const isPlatformWalletRejection = (error) =>
 
 const requiredAddress = (value, label) => {
   const normalized = clean(value);
-  if (!isAddress(normalized)) {
+  if (!isAddress(normalized, { strict: false })) {
     const error = new Error(`${label} is unavailable. Refresh the page and try again.`);
     error.code = 'INVALID_PLATFORM_ADDRESS';
     throw error;
   }
-  return getAddress(normalized);
+  return getAddress(normalized.toLowerCase());
 };
 
 const parseChainId = (value) => {
@@ -493,7 +493,7 @@ const paymentAccountState = async ({ quote, owner }) => {
 };
 
 /**
- * Read an account's existing USDT approval for the Platform Controller.
+ * Read an account's existing USDC approval for the Platform Controller.
  * When a required amount is supplied, any allowance that covers that action is
  * sufficient. Without an amount, only the reusable maximum-style approval is
  * treated as the completed one-time approval state.
@@ -543,7 +543,7 @@ const approveMaximumAllowance = async ({
   controller,
   onStep,
 }) => {
-  onStep?.({ stage: 'approval-signature', message: 'Allow USDT payments securely with Privy.' });
+  onStep?.({ stage: 'approval-signature', message: 'Allow USDC payments securely with Privy.' });
   const simulation = await publicClient.simulateContract({
     account,
     address: paymentToken,
@@ -552,23 +552,23 @@ const approveMaximumAllowance = async ({
     args: [controller, MAX_UINT256],
   });
   const approvalTxHash = await walletClient.writeContract(simulation.request);
-  onStep?.({ stage: 'approval-confirming', txHash: approvalTxHash, message: 'USDT approval submitted. Waiting for confirmation.' });
+  onStep?.({ stage: 'approval-confirming', txHash: approvalTxHash, message: 'USDC approval submitted. Waiting for confirmation.' });
   const receipt = await publicClient.waitForTransactionReceipt({
     hash: approvalTxHash,
-    confirmations: 1,
+    confirmations: web3Config.requiredConfirmations,
   });
   if (receipt.status !== 'success') {
-    const error = new Error('The USDT payment permission was not confirmed. No investment or redemption was submitted.');
+    const error = new Error('The USDC payment permission was not confirmed. No investment or redemption was submitted.');
     error.code = 'PAYMENT_APPROVAL_REVERTED';
     error.transactionHash = approvalTxHash;
     throw error;
   }
-  onStep?.({ stage: 'approval-confirmed', txHash: approvalTxHash, message: 'USDT payment permission confirmed.' });
+  onStep?.({ stage: 'approval-confirmed', txHash: approvalTxHash, message: 'USDC payment permission confirmed.' });
   return approvalTxHash;
 };
 
 /**
- * Complete only the USDT spending-approval step for purchases. This never
+ * Complete only the USDC spending-approval step for purchases. This never
  * submits a token purchase. Once MAX_UINT256 has been confirmed on-chain, the
  * UI can enable the independent Purchase action and future purchases can reuse
  * the same approval.
@@ -587,7 +587,7 @@ export async function approvePlatformPurchaseSpending({
     connectedAddress,
     expectedAddress: investor,
     chainId: chain.id,
-    purpose: 'allowing USDT spending',
+    purpose: 'allowing USDC spending',
   });
   const controller = platformControllerAddress();
   const { paymentToken, paymentTokenSymbol } = await paymentTokenMetadata(wallet.publicClient);
@@ -612,7 +612,7 @@ export async function approvePlatformPurchaseSpending({
   });
   const refreshed = await getPlatformPaymentApprovalState({ chainId: chain.id, owner: investor });
   if (!refreshed.spendingApproved) {
-    const error = new Error('USDT payment permission was confirmed, but the updated status could not be verified. Refresh and try again.');
+    const error = new Error('USDC payment permission was confirmed, but the updated status could not be verified. Refresh and try again.');
     error.code = 'PAYMENT_APPROVAL_NOT_UPDATED';
     error.transactionHash = approvalTxHash;
     throw error;
@@ -683,7 +683,7 @@ export async function submitPlatformPurchase({
   }
 
   if (!paymentState.allowanceSufficient) {
-    const error = new Error('Allow USDT payments before you make this investment.');
+    const error = new Error('Allow USDC payments before you make this investment.');
     error.code = 'PAYMENT_APPROVAL_REQUIRED';
     throw error;
   }
@@ -713,7 +713,7 @@ export async function waitForPlatformTransactionReceipt({ txHash, chainId, timeo
   try {
     const receipt = await publicClientFor(chainId).waitForTransactionReceipt({
       hash,
-      confirmations: 1,
+      confirmations: web3Config.requiredConfirmations,
       timeout,
     });
     if (receipt.status !== 'success') {
@@ -795,7 +795,7 @@ export async function approvePlatformRedemptionFunding({
   });
   const refreshed = await getPlatformRedemptionFunding({ chainId, tokenAddress, tokenAmountRaw, tokenAmount });
   if (!refreshed.issuerAllowanceSufficient) {
-    const error = new Error('The USDT approval was confirmed, but the available allowance could not be verified. Refresh and try again.');
+    const error = new Error('The USDC approval was confirmed, but the available allowance could not be verified. Refresh and try again.');
     error.code = 'ISSUER_ALLOWANCE_NOT_UPDATED';
     throw error;
   }
@@ -824,7 +824,7 @@ export async function submitPlatformRedemption({
   const nativeBalance = await wallet.publicClient.getBalance({ address: funding.issuer });
 
   if (!funding.issuerAllowanceSufficient) {
-    const error = new Error('Allow USDT payments before completing this redemption.');
+    const error = new Error('Allow USDC payments before completing this redemption.');
     error.code = 'ISSUER_ALLOWANCE_REQUIRED';
     throw error;
   }
@@ -931,7 +931,7 @@ export async function setPlatformTokenPrice({
   try {
     receipt = await wallet.publicClient.waitForTransactionReceipt({
       hash: txHash,
-      confirmations: 1,
+      confirmations: web3Config.requiredConfirmations,
     });
   } catch (cause) {
     const error = new Error(

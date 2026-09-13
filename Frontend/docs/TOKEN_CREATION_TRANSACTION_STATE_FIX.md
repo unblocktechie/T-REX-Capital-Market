@@ -100,7 +100,7 @@ If a read or receipt check is temporarily unavailable, leave the record at its l
 
 ## Acceptance test
 
-Use a test token on Sepolia or a local fork and force the activation transaction to revert.
+Use a test token on Arc Testnet or a local fork and force the activation transaction to revert.
 
 1. Submit deployment transaction #1 and allow it to confirm successfully.
 2. Force transfer activation transaction #2 to revert.

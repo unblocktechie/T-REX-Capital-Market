@@ -114,7 +114,7 @@ export const getInvestmentJourney = ({
       return result({
         viewerRole: role,
         currentIndex: 1,
-        statusLabel: role === 'investor' ? 'Action needed from you' : 'Waiting for investor',
+        statusLabel: role === 'investor' ? 'Action needed from you' : 'Rejected',
         tone: 'danger',
         title: role === 'investor' ? 'Update your application' : 'Investor needs to update their application',
         message: role === 'investor'
@@ -132,9 +132,9 @@ export const getInvestmentJourney = ({
     return result({
       viewerRole: role,
       currentIndex: 1,
-      statusLabel: 'Needs attention',
+      statusLabel: 'Rejected',
       tone: 'danger',
-      title: role === 'investor' ? 'Application not approved' : 'Request not approved',
+      title: role === 'investor' ? 'Application not approved' : 'Request rejected',
       message: role === 'investor'
         ? 'The issuer did not approve this application. Review the reason below for more information.'
         : 'This request was not approved. The decision and reason are recorded below.',
@@ -143,7 +143,7 @@ export const getInvestmentJourney = ({
         : 'No further action is required unless the investor submits a new application.',
       owner: 'No action required',
       terminal: true,
-      attention: true,
+      attention: role === 'investor',
     });
   }
 

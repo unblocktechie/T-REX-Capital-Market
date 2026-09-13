@@ -13,7 +13,7 @@ The application used Wagmi's MetaMask Connect connector. On desktop it could att
 
 - Desktop MetaMask uses Wagmi's injected EIP-1193 connector targeted to MetaMask.
 - Mobile wallets continue to use WalletConnect.
-- Public reads, simulations, and receipt polling use the configured Sepolia HTTP RPC.
+- Public reads, simulations, and receipt polling use the configured Arc Testnet HTTP RPC.
 - Only signed writes use the injected wallet transport.
 - Deployment reads `eth_accounts` instead of requesting account authorization a second time.
 - Wallet transport failures move the deployment page into a terminal error state and show a retryable toast.
@@ -21,7 +21,7 @@ The application used Wagmi's MetaMask Connect connector. On desktop it could att
 
 ## Safe deployment ordering
 
-1. Validate the connected account and Sepolia chain locally.
+1. Validate the connected account and Arc Testnet chain locally.
 2. Read and simulate through the configured public RPC.
 3. Request the issuer's wallet signature.
 4. Wait for the confirmed transaction receipt.

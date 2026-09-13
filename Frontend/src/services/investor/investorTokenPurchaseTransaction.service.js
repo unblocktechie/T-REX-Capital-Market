@@ -70,8 +70,8 @@ const publicClientFor = (chainId) => {
 
 /**
  * Read whether the registered investor already completed the app's persistent
- * USDT spending approval. This is a read-only on-chain check and survives page
- * refreshes because the allowance lives in the USDT contract.
+ * USDC spending approval. This is a read-only on-chain check and survives page
+ * refreshes because the allowance lives in the USDC contract.
  */
 export async function getInvestorUsdtSpendingApproval({
   investorWalletAddress,
@@ -86,7 +86,7 @@ export async function getInvestorUsdtSpendingApproval({
 }
 
 /**
- * Complete the one-time USDT spending approval only. No purchase is submitted
+ * Complete the one-time USDC spending approval only. No purchase is submitted
  * by this function. The Platform Controller receives MAX_UINT256 allowance so
  * later purchases can reuse the same permission without another approval.
  */
@@ -108,7 +108,7 @@ export async function approveInvestorUsdtSpending({
 
 /**
  * Submit a purchase directly from the registered investor wallet to the
- * Platform Controller. No backend purchase intent is required. USDT spending
+ * Platform Controller. No backend purchase intent is required. USDC spending
  * approval remains a separate wallet transaction.
  */
 export async function submitInvestorPurchasePayment({

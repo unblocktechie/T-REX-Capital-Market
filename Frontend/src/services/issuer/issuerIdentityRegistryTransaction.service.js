@@ -72,7 +72,7 @@ const isTransactionHash = (value) => /^0x[0-9a-f]{64}$/i.test(String(value || ''
 export async function getIssuerRegistryTransactionConfirmationProgress({
   chainId,
   txHash,
-  requiredConfirmations = 12,
+  requiredConfirmations = web3Config.requiredConfirmations,
 }) {
   const normalizedHash = String(txHash || '').trim();
   if (!isTransactionHash(normalizedHash)) {
@@ -125,8 +125,8 @@ export async function getIssuerRegistryTransactionConfirmationProgress({
 
 const requiredAddress = (value, label) => {
   const normalized = String(value || '').trim();
-  if (!isAddress(normalized)) throw new Error(`${label} is unavailable. Please refresh and try again.`);
-  return normalized;
+  if (!isAddress(normalized, { strict: false })) throw new Error(`${label} is unavailable. Please refresh and try again.`);
+  return getAddress(normalized.toLowerCase());
 };
 
 const requiredCountry = (value) => {

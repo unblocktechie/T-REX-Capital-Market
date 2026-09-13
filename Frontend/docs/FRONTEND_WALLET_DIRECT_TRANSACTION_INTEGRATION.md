@@ -13,8 +13,8 @@ Invest, Send, and the final Redemption transaction are now wallet-to-contract op
 ## Invest
 
 1. Read Platform Controller quote on-chain.
-2. Read investor USDT allowance on-chain.
-3. If needed, investor signs a separate reusable USDT approval.
+2. Read investor USDC allowance on-chain.
+3. If needed, investor signs a separate reusable USDC approval.
 4. Investor directly signs `PlatformController.buy(token, amount)`.
 5. Store the returned hash before calling the backend.
 6. Call canonical transaction confirmation with `expectedAction: INVEST`.
@@ -34,9 +34,9 @@ Backend-prepared `transactionRequest`, transfer create, transfer confirm, and tr
 
 ## Redemption
 
-The off-chain request/authorization/issuer decision APIs remain. Issuer USDT allowance remains a separate direct wallet approval. When ready, the issuer organization wallet directly signs `PlatformController.redeem(investor, token, amount)`.
+The off-chain request/authorization/issuer decision APIs remain. Issuer USDC allowance remains a separate direct wallet approval. When ready, the issuer organization wallet directly signs `PlatformController.redeem(investor, token, amount)`.
 
-The returned issuer redemption hash is stored in the generic observed-wallet transaction store, then canonical confirmation is called with `expectedAction: REDEMPTION`. The legacy redemption request is refreshed after canonical confirmation. No standalone issuer USDT payment transaction is used.
+The returned issuer redemption hash is stored in the generic observed-wallet transaction store, then canonical confirmation is called with `expectedAction: REDEMPTION`. The legacy redemption request is refreshed after canonical confirmation. No standalone issuer USDC payment transaction is used.
 
 ## Canonical transaction API
 

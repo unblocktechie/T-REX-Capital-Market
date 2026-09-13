@@ -17,6 +17,7 @@ import { isAddress, parseUnits } from 'viem';
 import { useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { investmentApi } from '@/api/investments';
+import { CurrencyAmount } from '@/components/common/CurrencyAmount';
 import {
   InvestorTokenActionHeader,
   InvestorTokenIdentityCard,
@@ -1119,8 +1120,24 @@ export default function SendTokenPage({
           <Card className="investor-token-order-card">
             <div className="investor-token-order-card__title"><span>Send summary</span><Send size={18} /></div>
             <div className="investor-token-order-row"><span>Amount to send</span><strong>{formattedAmount ? `${formattedAmount} ${token.symbol}` : '—'}</strong></div>
-            <div className="investor-token-order-row"><span>{activeTransferUid ? 'Price used' : 'Current price per unit'}</span><strong>{transferPriceExact ? `${formatExactAmount(transferPriceExact)} ${token.currency || 'USDT'}` : '—'}</strong></div>
-            <div className="investor-token-order-row investor-token-order-row--primary"><span>Estimated value</span><strong>{estimatedTransferValue === null ? '—' : `${estimatedTransferValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${token.currency || 'USDT'}`}</strong></div>
+            <div className="investor-token-order-row">
+              <span>{activeTransferUid ? 'Price used' : 'Current price per unit'}</span>
+              <strong>
+                {transferPriceExact ? (
+                  <CurrencyAmount symbol={token.currency || 'USDC'}>{formatExactAmount(transferPriceExact)}</CurrencyAmount>
+                ) : '—'}
+              </strong>
+            </div>
+            <div className="investor-token-order-row investor-token-order-row--primary">
+              <span>Estimated value</span>
+              <strong>
+                {estimatedTransferValue === null ? '—' : (
+                  <CurrencyAmount symbol={token.currency || 'USDC'}>
+                    {estimatedTransferValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </CurrencyAmount>
+                )}
+              </strong>
+            </div>
             <div className="investor-token-order-row"><span>Recipient</span><strong className="investor-token-order-address">{recipient || 'Not entered'}</strong></div>
             <div className="investor-token-order-row">
               <span>Your current holding</span>

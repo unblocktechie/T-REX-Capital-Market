@@ -28,6 +28,7 @@ const labels = {
   marketplace: 'Marketplace',
   applications: 'My Applications',
   'asset-management': 'Manage Investments',
+  wallet: 'Wallet Management',
   'submit-claim': 'Complete Verification',
   profile: 'Investor Profile',
   settings: 'Settings',

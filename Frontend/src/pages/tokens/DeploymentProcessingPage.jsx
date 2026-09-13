@@ -18,6 +18,7 @@ import { useTokenIssuanceBootstrap } from '@/hooks/useTokenIssuanceBootstrap';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useWalletConnection } from '@/hooks/useWalletConnection';
 import { pendingDeploymentService } from '@/services/pendingDeployment.service';
+import { requireOrganizationIdentityOnRequiredChain } from '@/services/organizationIdentity.service';
 import {
   activateTrexTransfers,
   deployTrexSuite,
@@ -191,6 +192,15 @@ const deploymentErrorPresentation = (error, transactionSubmitted) => {
     };
   }
 
+  if (/^(ORGANIZATION_IDENTITY_|IDENTITY_FACTORY_)/.test(error?.code || '')) {
+    return {
+      title: 'Arc organization identity setup required',
+      message: error.message,
+      canRetry: true,
+      retryMode: 'deployment',
+    };
+  }
+
   if (['TOKEN_PRICE_CONFIRMATION_REQUIRED', 'PRICE_CONFIRMATION_PENDING'].includes(error?.code)) {
     return {
       title: 'Token created — price confirmation needs attention',
@@ -235,7 +245,7 @@ const deploymentErrorPresentation = (error, transactionSubmitted) => {
     return {
       title: 'Asset verification is temporarily unavailable',
       message:
-        'The Sepolia network is temporarily unavailable. Retry the status check only; do not send another wallet transaction.',
+        'The Arc Testnet network is temporarily unavailable. Retry the status check only; do not send another wallet transaction.',
       canRetry: true,
       retryMode: 'backend-sync',
     };
@@ -266,7 +276,7 @@ const deploymentErrorPresentation = (error, transactionSubmitted) => {
     )
   ) {
     return {
-      title: 'Sepolia confirmation is taking longer',
+      title: 'Arc Testnet confirmation is taking longer',
       message:
         'The wallet transaction was submitted, but confirmation is still pending or temporarily unavailable. Retry the secure status check; do not send another wallet transaction.',
       canRetry: true,
@@ -527,7 +537,7 @@ export default function DeploymentProcessingPage() {
             status: 'syncing',
             title: 'Token verification is in progress',
             description:
-              'The transaction is already on Sepolia. We are checking its confirmation and token-creation result; no additional Privy approval will be requested.',
+              'The transaction is already on Arc Testnet. We are checking its confirmation and token-creation result; no additional Privy approval will be requested.',
           },
         });
 
@@ -1124,7 +1134,8 @@ export default function DeploymentProcessingPage() {
       tokenBootstrap.isLoading ||
       !backend.hydrated ||
       organizationLoading ||
-      !authUser
+      !authUser ||
+      !wallet.isReady
     ) {
       return;
     }
@@ -1434,15 +1445,54 @@ export default function DeploymentProcessingPage() {
 
         // Wallet validation is required only when a new transaction may be sent. Submitted
         // attempts above resume through the backend without requesting another Privy approval.
+        // The outer effect waits for Privy wallet discovery; the live chain is then checked
+        // directly below before a backend deployment attempt or wallet transaction is created.
         if (!wallet.isConnected || !wallet.connector) {
           throw new Error('Open the approved Privy secure account before creating the asset.');
         }
-        if (!wallet.isCorrectNetwork) {
+
+        // `useWalletConnection` mounts fresh state on this route, so the render-time
+        // `isCorrectNetwork` flag can briefly be false before its chain snapshot arrives.
+        // Read the provider now and validate that result directly. This is the same wallet
+        // that will sign the transaction and removes the first-attempt race without weakening
+        // the Arc Testnet guard.
+        let activeChainId;
+        try {
+          activeChainId = await wallet.getActiveChainId();
+        } catch (walletStateError) {
+          const readinessError = new Error(
+            'Your Privy secure account could not be checked before asset creation. Please try again once the wallet connection is available.',
+            { cause: walletStateError },
+          );
+          readinessError.code = 'WALLET_STATE_CHECK_FAILED';
+          throw readinessError;
+        }
+        if (Number(activeChainId) !== Number(wallet.requiredChain.id)) {
           throw new Error(`Your Privy secure account needs a quick setup check before asset creation can continue.`);
         }
         if (wallet.address?.toLowerCase() !== approvedWallet.toLowerCase()) {
           throw new Error('Restore the approved Privy secure account before creating the asset.');
         }
+
+        // Arc migration preflight: organization approval on Sepolia included an
+        // ONCHAINID deployment, so the Arc identity must be recreated/resolved
+        // and persisted before we create a backend deployment attempt. This keeps
+        // a missing migration from producing a misleading cancelled token attempt.
+        setDeployment({
+          activeStage: 0,
+          walletAction: {
+            key: 'organization-identity-preflight',
+            status: 'syncing',
+            title: 'Checking Arc organization identity',
+            description:
+              'Verifying that the approved organization account is linked to its ONCHAINID on Arc Testnet before any token transaction is prepared.',
+          },
+        });
+        const organizationIdentityReadiness =
+          await requireOrganizationIdentityOnRequiredChain({
+            walletAddress: approvedWallet,
+            recordedIdentityAddress: organization.contractAddress,
+          });
 
         if (!deploymentAttemptUid) {
           const idempotencyKey =
@@ -1505,6 +1555,7 @@ export default function DeploymentProcessingPage() {
           compliance,
           agents,
           deploymentConfig: env.trex,
+          organizationIdentityReadiness,
           onStageChange: (activeStage, values = {}) => {
             if (values.transactionHash) {
               transactionSubmitted = true;
@@ -1893,8 +1944,9 @@ export default function DeploymentProcessingPage() {
     tokenRecord.userKey,
     wallet.address,
     wallet.connector,
+    wallet.getActiveChainId,
     wallet.isConnected,
-    wallet.isCorrectNetwork,
+    wallet.isReady,
     wallet.requiredChain.id,
     wallet.requiredChain.name,
   ]);
@@ -2270,7 +2322,7 @@ export default function DeploymentProcessingPage() {
 
   const walletActionStatus = {
     'awaiting-signature': 'Approve in Privy',
-    confirming: 'Waiting for Sepolia',
+    confirming: 'Waiting for Arc Testnet',
     confirmed: 'Confirmed',
     failed: 'Needs attention',
     syncing: 'No wallet action required',
@@ -2313,7 +2365,7 @@ export default function DeploymentProcessingPage() {
               <ShieldCheck size={28} />
             )}
           </span>
-          <span className="eyebrow">Creating on Sepolia</span>
+          <span className="eyebrow">Creating on Arc Testnet</span>
           <h1>
             {existingDeploymentSyncPending
               ? 'Syncing your existing token'
@@ -2342,7 +2394,7 @@ export default function DeploymentProcessingPage() {
                       : 'Review the message below before retrying. Never send a duplicate transaction when a hash is already pending.'
                 : backendSyncPending
                   ? 'The submitted transaction and token-creation result are being checked before your token is marked ready.'
-                  : `Privy may request ${walletActionCount} approvals: create the asset, activate approved transfers${configuredInitialPrice ? ', and confirm the asset price' : ''}. Keep this page open until Sepolia confirms every required action.`}
+                  : `Privy may request ${walletActionCount} approvals: create the asset, activate approved transfers${configuredInitialPrice ? ', and confirm the asset price' : ''}. Keep this page open until Arc Testnet confirms every required action.`}
           </p>
         </div>
 

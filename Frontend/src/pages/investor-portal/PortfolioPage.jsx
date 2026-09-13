@@ -12,6 +12,9 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { formatUnits } from 'viem';
+import { ArcNetworkIcon } from '@/components/common/ArcNetworkIcon';
+import { CurrencyAmount } from '@/components/common/CurrencyAmount';
+import { TokenIcon } from '@/components/common/TokenIcon';
 import { InvestorHistoryPagination } from '@/components/investor-marketplace/InvestorHistoryPagination';
 import { MarketplaceTokenImage } from '@/components/investor-marketplace/MarketplaceTokenImage';
 import { Button } from '@/components/ui/Button';
@@ -47,10 +50,7 @@ const exactDecimal = (value, maximumFractionDigits = 6) => {
 };
 
 const tokenAmount = (value, symbol) => `${exactDecimal(value, 8)} ${symbol || 'TOKEN'}`;
-const usdtAmount = (value, maximumFractionDigits = 2) => {
-  const formatted = exactDecimal(value, maximumFractionDigits);
-  return formatted === '—' ? '—' : `${formatted} USDT`;
-};
+const settlementAmount = (value, maximumFractionDigits = 2) => exactDecimal(value, maximumFractionDigits);
 
 const decimalParts = (value) => {
   const normalized = String(value ?? '').replace(/,/g, '').trim();
@@ -345,7 +345,19 @@ export default function PortfolioPage() {
       <header className="investor-portfolio-header">
         <div>
           <span className="eyebrow">Your token holdings</span>
-          <h1>Portfolio</h1>
+          <div className="investor-portfolio-title-row">
+            <h1>Portfolio</h1>
+            <div className="asset-context-badges investor-portfolio-context-badges" aria-label="Portfolio settlement network">
+              <span className="asset-context-badge asset-context-badge--currency">
+                <TokenIcon symbol="USDC" size="xs" />
+                <span>USDC</span>
+              </span>
+              <span className="asset-context-badge asset-context-badge--network">
+                <ArcNetworkIcon size="xs" decorative />
+                <span>Arc Testnet</span>
+              </span>
+            </div>
+          </div>
           <p>Review the units held in your Privy secure account, current prices, and completed investment totals.</p>
         </div>
         <Button
@@ -353,8 +365,11 @@ export default function PortfolioPage() {
           icon={RefreshCcw}
           loading={refreshing || balanceLoading}
           onClick={refreshPortfolio}
+          className="investor-portfolio-refresh"
+          aria-label="Refresh portfolio"
+          title="Refresh portfolio"
         >
-          Refresh portfolio
+          Refresh
         </Button>
       </header>
 
@@ -374,7 +389,7 @@ export default function PortfolioPage() {
           <span className="investor-portfolio-summary__icon"><WalletCards size={20} /></span>
           <div>
             <span>Estimated current value</span>
-            <strong>{loading || overview.estimatedWalletValue === null ? '—' : `${overview.estimatedWalletValue} USDT`}</strong>
+            <strong>{loading || overview.estimatedWalletValue === null ? '—' : <CurrencyAmount symbol="USDC">{overview.estimatedWalletValue}</CurrencyAmount>}</strong>
             <small>{loading ? 'Checking live balances' : `Live balance × current price, ${summaryScope}`}</small>
           </div>
         </Card>
@@ -382,7 +397,7 @@ export default function PortfolioPage() {
           <span className="investor-portfolio-summary__icon"><Banknote size={20} /></span>
           <div>
             <span>Total invested</span>
-            <strong>{loading || overview.totalInvested === null ? '—' : `${overview.totalInvested} USDT`}</strong>
+            <strong>{loading || overview.totalInvested === null ? '—' : <CurrencyAmount symbol="USDC">{overview.totalInvested}</CurrencyAmount>}</strong>
             <small>Completed purchases {summaryScope}</small>
           </div>
         </Card>
@@ -474,27 +489,46 @@ export default function PortfolioPage() {
                             ? tokenAmount(balanceState.balance, symbol)
                             : 'Unavailable'}
                       </strong>
-                      <small>{balanceState.status === 'ready' ? 'Live balance from your Privy secure account' : balanceState.reason || 'Refresh to check balance'}</small>
+                      <small>{balanceState.status === 'ready' ? 'Live balance from Privy secure account' : balanceState.reason || 'Refresh to check balance'}</small>
                     </div>
 
                     <div className="investor-portfolio-cell investor-portfolio-current-value">
                       <span className="investor-portfolio-cell__label">Estimated value</span>
-                      <strong>{estimatedValue === null ? '—' : `${estimatedValue} USDT`}</strong>
+                      <strong>{estimatedValue === null ? '—' : `${estimatedValue} USDC`}</strong>
                       <small>{balanceState.status === 'ready' && currentPrice ? 'Current balance × live current price' : currentPriceState.reason || 'Available after live balance and price are verified'}</small>
                     </div>
 
                     <div className="investor-portfolio-cell investor-portfolio-token-price">
                       <span className="investor-portfolio-cell__label">Current price</span>
-                      <strong>{currentPriceState.status === 'loading' ? 'Checking…' : currentPrice ? usdtAmount(currentPrice, 18) : 'Unavailable'}</strong>
-                      <small>{currentPriceState.status === 'ready' ? 'Live platform-contract price' : currentPriceState.reason || 'Live price unavailable'}</small>
-                      <small>Initial price {resolveInitialTokenPriceExact(token) ? usdtAmount(resolveInitialTokenPriceExact(token), 18) : '—'}</small>
+                      <strong>
+                        {currentPriceState.status === 'loading'
+                          ? 'Checking…'
+                          : currentPrice
+                            ? `${settlementAmount(currentPrice, 18)} USDC`
+                            : 'Unavailable'}
+                      </strong>
+                      {currentPriceState.status === 'ready' ? null : (
+                        <small>{currentPriceState.reason || 'Live price unavailable'}</small>
+                      )}
+                      <small>
+                        Initial price{' '}
+                        {resolveInitialTokenPriceExact(token)
+                          ? `${settlementAmount(resolveInitialTokenPriceExact(token), 18)} USDC`
+                          : '—'}
+                      </small>
                     </div>
 
                     <div className="investor-portfolio-cell investor-portfolio-investment">
                       <span className="investor-portfolio-cell__label">Platform investment</span>
-                      <strong>{usdtAmount(portfolio.totalInvestedUsdtAmount, 2)}</strong>
-                      <small>Avg. purchase {portfolio.averagePurchasePrice ? usdtAmount(portfolio.averagePurchasePrice, 18) : '—'}</small>
-                      <small>{portfolio.purchaseCount} completed purchase{portfolio.purchaseCount === 1 ? '' : 's'}</small>
+                      <strong>
+                        {`${settlementAmount(portfolio.totalInvestedUsdtAmount, 4)} USDC`}
+                      </strong>
+                      <small>
+                        Avg. purchase{' '}
+                        {portfolio.averagePurchasePrice
+                          ? `${settlementAmount(portfolio.averagePurchasePrice, 4)} USDC`
+                          : '—'}
+                      </small>
                     </div>
 
                     <div className="investor-portfolio-actions">

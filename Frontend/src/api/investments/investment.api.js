@@ -742,8 +742,8 @@ export const investmentApi = Object.freeze({
     if (rejectReasonType === 'DOC_REJECTED' && !rejectedClaims.length) {
       throw new Error('Select at least one requested document claim.');
     }
-    if (rejectReasonType === 'OTHER' && !rejectReason) {
-      throw new Error('Add a reason for this rejection.');
+    if (!rejectReason) {
+      throw new Error('Enter a rejection note before rejecting this investment application.');
     }
 
     return apiClient

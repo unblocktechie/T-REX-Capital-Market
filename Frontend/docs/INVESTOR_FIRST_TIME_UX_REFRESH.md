@@ -1,6 +1,6 @@
 # Investor first-time UX refresh
 
-This update keeps the existing routes, APIs, wallet guards, investment transactions, USDT approval flow, transfer flow, redemption flow, and backend status handling intact. The changes are limited to presentation, information hierarchy, progressive disclosure, labels, helper text, and responsive styling.
+This update keeps the existing routes, APIs, wallet guards, investment transactions, USDC approval flow, transfer flow, redemption flow, and backend status handling intact. The changes are limited to presentation, information hierarchy, progressive disclosure, labels, helper text, and responsive styling.
 
 ## Screens updated
 
@@ -29,8 +29,8 @@ This update keeps the existing routes, APIs, wallet guards, investment transacti
 
 ### Invest
 - Hides wallet/contract addresses behind View wallet & payment details.
-- Uses How many units would you like to buy? and an Estimated USDT cost summary.
-- Clarifies one-time USDT spending approval and keeps it separate from Invest.
+- Uses How many units would you like to buy? and an Estimated USDC cost summary.
+- Clarifies one-time USDC spending approval and keeps it separate from Invest.
 - Does not alter allowance checks or transaction-signing logic.
 
 ### Send

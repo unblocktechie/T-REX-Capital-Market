@@ -32,6 +32,8 @@ import {
   UploadMissingDocumentsModal,
 } from '@/components/investor-marketplace/MarketplaceModals';
 import { MarketplaceStatusBadge } from '@/components/investor-marketplace/MarketplaceStatusBadge';
+import { ArcNetworkIcon } from '@/components/common/ArcNetworkIcon';
+import { CurrencyAmount } from '@/components/common/CurrencyAmount';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ROUTES } from '@/config/routes';
@@ -42,7 +44,6 @@ import { getErrorMessage } from '@/utils/error';
 
 const number = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
 const displayNumber = (value) => value == null ? '—' : number.format(value);
-const displayPrice = (value, currency) => value == null ? '—' : `$${number.format(value)}${currency ? ` ${currency}` : ''}`;
 
 const friendlyEligibilityLabel = (topic = {}) => {
   const code = String(topic.claimTopicCode || topic.code || topic.label || '').toUpperCase();
@@ -58,8 +59,13 @@ const friendlyEligibilityDescription = (topic = {}) => {
   return topic.description || 'This requirement must be completed before you can invest.';
 };
 
-function SnapshotCard({ label, children }) {
-  return <div className="marketplace-snapshot-card"><span>{label}</span><strong>{children}</strong></div>;
+function SnapshotCard({ label, children, className = '' }) {
+  return (
+    <div className={["marketplace-snapshot-card", className].filter(Boolean).join(' ')}>
+      <span>{label}</span>
+      <strong>{children}</strong>
+    </div>
+  );
 }
 
 function ComplianceRule({ icon: Icon, title, children, status }) {
@@ -376,7 +382,14 @@ export default function MarketplaceTokenDetailsPage() {
         <div className="marketplace-token-detail-header__identity">
           <span className="marketplace-token-detail-header__logo">{tokenDisplayImage ? <img src={tokenDisplayImage} alt={`${token.name} token`} /> : <ShieldCheck size={20} />}</span>
           <div>
-            <div className="marketplace-token-detail-header__name-line"><h1>{token.name}</h1><MarketplaceStatusBadge status={token.status} compact /></div>
+            <div className="marketplace-token-detail-header__name-line">
+              <h1>{token.name}</h1>
+              <MarketplaceStatusBadge status={token.status} compact />
+              <span className="marketplace-token-detail-network" aria-label="Arc Testnet" title="Arc Testnet">
+                <ArcNetworkIcon size="xs" decorative />
+                <span>Arc</span>
+              </span>
+            </div>
             <p><strong>{token.symbol}</strong><span>•</span><span>Issued by {token.issuer}</span>{token.assetClass ? <><span>•</span><span>{token.assetClass}</span></> : null}</p>
           </div>
         </div>
@@ -387,7 +400,11 @@ export default function MarketplaceTokenDetailsPage() {
           <section className="marketplace-detail-section">
             <span className="marketplace-detail-section-label">Key investment details</span>
             <div className="marketplace-snapshot-grid marketplace-snapshot-grid--friendly">
-              <SnapshotCard label="Price per unit">{displayPrice(token.price, token.currency)}</SnapshotCard>
+              <SnapshotCard label="Price per unit" className="marketplace-snapshot-card--price">
+                {token.price == null ? '—' : (
+                  <CurrencyAmount symbol={token.currency || 'USDC'}>${number.format(token.price)}</CurrencyAmount>
+                )}
+              </SnapshotCard>
               <SnapshotCard label="Investor limit">{displayNumber(token.maxInvestors)}</SnapshotCard>
               <SnapshotCard label="Current investors">{displayNumber(token.currentInvestors)}</SnapshotCard>
               <SnapshotCard label="Maximum you can hold">{token.maxBalance == null ? '—' : `${displayNumber(token.maxBalance)} ${token.symbol}`}</SnapshotCard>
@@ -470,7 +487,7 @@ export default function MarketplaceTokenDetailsPage() {
             actionLoading={actionLoading}
           />
           <Card className="marketplace-help-card"><span className="marketplace-help-card__icon"><HelpCircle size={18} /></span><div><strong>Need to update your information?</strong><p>Open your profile to review your identity, eligibility information, Privy secure account, and documents.</p><button type="button" onClick={() => navigate(`${ROUTES.profile}?token=${encodeURIComponent(token.id)}`)}><Mail size={14} /> View my profile</button></div></Card>
-          <Card className="marketplace-network-card marketplace-network-card--friendly"><span><Building2 size={16} /> How this investment is protected</span>{token.currentInvestors != null ? <p><UsersRound size={14} /> {number.format(token.currentInvestors)} investors currently registered</p> : null}<p><Banknote size={14} /> Purchases are priced in {token.currency || 'USDT'}</p><p><WalletCards size={14} /> Investor approval is checked before transfers</p></Card>
+          <Card className="marketplace-network-card marketplace-network-card--friendly"><span><Building2 size={16} /> How this investment is protected</span>{token.currentInvestors != null ? <p><UsersRound size={14} /> {number.format(token.currentInvestors)} investors currently registered</p> : null}<p><Banknote size={14} /> Purchases are priced in {token.currency || 'USDC'}</p><p><WalletCards size={14} /> Investor approval is checked before transfers</p></Card>
         </aside>
       </div>
 

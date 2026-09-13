@@ -1,5 +1,7 @@
 import { AlertTriangle, Copy, Network, WalletCards } from 'lucide-react';
 import { toast } from 'sonner';
+import { ArcNetworkIcon } from '@/components/common/ArcNetworkIcon';
+import { TokenIcon } from '@/components/common/TokenIcon';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 
@@ -14,6 +16,11 @@ export function WalletFundingDialog({ issue, onClose }) {
   const paymentSymbol = issue?.paymentSymbol || 'payment token';
   const nativeSymbol = issue?.nativeSymbol || 'native token';
   const networkName = issue?.networkName || 'the configured network';
+  const sameFundingAsset = paymentSymbol.toUpperCase() === nativeSymbol.toUpperCase();
+  const titleSymbol = issue?.type === 'gas' ? nativeSymbol : paymentSymbol;
+  const showUsdcTitleIcon = titleSymbol.toUpperCase() === 'USDC';
+  const showPaymentUsdcIcon = paymentSymbol.toUpperCase() === 'USDC';
+  const isArcNetwork = /\barc\b/i.test(networkName);
 
   const copyAddress = async () => {
     if (!issue?.walletAddress) return;
@@ -29,7 +36,12 @@ export function WalletFundingDialog({ issue, onClose }) {
     <Modal
       open={open}
       onClose={onClose}
-      title={titleFor(issue)}
+      title={(
+        <span className="inline-flex min-w-0 items-center gap-2.5">
+          {showUsdcTitleIcon ? <TokenIcon symbol="USDC" name="USD Coin" size="sm" /> : null}
+          <span className="min-w-0">{titleFor(issue)}</span>
+        </span>
+      )}
       className="sm:max-w-lg"
       trapFocus
       footer={(
@@ -54,7 +66,9 @@ export function WalletFundingDialog({ issue, onClose }) {
           <div className="min-w-0">
             {issue?.type === 'both' ? (
               <p className="m-0 text-sm leading-6">
-                Your wallet doesn&apos;t have enough funds to complete this transaction.
+                {sameFundingAsset
+                  ? `${networkName} uses ${nativeSymbol} for both the transaction amount and network fees. Add enough ${nativeSymbol} to cover both before trying again.`
+                  : 'Your wallet doesn’t have enough funds to complete this transaction.'}
               </p>
             ) : issue?.type === 'gas' ? (
               <p className="m-0 text-sm leading-6">
@@ -69,33 +83,44 @@ export function WalletFundingDialog({ issue, onClose }) {
         </div>
 
         {issue?.type === 'both' ? (
-          <div className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm">
-            <div className="grid gap-1 sm:grid-cols-[120px_minmax(0,1fr)] sm:items-center">
-              <strong className="text-slate-950">{paymentSymbol}</strong>
+          sameFundingAsset ? (
+            <div className="grid gap-2 rounded-2xl border border-slate-200 bg-white p-4 text-sm">
+              <strong className="text-slate-950">{paymentSymbol} covers both payment and network fees</strong>
               <span className="text-slate-600">
-                Required {issue?.requiredPayment ? `${issue.requiredPayment} ${paymentSymbol}` : 'for this transaction'}
-                {issue?.availablePayment ? ` · Available ${issue.availablePayment} ${paymentSymbol}` : ''}
+                Transaction amount: {issue?.requiredPayment ? `${issue.requiredPayment} ${paymentSymbol}` : 'amount unavailable'}. Keep a small additional {nativeSymbol} amount available for the network fee.
               </span>
             </div>
-            <div className="border-t border-slate-100 pt-3 sm:grid sm:grid-cols-[120px_minmax(0,1fr)] sm:items-center sm:gap-1">
-              <strong className="text-slate-950">{nativeSymbol}</strong>
-              <span className="text-slate-600">
-                Required for network fees{issue?.nativeBalanceLabel ? ` · Available ${issue.nativeBalanceLabel}` : ''}
-              </span>
+          ) : (
+            <div className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm">
+              <div className="grid gap-1 sm:grid-cols-[120px_minmax(0,1fr)] sm:items-center">
+                <strong className="text-slate-950">{paymentSymbol}</strong>
+                <span className="text-slate-600">
+                  Required {issue?.requiredPayment ? `${issue.requiredPayment} ${paymentSymbol}` : 'for this transaction'}
+                  {issue?.availablePayment ? ` · Available ${issue.availablePayment} ${paymentSymbol}` : ''}
+                </span>
+              </div>
+              <div className="border-t border-slate-100 pt-3 sm:grid sm:grid-cols-[120px_minmax(0,1fr)] sm:items-center sm:gap-1">
+                <strong className="text-slate-950">{nativeSymbol}</strong>
+                <span className="text-slate-600">
+                  Required for network fees{issue?.nativeBalanceLabel ? ` · Available ${issue.nativeBalanceLabel}` : ''}
+                </span>
+              </div>
             </div>
-          </div>
+          )
         ) : issue?.type === 'payment' ? (
           <div className="grid gap-2 rounded-2xl border border-slate-200 bg-white p-4 text-sm sm:grid-cols-2">
             <div>
               <small className="block font-semibold uppercase tracking-[0.08em] text-slate-500">Required</small>
-              <strong className="mt-1 block text-slate-950">
-                {issue?.requiredPayment ? `${issue.requiredPayment} ${paymentSymbol}` : `${paymentSymbol} for this transaction`}
+              <strong className="mt-1 flex items-center gap-2 text-slate-950">
+                {showPaymentUsdcIcon ? <TokenIcon symbol="USDC" name="USD Coin" size="xs" /> : null}
+                <span>{issue?.requiredPayment ? `${issue.requiredPayment} ${paymentSymbol}` : `${paymentSymbol} for this transaction`}</span>
               </strong>
             </div>
             <div>
               <small className="block font-semibold uppercase tracking-[0.08em] text-slate-500">Available</small>
-              <strong className="mt-1 block text-slate-950">
-                {issue?.availablePayment ? `${issue.availablePayment} ${paymentSymbol}` : 'Not enough'}
+              <strong className="mt-1 flex items-center gap-2 text-slate-950">
+                {showPaymentUsdcIcon ? <TokenIcon symbol="USDC" name="USD Coin" size="xs" /> : null}
+                <span>{issue?.availablePayment ? `${issue.availablePayment} ${paymentSymbol}` : 'Not enough'}</span>
               </strong>
             </div>
           </div>
@@ -105,7 +130,9 @@ export function WalletFundingDialog({ issue, onClose }) {
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
             <strong className="block text-slate-950">What to do</strong>
             <p className="mt-2 mb-0 leading-6">
-              Add the required {paymentSymbol} and a small amount of {nativeSymbol} for network fees, then try again.
+              {sameFundingAsset
+                ? `Add enough ${nativeSymbol} for the transaction amount plus a small network fee, then try again.`
+                : `Add the required ${paymentSymbol} and a small amount of ${nativeSymbol} for network fees, then try again.`}
             </p>
           </div>
         ) : issue?.type === 'gas' ? (
@@ -142,9 +169,17 @@ export function WalletFundingDialog({ issue, onClose }) {
         </div>
 
         <div className="flex items-start gap-3 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950">
-          <Network size={18} className="mt-0.5 shrink-0" />
+          {isArcNetwork ? (
+            <ArcNetworkIcon size="sm" className="mt-0.5 shrink-0" decorative />
+          ) : (
+            <Network size={18} className="mt-0.5 shrink-0" />
+          )}
           <p className="m-0 leading-6">
-            Send {issue?.type === 'gas' ? nativeSymbol : issue?.type === 'both' ? `${paymentSymbol} and ${nativeSymbol}` : paymentSymbol} on <strong>{networkName}</strong>. Use the same network shown here so the funds arrive in the wallet T-REX is using.
+            Send {issue?.type === 'gas' ? nativeSymbol : issue?.type === 'both' && !sameFundingAsset ? `${paymentSymbol} and ${nativeSymbol}` : paymentSymbol} on{' '}
+            <strong className="inline-flex items-center gap-1.5 align-middle">
+              {isArcNetwork ? <ArcNetworkIcon size="xs" decorative /> : null}
+              <span>{networkName}</span>
+            </strong>. Use the same network shown here so the funds arrive in the wallet T-REX is using.
           </p>
         </div>
       </div>

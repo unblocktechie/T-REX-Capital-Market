@@ -2950,6 +2950,11 @@ button.org-stepper__button {
   content: '−';
 }
 
+.org-wallet-card__technical[open] > summary {
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 .org-wallet-card__technical > summary:hover,
 .org-wallet-card__technical > summary:focus-visible {
   background: var(--brand-panel-glass-hover);
@@ -2958,6 +2963,10 @@ button.org-stepper__button {
 }
 
 .org-wallet-card__technical .org-wallet-card__contract {
+  margin: 0 12px 12px;
+}
+
+.org-wallet-card__technical .org-wallet-card__actions {
   margin: 0 12px 12px;
 }
 

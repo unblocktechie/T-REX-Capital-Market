@@ -389,13 +389,13 @@ export default function IssuerRedemptionDetailPage() {
         tokenAmount: cleanRedemptionText(redemption?.tokenAmount || redemption?.amount),
         onStep: ({ stage }) => {
           if (stage === 'approval-signature') {
-            toast.info('Allow USDT payments', { description: 'This is a separate one-time permission. It does not redeem units or send a redemption payment by itself.' });
+            toast.info('Allow USDC payments', { description: 'This is a separate one-time permission. It does not redeem units or send a redemption payment by itself.' });
           }
         },
       });
       setFunding(result.funding);
       if (result.alreadyApproved) {
-        toast.success('Payment setup is ready', { description: 'You can confirm the redemption once the organization secure account has enough USDT.' });
+        toast.success('Payment setup is ready', { description: 'You can confirm the redemption once the organization secure account has enough USDC.' });
       } else {
         toast.success('Payment setup complete', { description: 'No further setup is needed for future redemptions while this permission remains available.' });
       }
@@ -422,7 +422,7 @@ export default function IssuerRedemptionDetailPage() {
       }
       if (fundingError) throw new Error(fundingError);
       if (!funding?.issuerAllowanceSufficient) {
-        throw new Error('Allow USDT payments before executing this redemption.');
+        throw new Error('Allow USDC payments before executing this redemption.');
       }
       if (!funding?.issuerBalanceSufficient) {
         const paymentSymbol = funding?.paymentTokenSymbol || 'payment token';
@@ -490,7 +490,7 @@ export default function IssuerRedemptionDetailPage() {
       toast.success('Redemption submitted', { description: 'Your redemption is being confirmed. Do not submit another redemption request.' });
 
       await waitForPlatformTransactionReceipt({ txHash, chainId });
-      toast.success('Redemption confirmed', { description: 'The investor units were redeemed and the USDT payment was completed.' });
+      toast.success('Redemption confirmed', { description: 'The investor units were redeemed and the USDC payment was completed.' });
       markRedemptionConfirmedLocally(txHash);
 
       if (tokenUid) {
@@ -610,11 +610,11 @@ export default function IssuerRedemptionDetailPage() {
     }
 
     if (paymentReady) {
-      return 'USDT payment permission and balance are ready. Review and confirm the redemption with Privy.';
+      return 'USDC payment permission and balance are ready. Review and confirm the redemption with Privy.';
     }
 
     if (issuerAllowanceReady && !issuerBalanceReady) {
-      return 'The organization secure account needs enough USDT before you can confirm this redemption.';
+      return 'The organization secure account needs enough USDC before you can confirm this redemption.';
     }
 
     return baseMessage;
@@ -626,7 +626,7 @@ export default function IssuerRedemptionDetailPage() {
         <div>
           <span className="issuer-redemptions-eyebrow">Redemption review</span>
           <h1>{issuerRedemptionTokenLabel(redemption)}</h1>
-          <p>Review the request and prepare USDT if needed. When everything is ready, review and confirm the redemption securely with Privy.</p>
+          <p>Review the request and prepare USDC if needed. When everything is ready, review and confirm the redemption securely with Privy.</p>
         </div>
         <AppStatusBadge status={status} label={statusMeta.label} tone={statusMeta.tone} />
       </header>
@@ -684,11 +684,11 @@ export default function IssuerRedemptionDetailPage() {
 
         <aside className="issuer-redemption-detail-side">
           <Card className="issuer-redemption-card issuer-redemption-action-card">
-            <div className="issuer-redemption-card__heading"><div><span>Required action</span><h2>{awaitingDecision ? 'Review request' : fundingPhase ? fundingCheckPending || fundingLoading ? 'Preparing redemption' : fundingError ? 'Unable to check readiness' : approvalNeeded ? 'One-time payment setup' : !issuerBalanceReady ? 'Add USDT for this redemption' : 'Execute redemption' : status === 'ISSUER_REJECTED' ? 'Redemption outcome' : 'Redemption progress'}</h2></div><WalletCards size={21} /></div>
+            <div className="issuer-redemption-card__heading"><div><span>Required action</span><h2>{awaitingDecision ? 'Review request' : fundingPhase ? fundingCheckPending || fundingLoading ? 'Preparing redemption' : fundingError ? 'Unable to check readiness' : approvalNeeded ? 'One-time payment setup' : !issuerBalanceReady ? 'Add USDC for this redemption' : 'Execute redemption' : status === 'ISSUER_REJECTED' ? 'Redemption outcome' : 'Redemption progress'}</h2></div><WalletCards size={21} /></div>
 
             {awaitingDecision ? (
               <>
-                <p>Review the investor’s request, then approve or reject it. If approved, you will review and confirm the final redemption with the organization’s Privy secure account after USDT readiness is verified.</p>
+                <p>Review the investor’s request, then approve or reject it. If approved, you will review and confirm the final redemption with the organization’s Privy secure account after USDC readiness is verified.</p>
                 <div className="issuer-redemption-action-stack">
                   <Button loading={action === 'approve'} disabled={Boolean(action)} onClick={() => openDecisionModal('approve')} icon={CheckCircle2}>Approve redemption</Button>
                   <Button variant="danger" loading={action === 'reject'} disabled={Boolean(action)} onClick={() => openDecisionModal('reject')} icon={XCircle}>Reject redemption</Button>
@@ -708,7 +708,7 @@ export default function IssuerRedemptionDetailPage() {
                   <>
                     <p>This organization needs a one-time payment setup before redemptions can be processed. Complete it once with the approved Privy secure account.</p>
                     <div className="issuer-redemption-payment-summary">
-                      <div><span>Current redemption</span><strong>{paymentAmount !== '—' ? `${paymentAmount} USDT` : 'Unavailable'}</strong></div>
+                      <div><span>Current redemption</span><strong>{paymentAmount !== '—' ? `${paymentAmount} USDC` : 'Unavailable'}</strong></div>
                       <div><span>Payment permission</span><strong>Required once</strong></div>
                       <div><span>Secure account</span><strong>Securely managed by Privy</strong></div>
                     </div>
@@ -721,28 +721,28 @@ export default function IssuerRedemptionDetailPage() {
                     >
                       Allow payments
                     </Button>
-                    <small className="issuer-redemption-action-note">This one-time permission lets the organization make redemption payments using USDT. You will still review and confirm each redemption before funds are used.</small>
+                    <small className="issuer-redemption-action-note">This one-time permission lets the organization make redemption payments using USDC. You will still review and confirm each redemption before funds are used.</small>
                   </>
                 ) : null}
 
                 {!approvalNeeded && issuerAllowanceReady && funding?.issuerBalanceSufficient === false ? (
                   <>
                     <div className="issuer-redemption-payment-summary">
-                      <div><span>USDT needed</span><strong>{paymentAmount !== '—' ? `${paymentAmount} USDT` : 'Unavailable'}</strong></div>
+                      <div><span>USDC needed</span><strong>{paymentAmount !== '—' ? `${paymentAmount} USDC` : 'Unavailable'}</strong></div>
                       <div><span>Organization secure account</span><strong>Securely managed by Privy</strong></div>
                     </div>
-                    <div className="issuer-redemption-inline-alert is-danger"><AlertTriangle size={17} /><span>Add enough USDT to the organization secure account for this redemption, then refresh. Confirmation becomes available once the balance is sufficient.</span></div>
+                    <div className="issuer-redemption-inline-alert is-danger"><AlertTriangle size={17} /><span>Add enough USDC to the organization secure account for this redemption, then refresh. Confirmation becomes available once the balance is sufficient.</span></div>
                   </>
                 ) : null}
 
                 {paymentReady ? (
                   <>
                     <div className="issuer-redemption-payment-summary">
-                      <div><span>Investor receives</span><strong>{paymentAmount !== '—' ? `${paymentAmount} USDT` : 'Unavailable'}</strong></div>
+                      <div><span>Investor receives</span><strong>{paymentAmount !== '—' ? `${paymentAmount} USDC` : 'Unavailable'}</strong></div>
                       <div><span>Investor secure account</span><strong>{redemption?.investorWalletAddress ? 'Linked to investor profile' : 'Not available'}</strong></div>
                       <div><span>Organization secure account</span><strong>Securely managed by Privy</strong></div>
                     </div>
-                    {!wallet.isConnected ? <div className="issuer-redemption-inline-alert is-warning"><AlertTriangle size={17} /><span>Open the approved Privy secure account to confirm this redemption.</span></div> : !correctIssuerWallet ? <div className="issuer-redemption-inline-alert is-danger"><AlertTriangle size={17} /><span>Use the approved Privy secure account before confirming this redemption.</span></div> : !correctChain ? <div className="issuer-redemption-inline-alert is-warning"><AlertTriangle size={17} /><span>Your Privy secure account needs a quick setup check before continuing.</span></div> : <div className="issuer-redemption-inline-alert is-success"><CheckCircle2 size={17} /><span>USDT payment permission, balance, and the Privy secure account are ready.</span></div>}
+                    {!wallet.isConnected ? <div className="issuer-redemption-inline-alert is-warning"><AlertTriangle size={17} /><span>Open the approved Privy secure account to confirm this redemption.</span></div> : !correctIssuerWallet ? <div className="issuer-redemption-inline-alert is-danger"><AlertTriangle size={17} /><span>Use the approved Privy secure account before confirming this redemption.</span></div> : !correctChain ? <div className="issuer-redemption-inline-alert is-warning"><AlertTriangle size={17} /><span>Your Privy secure account needs a quick setup check before continuing.</span></div> : <div className="issuer-redemption-inline-alert is-success"><CheckCircle2 size={17} /><span>USDC payment permission, balance, and the Privy secure account are ready.</span></div>}
                     <Button
                       loading={action === 'redeem'}
                       disabled={Boolean(action) || Boolean(fundingError) || !wallet.isConnected || !correctIssuerWallet || Boolean(submittedRedemptionHash)}
@@ -751,7 +751,7 @@ export default function IssuerRedemptionDetailPage() {
                     >
                       {submittedRedemptionHash ? 'Redemption submitted' : 'Review and confirm redemption'}
                     </Button>
-                    <small className="issuer-redemption-action-note">Confirming this redemption will remove the redeemed asset units from the investor and send the stated USDT amount from the organization secure account to the investor. Review the amount before you confirm.</small>
+                    <small className="issuer-redemption-action-note">Confirming this redemption will remove the redeemed asset units from the investor and send the stated USDC amount from the organization secure account to the investor. Review the amount before you confirm.</small>
                   </>
                 ) : null}
               </>
@@ -802,7 +802,7 @@ export default function IssuerRedemptionDetailPage() {
             {decision === 'approve' ? <CheckCircle2 size={24} /> : <XCircle size={24} />}
             <div>
               <strong>{decision === 'approve' ? 'Approve this redemption request' : 'End this redemption request'}</strong>
-              <p>{decision === 'approve' ? 'This accepts the investor’s request. Once USDT readiness is verified, you will review and confirm the final redemption securely with Privy.' : 'Reject only if this investor redemption should not proceed. No settlement will be processed.'}</p>
+              <p>{decision === 'approve' ? 'This accepts the investor’s request. Once USDC readiness is verified, you will review and confirm the final redemption securely with Privy.' : 'Reject only if this investor redemption should not proceed. No settlement will be processed.'}</p>
             </div>
           </div>
 

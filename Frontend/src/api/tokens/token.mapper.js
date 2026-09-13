@@ -381,7 +381,7 @@ export const mapTokenForm = ({ data, options, countries, logo }) => {
         data?.initialTokenPrice,
         data?.initialPrice,
       ),
-      currency: 'USDT',
+      currency: 'USDC',
     },
     identityClaims: {
       claimTopics: mappedClaims,

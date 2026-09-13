@@ -2,7 +2,7 @@
 
 ## Backend contract
 
-After the Sepolia deployment transaction is confirmed, the frontend calls:
+After the Arc Testnet deployment transaction is confirmed, the frontend calls:
 
 ```http
 POST /tokens/me/submit
@@ -18,7 +18,7 @@ Content-Type: application/json
 The frontend validates the hash before making the request. The backend is expected to:
 
 1. Validate the authenticated issuer and token-proposal ownership.
-2. Validate the transaction-hash format and Sepolia chain.
+2. Validate the transaction-hash format and Arc Testnet chain.
 3. Fetch and verify the confirmed transaction receipt.
 4. Verify that the receipt targets the configured T-REX Gateway.
 5. Parse `TREXSuiteDeployed` and store the suite contract addresses.

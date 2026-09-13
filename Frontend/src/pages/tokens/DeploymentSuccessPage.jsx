@@ -287,7 +287,7 @@ export default function DeploymentSuccessPage() {
             onClick={() => window.open(transactionExplorer, '_blank', 'noopener,noreferrer')}
             disabled={!transactionExplorer}
           >
-            View on Etherscan
+            View on {web3Config.requiredChain.blockExplorers?.default?.name || 'block explorer'}
           </Button>
         </div>
 

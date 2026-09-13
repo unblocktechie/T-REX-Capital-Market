@@ -2,9 +2,9 @@ import { z } from 'zod';
 
 // Default Platform Controller that must be registered as a Token Agent on every
 // newly created T-REX token. It remains environment-overridable for controlled
-// network migrations, while this address is the default for the current platform.
+// network migrations, while this Arc Testnet address is the default for the current platform.
 export const DEFAULT_TREX_PLATFORM_CONTROLLER_ADDRESS =
-  '0x40e81FAA4e6D54ae0632DF146939bB5858359271';
+  '0x972E9CEf9eA9d3A9d7f3261bb8e16bA59E76a0FB';
 
 const envSchema = z.object({
   VITE_APP_NAME: z.string().default('T-REX Capital Market'),
@@ -21,17 +21,17 @@ const envSchema = z.object({
   VITE_SENTRY_DSN: z.string().default(''),
   VITE_PRIVY_APP_ID: z.string().min(1).default('your-privy-app-id'),
   VITE_PRIVY_CLIENT_ID: z.string().default(''),
-  VITE_WEB3_DEFAULT_CHAIN: z.literal('sepolia').default('sepolia'),
-  VITE_WEB3_ENABLED_CHAINS: z.literal('sepolia').default('sepolia'),
-  VITE_SEPOLIA_RPC_URL: z.string().url().default('https://ethereum-sepolia-rpc.publicnode.com'),
-  VITE_TREX_GATEWAY_ADDRESS: z.string().default('0x32c06Dcd426ee86c4FDD2514c58785ff7A5DDAc0'),
-  VITE_TREX_PLATFORM_WALLET_ADDRESS: z.string().default('0xDbBdcA99d568B54feaAb6c6D34e8f0093c509859'),
+  VITE_WEB3_DEFAULT_CHAIN: z.literal('arc-testnet').default('arc-testnet'),
+  VITE_WEB3_ENABLED_CHAINS: z.literal('arc-testnet').default('arc-testnet'),
+  VITE_ARC_TESTNET_RPC_URL: z.string().url().default('https://rpc.testnet.arc.network'),
+  VITE_TREX_GATEWAY_ADDRESS: z.string().default('0x9b0077e6000C9937eE769A61519F9CdFc3f30331'),
+  VITE_TREX_PLATFORM_WALLET_ADDRESS: z.string().default('0x849F887daec1B14c161ec377C95549ef83dDf3ff'),
   VITE_TREX_PLATFORM_CONTROLLER_ADDRESS: z.string().default(DEFAULT_TREX_PLATFORM_CONTROLLER_ADDRESS),
-  VITE_TREX_PAYMENT_TOKEN_ADDRESS: z.string().default('0x86B14D29A59b745bF08c42661322d13142d5eb49'),
-  VITE_ONCHAIN_ID_FACTORY_ADDRESS: z.string().default('0xe1da45b88C9d3f4347A6E1C6e8ee63e360068a15'),
-  VITE_COUNTRY_RESTRICT_MODULE_ADDRESS: z.string().default('0xF5D3F29B57f2fd33aDbF5d6A5F5C774C07D18fDf'),
-  VITE_MAX_BALANCE_MODULE_ADDRESS: z.string().default('0x45747f7068CE9C743b82ec3E8E92627b495860A6'),
-  VITE_MAX_INVESTORS_MODULE_ADDRESS: z.string().default('0xa729d37329Bc0F513d5E50d200ec9cf06a80064F'),
+  VITE_TREX_PAYMENT_TOKEN_ADDRESS: z.string().default('0x3600000000000000000000000000000000000000'),
+  VITE_ONCHAIN_ID_FACTORY_ADDRESS: z.string().default('0xA30A9FC6d6ea2Fa3fa3F01265a3C1253125481D8'),
+  VITE_COUNTRY_RESTRICT_MODULE_ADDRESS: z.string().default('0x7f3a67C7b520a0F01d7A3d98A5B7F2a3bfc7A54D'),
+  VITE_MAX_BALANCE_MODULE_ADDRESS: z.string().default('0x08B942c8aCFdB143F0096Cc4D80160221B589804'),
+  VITE_MAX_INVESTORS_MODULE_ADDRESS: z.string().default('0xa893BFEE2eCd38A61De91D74Ec15427dA6f7890f'),
 });
 
 const result = envSchema.safeParse(import.meta.env);
@@ -59,7 +59,7 @@ export const env = Object.freeze({
   web3: {
     defaultChain: parsed.VITE_WEB3_DEFAULT_CHAIN,
     enabledChains: [parsed.VITE_WEB3_ENABLED_CHAINS],
-    rpcUrl: parsed.VITE_SEPOLIA_RPC_URL,
+    rpcUrl: parsed.VITE_ARC_TESTNET_RPC_URL,
   },
   trex: {
     gateway: parsed.VITE_TREX_GATEWAY_ADDRESS,

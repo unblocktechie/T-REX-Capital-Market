@@ -7,7 +7,7 @@ import { setupAxiosInterceptors } from '@/api/axios';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { queryClient } from '@/lib/queryClient';
 import { env } from '@/config/env';
-import { requiredChain, supportedChains } from '@/config/web3';
+import { privySupportedChains, requiredChain } from '@/config/web3';
 import '@/assets/styles/global.css';
 import '@/assets/styles/organization.css';
 import '@/assets/styles/token-issuance.css';
@@ -19,7 +19,7 @@ setupAxiosInterceptors();
 const privyConfig = {
   loginMethods: ['email'],
   defaultChain: requiredChain,
-  supportedChains,
+  supportedChains: privySupportedChains,
   // Whitelabel email login does not run automatic wallet creation, so the auth
   // flow explicitly calls useCreateWallet after a successful Privy OTP.
   embeddedWallets: {

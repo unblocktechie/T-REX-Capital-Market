@@ -36,9 +36,12 @@ import { ApproveOrganizationModal, RejectOrganizationModal } from '@/components/
 import { DetailPageSkeleton } from '@/components/admin/AdminSkeletons';
 import { Modal } from '@/components/ui/Modal';
 import { ROUTES } from '@/config/routes';
+import { web3Config } from '@/config/web3';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { formatAdminDate, formatAdminDateTime, formatFileSize } from '@/utils/adminFormat';
+import { addressExplorerUrl } from '@/utils/blockExplorer';
 import { sanitizeUserFacingMessage } from '@/utils/error';
+import { inspectOrganizationIdentityOnRequiredChain } from '@/services/organizationIdentity.service';
 
 export default function OrganizationReviewPage() {
   const { organizationId } = useParams();
@@ -56,6 +59,26 @@ export default function OrganizationReviewPage() {
   const organization = organizationQuery.data;
   useDocumentTitle(organization ? `${organization.name} Review` : 'Organization Review');
 
+  const identityReadinessQuery = useQuery({
+    queryKey: [
+      'admin',
+      'organization-arc-identity',
+      organizationId,
+      organization?.wallet?.address || '',
+      organization?.wallet?.contractAddress || '',
+    ],
+    queryFn: () =>
+      inspectOrganizationIdentityOnRequiredChain({
+        walletAddress: organization.wallet.address,
+        recordedIdentityAddress: organization.wallet.contractAddress,
+      }),
+    enabled: Boolean(
+      organization?.status === 'approved' && organization?.wallet?.address,
+    ),
+    staleTime: 30_000,
+    retry: 1,
+  });
+
   const refresh = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['admin', 'organization', organizationId] }),
@@ -67,7 +90,10 @@ export default function OrganizationReviewPage() {
   const approveMutation = useMutation({
     mutationFn: () => adminApi.approveOrganization(organizationId),
     onSuccess: async () => {
-      toast.success('Organization approved', { description: 'The organization status is now approved.' });
+      toast.success('Organization approved', {
+        description:
+          'Approval is saved. The Arc Testnet ONCHAINID is verified separately before asset creation.',
+      });
       setApproveOpen(false);
       setDecisionSuccess(true);
       window.setTimeout(() => setDecisionSuccess(false), 1800);
@@ -104,6 +130,9 @@ export default function OrganizationReviewPage() {
   const owners = organization.ubos || organization.beneficialOwners || [];
   const documents = organization.documents || [];
   const activity = organization.activity || [];
+  const walletChainId = organization.wallet?.chainId || web3Config.requiredChain.id;
+  const walletExplorerUrl = addressExplorerUrl(organization.wallet?.address, walletChainId);
+  const identityExplorerUrl = addressExplorerUrl(organization.wallet?.contractAddress, walletChainId);
 
   const copyWallet = async () => {
     if (!organization.wallet?.address) return;
@@ -188,12 +217,12 @@ export default function OrganizationReviewPage() {
                       <p className="mt-2 mb-0 break-all font-mono text-xs font-semibold text-slate-950 sm:text-sm">{organization.wallet.address}</p>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <button type="button" onClick={copyWallet} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-emerald-200 bg-white px-3 text-xs font-semibold text-emerald-700"><Copy className="size-4" />Copy address</button>
-                        <a href={`https://sepolia.etherscan.io/address/${organization.wallet.address}`} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-emerald-700 px-3 text-xs font-semibold text-white"><ExternalLink className="size-4" />View technical record</a>
+                        {walletExplorerUrl ? <a href={walletExplorerUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-emerald-700 px-3 text-xs font-semibold text-white"><ExternalLink className="size-4" />View technical record</a> : null}
                       </div>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-3">
-                      <WalletDetail label="Network" value={organization.wallet.network || 'Sepolia'} />
-                      <WalletDetail label="Chain ID" value={organization.wallet.chainId || '11155111'} />
+                      <WalletDetail label="Network" value={organization.wallet.network || web3Config.requiredChain.name} />
+                      <WalletDetail label="Chain ID" value={organization.wallet.chainId || web3Config.requiredChain.id} />
                       <WalletDetail label="Status" value="Ready" />
                     </div>
                     {organization.wallet.contractAddress ? (
@@ -202,7 +231,7 @@ export default function OrganizationReviewPage() {
                         <p className="mt-2 mb-0 break-all font-mono text-xs leading-5 font-semibold text-slate-950 sm:text-sm">{organization.wallet.contractAddress}</p>
                         <div className="mt-3 flex flex-wrap gap-2">
                           <button type="button" onClick={copyOnChainId} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white px-3 text-xs font-semibold text-emerald-700"><Copy className="size-4" />Copy reference</button>
-                          <a href={`https://sepolia.etherscan.io/address/${organization.wallet.contractAddress}`} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 text-xs font-semibold text-white"><ExternalLink className="size-4" />View technical record</a>
+                          {identityExplorerUrl ? <a href={identityExplorerUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 text-xs font-semibold text-white"><ExternalLink className="size-4" />View technical record</a> : null}
                         </div>
                       </div>
                     ) : null}
@@ -224,7 +253,34 @@ export default function OrganizationReviewPage() {
                 <DecisionDetail label="Current status" value={<AdminStatusBadge status={organization.status} compact />} />
                 <DecisionDetail label="Submitted" value={formatAdminDateTime(organization.submittedAt)} />
                 <DecisionDetail label="Last updated" value={formatAdminDateTime(organization.updatedAt)} />
+                {organization.status === 'approved' ? (
+                  <DecisionDetail
+                    label="Arc ONCHAINID"
+                    value={
+                      identityReadinessQuery.isLoading ? (
+                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+                          <LoaderCircle className="size-3.5 animate-spin" />Checking
+                        </span>
+                      ) : identityReadinessQuery.data?.ready ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                          <ShieldCheck className="size-3.5" />Ready on Arc
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                          <ShieldAlert className="size-3.5" />Setup required
+                        </span>
+                      )
+                    }
+                  />
+                ) : null}
               </div>
+
+              {organization.status === 'approved' && identityReadinessQuery.data && !identityReadinessQuery.data.ready ? (
+                <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3.5 text-xs leading-5 text-amber-900">
+                  <strong className="block font-semibold">Arc Testnet identity setup is incomplete</strong>
+                  <span className="mt-1 block">{identityReadinessQuery.data.message}</span>
+                </div>
+              ) : null}
 
               {organization.status === 'rejected' && organization.rejectionReason ? <div className="mt-5 rounded-2xl border border-rose-200 bg-rose-50 p-4"><span className="text-[10px] font-semibold tracking-[0.12em] text-rose-600 uppercase">Rejection reason</span><p className="mt-2 mb-0 text-sm leading-6 text-rose-800">{organization.rejectionReason}</p></div> : null}
 
@@ -249,7 +305,7 @@ export default function OrganizationReviewPage() {
             <motion.div initial={{ scale: 0.82, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0 }} transition={{ type: 'spring', stiffness: 240, damping: 20 }} className="w-full max-w-sm rounded-[28px] border border-emerald-200 bg-white p-7 text-center shadow-2xl">
               <motion.span initial={{ scale: 0 }} animate={{ scale: 1, rotate: [0, -8, 8, 0] }} transition={{ delay: 0.12, type: 'spring' }} className="mx-auto grid size-20 place-items-center rounded-full bg-emerald-100 text-emerald-700"><CheckCircle2 className="size-10" /></motion.span>
               <h3 className="mt-5 mb-2 text-2xl font-semibold text-slate-950">Organization approved</h3>
-              <p className="m-0 text-sm leading-6 text-slate-500">{organization.name} has been approved successfully.</p>
+              <p className="m-0 text-sm leading-6 text-slate-500">{organization.name} is approved. Arc Testnet ONCHAINID readiness is checked before the issuer can create an asset.</p>
             </motion.div>
           </motion.div>
         ) : null}
