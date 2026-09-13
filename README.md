@@ -1,6 +1,6 @@
 # T-REX Capital Market
 
-A full-stack capital-markets platform for compliant ERC-3643 (T-REX) token issuance, investor onboarding, wallet-based transactions, and on-chain reconciliation.
+A web3 capital-markets platform for compliant ERC-3643 (T-REX) token issuance, investor onboarding, wallet-based transactions, and on-chain reconciliation.
 
 ## Overview
 
