@@ -1036,6 +1036,12 @@ npm run phase0:redeploy-factory
 npm run sync:erc3643-artifacts
 npm run diagnose:transfer
 ```
+
+## Deployment Addresses
+
+- [Arc Mainnet](https://github.com/unblocktechie/T-REX-Capital-Market/blob/release/arc-mainnet/T-Rex/deployments/arc.json)
+- [Arc Testnet](https://github.com/unblocktechie/T-REX-Capital-Market/blob/release/arc-mainnet/T-Rex/deployments/arcTestnet.json)
+
 ## Security Considerations
 
 - **Secrets:** keep `JWT_SECRET`, `PRIVY_APP_SECRET`, SMTP credentials, database credentials, and all private keys in a proper server-side secret manager/environment. Never expose them through `VITE_*`.
