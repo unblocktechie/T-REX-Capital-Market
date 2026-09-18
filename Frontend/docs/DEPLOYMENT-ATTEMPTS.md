@@ -152,7 +152,7 @@ without re-verifying or redeploying.
 
 ## Independent blockchain verification
 
-Verification uses the configured Arc Testnet RPC (`ARC_TESTNET_RPC_URL`, chain `5042002`) and the
+Verification must use the active Arc RPC (`VITE_ARC_RPC_URL`) and chain ID (`VITE_ARC_CHAIN_ID`) and the
 existing `TokenDeploymentReceiptService`. The backend never trusts frontend-supplied
 success, contract address, block number, sender, chain, confirmation count, or event data.
 It confirms: the receipt exists with the required confirmations, `status === 1`, the
@@ -164,8 +164,8 @@ another token. RPC URLs and keys come only from environment configuration.
 ## Configuration
 
 ```
-BLOCKCHAIN_CHAIN_ID=5042002
-SUPPORTED_CHAIN_IDS=5042002
+BLOCKCHAIN_CHAIN_ID=<same value as VITE_ARC_CHAIN_ID>
+SUPPORTED_CHAIN_IDS=<same value as VITE_ARC_CHAIN_ID>
 BLOCKCHAIN_NETWORK_NAME=arc-testnet
 DEPLOYMENT_ATTEMPT_TTL_MINUTES=20
 ```
@@ -188,3 +188,6 @@ Apply it after the base schema:
 ```bash
 mysql -u root trexCapitalMarket < database/migrations/20260909_add_token_deployment_attempts.sql
 ```
+
+
+> The numeric `5042002` values in earlier request/response examples represent the Testnet profile. For a Mainnet deployment the equivalent chain ID is `5042`; production code must use the configured value rather than treating either number as a source constant.

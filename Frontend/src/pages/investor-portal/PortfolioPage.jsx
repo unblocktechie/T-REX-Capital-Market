@@ -19,7 +19,9 @@ import { InvestorHistoryPagination } from '@/components/investor-marketplace/Inv
 import { MarketplaceTokenImage } from '@/components/investor-marketplace/MarketplaceTokenImage';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { appConfig } from '@/config/app.config';
 import { ROUTES } from '@/config/routes';
+import { web3Config } from '@/config/web3';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useInvestorProfileData } from '@/hooks/useInvestorProfileData';
@@ -354,7 +356,7 @@ export default function PortfolioPage() {
               </span>
               <span className="asset-context-badge asset-context-badge--network">
                 <ArcNetworkIcon size="xs" decorative />
-                <span>Arc Testnet</span>
+                <span>{web3Config.requiredChain.name}</span>
               </span>
             </div>
           </div>
@@ -416,7 +418,7 @@ export default function PortfolioPage() {
           <Info size={17} />
           <div>
             <strong>Your Privy secure account shows what you currently hold</strong>
-            <span>Your current balances and prices are checked live. Total invested and purchase counts include completed investments made through T-REX Capital Market. Transfers made outside T-REX can change your current balance without changing your purchase history, so performance estimates are shown only when the cost basis can be confirmed.</span>
+            <span>Your current balances and prices are checked live. Total invested and purchase counts include completed investments made through {appConfig.name}. Transfers made outside {appConfig.shortProductName} can change your current balance without changing your purchase history, so performance estimates are shown only when the cost basis can be confirmed.</span>
           </div>
         </div>
       ) : null}

@@ -10,6 +10,9 @@ import {
 import { env } from '@/config/env';
 import { web3Config } from '@/config/web3';
 
+const REQUIRED_CHAIN_NAME = web3Config.requiredChain.name;
+const REQUIRED_CHAIN_SHORT_NAME = web3Config.ui.requiredChainShortName;
+
 const IDENTITY_FACTORY_ABI = [
   {
     type: 'function',
@@ -97,16 +100,16 @@ const inspectIdentity = async ({ publicClient, identityAddress, walletAddress })
 
 /**
  * Verifies that an approved organization has a usable ONCHAINID on the currently
- * configured chain. This is deliberately chain-aware: a Sepolia identity address
- * stored in the backend is not treated as valid on Arc merely because it is a
- * syntactically valid EVM address.
+ * configured chain. This is deliberately chain-aware: an identity address from a
+ * different chain is not treated as valid on the required chain merely because
+ * it is a syntactically valid EVM address.
  */
 export async function inspectOrganizationIdentityOnRequiredChain({
   walletAddress,
   recordedIdentityAddress,
   identityFactoryAddress = env.trex.identityFactory,
   publicClient = createOrganizationIdentityPublicClient(),
-}) {
+}) { 
   const wallet = normalizedAddress(walletAddress);
   const factory = normalizedAddress(identityFactoryAddress);
   const recorded = normalizedAddress(recordedIdentityAddress);
@@ -127,7 +130,7 @@ export async function inspectOrganizationIdentityOnRequiredChain({
     return {
       ready: false,
       code: 'IDENTITY_FACTORY_INVALID',
-      message: 'The Arc Testnet ONCHAINID Factory address is not configured correctly.',
+      message: `The ${REQUIRED_CHAIN_NAME} ONCHAINID Factory address is not configured correctly.`,
       walletAddress: wallet,
       recordedIdentityAddress: recorded,
       factoryIdentityAddress: '',
@@ -168,7 +171,7 @@ export async function inspectOrganizationIdentityOnRequiredChain({
     return {
       ready: false,
       code: 'IDENTITY_FACTORY_NOT_DEPLOYED',
-      message: 'The configured ONCHAINID Factory is not deployed on Arc Testnet.',
+      message: `The configured ONCHAINID Factory is not deployed on ${REQUIRED_CHAIN_NAME}.`,
       walletAddress: wallet,
       recordedIdentityAddress: recorded,
       factoryIdentityAddress: '',
@@ -179,13 +182,13 @@ export async function inspectOrganizationIdentityOnRequiredChain({
 
   if (factoryLookupError) {
     // Do not silently ignore a broken Factory configuration. If the recorded
-    // ONCHAINID is valid on Arc we surface that fact to diagnostics, but token
-    // creation remains blocked until the Arc factory is usable as well.
+    // ONCHAINID is valid on the required chain we surface that fact to diagnostics,
+    // but token creation remains blocked until the configured factory is usable as well.
     return {
       ready: false,
       code: 'IDENTITY_FACTORY_LOOKUP_FAILED',
       message:
-        'The Arc Testnet ONCHAINID Factory could not verify this organization. Confirm the Arc Factory deployment and migrate the organization identity before creating an asset.',
+        `The ${REQUIRED_CHAIN_NAME} ONCHAINID Factory could not verify this organization. Confirm the ${REQUIRED_CHAIN_SHORT_NAME} Factory deployment and migrate the organization identity before creating an asset.`,
       walletAddress: wallet,
       recordedIdentityAddress: recorded,
       factoryIdentityAddress: '',
@@ -201,7 +204,7 @@ export async function inspectOrganizationIdentityOnRequiredChain({
       ready: false,
       code: 'ORGANIZATION_IDENTITY_NOT_MIGRATED',
       message:
-        'This approved organization does not yet have an ONCHAINID linked on Arc Testnet. Recreate or migrate the organization identity on Arc and update the organization record before creating an asset.',
+        `This approved organization does not yet have an ONCHAINID linked on ${REQUIRED_CHAIN_NAME}. Recreate or migrate the organization identity on ${REQUIRED_CHAIN_SHORT_NAME} and update the organization record before creating an asset.`,
       walletAddress: wallet,
       recordedIdentityAddress: recorded,
       factoryIdentityAddress: '',
@@ -218,8 +221,8 @@ export async function inspectOrganizationIdentityOnRequiredChain({
         ? 'ORGANIZATION_IDENTITY_OWNER_MISMATCH'
         : 'ORGANIZATION_IDENTITY_NOT_DEPLOYED',
       message: factoryInspection.hasCode
-        ? 'The Arc Testnet ONCHAINID returned for this organization is not managed by the approved organization secure account.'
-        : 'The ONCHAINID linked by the Arc Testnet Factory is not deployed at the returned address.',
+        ? `The ${REQUIRED_CHAIN_NAME} ONCHAINID returned for this organization is not managed by the approved organization secure account.`
+        : `The ONCHAINID linked by the ${REQUIRED_CHAIN_NAME} Factory is not deployed at the returned address.`,
       walletAddress: wallet,
       recordedIdentityAddress: recorded,
       factoryIdentityAddress: factoryIdentity,
@@ -234,7 +237,7 @@ export async function inspectOrganizationIdentityOnRequiredChain({
       ready: false,
       code: 'ORGANIZATION_IDENTITY_RECORD_MISSING',
       message:
-        'The organization ONCHAINID exists on Arc Testnet, but the backend organization record has not been updated with its Arc identity address yet.',
+        `The organization ONCHAINID exists on ${REQUIRED_CHAIN_NAME}, but the backend organization record has not been updated with its ${REQUIRED_CHAIN_SHORT_NAME} identity address yet.`,
       walletAddress: wallet,
       recordedIdentityAddress: '',
       factoryIdentityAddress: factoryIdentity,
@@ -248,7 +251,7 @@ export async function inspectOrganizationIdentityOnRequiredChain({
       ready: false,
       code: 'ORGANIZATION_IDENTITY_RECORD_OUTDATED',
       message:
-        'The organization record still points to a different ONCHAINID than the Arc Testnet Factory. Update the backend with the Arc identity address before creating an asset.',
+        `The organization record still points to a different ONCHAINID than the ${REQUIRED_CHAIN_NAME} Factory. Update the backend with the ${REQUIRED_CHAIN_SHORT_NAME} identity address before creating an asset.`,
       walletAddress: wallet,
       recordedIdentityAddress: recorded,
       factoryIdentityAddress: factoryIdentity,
@@ -265,8 +268,8 @@ export async function inspectOrganizationIdentityOnRequiredChain({
         ? 'ORGANIZATION_IDENTITY_OWNER_MISMATCH'
         : 'ORGANIZATION_IDENTITY_NOT_DEPLOYED',
       message: recordedInspection.hasCode
-        ? 'The organization ONCHAINID on Arc Testnet is not managed by the approved organization secure account.'
-        : 'The organization ONCHAINID saved in the backend is not deployed on Arc Testnet.',
+        ? `The organization ONCHAINID on ${REQUIRED_CHAIN_NAME} is not managed by the approved organization secure account.`
+        : `The organization ONCHAINID saved in the backend is not deployed on ${REQUIRED_CHAIN_NAME}.`,
       walletAddress: wallet,
       recordedIdentityAddress: recorded,
       factoryIdentityAddress: factoryIdentity,
@@ -278,7 +281,7 @@ export async function inspectOrganizationIdentityOnRequiredChain({
   return {
     ready: true,
     code: 'READY',
-    message: 'The approved organization ONCHAINID is linked and verified on Arc Testnet.',
+    message: `The approved organization ONCHAINID is linked and verified on ${REQUIRED_CHAIN_NAME}.`,
     walletAddress: wallet,
     recordedIdentityAddress: recorded,
     factoryIdentityAddress: factoryIdentity,

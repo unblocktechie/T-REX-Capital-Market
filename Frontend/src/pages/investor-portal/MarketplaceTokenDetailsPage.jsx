@@ -37,6 +37,7 @@ import { CurrencyAmount } from '@/components/common/CurrencyAmount';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ROUTES } from '@/config/routes';
+import { web3Config } from '@/config/web3';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { investorMarketplaceService } from '@/services/investor/investorMarketplaceService';
 import { MARKETPLACE_STATUS } from '@/services/investor/investorMarketplaceLocalService';
@@ -385,9 +386,9 @@ export default function MarketplaceTokenDetailsPage() {
             <div className="marketplace-token-detail-header__name-line">
               <h1>{token.name}</h1>
               <MarketplaceStatusBadge status={token.status} compact />
-              <span className="marketplace-token-detail-network" aria-label="Arc Testnet" title="Arc Testnet">
+              <span className="marketplace-token-detail-network" aria-label={web3Config.requiredChain.name} title={web3Config.requiredChain.name}>
                 <ArcNetworkIcon size="xs" decorative />
-                <span>Arc</span>
+                <span>{web3Config.ui.requiredChainShortName}</span>
               </span>
             </div>
             <p><strong>{token.symbol}</strong><span>•</span><span>Issued by {token.issuer}</span>{token.assetClass ? <><span>•</span><span>{token.assetClass}</span></> : null}</p>

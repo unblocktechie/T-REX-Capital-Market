@@ -1280,7 +1280,7 @@ components:
       required: [chainId, txHash, tokenUid, expectedAction]
       additionalProperties: false
       properties:
-        chainId: { type: integer, example: 5042002 }
+        chainId: { type: integer, example: 5042 }
         txHash:
           type: string
           pattern: '^0x[a-fA-F0-9]{64}$'

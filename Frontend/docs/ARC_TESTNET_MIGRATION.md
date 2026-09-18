@@ -1,6 +1,8 @@
+> **Historical document:** This file records the earlier migration to Testnet. The current frontend supports both Arc Testnet and Arc Mainnet through configuration. For current setup, use `docs/ARC_NETWORK_CONFIGURATION.md`.
+
 # Arc Testnet migration
 
-The frontend is configured for Arc Testnet only. Sepolia is no longer an accepted chain in the runtime environment schema.
+At the time of this historical migration, the frontend was configured for Arc Testnet only. The current implementation is network-configurable; see `docs/ARC_NETWORK_CONFIGURATION.md`.
 
 ## Network
 

@@ -38,7 +38,7 @@ independently of any frontend state.
 | `TrexDeploymentStartBlock` | `0` | Optional first-run start block. Set to the factory deploy block for full recovery; `0` starts one offset window behind the safe head. |
 | `TrexDeploymentSyncEnabled` | `true` | On/off switch (DB-level). |
 
-Blockchain config is reused from the existing env: `BLOCKCHAIN_RPC_URL`, Arc Testnet chain `5042002`, and
+Blockchain config is reused from the existing env: `BLOCKCHAIN_RPC_URL`, Arc Network chain `5042`, and
 `TREX_FACTORY_ADDRESS` (`0x667ce07e2C17CeB4089823B7d542494B6c2aA042`). No RPC URL or key is
 hardcoded.
 

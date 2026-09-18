@@ -10,6 +10,7 @@ import {
   X,
 } from 'lucide-react';
 import { Navigate, useNavigate } from 'react-router-dom';
+import { appConfig } from '@/config/app.config';
 import { ROUTES } from '@/config/routes';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useOrganization } from '@/hooks/useOrganization';
@@ -82,11 +83,11 @@ export default function VerificationRejectedPage() {
             ) : null}
 
             <a
-              href="mailto:compliance@erc3643.com"
+              href={`mailto:${appConfig.complianceEmail}`}
               className="inline-flex min-h-12 min-w-0 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 sm:justify-start"
             >
               <Mail className="size-4 shrink-0" />
-              <span className="min-w-0 break-all sm:break-normal">compliance@erc3643.com</span>
+              <span className="min-w-0 break-all sm:break-normal">{appConfig.complianceEmail}</span>
             </a>
           </div>
         </article>
@@ -130,7 +131,7 @@ export default function VerificationRejectedPage() {
           </article>
 
           <a
-            href="mailto:compliance@erc3643.com"
+            href={`mailto:${appConfig.complianceEmail}`}
             className="group flex min-h-[76px] items-center gap-3 rounded-[22px] bg-slate-950 px-5 text-white shadow-lg shadow-slate-950/15 transition hover:-translate-y-0.5 hover:bg-slate-800"
           >
             <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-white/10">

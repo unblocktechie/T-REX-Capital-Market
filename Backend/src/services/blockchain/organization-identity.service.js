@@ -3,17 +3,31 @@ const { contracts } = require('@onchain-id/solidity');
 const { env } = require('../../core/config/env');
 
 const zeroAddress = ethers.ZeroAddress.toLowerCase();
+const ID_FACTORY_ACCESS_MANAGER_ABI = [
+  'function createIdentity(address identityOwner,string salt) returns (address)',
+];
 
-const requireConfiguration = (config) => {
+const requireReadConfiguration = (config) => {
   const missing = [];
   if (!config.sepoliaRpcUrl) missing.push('BLOCKCHAIN_RPC_URL');
-  if (!config.deployerPrivateKey) missing.push('DEPLOYER_PRIVATE_KEY');
   if (!config.identityFactoryAddress) missing.push('IDENTITY_FACTORY_ADDRESS');
   if (missing.length) {
     throw new Error(`Missing blockchain configuration: ${missing.join(', ')}.`);
   }
   if (!ethers.isAddress(config.identityFactoryAddress)) {
     throw new Error('IDENTITY_FACTORY_ADDRESS is not a valid EVM address.');
+  }
+};
+
+const requireWriteConfiguration = (config) => {
+  const missing = [];
+  if (!config.deployerPrivateKey) missing.push('DEPLOYER_PRIVATE_KEY');
+  if (!config.idFactoryAccessManagerAddress) missing.push('ID_FACTORY_ACCESS_MANAGER_ADDRESS');
+  if (missing.length) {
+    throw new Error(`Missing blockchain configuration: ${missing.join(', ')}.`);
+  }
+  if (!ethers.isAddress(config.idFactoryAccessManagerAddress)) {
+    throw new Error('ID_FACTORY_ACCESS_MANAGER_ADDRESS is not a valid EVM address.');
   }
   if (!Number.isInteger(config.confirmations) || config.confirmations < 1) {
     throw new Error('BLOCKCHAIN_CONFIRMATIONS must be an integer of at least 1.');
@@ -31,7 +45,7 @@ class OrganizationIdentityService {
     this.walletFactory = dependencies.walletFactory
       || ((privateKey, provider) => new ethers.Wallet(privateKey, provider));
     this.contractFactory = dependencies.contractFactory
-      || ((address, signer) => new ethers.Contract(address, contracts.Factory.abi, signer));
+      || ((address, abi, runner) => new ethers.Contract(address, abi, runner));
   }
 
   async createOrganizationIdentity(orgWalletAddress, salt) {
@@ -39,12 +53,27 @@ class OrganizationIdentityService {
       throw new Error(`Invalid organization wallet address: ${orgWalletAddress || 'missing'}.`);
     }
     if (!String(salt || '').trim()) throw new Error('Organization identity salt is required.');
-    requireConfiguration(this.config);
+    requireReadConfiguration(this.config);
 
     let provider;
     let transactionHash = null;
     try {
       provider = this.providerFactory(this.config.sepoliaRpcUrl);
+      const identityFactory = this.contractFactory(
+        this.config.identityFactoryAddress,
+        contracts.Factory.abi,
+        provider,
+      );
+      const existingAddress = await identityFactory.getIdentity(orgWalletAddress);
+      if (String(existingAddress).toLowerCase() !== zeroAddress) {
+        return {
+          identityAddress: existingAddress,
+          txHash: null,
+          alreadyExisted: true,
+        };
+      }
+
+      requireWriteConfiguration(this.config);
       const platform = this.walletFactory(this.config.deployerPrivateKey, provider);
 
       if (this.config.deployerAddress) {
@@ -56,17 +85,12 @@ class OrganizationIdentityService {
         }
       }
 
-      const identityFactory = this.contractFactory(this.config.identityFactoryAddress, platform);
-      const existingAddress = await identityFactory.getIdentity(orgWalletAddress);
-      if (String(existingAddress).toLowerCase() !== zeroAddress) {
-        return {
-          identityAddress: existingAddress,
-          txHash: null,
-          alreadyExisted: true,
-        };
-      }
-
-      const transaction = await identityFactory.createIdentity(orgWalletAddress, salt);
+      const IdFactoryAccessManager = this.contractFactory(
+        this.config.idFactoryAccessManagerAddress,
+        ID_FACTORY_ACCESS_MANAGER_ABI,
+        platform,
+      );
+      const transaction = await IdFactoryAccessManager.createIdentity(orgWalletAddress, salt);
       transactionHash = transaction.hash || null;
       const receipt = await transaction.wait(
         this.config.confirmations,
@@ -97,4 +121,4 @@ class OrganizationIdentityService {
   }
 }
 
-module.exports = { OrganizationIdentityService, requireConfiguration };
+module.exports = { OrganizationIdentityService, requireReadConfiguration, requireWriteConfiguration };

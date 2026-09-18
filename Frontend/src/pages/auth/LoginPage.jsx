@@ -10,6 +10,7 @@ import { AuthRecoveryNotice } from '@/components/auth/AuthRecoveryNotice';
 import { OTPInput } from '@/components/forms/OTPInput';
 import { Input } from '@/components/ui/Input';
 import { PasswordInput } from '@/components/ui/PasswordInput';
+import { appConfig } from '@/config/app.config';
 import { ROUTES } from '@/config/routes';
 import { ROLES } from '@/config/permissions';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
@@ -302,7 +303,7 @@ export default function LoginPage() {
           Welcome back
         </span>
         <h2 className="my-[7px] font-[var(--font-display)] text-[clamp(28px,3vw,38px)] leading-[1.16] tracking-[-0.025em] text-[var(--text)]">
-          Sign in to T-REX Capital Market
+          Sign in to {appConfig.name}
         </h2>
         <p className="m-0 text-sm leading-6 text-[var(--text-soft)]">
           Enter your email and password to continue. We’ll send a one-time code to your email to keep

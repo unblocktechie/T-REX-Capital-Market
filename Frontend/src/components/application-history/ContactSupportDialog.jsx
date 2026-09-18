@@ -98,7 +98,7 @@ export function ContactSupportDialog({ open, onClose, context = {} }) {
       metadata,
     ].join('\n');
 
-    const mailSubject = `[T-REX Support] ${subject}${clean(context.tokenName) ? ` - ${clean(context.tokenName)}` : ''}`;
+    const mailSubject = `[${appConfig.shortProductName} Support] ${subject}${clean(context.tokenName) ? ` - ${clean(context.tokenName)}` : ''}`;
     setSubmitted(true);
     window.location.href = `mailto:${appConfig.supportEmail}?subject=${encodeURIComponent(mailSubject)}&body=${encodeURIComponent(body)}`;
   };

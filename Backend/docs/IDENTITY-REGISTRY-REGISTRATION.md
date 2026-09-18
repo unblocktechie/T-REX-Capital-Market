@@ -48,7 +48,7 @@ Success creates exactly one `identityRegistryRegistration` row with `PENDING` an
     "subscriptionId": "ff2cc584-4e5b-4657-a66b-06d84534c98f",
     "tokenId": "02647d95-d487-4a7a-ab83-d470176cf803",
     "status": "PENDING",
-    "chainId": 5042002,
+    "chainId": 5042,
     "identityRegistryAddress": "0x...",
     "investorWalletAddress": "0x...",
     "onchainIdentityAddress": "0x...",

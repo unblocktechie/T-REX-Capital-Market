@@ -827,7 +827,7 @@ export async function deployTrexSuite({
     deploymentConfig?.identityFactory,
     'ONCHAINID Identity Factory address',
   );
-  // Read, simulate, and confirm through the configured Arc Testnet RPC. Only the
+  // Read, simulate, and confirm through the configured required-chain RPC. Only the
   // transaction signature is sent through the injected wallet provider. This keeps
   // routine blockchain reads out of the Privy wallet request transport and avoids a stalled
   // wallet connection from leaving the deployment page in a loading state.
@@ -838,10 +838,10 @@ export async function deployTrexSuite({
     transport: custom(provider),
   });
 
-  // Organization approval on Sepolia also created an ONCHAINID. Arc is a
-  // separate chain and uses a different Identity Factory address, so a Sepolia
-  // identity stored in the backend cannot be assumed to exist on Arc. Verify
-  // both the Arc Factory mapping and the backend's recorded identity before any
+  // Organization approval on another chain may also have created an ONCHAINID. The
+  // required chain can use a different Identity Factory address, so an identity
+  // stored in the backend cannot be assumed to exist there. Verify both the
+  // configured Factory mapping and the backend's recorded identity before any
   // token transaction is opened in Privy.
   const [identityReadiness, factoryAddress, publicDeployment, isApprovedDeployer] =
     await Promise.all([

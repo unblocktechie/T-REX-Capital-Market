@@ -5,11 +5,11 @@
 1. The token proposal is submitted to the backend when it is not already `readyToDeploy`.
 2. The authenticated Privy connector requests the current embedded wallet account.
 3. The connected account must match the approved organization/treasury wallet.
-4. The wallet must be connected to Arc Testnet (`5042002`).
+4. The wallet must be connected to the configured Arc network (`VITE_ARC_CHAIN_ID`).
 5. The frontend reads the issuer ONCHAINID from the configured Identity Factory and verifies that contract code exists.
 6. Claim topics and modular-compliance initialization calls are prepared.
 7. The issuer-selected agent, issuer wallet, and platform wallet are included in `tokenDetails.tokenAgents`, with duplicate addresses removed.
-8. The issuer Privy wallet signs `deployTREXSuite(tokenDetails, claimDetails)` and pays the Arc Testnet network fee in USDC.
+8. The issuer Privy wallet signs `deployTREXSuite(tokenDetails, claimDetails)` and pays the configured Arc network fee in USDC.
 9. The confirmed receipt is searched for the Factory `TREXSuiteDeployed` event.
 10. The frontend verifies Token/Identity Registry ownership and agent roles.
 11. When the new token is paused, the issuer wallet signs `unpause()` to prove that the issuer has Token Agent rights.

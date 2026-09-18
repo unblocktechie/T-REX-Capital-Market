@@ -6,6 +6,7 @@ import { CompactAddress } from '@/components/common/CompactAddress';
 import { ArcNetworkIcon } from '@/components/common/ArcNetworkIcon';
 import { TokenIcon } from '@/components/common/TokenIcon';
 import { WalletControl } from '@/components/wallet/WalletControl';
+import { web3Config } from '@/config/web3';
 import { toast } from 'sonner';
 import { getWalletErrorMessage } from '@/utils/wallet';
 
@@ -38,14 +39,14 @@ export function InvestorTokenIdentityCard({ token, readyLabel = 'Registered inve
         <div className="investor-token-action-identity-card__copy">
           <h2>{token?.name || 'Token'}{token?.symbol ? ` (${token.symbol})` : ''}</h2>
           <p>{token?.issuer ? `Issued by ${token.issuer}` : 'Approved investment'}</p>
-          <div className="asset-context-badges investor-token-action-identity-card__badges" aria-label={`${settlementSymbol} on Arc Testnet`}>
+          <div className="asset-context-badges investor-token-action-identity-card__badges" aria-label={`${settlementSymbol} on ${web3Config.requiredChain.name}`}>
             <span className="asset-context-badge asset-context-badge--currency">
               <TokenIcon symbol={settlementSymbol} size="xs" />
               <span>{settlementSymbol}</span>
             </span>
             <span className="asset-context-badge asset-context-badge--network">
               <ArcNetworkIcon size="xs" decorative />
-              <span>Arc Testnet</span>
+              <span>{web3Config.requiredChain.name}</span>
             </span>
           </div>
         </div>

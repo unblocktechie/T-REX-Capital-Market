@@ -53,6 +53,7 @@ import {
   isInvestorPurchaseWalletRejection,
   submitInvestorPurchasePayment,
 } from '@/services/investor/investorTokenPurchaseTransaction.service';
+import { formatDecimalForDisplay, multiplyDecimalStrings } from '@/utils/currency';
 import { getErrorMessage, sanitizeUserFacingMessage } from '@/utils/error';
 import { getWalletErrorMessage } from '@/utils/wallet';
 import { getWalletFundingIssue } from '@/utils/walletFunding';
@@ -60,7 +61,6 @@ import { getInvestmentActionContext } from '@/utils/investmentPurchase';
 import { getInvestmentJourney } from '@/utils/investmentJourney';
 import { resolveCurrentTokenPriceExact } from '@/utils/tokenPrice';
 
-const money = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
 
 const PURCHASE_STATUS = Object.freeze({
   PENDING_PAYMENT: 'PENDING_PAYMENT',
@@ -382,16 +382,20 @@ export default function PurchaseTokenPage({
   const tokenPriceExact = activePurchasePrice
     || clean(platformQuote?.priceFormatted)
     || resolveCurrentTokenPriceExact(token || {});
-  const tokenPrice = Number(tokenPriceExact);
-  const preparedPayment = Number(clean(purchase?.usdtAmount || purchase?.paymentAmount || purchase?.totalUsdtAmount));
-  const quotedPayment = Number(clean(platformQuote?.paymentAmountFormatted));
-  const estimatedPayment = Number.isFinite(preparedPayment) && preparedPayment > 0
-    ? preparedPayment
-    : Number.isFinite(quotedPayment) && quotedPayment > 0
-      ? quotedPayment
-      : Number.isFinite(tokenPrice) && tokenPrice > 0 && Number(normalizedTokenAmount) > 0
-        ? Number(normalizedTokenAmount) * tokenPrice
-        : 0;
+  const preparedPaymentExact = canonicalDecimal(
+    clean(purchase?.usdtAmount || purchase?.paymentAmount || purchase?.totalUsdtAmount),
+  );
+  const quotedPaymentExact = canonicalDecimal(clean(platformQuote?.paymentAmountFormatted));
+  const estimatedPaymentExact = isPositiveDecimal(preparedPaymentExact)
+    ? preparedPaymentExact
+    : isPositiveDecimal(quotedPaymentExact)
+      ? quotedPaymentExact
+      : isPositiveDecimal(normalizedTokenAmount) && isPositiveDecimal(canonicalDecimal(tokenPriceExact))
+        ? multiplyDecimalStrings(normalizedTokenAmount, tokenPriceExact)
+        : '';
+  const estimatedPaymentDisplay = formatDecimalForDisplay(estimatedPaymentExact || '0');
+  const tokenPriceDisplay = formatDecimalForDisplay(tokenPriceExact);
+  const settlementSymbol = String(token?.currency || 'USDC').trim().toUpperCase() || 'USDC';
 
   const resolveWalletFundingIssue = useCallback((walletError) => getWalletFundingIssue(walletError, {
     walletAddress: walletGuard.wallet.address || preparedInvestorWallet,
@@ -1179,8 +1183,12 @@ export default function PurchaseTokenPage({
             <div className="investor-token-action-calculation">
               <span>Estimated USDC cost</span>
               <strong>
-                <CurrencyAmount symbol={token.currency || 'USDC'}>
-                  {estimatedPayment > 0 ? money.format(estimatedPayment) : '0'}
+                <CurrencyAmount
+                  symbol={settlementSymbol}
+                  title={estimatedPaymentDisplay.isAbbreviated ? `${estimatedPaymentDisplay.exact} ${settlementSymbol}` : undefined}
+                  ariaLabel={estimatedPaymentDisplay.isAbbreviated ? `${estimatedPaymentDisplay.exact} ${settlementSymbol}` : undefined}
+                >
+                  {estimatedPaymentDisplay.display || '0'}
                 </CurrencyAmount>
               </strong>
             </div>
@@ -1230,7 +1238,13 @@ export default function PurchaseTokenPage({
               <span>Price per unit</span>
               <strong>
                 {tokenPriceExact ? (
-                  <CurrencyAmount symbol={token.currency || 'USDC'}>${displayServerAmount(tokenPriceExact)}</CurrencyAmount>
+                  <CurrencyAmount
+                    symbol={settlementSymbol}
+                    title={tokenPriceDisplay.isAbbreviated ? `$${tokenPriceDisplay.exact} ${settlementSymbol}` : undefined}
+                    ariaLabel={tokenPriceDisplay.isAbbreviated ? `${tokenPriceDisplay.exact} ${settlementSymbol}` : undefined}
+                  >
+                    ${tokenPriceDisplay.display || displayServerAmount(tokenPriceExact)}
+                  </CurrencyAmount>
                 ) : '—'}
               </strong>
             </div>
@@ -1241,8 +1255,14 @@ export default function PurchaseTokenPage({
             <div className="investor-token-order-row">
               <span>Estimated USDC cost</span>
               <strong>
-                {estimatedPayment > 0 ? (
-                  <CurrencyAmount symbol={token.currency || 'USDC'}>${money.format(estimatedPayment)}</CurrencyAmount>
+                {isPositiveDecimal(estimatedPaymentExact) ? (
+                  <CurrencyAmount
+                    symbol={settlementSymbol}
+                    title={estimatedPaymentDisplay.isAbbreviated ? `$${estimatedPaymentDisplay.exact} ${settlementSymbol}` : undefined}
+                    ariaLabel={estimatedPaymentDisplay.isAbbreviated ? `${estimatedPaymentDisplay.exact} ${settlementSymbol}` : undefined}
+                  >
+                    ${estimatedPaymentDisplay.display}
+                  </CurrencyAmount>
                 ) : '—'}
               </strong>
             </div>

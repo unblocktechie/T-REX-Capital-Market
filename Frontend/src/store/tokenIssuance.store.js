@@ -39,6 +39,8 @@ const createBackendState = () => ({
   lastSavedAt: null,
   claimTopicOptions: [],
   countryOptions: [],
+  governanceNeedsSync: false,
+  governanceSyncError: '',
 });
 
 export const createInitialTokenIssuanceState = () => ({
@@ -398,6 +400,9 @@ export const useTokenIssuanceStore = create((set, get) => ({
           stepKey === 'token-information' || state.backend.imageAvailable,
         lastSavedStep: stepKey,
         lastSavedAt: new Date().toISOString(),
+        ...(stepKey === 'agents'
+          ? { governanceNeedsSync: false, governanceSyncError: '' }
+          : {}),
         error: '',
       },
     })),

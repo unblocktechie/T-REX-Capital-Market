@@ -28,14 +28,14 @@ The deployment backend should return fields such as:
   "tokenAddress": "0x...",
   "tokenName": "Example Token",
   "symbol": "EXT",
-  "network": "Arc Testnet",
+  "network": "Arc",
   "identityRegistryAddress": "0x...",
   "identityRegistryStorageAddress": "0x...",
   "complianceAddress": "0x...",
   "transactionHash": "0x...",
   "deployedAt": "2026-09-13T00:00:00.000Z",
   "status": "confirmed",
-  "explorerUrl": "https://testnet.arcscan.app"
+  "explorerUrl": "<configured VITE_ARC_EXPLORER_URL>"
 }
 ```
 

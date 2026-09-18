@@ -92,7 +92,7 @@ export default function OrganizationReviewPage() {
     onSuccess: async () => {
       toast.success('Organization approved', {
         description:
-          'Approval is saved. The Arc Testnet ONCHAINID is verified separately before asset creation.',
+          `Approval is saved. The ${web3Config.requiredChain.name} ONCHAINID is verified separately before asset creation.`,
       });
       setApproveOpen(false);
       setDecisionSuccess(true);
@@ -255,7 +255,7 @@ export default function OrganizationReviewPage() {
                 <DecisionDetail label="Last updated" value={formatAdminDateTime(organization.updatedAt)} />
                 {organization.status === 'approved' ? (
                   <DecisionDetail
-                    label="Arc ONCHAINID"
+                    label={`${web3Config.ui.requiredChainShortName} ONCHAINID`}
                     value={
                       identityReadinessQuery.isLoading ? (
                         <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500">
@@ -263,7 +263,7 @@ export default function OrganizationReviewPage() {
                         </span>
                       ) : identityReadinessQuery.data?.ready ? (
                         <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
-                          <ShieldCheck className="size-3.5" />Ready on Arc
+                          <ShieldCheck className="size-3.5" />Ready on {web3Config.ui.requiredChainShortName}
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
@@ -277,7 +277,7 @@ export default function OrganizationReviewPage() {
 
               {organization.status === 'approved' && identityReadinessQuery.data && !identityReadinessQuery.data.ready ? (
                 <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3.5 text-xs leading-5 text-amber-900">
-                  <strong className="block font-semibold">Arc Testnet identity setup is incomplete</strong>
+                  <strong className="block font-semibold">{web3Config.requiredChain.name} identity setup is incomplete</strong>
                   <span className="mt-1 block">{identityReadinessQuery.data.message}</span>
                 </div>
               ) : null}
@@ -305,7 +305,7 @@ export default function OrganizationReviewPage() {
             <motion.div initial={{ scale: 0.82, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0 }} transition={{ type: 'spring', stiffness: 240, damping: 20 }} className="w-full max-w-sm rounded-[28px] border border-emerald-200 bg-white p-7 text-center shadow-2xl">
               <motion.span initial={{ scale: 0 }} animate={{ scale: 1, rotate: [0, -8, 8, 0] }} transition={{ delay: 0.12, type: 'spring' }} className="mx-auto grid size-20 place-items-center rounded-full bg-emerald-100 text-emerald-700"><CheckCircle2 className="size-10" /></motion.span>
               <h3 className="mt-5 mb-2 text-2xl font-semibold text-slate-950">Organization approved</h3>
-              <p className="m-0 text-sm leading-6 text-slate-500">{organization.name} is approved. Arc Testnet ONCHAINID readiness is checked before the issuer can create an asset.</p>
+              <p className="m-0 text-sm leading-6 text-slate-500">{organization.name} is approved. {web3Config.requiredChain.name} ONCHAINID readiness is checked before the issuer can create an asset.</p>
             </motion.div>
           </motion.div>
         ) : null}

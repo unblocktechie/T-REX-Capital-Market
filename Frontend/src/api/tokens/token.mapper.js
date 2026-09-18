@@ -2,6 +2,8 @@ import { DEFAULT_CLAIM_TOPICS, TOKEN_ISSUANCE_STEPS } from '@/config/tokenIssuan
 
 const first = (...values) => values.find((value) => value !== undefined && value !== null);
 const text = (...values) => String(first(...values, '') || '').trim();
+const nonEmptyText = (...values) =>
+  values.map((value) => String(value ?? '').trim()).find(Boolean) || '';
 const flag = (value) => value === true || value === 1 || value === '1' || value === 'true';
 
 const normalize = (value) =>
@@ -349,6 +351,58 @@ export const mapTokenForm = ({ data, options, countries, logo }) => {
   const currentStep = normalizeCurrentStep(data?.currentStep || 'information');
   const status = text(data?.status, 'draft');
   const completedSteps = completedFromStep(currentStep, status);
+  const approvedOrganizationWallet = nonEmptyText(
+    information?.treasuryWalletAddress,
+    information?.treasuryWallet,
+    data?.tokenInformation?.treasuryWalletAddress,
+    data?.tokenInformation?.treasuryWallet,
+    data?.information?.treasuryWalletAddress,
+    data?.information?.treasuryWallet,
+    data?.treasuryWalletAddress,
+    data?.treasuryWallet,
+    // GET /tokens/me can expose the approved issuer wallet at the token root while omitting
+    // duplicated treasury/governance fields. Treat that backend-owned value as authoritative
+    // for restoring the read-only management roles after a refresh or a new login session.
+    data?.organizationWalletAddress,
+    data?.organization?.walletAddress,
+    data?.approvedOrganizationWalletAddress,
+  );
+
+  const persistedTokenAgentWallet = nonEmptyText(
+    governance?.tokenAgentWalletAddress,
+    governance?.tokenAgent?.address,
+    typeof governance?.tokenAgent === 'string' ? governance.tokenAgent : '',
+    data?.agents?.tokenAgentWalletAddress,
+    data?.agents?.tokenAgent?.address,
+    typeof data?.agents?.tokenAgent === 'string' ? data.agents.tokenAgent : '',
+    data?.tokenAgentWalletAddress,
+    data?.tokenAgent?.address,
+    typeof data?.tokenAgent === 'string' ? data.tokenAgent : '',
+  );
+  const persistedIdentityManagerWallet = nonEmptyText(
+    governance?.identityManagerWalletAddress,
+    governance?.identityRegistryAgent?.address,
+    governance?.identityManager?.address,
+    typeof governance?.identityManager === 'string' ? governance.identityManager : '',
+    data?.agents?.identityManagerWalletAddress,
+    data?.agents?.identityRegistryAgent?.address,
+    data?.agents?.identityManager?.address,
+    typeof data?.agents?.identityManager === 'string' ? data.agents.identityManager : '',
+    data?.identityManagerWalletAddress,
+    data?.identityRegistryAgent?.address,
+    data?.identityManager?.address,
+    typeof data?.identityManager === 'string' ? data.identityManager : '',
+  );
+
+  // The management roles are read-only and are always assigned to the approved organization
+  // wallet. Some /tokens/me responses omit the duplicated governance wallet fields after the
+  // governance step has already been saved. Rehydrate those saved roles from the approved wallet
+  // only when the backend workflow confirms that the management step is complete. This keeps a
+  // hard refresh on Review equivalent to arriving there through the wizard without inventing
+  // completion for an unfinished draft.
+  const savedGovernanceWallet = completedSteps.includes('agents')
+    ? approvedOrganizationWallet
+    : '';
 
   return {
     exists: true,
@@ -358,9 +412,14 @@ export const mapTokenForm = ({ data, options, countries, logo }) => {
       symbol: text(information?.tokenSymbol, information?.symbol).toUpperCase(),
       decimals: text(information?.decimals, '18'),
       description: text(information?.tokenDescription, information?.description),
-      treasuryWallet: text(
+      treasuryWallet: nonEmptyText(
         information?.treasuryWalletAddress,
         information?.treasuryWallet,
+        data?.treasuryWalletAddress,
+        data?.treasuryWallet,
+        data?.organizationWalletAddress,
+        data?.organization?.walletAddress,
+        data?.approvedOrganizationWalletAddress,
       ),
       network: text(information?.network, information?.networkName),
     },
@@ -386,11 +445,14 @@ export const mapTokenForm = ({ data, options, countries, logo }) => {
     identityClaims: {
       claimTopics: mappedClaims,
       trustedIssuer: {
-        address: text(
+        address: nonEmptyText(
           claims?.trustedClaimIssuerWalletAddress,
           claims?.trustedIssuerWalletAddress,
           information?.treasuryWalletAddress,
           information?.treasuryWallet,
+          data?.organizationWalletAddress,
+          data?.organization?.walletAddress,
+          data?.approvedOrganizationWalletAddress,
         ),
         mode: flag(
           first(
@@ -415,19 +477,10 @@ export const mapTokenForm = ({ data, options, countries, logo }) => {
     },
     agents: {
       tokenAgent: {
-        address: text(
-          governance?.tokenAgentWalletAddress,
-          governance?.tokenAgent?.address,
-          governance?.tokenAgent,
-        ),
+        address: nonEmptyText(persistedTokenAgentWallet, savedGovernanceWallet),
       },
       identityRegistryAgent: {
-        address: text(
-          governance?.identityManagerWalletAddress,
-          governance?.identityRegistryAgent?.address,
-          governance?.identityManager?.address,
-          governance?.identityManager,
-        ),
+        address: nonEmptyText(persistedIdentityManagerWallet, savedGovernanceWallet),
       },
     },
     options,
@@ -444,6 +497,16 @@ export const mapTokenForm = ({ data, options, countries, logo }) => {
           data?.tokenImage ||
           information?.imageMimeType ||
           information?.tokenImage,
+      ),
+      // A draft at currentStep=review is deployable. Some backend responses keep currentStep at
+      // review but return the duplicated governance wallet fields as null. The UI can restore the
+      // read-only roles locally, and this flag lets Review & Create idempotently persist them again
+      // so deployment-attempt validation sees the same completed management step after refresh.
+      governanceNeedsSync: Boolean(
+        normalize(status).replace(/\s+/g, '') === 'draft' &&
+          completedSteps.includes('agents') &&
+          approvedOrganizationWallet &&
+          (!persistedTokenAgentWallet || !persistedIdentityManagerWallet),
       ),
       updatedAt: first(data?.updatedAt, data?.modifiedAt, null),
     },

@@ -24,10 +24,10 @@ import {
 import { shortenWalletAddress } from '@/utils/wallet';
 
 const BRIDGE_STEPS = Object.freeze([
-  { id: 'approve', label: 'Approve Sepolia USDC', detail: 'Allow Circle CCTP to use the bridge amount.' },
-  { id: 'burn', label: 'Send from Ethereum Sepolia', detail: 'Burn the source USDC for the cross-chain transfer.' },
+  { id: 'approve', label: `Approve ${web3Config.ui.walletViewChainShortName} USDC`, detail: 'Allow Circle CCTP to use the bridge amount.' },
+  { id: 'burn', label: `Send from ${web3Config.walletViewChains.find((chain) => Number(chain.id) !== Number(web3Config.requiredChain.id))?.name || web3Config.ui.walletViewChainShortName}`, detail: 'Burn the source USDC for the cross-chain transfer.' },
   { id: 'attestation', label: 'Verify cross-chain transfer', detail: 'Circle confirms the CCTP message.' },
-  { id: 'mint', label: 'Receive USDC on Arc', detail: 'Mint the bridged USDC to the same Privy wallet on Arc Testnet.' },
+  { id: 'mint', label: `Receive USDC on ${web3Config.ui.requiredChainShortName}`, detail: `Mint the bridged USDC to the same Privy wallet on ${web3Config.requiredChain.name}.` },
 ]);
 
 const clean = (value) => String(value ?? '').trim();
@@ -44,7 +44,6 @@ const displayAmount = (value, digits = 6) => {
 const feeLabel = (type) => {
   switch (String(type || '').toLowerCase()) {
     case 'provider': return 'CCTP provider fee';
-    case 'forwarder': return 'Forwarding service fee';
     case 'kit': return 'Application fee';
     case 'gasfee': return 'Network gas';
     default: return 'Bridge fee';
@@ -69,7 +68,7 @@ function EthereumMark() {
 
 function BridgeRoute() {
   return (
-    <div className="wallet-bridge-route" aria-label="Bridge route from Ethereum Sepolia to Arc Testnet">
+    <div className="wallet-bridge-route" aria-label={`Bridge route from ${web3Config.walletViewChains.find((chain) => Number(chain.id) !== Number(web3Config.requiredChain.id))?.name || web3Config.ui.walletViewChainShortName} to ${web3Config.requiredChain.name}`}>
       <div className="wallet-bridge-route__chain">
         <EthereumMark />
         <span><small>From</small><strong>{web3Config.arcBridge.source.networkName}</strong></span>
@@ -156,10 +155,10 @@ export function ArcBridgeModal({
     if (!normalized) return '';
     if (!/^\d+(?:\.\d{0,6})?$/.test(normalized)) return 'Enter a valid USDC amount with up to 6 decimals.';
     if (!hasPositiveDecimal(normalized)) return 'Enter an amount greater than 0 USDC.';
-    if (!hasPositiveDecimal(sourceUsdcBalance)) return 'This wallet does not have Sepolia USDC available to bridge.';
+    if (!hasPositiveDecimal(sourceUsdcBalance)) return `This wallet does not have ${web3Config.ui.walletViewChainShortName} USDC available to bridge.`;
     try {
       if (parseUnits(normalized, 6) > parseUnits(clean(sourceUsdcBalance), 6)) {
-        return `You only have ${displayAmount(sourceUsdcBalance, 6)} USDC on Ethereum Sepolia.`;
+        return `You only have ${displayAmount(sourceUsdcBalance, 6)} USDC on ${web3Config.walletViewChains.find((chain) => Number(chain.id) !== Number(web3Config.requiredChain.id))?.name || web3Config.ui.walletViewChainShortName}.`;
       }
     } catch {
       return 'Unable to validate this USDC amount.';
@@ -256,12 +255,12 @@ export function ArcBridgeModal({
   ) : stage === 'review' ? (
     <>
       <Button variant="secondary" onClick={() => { setStage('amount'); setError(''); }}>Back</Button>
-      <Button onClick={handleExecute} disabled={knownNoGas}>Bridge to Arc</Button>
+      <Button onClick={handleExecute} disabled={knownNoGas}>Bridge to {web3Config.ui.requiredChainShortName}</Button>
     </>
   ) : stage === 'success' ? (
     <>
       <Button variant="secondary" onClick={safeClose}>Close</Button>
-      <Button onClick={() => { onViewArcBalance?.(); safeClose(); }}>View Arc balance</Button>
+      <Button onClick={() => { onViewArcBalance?.(); safeClose(); }}>View {web3Config.ui.requiredChainShortName} balance</Button>
     </>
   ) : stage === 'error' ? (
     <>
@@ -274,7 +273,7 @@ export function ArcBridgeModal({
     <Modal
       open={open}
       onClose={safeClose}
-      title="Bridge USDC to Arc"
+      title={`Bridge USDC to ${web3Config.ui.requiredChainShortName}`}
       className="wallet-bridge-modal sm:max-w-2xl"
       bodyClassName="wallet-bridge-modal__body"
       footer={footer}
@@ -286,7 +285,7 @@ export function ArcBridgeModal({
         <div className="wallet-bridge-section-stack">
           <section className="wallet-bridge-panel">
             <div className="wallet-bridge-panel__heading">
-              <div><small>Amount to bridge</small><strong>Sepolia USDC</strong></div>
+              <div><small>Amount to bridge</small><strong>{web3Config.ui.walletViewChainShortName} USDC</strong></div>
               <TokenIcon symbol="USDC" name="USD Coin" size="md" />
             </div>
             <label className="wallet-bridge-amount-field">
@@ -303,7 +302,7 @@ export function ArcBridgeModal({
               <span>USDC</span>
             </label>
             <div className="wallet-bridge-balance-line">
-              <span>Available on Ethereum Sepolia</span>
+              <span>Available on {web3Config.walletViewChains.find((chain) => Number(chain.id) !== Number(web3Config.requiredChain.id))?.name || web3Config.ui.walletViewChainShortName}</span>
               <button
                 type="button"
                 onClick={() => setAmount(clean(sourceUsdcBalance))}
@@ -318,8 +317,8 @@ export function ArcBridgeModal({
           <div className={`wallet-bridge-gas-note${knownNoGas ? ' is-warning' : ''}`}>
             <Fuel size={17} />
             <span>
-              <strong>Sepolia gas balance: {sourceEthLoading ? 'Loading…' : `${displayAmount(sourceEthBalance || '0', 8)} ETH`}</strong>
-              <small>{knownNoGas ? 'Add Sepolia ETH before bridging. The source-chain approval and burn need ETH for gas.' : 'Ethereum Sepolia uses ETH for the source-chain approval and burn transactions.'}</small>
+              <strong>{web3Config.ui.walletViewChainShortName} gas balance: {sourceEthLoading ? 'Loading…' : `${displayAmount(sourceEthBalance || '0', 8)} ${web3Config.walletViewChains.find((chain) => Number(chain.id) !== Number(web3Config.requiredChain.id))?.nativeCurrency.symbol || 'ETH'}`}</strong>
+              <small>{knownNoGas ? `Add ${web3Config.ui.walletViewChainShortName} ${web3Config.walletViewChains.find((chain) => Number(chain.id) !== Number(web3Config.requiredChain.id))?.nativeCurrency.symbol || 'ETH'} before bridging. The source-chain approval and burn need ${web3Config.walletViewChains.find((chain) => Number(chain.id) !== Number(web3Config.requiredChain.id))?.nativeCurrency.symbol || 'ETH'} for gas.` : `${web3Config.walletViewChains.find((chain) => Number(chain.id) !== Number(web3Config.requiredChain.id))?.name || web3Config.ui.walletViewChainShortName} uses ${web3Config.walletViewChains.find((chain) => Number(chain.id) !== Number(web3Config.requiredChain.id))?.nativeCurrency.symbol || 'ETH'} for the source-chain approval and burn transactions.`}</small>
             </span>
           </div>
 
@@ -352,7 +351,7 @@ export function ArcBridgeModal({
           {knownNoGas ? (
             <div className="wallet-bridge-gas-note is-warning">
               <AlertCircle size={17} />
-              <span><strong>Sepolia ETH required</strong><small>This wallet currently shows 0 ETH on Ethereum Sepolia, so the bridge cannot be submitted.</small></span>
+              <span><strong>{web3Config.ui.walletViewChainShortName} {web3Config.walletViewChains.find((chain) => Number(chain.id) !== Number(web3Config.requiredChain.id))?.nativeCurrency.symbol || 'ETH'} required</strong><small>This wallet currently shows 0 {web3Config.walletViewChains.find((chain) => Number(chain.id) !== Number(web3Config.requiredChain.id))?.nativeCurrency.symbol || 'ETH'} on {web3Config.walletViewChains.find((chain) => Number(chain.id) !== Number(web3Config.requiredChain.id))?.name || web3Config.ui.walletViewChainShortName}, so the bridge cannot be submitted.</small></span>
             </div>
           ) : null}
         </div>
@@ -385,12 +384,12 @@ export function ArcBridgeModal({
       {stage === 'success' ? (
         <div className="wallet-bridge-result is-success">
           <span className="wallet-bridge-result__icon"><CheckCircle2 size={28} /></span>
-          <h3>USDC bridged to Arc</h3>
+          <h3>USDC bridged to {web3Config.ui.requiredChainShortName}</h3>
           <p>{displayAmount(result?.amount || amount, 6)} USDC completed the Circle App Kit bridge flow for this Privy wallet.</p>
           <div className="wallet-bridge-result__summary">
-            <span><small>From</small><strong>Ethereum Sepolia</strong></span>
+            <span><small>From</small><strong>{web3Config.walletViewChains.find((chain) => Number(chain.id) !== Number(web3Config.requiredChain.id))?.name || web3Config.ui.walletViewChainShortName}</strong></span>
             <ArrowRight size={18} />
-            <span><small>To</small><strong>Arc Testnet</strong></span>
+            <span><small>To</small><strong>{web3Config.requiredChain.name}</strong></span>
           </div>
           {Object.values(stepLinks).filter(Boolean).length ? (
             <div className="wallet-bridge-result__links">

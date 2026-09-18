@@ -12,6 +12,7 @@ import {
 import { ArcNetworkIcon } from '@/components/common/ArcNetworkIcon';
 import { CountryFlagIcon } from '@/components/common/CountryFlagIcon';
 import { CurrencyAmount } from '@/components/common/CurrencyAmount';
+import { web3Config } from '@/config/web3';
 import { MarketplaceStatusBadge } from './MarketplaceStatusBadge';
 import { useMarketplaceTokenImageUrl } from './MarketplaceTokenImage';
 import { MARKETPLACE_STATUS } from '@/services/investor/investorMarketplaceLocalService';
@@ -195,9 +196,9 @@ export function TokenApplicationCard({
           </div>
 
           <div className="token-application-card__badges">
-            <span className="token-application-card__network" title="Arc Testnet">
+            <span className="token-application-card__network" title={web3Config.requiredChain.name}>
               <ArcNetworkIcon size="xs" decorative />
-              <span>Arc</span>
+              <span>{web3Config.ui.requiredChainShortName}</span>
             </span>
             <MarketplaceStatusBadge status={card.status} compact />
           </div>

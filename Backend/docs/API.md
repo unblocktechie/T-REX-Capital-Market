@@ -533,7 +533,7 @@ Approve:
 }
 ```
 
-Approval first checks the configured Arc Testnet OnchainID factory for the organization's submitted `walletAddress`. If no identity exists, the API creates one with the deterministic salt `org-{organizationUid}` and waits for the configured confirmations. A successful response includes:
+Approval first checks the configured Arc Network OnchainID factory for the organization's submitted `walletAddress`. If no identity exists, the API creates one with the deterministic salt `org-{organizationUid}` and waits for the configured confirmations. A successful response includes:
 
 ```json
 {

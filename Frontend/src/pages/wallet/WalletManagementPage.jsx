@@ -38,6 +38,7 @@ import { useWalletConnection } from '@/hooks/useWalletConnection';
 import { investorMarketplaceService } from '@/services/investor/investorMarketplaceService';
 import { investorPortfolioService } from '@/services/investor/investorPortfolioService';
 import { readWalletNativeBalance, readWalletTokenBalance } from '@/services/wallet/walletAssets.service';
+import { getUsdcBridgeConfigurationIssue } from '@/services/wallet/usdcBridge.service';
 import { shortenWalletAddress } from '@/utils/wallet';
 
 const PORTFOLIO_PAGE_SIZE = 100;
@@ -712,9 +713,11 @@ export default function WalletManagementPage() {
       && isAddress(clean(fundingDestination?.asset)),
   );
 
+  const bridgeConfigurationIssue = getUsdcBridgeConfigurationIssue();
   const canBridgeUsdc = Boolean(
     wallet.isConnected
       && isAddress(clean(wallet.address))
+      && !bridgeConfigurationIssue
       && web3Config.usdcBridge?.routes?.toArc?.source?.appKitChain
       && web3Config.usdcBridge?.routes?.toArc?.destination?.appKitChain
       && web3Config.usdcBridge?.routes?.toSepolia?.source?.appKitChain
@@ -761,7 +764,7 @@ export default function WalletManagementPage() {
     }
 
     if (!fundingDestination?.chain || !isAddress(clean(fundingDestination?.asset))) {
-      toast.error('USDC funding is not configured for Ethereum Mainnet.');
+      toast.error(`USDC funding is not configured for ${fundingDestination.networkName}.`);
       return;
     }
 
@@ -778,31 +781,31 @@ export default function WalletManagementPage() {
             assets: ['usd'],
             defaultAsset: 'usd',
           },
-          environment: 'production',
+          environment: fundingDestination.fiatEnvironment,
         },
-        crypto: {
-          slippageBps: 100,
-        },
+        // crypto: {
+        //   slippageBps: fundingDestination.cryptoSlippageBps,
+        // },
       });
 
       if (result?.method === 'fiat' && result?.status === 'submitted') {
         toast.success('Funding request submitted', {
-          description: 'Privy is processing the USDC purchase for this wallet on Ethereum Mainnet.',
+          description: `Privy is processing the USDC purchase for this wallet on ${fundingDestination.networkName}.`,
         });
       } else if (
         (result?.method === 'fiat' && result?.status === 'confirmed')
         || (result?.method === 'crypto' && result?.status === 'completed')
       ) {
         toast.success('USDC funding completed', {
-          description: 'Your USDC balance on Ethereum Mainnet may take a moment to update.',
+          description: `Your USDC balance on ${fundingDestination.networkName} may take a moment to update.`,
         });
       } else {
         toast.success('Funding flow completed');
       }
 
       // Add Funds remains intentionally independent from the read-only balance
-      // network selector. Funding Ethereum Mainnet must not imply that the selected
-      // Arc Testnet or Ethereum Sepolia balance changed immediately.
+      // network selector. Funding the configured destination must not imply that the
+      // selected wallet-view balance changed immediately.
     } catch (error) {
       const message = clean(error?.message || error?.shortMessage || error);
       if (/cancel|canceled|cancelled|dismiss|closed|user rejected/i.test(message)) {
@@ -829,7 +832,7 @@ export default function WalletManagementPage() {
       wallet.refresh?.(),
     ]);
     toast.success('Bridge completed', {
-      description: 'Your Sepolia and Arc balances are being refreshed.',
+      description: `Your ${web3Config.ui.walletViewChainShortName} and ${web3Config.ui.requiredChainShortName} balances are being refreshed.`,
     });
   };
 
@@ -852,8 +855,8 @@ export default function WalletManagementPage() {
             loading={addingFunds}
             onClick={handleAddFunds}
             disabled={!canAddFunds}
-            aria-label="Add USDC funds to this Privy secure account on Ethereum Mainnet"
-            title="Add USDC to this Privy secure account on Ethereum Mainnet"
+            aria-label={`Add ${fundingDestination.symbol} funds to this Privy secure account on ${fundingDestination.networkName}`}
+            title={`Add ${fundingDestination.symbol} to this Privy secure account on ${fundingDestination.networkName}`}
           >
             Add funds
           </Button>
@@ -1123,19 +1126,23 @@ export default function WalletManagementPage() {
                       type="button"
                       className="wallet-asset-bridge-button"
                       onClick={() => {
+                        if (bridgeConfigurationIssue) {
+                          toast.error(bridgeConfigurationIssue);
+                          return;
+                        }
                         setBridgeDirection(isArcBalanceView ? 'toSepolia' : 'toArc');
                         setBridgeOpen(true);
                       }}
                       disabled={!canBridgeUsdc}
                       aria-label={isArcBalanceView
-                        ? 'Bridge this Arc Testnet USDC balance to Ethereum Sepolia'
-                        : 'Bridge this Ethereum Sepolia USDC balance to Arc Testnet'}
-                      title={isArcBalanceView
-                        ? 'Bridge Arc Testnet USDC to Ethereum Sepolia'
-                        : 'Bridge Ethereum Sepolia USDC to Arc Testnet'}
+                        ? `Bridge this ${web3Config.requiredChain.name} USDC balance to ${web3Config.walletViewChains.find((chain) => Number(chain.id) !== Number(web3Config.requiredChain.id))?.name || 'the configured destination network'}`
+                        : `Bridge this ${selectedChain.name} USDC balance to ${web3Config.requiredChain.name}`}
+                      title={bridgeConfigurationIssue || (isArcBalanceView
+                        ? `Bridge ${web3Config.requiredChain.name} USDC to ${web3Config.walletViewChains.find((chain) => Number(chain.id) !== Number(web3Config.requiredChain.id))?.name || 'the configured destination network'}`
+                        : `Bridge ${selectedChain.name} USDC to ${web3Config.requiredChain.name}`)}
                     >
                       <ArrowRightLeft size={15} />
-                      <span>{isArcBalanceView ? 'Bridge to Sepolia' : 'Bridge to Arc'}</span>
+                      <span>{isArcBalanceView ? `Bridge to ${web3Config.ui.walletViewChainShortName}` : `Bridge to ${web3Config.ui.requiredChainShortName}`}</span>
                     </button>
                   ) : null}
                   {asset.tokenAddress ? (
@@ -1183,7 +1190,7 @@ export default function WalletManagementPage() {
         <footer className="wallet-assets-card__footer">
           <ShieldCheck size={17} />
           <p>
-            Balance viewing is read-only and does not switch the Privy wallet's transaction network. Arc Testnet includes assets known to T-REX; Ethereum Sepolia includes native ETH and the official Circle USDC contract configured by T-REX.
+            Balance viewing is read-only and does not switch the Privy wallet's transaction network. {web3Config.requiredChain.name} includes assets known to T-REX; {web3Config.walletViewChains.find((chain) => Number(chain.id) !== Number(web3Config.requiredChain.id))?.name} includes native {web3Config.walletViewChains.find((chain) => Number(chain.id) !== Number(web3Config.requiredChain.id))?.nativeCurrency.symbol} and the official Circle {web3Config.usdcBridge.token} contract configured by T-REX.
           </p>
         </footer>
       </Card>
@@ -1198,14 +1205,24 @@ export default function WalletManagementPage() {
           toArc: {
             usdcBalance: bridgeSepoliaUsdcQuery.data?.formatted || '',
             gasBalance: bridgeSepoliaNativeQuery.data?.formatted || '',
+            destinationGasBalance: bridgeArcUsdcQuery.data?.formatted || '',
             usdcLoading: bridgeSepoliaUsdcQuery.isLoading || bridgeSepoliaUsdcQuery.isFetching,
             gasLoading: bridgeSepoliaNativeQuery.isLoading || bridgeSepoliaNativeQuery.isFetching,
+            destinationGasLoading: bridgeArcUsdcQuery.isLoading || bridgeArcUsdcQuery.isFetching,
+            usdcError: bridgeSepoliaUsdcQuery.isError,
+            gasError: bridgeSepoliaNativeQuery.isError,
+            destinationGasError: bridgeArcUsdcQuery.isError,
           },
           toSepolia: {
             usdcBalance: bridgeArcUsdcQuery.data?.formatted || '',
             gasBalance: bridgeArcUsdcQuery.data?.formatted || '',
+            destinationGasBalance: bridgeSepoliaNativeQuery.data?.formatted || '',
             usdcLoading: bridgeArcUsdcQuery.isLoading || bridgeArcUsdcQuery.isFetching,
             gasLoading: bridgeArcUsdcQuery.isLoading || bridgeArcUsdcQuery.isFetching,
+            destinationGasLoading: bridgeSepoliaNativeQuery.isLoading || bridgeSepoliaNativeQuery.isFetching,
+            usdcError: bridgeArcUsdcQuery.isError,
+            gasError: bridgeArcUsdcQuery.isError,
+            destinationGasError: bridgeSepoliaNativeQuery.isError,
           },
         }}
         onBridgeCompleted={handleBridgeCompleted}

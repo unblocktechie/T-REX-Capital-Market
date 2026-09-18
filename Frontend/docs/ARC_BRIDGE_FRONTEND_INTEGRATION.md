@@ -4,8 +4,8 @@
 
 Wallet Management supports USDC bridging in both testnet directions for the same Privy embedded wallet:
 
-- **Bridge to Arc:** Ethereum Sepolia USDC → Arc Testnet USDC
-- **Bridge to Sepolia:** Arc Testnet USDC → Ethereum Sepolia USDC
+- **Bridge to Arc:** configured wallet-view network USDC → Arc USDC
+- **Bridge to Sepolia:** Arc USDC → configured wallet-view network USDC
 
 The implementation uses Circle App Kit's Bridge capability instead of manually orchestrating CCTP burn, attestation, and mint operations.
 
@@ -20,7 +20,7 @@ Keeping the route definitions separate from the bridge UI/service makes the late
 The USDC balance row exposes the contextually correct action for the network currently being viewed:
 
 - Ethereum Sepolia → **Bridge to Arc**
-- Arc Testnet → **Bridge to Sepolia**
+- Arc → **configured reverse bridge destination**
 
 The bridge modal also contains a clear two-option direction selector so the user can switch routes before confirming. Changing direction resets the amount and estimate to prevent a quote from one route being reused on the opposite route.
 
@@ -44,3 +44,8 @@ If App Kit returns an error state and explicitly marks it retryable, the service
 - `@circle-fin/app-kit`
 - `@circle-fin/adapter-viem-v2`
 - `viem`
+
+
+## Network profiles
+
+Bridge source/destination chain IDs, network names, USDC addresses, Circle App Kit chain identifiers, and the App Kit environment are selected with `VITE_WALLET_VIEW_*` and `VITE_BRIDGE_*` values. See `docs/ARC_NETWORK_CONFIGURATION.md`. The bridge code path is shared by Testnet and Mainnet.

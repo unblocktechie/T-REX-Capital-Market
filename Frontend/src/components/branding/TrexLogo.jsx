@@ -1,3 +1,5 @@
+import { appConfig } from '@/config/app.config';
+
 export function TrexMark({ size = 24, className = '' }) {
   return (
     <img
@@ -19,8 +21,8 @@ export function TrexLogo({ compact = false, className = '' }) {
       </span>
       {!compact ? (
         <span className="trex-logo__copy">
-          <strong>T-REX</strong>
-          <small>Capital Market</small>
+          <strong>{appConfig.shortProductName}</strong>
+          <small>{appConfig.brandSubtitle}</small>
         </span>
       ) : null}
     </span>

@@ -4,6 +4,12 @@ import { getTokenLogoValidationError } from '@/utils/tokenLogo';
 
 const positiveNumber = (value) => Number(value) > 0;
 const optionalPositiveNumber = (value) => value === '' || Number(value) >= 0;
+const hasAtMostDecimalPlaces = (value, maximumPlaces) => {
+  const normalized = String(value ?? '').trim();
+  if (!normalized) return true;
+  const match = normalized.match(/^\d+(?:\.(\d*))?$/);
+  return Boolean(match) && (match[1]?.length || 0) <= maximumPlaces;
+};
 
 export const formatNumber = (value, options = {}) => {
   const numeric = Number(value);
@@ -63,6 +69,8 @@ export const validateTokenInformation = (data, supplyPricing = {}, options = {})
 
   if (!positiveNumber(supplyPricing.initialPrice)) {
     errors.initialPrice = 'Enter a starting price greater than zero.';
+  } else if (!hasAtMostDecimalPlaces(supplyPricing.initialPrice, 6)) {
+    errors.initialPrice = 'Use no more than 6 digits after the decimal point.';
   }
   if (!data.treasuryWallet.trim()) errors.treasuryWallet = 'An approved organization account is required.';
   else if (!isAddress(data.treasuryWallet.trim())) {
@@ -86,6 +94,8 @@ export const validateSupplyPricing = (data) => {
   }
   if (!positiveNumber(data.initialPrice)) {
     errors.initialPrice = 'Initial price must be greater than zero.';
+  } else if (!hasAtMostDecimalPlaces(data.initialPrice, 6)) {
+    errors.initialPrice = 'Use no more than 6 digits after the decimal point.';
   }
   if (!data.currency) errors.currency = 'Select a price currency.';
   if (!positiveNumber(data.minimumInvestment)) {
@@ -195,7 +205,12 @@ export const validateStep = (stepKey, state) => {
   }
 };
 
-export const buildReviewChecklist = (state, wallet, expectedWallet = '') => {
+export const buildReviewChecklist = (
+  state,
+  wallet,
+  expectedWallet = '',
+  { managementStepCompleted = false } = {},
+) => {
   const tokenValid =
     Object.keys(
       validateTokenInformation(state.tokenInformation, state.supplyPricing, {
@@ -204,7 +219,15 @@ export const buildReviewChecklist = (state, wallet, expectedWallet = '') => {
     ).length === 0;
   const claimsValid = Object.keys(validateIdentityClaims(state.identityClaims)).length === 0;
   const complianceValid = Object.keys(validateCompliance(state.compliance)).length === 0;
-  const agentsValid = Object.keys(validateAgents(state.agents, expectedWallet)).length === 0;
+
+  // Before the management step is saved, keep the strict organization-wallet check used by
+  // the wizard. Once the backend has advanced the draft to Review, the persisted role wallets
+  // are authoritative. The backend may replace a submitted organization wallet with a dedicated
+  // technical Token Agent wallet, so comparing every persisted role to the organization wallet
+  // after a refresh would incorrectly turn a completed step back into "Action Needed".
+  const agentsValid =
+    Object.keys(validateAgents(state.agents, managementStepCompleted ? '' : expectedWallet))
+      .length === 0;
   const walletAuthorized = Boolean(
     wallet.isConnected &&
       expectedWallet &&

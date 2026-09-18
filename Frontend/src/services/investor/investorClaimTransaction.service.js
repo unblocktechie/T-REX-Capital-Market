@@ -48,7 +48,7 @@ export const getInvestorClaimWalletErrorMessage = (error) => {
   }
 
   if (/insufficient funds|insufficient balance/.test(text)) {
-    return 'Your registered wallet needs a small amount of USDC on Arc Testnet to pay the network fee.';
+    return `Your registered wallet needs a small amount of ${web3Config.requiredChain.nativeCurrency.symbol} on ${web3Config.requiredChain.name} to pay the network fee.`;
   }
 
   if (

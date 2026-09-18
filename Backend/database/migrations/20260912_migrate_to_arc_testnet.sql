@@ -1,5 +1,5 @@
--- Migrate blockchain worker configuration from Ethereum Sepolia to Arc Testnet.
--- Arc Testnet chain ID: 5042002. Arc uses deterministic BFT finality, so one
+-- Migrate blockchain worker configuration from Ethereum Sepolia to Arc Network.
+-- Arc uses deterministic BFT finality, so one
 -- committed block is sufficient for authoritative application confirmation.
 --
 -- Contract addresses and RPC credentials remain environment configuration.

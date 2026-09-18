@@ -37,11 +37,21 @@ const humanize = (value) =>
     })
     .join(' ');
 
-const splitDescription = (value) => {
+const splitDescription = (...values) => {
+  const value = values.find((candidate) => {
+    if (Array.isArray(candidate)) return candidate.some((item) => text(item));
+    return Boolean(text(candidate));
+  });
+
   if (Array.isArray(value)) return value.map((item) => text(item)).filter(Boolean);
+
   const normalized = text(value);
   if (!normalized) return [];
-  return normalized.split(/\n\s*\n/).map((item) => item.trim()).filter(Boolean);
+
+  return normalized
+    .split(/\r?\n\s*\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
 };
 
 export const mapClaimTopic = (topic, index = 0) => {
@@ -252,8 +262,29 @@ export const mapMarketplaceToken = (raw = {}, { interest = null, eligibility = n
     nav: numberOrNull(raw?.nav, raw?.netAssetValue, price),
     initialPrice: initialTokenPrice,
     currency: text(raw?.currency, pricing?.currency, 'USDC').toUpperCase(),
-    description: splitDescription(first(raw?.description, tokenInformation?.description)),
-    shortDescription: text(raw?.shortDescription, raw?.description, tokenInformation?.description, tokenInformation?.assetClass),
+    description: splitDescription(
+      raw?.tokenDescription,
+      raw?.description,
+      raw?.investorFacingDescription,
+      raw?.investorDescription,
+      tokenInformation?.tokenDescription,
+      tokenInformation?.description,
+      tokenInformation?.investorFacingDescription,
+      tokenInformation?.investorDescription,
+    ),
+    shortDescription: text(
+      raw?.shortDescription,
+      raw?.tokenDescription,
+      raw?.description,
+      raw?.investorFacingDescription,
+      raw?.investorDescription,
+      tokenInformation?.shortDescription,
+      tokenInformation?.tokenDescription,
+      tokenInformation?.description,
+      tokenInformation?.investorFacingDescription,
+      tokenInformation?.investorDescription,
+      tokenInformation?.assetClass,
+    ),
     issuer: companyName || '—',
     company: companyName || '—',
     legalCompanyName: companyName || '',

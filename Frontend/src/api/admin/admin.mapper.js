@@ -1,3 +1,5 @@
+import { web3Config } from '@/config/web3';
+
 const first = (...values) => values.find((value) => value !== undefined && value !== null && value !== '');
 const text = (...values) => String(first(...values, '') || '').trim();
 const number = (...values) => {
@@ -50,7 +52,7 @@ const mapWallet = (data) => {
       data?.organizationWalletNetwork,
       data?.organizationWallet?.network,
       data?.wallet?.network,
-      address ? 'Arc Testnet' : '',
+      address ? web3Config.requiredChain.name : '',
     ),
     provider: text(data?.walletProvider, data?.organizationWallet?.provider, data?.wallet?.provider),
     connectedAt: first(

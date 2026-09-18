@@ -125,3 +125,64 @@ export async function readWalletTokenBalance({ tokenAddress, walletAddress, chai
     formatted: formatUnits(rawBalance, resolvedDecimals),
   };
 }
+
+/**
+ * Build a conservative native-token gas budget from the chain's current fee
+ * market without preparing or submitting a wallet transaction. This is used
+ * only when Circle's bridge estimate does not include a usable gas amount for
+ * a side of the bridge.
+ */
+export async function estimateWalletNativeGasBudget({ chainId, gasUnits }) {
+  const resolvedChainId = Number(chainId || web3Config.requiredChain.id);
+  const chain = readableChains().find((item) => item.id === resolvedChainId);
+  if (!chain) throw new Error('This wallet network is not supported by the application.');
+
+  const parsedGasUnits = Number(gasUnits);
+  if (!Number.isSafeInteger(parsedGasUnits) || parsedGasUnits <= 0) {
+    throw new Error('Fallback gas units are not configured correctly.');
+  }
+
+  const client = publicClientFor(resolvedChainId);
+  let feePerGas = 0n;
+  let feeSource = '';
+
+  try {
+    const fees = await client.estimateFeesPerGas();
+    feePerGas = fees?.maxFeePerGas ?? fees?.gasPrice ?? 0n;
+    if (feePerGas > 0n) feeSource = 'estimateFeesPerGas';
+  } catch {
+    // Some EVM-compatible networks/RPCs do not expose EIP-1559 fee estimation.
+    // Fall through to eth_gasPrice below.
+  }
+
+  if (feePerGas <= 0n) {
+    try {
+      feePerGas = await client.getGasPrice();
+      if (feePerGas > 0n) feeSource = 'getGasPrice';
+    } catch (error) {
+      throw new Error(
+        `Unable to read the current gas price on ${chain.name}. ${String(error?.shortMessage || error?.message || error || '').trim()}`.trim(),
+      );
+    }
+  }
+
+  if (feePerGas <= 0n) {
+    throw new Error(`The current gas price on ${chain.name} is unavailable.`);
+  }
+
+  const estimatedRaw = feePerGas * BigInt(parsedGasUnits);
+  const decimals = safeDecimals(chain.nativeCurrency?.decimals) ?? 18;
+
+  return {
+    estimatedRaw,
+    formatted: formatUnits(estimatedRaw, decimals),
+    decimals,
+    symbol: chain.nativeCurrency?.symbol || '',
+    chainId: chain.id,
+    chainName: chain.name,
+    gasUnits: parsedGasUnits,
+    feePerGas,
+    feeSource,
+  };
+}
+

@@ -259,7 +259,7 @@ export default function TokenInformationPage() {
               label="Starting price per unit (USDC)"
               required
               error={fieldError('initialPrice')}
-              hint="Enter the starting price for one unit of the asset. Example: 10 means one unit starts at 10 USDC."
+              hint="Enter the starting price for one unit of the asset. You can use up to 6 digits after the decimal point, for example 0.123456."
               htmlFor="initial-token-price"
             >
               <div className="issuance-currency-input">
@@ -270,8 +270,8 @@ export default function TokenInformationPage() {
                   id="initial-token-price"
                   className="issuance-currency-input__control"
                   type="number"
-                  min="0.00000001"
-                  step="any"
+                  min="0.000001"
+                  step="0.000001"
                   inputMode="decimal"
                   value={supplyPricing.initialPrice}
                   onKeyDown={(event) => {
@@ -279,7 +279,7 @@ export default function TokenInformationPage() {
                   }}
                   onChange={(event) => {
                     const nextValue = event.target.value;
-                    if (nextValue !== '' && Number(nextValue) < 0) return;
+                    if (nextValue !== '' && !/^\d*(?:\.\d{0,6})?$/.test(nextValue)) return;
                     clearServerError('initialPrice');
                     updateSection('supplyPricing', {
                       initialPrice: nextValue,

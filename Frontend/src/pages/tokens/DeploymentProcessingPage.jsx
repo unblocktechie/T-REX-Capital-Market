@@ -10,7 +10,9 @@ import {
   InfoCallout,
 } from '@/components/token-issuance/IssuancePrimitives';
 import { Button } from '@/components/ui/Button';
+import { centralizedConfig } from '@/config/app.config';
 import { env } from '@/config/env';
+import { web3Config } from '@/config/web3';
 import { ROUTES } from '@/config/routes';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useMyToken, myTokenQueryKey } from '@/hooks/useMyToken';
@@ -194,7 +196,7 @@ const deploymentErrorPresentation = (error, transactionSubmitted) => {
 
   if (/^(ORGANIZATION_IDENTITY_|IDENTITY_FACTORY_)/.test(error?.code || '')) {
     return {
-      title: 'Arc organization identity setup required',
+      title: `${web3Config.ui.requiredChainShortName} organization identity setup required`,
       message: error.message,
       canRetry: true,
       retryMode: 'deployment',
@@ -245,7 +247,7 @@ const deploymentErrorPresentation = (error, transactionSubmitted) => {
     return {
       title: 'Asset verification is temporarily unavailable',
       message:
-        'The Arc Testnet network is temporarily unavailable. Retry the status check only; do not send another wallet transaction.',
+        `The ${web3Config.requiredChain.name} network is temporarily unavailable. Retry the status check only; do not send another wallet transaction.`,
       canRetry: true,
       retryMode: 'backend-sync',
     };
@@ -276,7 +278,7 @@ const deploymentErrorPresentation = (error, transactionSubmitted) => {
     )
   ) {
     return {
-      title: 'Arc Testnet confirmation is taking longer',
+      title: `${web3Config.requiredChain.name} confirmation is taking longer`,
       message:
         'The wallet transaction was submitted, but confirmation is still pending or temporarily unavailable. Retry the secure status check; do not send another wallet transaction.',
       canRetry: true,
@@ -537,7 +539,7 @@ export default function DeploymentProcessingPage() {
             status: 'syncing',
             title: 'Token verification is in progress',
             description:
-              'The transaction is already on Arc Testnet. We are checking its confirmation and token-creation result; no additional Privy approval will be requested.',
+              `The transaction is already on ${web3Config.requiredChain.name}. We are checking its confirmation and token-creation result; no additional Privy approval will be requested.`,
           },
         });
 
@@ -1455,7 +1457,7 @@ export default function DeploymentProcessingPage() {
         // `isCorrectNetwork` flag can briefly be false before its chain snapshot arrives.
         // Read the provider now and validate that result directly. This is the same wallet
         // that will sign the transaction and removes the first-attempt race without weakening
-        // the Arc Testnet guard.
+        // the configured transaction-network guard.
         let activeChainId;
         try {
           activeChainId = await wallet.getActiveChainId();
@@ -1474,8 +1476,8 @@ export default function DeploymentProcessingPage() {
           throw new Error('Restore the approved Privy secure account before creating the asset.');
         }
 
-        // Arc migration preflight: organization approval on Sepolia included an
-        // ONCHAINID deployment, so the Arc identity must be recreated/resolved
+        // Network migration preflight: organization approval on the prior network included an
+        // ONCHAINID deployment, so the configured-network identity must be recreated/resolved
         // and persisted before we create a backend deployment attempt. This keeps
         // a missing migration from producing a misleading cancelled token attempt.
         setDeployment({
@@ -1483,9 +1485,9 @@ export default function DeploymentProcessingPage() {
           walletAction: {
             key: 'organization-identity-preflight',
             status: 'syncing',
-            title: 'Checking Arc organization identity',
+            title: `Checking ${web3Config.ui.requiredChainShortName} organization identity`,
             description:
-              'Verifying that the approved organization account is linked to its ONCHAINID on Arc Testnet before any token transaction is prepared.',
+              `Verifying that the approved organization account is linked to its ONCHAINID on ${web3Config.requiredChain.name} before any token transaction is prepared.`,
           },
         });
         const organizationIdentityReadiness =
@@ -1509,7 +1511,7 @@ export default function DeploymentProcessingPage() {
             networkName: wallet.requiredChain.name,
             metadata: {
               tokenUid: cachedTokenUid,
-              client: 'trex-capital-market-ui',
+              client: centralizedConfig.deployment.clientIdentifier,
             },
           });
 
@@ -2322,7 +2324,7 @@ export default function DeploymentProcessingPage() {
 
   const walletActionStatus = {
     'awaiting-signature': 'Approve in Privy',
-    confirming: 'Waiting for Arc Testnet',
+    confirming: `Waiting for ${web3Config.requiredChain.name}`,
     confirmed: 'Confirmed',
     failed: 'Needs attention',
     syncing: 'No wallet action required',
@@ -2365,7 +2367,7 @@ export default function DeploymentProcessingPage() {
               <ShieldCheck size={28} />
             )}
           </span>
-          <span className="eyebrow">Creating on Arc Testnet</span>
+          <span className="eyebrow">Creating on {web3Config.requiredChain.name}</span>
           <h1>
             {existingDeploymentSyncPending
               ? 'Syncing your existing token'
@@ -2394,7 +2396,7 @@ export default function DeploymentProcessingPage() {
                       : 'Review the message below before retrying. Never send a duplicate transaction when a hash is already pending.'
                 : backendSyncPending
                   ? 'The submitted transaction and token-creation result are being checked before your token is marked ready.'
-                  : `Privy may request ${walletActionCount} approvals: create the asset, activate approved transfers${configuredInitialPrice ? ', and confirm the asset price' : ''}. Keep this page open until Arc Testnet confirms every required action.`}
+                  : `Privy may request ${walletActionCount} approvals: create the asset, activate approved transfers${configuredInitialPrice ? ', and confirm the asset price' : ''}. Keep this page open until ${web3Config.requiredChain.name} confirms every required action.`}
           </p>
         </div>
 

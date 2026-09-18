@@ -2,6 +2,7 @@ import { ArrowRight, Check, LayoutDashboard } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { appConfig } from '@/config/app.config';
 import { ROUTES } from '@/config/routes';
 
 export default function InvestmentRequestSubmittedStep() {
@@ -16,7 +17,7 @@ export default function InvestmentRequestSubmittedStep() {
         <span className="eyebrow">Profile setup complete</span>
         <h1>Investor Profile Created</h1>
         <p className="investor-success-welcome">
-          Welcome to T-REX Capital Market. Your investor profile and supporting documents have been
+          Welcome to {appConfig.name}. Your investor profile and supporting documents have been
           saved successfully. You can now continue to your dashboard and access the investor
           portal.
         </p>

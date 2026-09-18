@@ -1,3 +1,4 @@
+import { web3Config } from '@/config/web3';
 import { consumeMockFailure } from './investorMockService';
 
 const wait = (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
@@ -11,7 +12,7 @@ export const connectMockWallet = async () => {
     isConnected: true,
     address: '0x1234567890ABCDEF1234567890ABCDEF12349859',
     displayAddress: '0x1234...9859',
-    network: 'Arc Testnet',
+    network: web3Config.requiredChain.name,
     balance: '1.24 USDC',
   };
 };

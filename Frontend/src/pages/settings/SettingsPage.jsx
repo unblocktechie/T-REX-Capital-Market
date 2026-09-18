@@ -1,5 +1,6 @@
 import { Bell, LockKeyhole, MonitorCheck, ShieldCheck } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
+import { appConfig } from '@/config/app.config';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 
 const Setting = ({ icon: Icon, title, text, children }) => (
@@ -41,7 +42,7 @@ export default function SettingsPage() {
           <Setting
             icon={MonitorCheck}
             title="Interface style"
-            text="T-REX Capital Market uses a fixed white workspace for consistent readability."
+            text={`${appConfig.name} uses a fixed white workspace for consistent readability.`}
           >
             <span className="settings-value">Light</span>
           </Setting>

@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { Network } from 'lucide-react';
+import { web3Config } from '@/config/web3';
 import { cn } from '@/utils/cn';
-
-const ARC_NETWORK_ICON_URL = 'https://testnet.arcscan.app/assets/configs/network_icon.svg';
 
 const sizeClasses = Object.freeze({
   xs: 'arc-network-icon--xs',
@@ -12,7 +11,7 @@ const sizeClasses = Object.freeze({
 
 export function ArcNetworkIcon({ size = 'sm', className, decorative = false }) {
   const [imageFailed, setImageFailed] = useState(false);
-  const label = 'Arc Testnet network';
+  const label = `${web3Config.requiredChain.name} network`;
 
   return (
     <span
@@ -22,9 +21,9 @@ export function ArcNetworkIcon({ size = 'sm', className, decorative = false }) {
       aria-hidden={decorative ? 'true' : undefined}
       title={decorative ? undefined : label}
     >
-      {!imageFailed ? (
+      {!imageFailed && web3Config.ui.requiredChainIconUrl ? (
         <img
-          src={ARC_NETWORK_ICON_URL}
+          src={web3Config.ui.requiredChainIconUrl}
           alt=""
           loading="eager"
           decoding="async"

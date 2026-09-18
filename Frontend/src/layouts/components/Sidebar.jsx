@@ -37,9 +37,7 @@ export function Sidebar() {
   const workspaceName = isIssuer
     ? user?.company || user?.name || 'Issuer account'
     : user?.name || `${roleLabel} account`;
-  const networkLabel = web3Config.requiredChain?.testnet
-    ? 'Testnet'
-    : web3Config.requiredChain?.name || 'Network';
+  const networkLabel = web3Config.ui.requiredChainEnvironmentBadgeLabel;
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 900px)');

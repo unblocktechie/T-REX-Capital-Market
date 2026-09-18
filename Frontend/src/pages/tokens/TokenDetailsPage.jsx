@@ -530,7 +530,7 @@ export default function TokenDetailsPage() {
               </span>
               <span className="asset-context-badge asset-context-badge--network">
                 <ArcNetworkIcon size="xs" decorative />
-                <span>Arc Testnet</span>
+                <span>{web3Config.requiredChain.name}</span>
               </span>
             </div>
           </div>

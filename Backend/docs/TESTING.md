@@ -240,7 +240,7 @@ Approval example:
 curl -X PATCH http://localhost:3000/api/v1/admin/organizations/ORGANIZATION_UID/status -H "Authorization: Bearer ADMIN_TOKEN" -H "Content-Type: application/json" -d '{"status":"approved"}'
 ```
 
-Before testing, configure `BLOCKCHAIN_RPC_URL`, `IDENTITY_FACTORY_ADDRESS`, `DEPLOYER_PRIVATE_KEY`, and `DEPLOYER_ADDRESS` with a funded Arc Testnet deployer. Never use an exposed sample key; rotate it first.
+Before testing, configure `BLOCKCHAIN_RPC_URL`, `IDENTITY_FACTORY_ADDRESS`, `DEPLOYER_PRIVATE_KEY`, and `DEPLOYER_ADDRESS` with a funded Arc Network deployer. Never use an exposed sample key; rotate it first.
 
 Expected after a new identity transaction: `200`, `status: approved`, `canResubmit: false`, `rejectionReason: null`, and populated `contractAddress`, `contractTxnHash`, and `contractTxnMessage`. Repeating safely after an identity already exists reuses the factory result and may return a null transaction hash.
 
@@ -323,7 +323,7 @@ curl -X POST http://localhost:3000/api/v1/tokens/me/submit \
   -d '{"transactionHash":"0xPASTE_64_HEX_CHARACTER_DEPLOYMENT_HASH"}'
 ```
 
-Before submitting, configure `TREX_FACTORY_ADDRESS` with the Arc Testnet TREX factory used by the frontend. Expected: `status: deployed`, `currentStep: deployed`, `isDraft: false`, all deployment addresses and block metadata populated, and all later mutation attempts return `409`. The unique organization constraint prevents another token row.
+Before submitting, configure `TREX_FACTORY_ADDRESS` with the Arc Network TREX factory used by the frontend. Expected: `status: deployed`, `currentStep: deployed`, `isDraft: false`, all deployment addresses and block metadata populated, and all later mutation attempts return `409`. The unique organization constraint prevents another token row.
 
 Failure check: submit a confirmed failed transaction or a successful hash without the configured factory's `TREXSuiteDeployed` event. Expected: `422 TOKEN_DEPLOYMENT_VERIFICATION_FAILED`; `GET /tokens/me` then returns `status: deploymentFailed`, the attempted `deployTxHash`, and a diagnostic `contractTxnMessage`. A new valid transaction hash can be submitted afterward.
 
@@ -453,7 +453,7 @@ Their transaction-orchestration POST endpoints and runners are retired.
 
 ## Legacy investor token purchase and mint settlement
 
-1. Configure the Arc Testnet RPC, platform signer, and `PURCHASE_USDT_ADDRESS`. Confirm the platform wallet
+1. Configure the Arc Network RPC, platform signer, and `PURCHASE_USDT_ADDRESS`. Confirm the platform wallet
    is a Token Agent for the deployed token and use an investor interest with status `registered`.
 2. Create an intent:
 

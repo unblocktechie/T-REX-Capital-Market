@@ -14,11 +14,13 @@ export function CurrencyAmount({
   className,
   iconSize = 'xs',
   showSymbol = true,
+  title,
+  ariaLabel,
 }) {
   const normalizedSymbol = normalizeSymbol(symbol) || 'USDC';
 
   return (
-    <span className={cn('currency-amount', className)}>
+    <span className={cn('currency-amount', className)} title={title} aria-label={ariaLabel}>
       <TokenIcon symbol={normalizedSymbol} size={iconSize} />
       <span className="currency-amount__value">{children}</span>
       {showSymbol ? <span className="currency-amount__symbol">{normalizedSymbol}</span> : null}

@@ -21040,3 +21040,44 @@ button.investor-dashboard-live__metric:focus-visible,
     font-size: 0.68rem;
   }
 }
+
+/* Keep the Arc/USDC icons and their values on the same line in profile account details.
+   The broader reference-grid selectors intentionally style card labels, so these
+   more-specific rules prevent those label styles from stacking the nested value spans. */
+.investor-profile-reference-grid .investor-profile-technical-grid strong.investor-profile-account-value {
+  display: inline-flex;
+  max-width: 100%;
+  margin-top: 0;
+  align-items: center;
+  gap: 7px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.investor-profile-reference-grid .investor-profile-technical-grid .investor-profile-account-value > span:last-child {
+  display: inline;
+  min-height: 0;
+  margin: 0;
+  overflow: hidden;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: normal;
+  line-height: inherit;
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .investor-profile-reference-grid .investor-profile-technical-grid strong.investor-profile-account-value {
+    width: 100%;
+    white-space: normal;
+  }
+
+  .investor-profile-reference-grid .investor-profile-technical-grid .investor-profile-account-value > span:last-child {
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+}

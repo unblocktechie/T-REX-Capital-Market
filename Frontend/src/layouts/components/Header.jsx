@@ -5,6 +5,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { authService } from '@/api/auth';
 import { TrexLogo } from '@/components/branding/TrexLogo';
 import { WalletControl } from '@/components/wallet/WalletControl';
+import { appConfig } from '@/config/app.config';
 import { routeMeta } from '@/config/navigation';
 import { ROLES } from '@/config/permissions';
 import { ROUTES } from '@/config/routes';
@@ -174,7 +175,7 @@ export function Header({ onboardingOnly = false }) {
   if (onboardingOnly) {
     return (
       <header className="app-header app-header--onboarding">
-        <div className="onboarding-header__brand" aria-label="T-REX Capital Market">
+        <div className="onboarding-header__brand" aria-label={appConfig.name}>
           <TrexLogo />
         </div>
         <div className="onboarding-header__account">

@@ -8,7 +8,7 @@ T-REX Capital Market is a three-part application composed of a React/Vite web cl
 
 The implemented product supports issuer and investor onboarding, organization and investor document workflows, compliant token configuration and deployment tracking, issuer/investor approval flows, identity claims and registry registration, marketplace discovery, token purchases/transfers/redemptions, portfolio and transaction views, and administrative review workflows.
 
-Blockchain transaction flows are configured for **Arc Testnet (chain ID `5042002`)**.
+Blockchain transaction flows are configured for **Arc Network (chain ID `5042`)**.
 
 ## Features
 
@@ -54,7 +54,7 @@ Blockchain transaction flows are configured for **Arc Testnet (chain ID `5042002
 - ONCHAINID integration through `@onchain-id/solidity`.
 - `TREXPlatformController` contract for priced token purchase/redemption settlement.
 - Custom country-restriction, maximum-balance, and maximum-investor compliance modules.
-- Arc Testnet RPC configuration in the frontend/backend runtime.
+- Arc Network RPC configuration in the frontend/backend runtime.
 - Backend receipt/state verification rather than trusting browser-submitted transaction metadata alone.
 - Checkpointed blockchain event indexing and recovery/reconciliation jobs.
 
@@ -100,7 +100,7 @@ flowchart LR
     User[Browser user] --> SPA[React / Vite SPA]
     SPA --> Privy[Privy email OTP + embedded wallet]
     SPA --> API[Express API]
-    SPA --> Arc[Arc Testnet contracts]
+    SPA --> Arc[Arc Network contracts]
 
     API --> MySQL[(MySQL)]
     API --> Files[(Local document/image storage)]
@@ -204,7 +204,7 @@ To run the complete application locally, use the strictest runtime requirement d
 - **MySQL 8+**.
 - **Privy application credentials** for the browser and backend SDKs.
 - **SMTP server credentials**. The backend validates SMTP settings at startup.
-- **Arc Testnet RPC access** and the public contract addresses used by the application.
+- **Arc Network RPC access** and the public contract addresses used by the application.
 - A funded wallet/environment appropriate to any on-chain operation you intend to execute.
 
 ## Installation
@@ -345,8 +345,8 @@ AUTH_RATE_LIMIT_MAX=10
 
 BLOCKCHAIN_RPC_URL=<arc-testnet-rpc-url>
 BLOCKCHAIN_FALLBACK_RPC_URLS=
-BLOCKCHAIN_CHAIN_ID=5042002
-SUPPORTED_CHAIN_IDS=5042002
+BLOCKCHAIN_CHAIN_ID=5042
+SUPPORTED_CHAIN_IDS=5042
 BLOCKCHAIN_NETWORK_NAME=arc-testnet
 IDENTITY_FACTORY_ADDRESS=<public-contract-address>
 TREX_FACTORY_ADDRESS=<public-contract-address>
@@ -825,12 +825,12 @@ The current application runtime is configured for:
 
 | Property | Value |
 | --- | --- |
-| Network | Arc Testnet |
-| Chain ID | `5042002` |
+| Network | Arc Mainnet |
+| Chain ID | `5042` |
 | Native asset label in frontend config | USD Coin (`USDC`) |
 | Block confirmations default | `1` |
 
-Transaction-critical application flows use Arc Testnet.
+Transaction-critical application flows use Arc Network.
 
 ### ERC-3643 / ONCHAINID
 

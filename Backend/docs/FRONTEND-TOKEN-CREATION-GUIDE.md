@@ -133,7 +133,7 @@ First send the TREX deployment transaction from the connected frontend wallet an
 }
 ```
 
-Do not send contract addresses from browser state. The backend independently reads the Arc Testnet receipt, decodes the factory's `TREXSuiteDeployed` event, and returns the authoritative addresses. Success returns `status: deployed` with `platformAgentWallet`, the six suite addresses, `deployTxHash`, `deployedAtBlock`, and `deployedAt`.
+Do not send contract addresses from browser state. The backend independently reads the Arc Network receipt, decodes the factory's `TREXSuiteDeployed` event, and returns the authoritative addresses. Success returns `status: deployed` with `platformAgentWallet`, the six suite addresses, `deployTxHash`, `deployedAtBlock`, and `deployedAt`.
 
 If the API returns `422 TOKEN_DEPLOYMENT_VERIFICATION_FAILED`, show `message` to the user and reload `GET /tokens/me`. The stored token will have `status: deploymentFailed` and `contractTxnMessage`; the user may retry deployment. A `deployed` token's creation fields are read-only, but its owning issuer may update `currentTokenPrice` through the dedicated price endpoint below.
 

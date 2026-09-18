@@ -5,7 +5,7 @@
 > `/api/v1/investments/transactions/confirm`, and recovered by the canonical indexer. Do not call
 > the purchase create/confirm/retry endpoints. See `FRONTEND-BLOCKCHAIN-TRANSACTION-GUIDE.md`.
 
-This flow lets a registered investor pay in configured Arc Testnet USDC and receive the deployed
+This flow lets a registered investor pay in configured Arc Network USDC and receive the deployed
 ERC-3643 token. The backend is authoritative for amounts, payment verification, and mint
 confirmation. The browser never sends trusted wallet, contract, recipient, price, or raw amount
 values.
@@ -65,7 +65,7 @@ the smallest USDT base unit so the treasury is never underpaid. Response example
 {
   "purchaseUid": "...",
   "status": "PENDING_PAYMENT",
-  "chainId": 5042002,
+  "chainId": 5042,
   "usdtContractAddress": "0x8fC7...aF6A",
   "treasuryWalletAddress": "0x...",
   "investorWalletAddress": "0x...",
@@ -121,7 +121,7 @@ platform-mint lease, calls `mint(investorWalletAddress, tokenAmountRaw)`, and pe
 immediately. It then waits for `PURCHASE_CONFIRMATIONS`, independently verifies the mint transaction,
 calldata, successful receipt, zero-address `Transfer` event and final balance, persists block/hash/
 transaction-index/log-index/gas metadata, and normally returns `COMPLETED` in the same response.
-For Arc Testnet this project uses one confirmation. If mining exceeds the configured HTTP wait timeout,
+For Arc Network this project uses one confirmation. If mining exceeds the configured HTTP wait timeout,
 another process owns the mint lease, or a transient RPC failure occurs, the API returns HTTP `200`
 with the current `MINT_SUBMITTED` or other persisted state; the worker verifies the same stored hash
 later without minting twice. Confirm also returns HTTP `200` with `EXPIRED` when the intent already

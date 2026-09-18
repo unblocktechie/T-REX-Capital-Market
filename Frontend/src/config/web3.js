@@ -1,134 +1,174 @@
 import { defineChain } from 'viem';
-import { sepolia } from 'viem/chains';
 import { env } from '@/config/env';
+import { centralizedConfig } from '@/config/app.config';
 
-// Arc Testnet uses USDC as the native gas asset. eth_getBalance and native value
-// accounting use 18 internal decimals, while the USDC ERC-20 interface uses 6.
-export const arcTestnet = defineChain({
-  id: 5_042_002,
-  name: 'Arc Testnet',
-  nativeCurrency: {
-    name: 'USD Coin',
-    symbol: 'USDC',
-    decimals: 18,
-  },
+const requiredChainConfig = env.web3.requiredChain;
+const walletViewChainConfig = env.web3.walletViewChain;
+const walletViewUsdcConfig = {
+  ...centralizedConfig.tokens.walletViewUsdc,
+  ...env.walletViewUsdc,
+};
+const bridgeConfig = env.bridge;
+const walletFundingConfig = centralizedConfig.walletFunding;
+
+// Arc publishes one network mark for both Testnet and Mainnet. Keep an official
+// brand fallback so UI icons do not disappear when an environment leaves the
+// optional icon override empty. Environment-specific URLs still take priority.
+const ARC_NETWORK_ICON_FALLBACK_URL =
+  'https://cdn.prod.website-files.com/685311a976e7c248b5dfde95/699e21e934a48439675361dc_arc-icon.svg';
+
+// Single Arc chain implementation. The actual Arc network is selected entirely
+// by VITE_ARC_* values (or the centralized defaults) rather than code branches.
+export const arcChain = defineChain({
+  id: requiredChainConfig.chainId,
+  name: requiredChainConfig.name,
+  nativeCurrency: requiredChainConfig.nativeCurrency,
   rpcUrls: {
     default: {
-      http: [env.web3.rpcUrl],
-      webSocket: ['wss://rpc.testnet.arc.network'],
+      http: [requiredChainConfig.rpcHttpUrl],
+      ...(requiredChainConfig.rpcWebSocketUrl
+        ? { webSocket: [requiredChainConfig.rpcWebSocketUrl] }
+        : {}),
     },
   },
-  blockExplorers: {
+  blockExplorers: requiredChainConfig.explorerUrl
+    ? {
+        default: {
+          name: requiredChainConfig.explorerName,
+          url: requiredChainConfig.explorerUrl,
+        },
+      }
+    : undefined,
+  testnet: requiredChainConfig.isTestnet,
+});
+
+// Secondary read-only / bridge chain is also environment-driven so an Arc
+// production build can use a production counterpart without another code path.
+export const walletViewChain = defineChain({
+  id: walletViewChainConfig.chainId,
+  name: walletViewChainConfig.name,
+  nativeCurrency: walletViewChainConfig.nativeCurrency,
+  rpcUrls: {
     default: {
-      name: 'ArcScan',
-      url: 'https://testnet.arcscan.app',
+      http: [walletViewChainConfig.rpcHttpUrl],
     },
   },
-  testnet: true,
+  blockExplorers: walletViewChainConfig.explorerUrl
+    ? {
+        default: {
+          name: walletViewChainConfig.explorerName,
+          url: walletViewChainConfig.explorerUrl,
+          ...(walletViewChainConfig.explorerApiUrl
+            ? { apiUrl: walletViewChainConfig.explorerApiUrl }
+            : {}),
+        },
+      }
+    : undefined,
+  contracts:
+    walletViewChainConfig.multicall3Address || walletViewChainConfig.ensUniversalResolverAddress
+      ? {
+          ...(walletViewChainConfig.multicall3Address
+            ? {
+                multicall3: {
+                  address: walletViewChainConfig.multicall3Address,
+                  blockCreated: walletViewChainConfig.multicall3BlockCreated,
+                },
+              }
+            : {}),
+          ...(walletViewChainConfig.ensUniversalResolverAddress
+            ? {
+                ensUniversalResolver: {
+                  address: walletViewChainConfig.ensUniversalResolverAddress,
+                  blockCreated: walletViewChainConfig.ensUniversalResolverBlockCreated,
+                },
+              }
+            : {}),
+        }
+      : undefined,
+  testnet: walletViewChainConfig.isTestnet,
 });
 
-// Wallet Management can read balances from Ethereum Sepolia without changing
-// the transaction network used by the rest of the T-REX application.
-export const ethereumSepolia = defineChain({
-  ...sepolia,
-  name: 'Ethereum Sepolia',
-});
+export const supportedChains = [arcChain];
+export const requiredChain = arcChain;
+export const walletViewChains = [arcChain, walletViewChain];
+export const privySupportedChains = [arcChain, walletViewChain];
 
-// Transaction-critical application flows remain Arc Testnet only.
-export const supportedChains = [arcTestnet];
-export const requiredChain = arcTestnet;
-
-// Read-only balance networks exposed by Wallet Management. Keeping this list
-// separate from supportedChains prevents a balance-view selection from changing
-// token creation, investment, transfer, or redemption network requirements.
-export const walletViewChains = [arcTestnet, ethereumSepolia];
-
-// Privy must know both EVM chains used by the bridge so its embedded wallet can
-// approve the Sepolia burn and the Arc mint. Transaction-critical T-REX flows
-// still use `supportedChains` above (Arc only).
-export const privySupportedChains = [arcTestnet, ethereumSepolia];
-
-// ERC-20 assets that Wallet Management knows how to read on each optional
-// balance-view network. Standard EVM RPCs cannot enumerate every token held by a
-// wallet, so this registry intentionally contains trusted/known assets. Circle's
-// official Ethereum Sepolia USDC contract is included so a Privy wallet's test
-// USDC is visible alongside native Sepolia ETH.
 export const walletViewTokenAssets = Object.freeze({
-  [ethereumSepolia.id]: Object.freeze([
+  [walletViewChain.id]: Object.freeze([
     Object.freeze({
-      id: 'ethereum-sepolia-usdc',
-      kind: 'network-token',
-      name: 'USD Coin',
-      symbol: 'USDC',
-      tokenAddress: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
-      chainId: ethereumSepolia.id,
-      decimals: 6,
+      id: walletViewUsdcConfig.id,
+      kind: walletViewUsdcConfig.kind,
+      name: walletViewUsdcConfig.name,
+      symbol: walletViewUsdcConfig.symbol,
+      tokenAddress: walletViewUsdcConfig.address,
+      chainId: walletViewChain.id,
+      decimals: walletViewUsdcConfig.decimals,
     }),
   ]),
 });
 
-// Circle App Kit USDC bridge configuration. Both testnet directions are
-// modeled explicitly so Wallet Management can bridge the same Privy wallet
-// between Ethereum Sepolia and Arc Testnet. For mainnet, the UI and bridge
-// service can stay unchanged while these route definitions are replaced with
-// their production chain identifiers and token metadata.
 export const usdcBridge = Object.freeze({
-  environment: 'testnet',
-  token: 'USDC',
-  transferSpeed: 'FAST',
-  maxFee: '0.10',
+  environment: bridgeConfig.environment,
+  token: bridgeConfig.token,
+  transferSpeed: bridgeConfig.transferSpeed,
+  maxFee: bridgeConfig.maxFee,
+  fallbackSourceGasUnits: bridgeConfig.fallbackSourceGasUnits,
+  fallbackDestinationGasUnits: bridgeConfig.fallbackDestinationGasUnits,
   routes: Object.freeze({
+    // Route keys remain unchanged to preserve the existing bridge UI/API flow.
     toArc: Object.freeze({
       id: 'toArc',
-      label: 'Bridge to Arc',
+      label: bridgeConfig.toArcLabel,
       source: Object.freeze({
-        chainId: ethereumSepolia.id,
-        appKitChain: 'Ethereum_Sepolia',
-        networkName: ethereumSepolia.name,
-        nativeSymbol: ethereumSepolia.nativeCurrency.symbol,
-        usdcAddress: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
+        chainId: walletViewChain.id,
+        appKitChain: bridgeConfig.sourceAppKitChain,
+        networkName: walletViewChain.name,
+        nativeSymbol: walletViewChain.nativeCurrency.symbol,
+        nativeDecimals: walletViewChain.nativeCurrency.decimals,
+        usdcAddress: walletViewUsdcConfig.address,
         usdcIsNative: false,
       }),
       destination: Object.freeze({
-        chainId: arcTestnet.id,
-        appKitChain: 'Arc_Testnet',
-        networkName: arcTestnet.name,
-        nativeSymbol: arcTestnet.nativeCurrency.symbol,
+        chainId: arcChain.id,
+        appKitChain: bridgeConfig.destinationAppKitChain,
+        networkName: arcChain.name,
+        nativeSymbol: arcChain.nativeCurrency.symbol,
+        nativeDecimals: arcChain.nativeCurrency.decimals,
         usdcIsNative: true,
       }),
     }),
     toSepolia: Object.freeze({
       id: 'toSepolia',
-      label: 'Bridge to Sepolia',
+      label: bridgeConfig.toWalletViewLabel,
       source: Object.freeze({
-        chainId: arcTestnet.id,
-        appKitChain: 'Arc_Testnet',
-        networkName: arcTestnet.name,
-        nativeSymbol: arcTestnet.nativeCurrency.symbol,
+        chainId: arcChain.id,
+        appKitChain: bridgeConfig.destinationAppKitChain,
+        networkName: arcChain.name,
+        nativeSymbol: arcChain.nativeCurrency.symbol,
+        nativeDecimals: arcChain.nativeCurrency.decimals,
         usdcIsNative: true,
       }),
       destination: Object.freeze({
-        chainId: ethereumSepolia.id,
-        appKitChain: 'Ethereum_Sepolia',
-        networkName: ethereumSepolia.name,
-        nativeSymbol: ethereumSepolia.nativeCurrency.symbol,
-        usdcAddress: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
+        chainId: walletViewChain.id,
+        appKitChain: bridgeConfig.sourceAppKitChain,
+        networkName: walletViewChain.name,
+        nativeSymbol: walletViewChain.nativeCurrency.symbol,
+        nativeDecimals: walletViewChain.nativeCurrency.decimals,
+        usdcAddress: walletViewUsdcConfig.address,
         usdcIsNative: false,
       }),
     }),
   }),
 });
 
-// Privy's add-funds flow uses Ethereum Mainnet as its funding destination.
-// The asset below is Circle's official USDC contract on Ethereum Mainnet.
-// This funding destination is intentionally independent from the app's Arc
-// Testnet execution chain; changing it must not change token/deployment logic.
 export const walletFunding = Object.freeze({
-  chain: 'eip155:1',
-  chainId: 1,
-  networkName: 'Ethereum Mainnet',
-  symbol: 'USDC',
-  asset: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+  chain: walletFundingConfig.chain,
+  chainId: walletFundingConfig.chainId,
+  networkName: walletFundingConfig.networkName,
+  symbol: walletFundingConfig.symbol,
+  asset: walletFundingConfig.assetAddress,
+  fiatEnvironment: walletFundingConfig.fiatEnvironment,
+  cryptoSlippageBps: walletFundingConfig.cryptoSlippageBps,
 });
 
 export const web3Config = Object.freeze({
@@ -138,6 +178,13 @@ export const web3Config = Object.freeze({
   walletViewTokenAssets,
   privySupportedChains,
   usdcBridge,
-  requiredConfirmations: 1,
+  requiredConfirmations: env.web3.requiredConfirmations,
   walletFunding,
+  ui: Object.freeze({
+    requiredChainShortName: requiredChainConfig.shortName,
+    requiredChainEnvironmentBadgeLabel: requiredChainConfig.environmentLabel,
+    walletViewChainShortName: walletViewChainConfig.shortName,
+    requiredChainIconUrl:
+      requiredChainConfig.networkIconUrl || ARC_NETWORK_ICON_FALLBACK_URL,
+  }),
 });

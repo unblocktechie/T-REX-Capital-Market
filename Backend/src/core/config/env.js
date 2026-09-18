@@ -108,6 +108,9 @@ const env = Object.freeze({
       || '0x972E9CEf9eA9d3A9d7f3261bb8e16bA59E76a0FB',
     identityFactoryAddress: process.env.IDENTITY_FACTORY_ADDRESS
       || '0xA30A9FC6d6ea2Fa3fa3F01265a3C1253125481D8',
+    // Access manager used only for identity creation writes.
+    idFactoryAccessManagerAddress: process.env.ID_FACTORY_ACCESS_MANAGER_ADDRESS
+      || '0xE15f7B89802232F8FD5f7635A1964151987a0Dc8',
     trexFactoryAddress: process.env.TREX_FACTORY_ADDRESS
       || '0x667ce07e2C17CeB4089823B7d542494B6c2aA042',
     // Arc has deterministic BFT finality, so one committed block is authoritative.
@@ -135,10 +138,10 @@ const env = Object.freeze({
     // and the maximum blocks to look back when no start block is configured.
     reconcileBlockOffset: Number(process.env.RECONCILE_BLOCK_OFFSET || 9000),
     reconcileMaxLookbackBlocks: Number(process.env.RECONCILE_MAX_LOOKBACK_BLOCKS || 1000000),
-    // Chain configuration for the deployment-attempt flow. Arc Testnet = 5042002.
-    chainId: Number(process.env.BLOCKCHAIN_CHAIN_ID || 5042002),
-    supportedChainIds: csvNumbers(process.env.SUPPORTED_CHAIN_IDS || process.env.BLOCKCHAIN_CHAIN_ID || '5042002'),
-    networkName: process.env.BLOCKCHAIN_NETWORK_NAME || 'arc-testnet',
+    // Chain configuration for the deployment-attempt flow. Arc Network.
+    chainId: Number(process.env.BLOCKCHAIN_CHAIN_ID || 5042),
+    supportedChainIds: csvNumbers(process.env.SUPPORTED_CHAIN_IDS || process.env.BLOCKCHAIN_CHAIN_ID || '5042'),
+    networkName: process.env.BLOCKCHAIN_NETWORK_NAME || 'arc-mainnet',
     // How long a pending (pre-broadcast) deployment attempt stays valid.
     deploymentAttemptTtlMinutes: Number(process.env.DEPLOYMENT_ATTEMPT_TTL_MINUTES || 20),
     // Master switch for the background deployment-sync runner (overrides the DB setting when false).

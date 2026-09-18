@@ -15,9 +15,11 @@ import {
   UsersRound,
   XCircle,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { tokenApi } from '@/api/tokens';
+import { toGovernancePayload } from '@/api/tokens/token.mapper';
 import { PrivyTrustBadge } from '@/components/branding/PrivyBrand';
 import { DeploymentConfirmationModal } from '@/components/token-issuance/DeploymentConfirmationModal';
 import {
@@ -30,7 +32,9 @@ import { Button } from '@/components/ui/Button';
 import { WalletControl } from '@/components/wallet/WalletControl';
 import { TOKEN_CREATION_AGENT_ROLES, TOKEN_ISSUANCE_STEPS } from '@/config/tokenIssuance';
 import { ROUTES } from '@/config/routes';
+import { web3Config } from '@/config/web3';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { useOrganization } from '@/hooks/useOrganization';
 import { useWalletConnection } from '@/hooks/useWalletConnection';
 import { pendingDeploymentService } from '@/services/pendingDeployment.service';
 import { useAuthStore } from '@/store/auth.store';
@@ -42,6 +46,7 @@ import {
   formatNumber,
   hasBlockingReviewErrors,
 } from '@/utils/tokenIssuance';
+import { getTokenApiErrorMessage } from '@/utils/tokenApiValidation';
 import { getWalletErrorMessage } from '@/utils/wallet';
 
 const statusIcons = {
@@ -92,6 +97,7 @@ function DetailItem({ label, children, full = false }) {
 export default function ReviewDeployPage() {
   const navigate = useNavigate();
   const wallet = useWalletConnection();
+  const { organization } = useOrganization();
   const authUser = useAuthStore((state) => state.user);
   const tokenInformation = useTokenIssuanceStore((state) => state.tokenInformation);
   const supplyPricing = useTokenIssuanceStore((state) => state.supplyPricing);
@@ -102,13 +108,20 @@ export default function ReviewDeployPage() {
   const deployment = useTokenIssuanceStore((state) => state.deployment);
   const backend = useTokenIssuanceStore((state) => state.backend);
   const setDeployment = useTokenIssuanceStore((state) => state.setDeployment);
+  const setBackendState = useTokenIssuanceStore((state) => state.setBackendState);
+  const hydrateWalletDefaults = useTokenIssuanceStore((state) => state.hydrateWalletDefaults);
+  const recordBackendSave = useTokenIssuanceStore((state) => state.recordBackendSave);
   const [confirmationOpen, setConfirmationOpen] = useState(false);
   const [startingDeployment, setStartingDeployment] = useState(false);
+  const [syncingGovernance, setSyncingGovernance] = useState(false);
+  const governanceRepairAttemptedRef = useRef('');
   const state = useMemo(
     () => ({ tokenInformation, supplyPricing, identityClaims, compliance, agents }),
     [agents, compliance, identityClaims, supplyPricing, tokenInformation],
   );
-  const checks = buildReviewChecklist(state, wallet, tokenInformation.treasuryWallet);
+  const approvedOrganizationWallet = String(
+    organization?.walletAddress || tokenInformation.treasuryWallet || '',
+  ).trim();
   const normalizedBackendStatus = String(backend.status || '')
     .toLowerCase()
     .replace(/[^a-z]/g, '');
@@ -122,18 +135,98 @@ export default function ReviewDeployPage() {
   const isConfigurationFailed = normalizedBackendStatus === 'configurationfailed';
   const isDeploymentFailed = normalizedBackendStatus === 'deploymentfailed';
   const isDeployed = ['deployed', 'completed', 'active'].includes(normalizedBackendStatus);
+  const normalizedBackendStep = String(backend.currentStep || '')
+    .toLowerCase()
+    .replace(/[^a-z]/g, '');
+  const managementStepCompleted =
+    completedSteps.includes('agents') || ['review', 'deploy', 'deployment'].includes(normalizedBackendStep);
+  const checks = buildReviewChecklist(state, wallet, approvedOrganizationWallet, {
+    managementStepCompleted,
+  });
+  const governanceNeedsSync = Boolean(
+    backend.governanceNeedsSync && managementStepCompleted && approvedOrganizationWallet,
+  );
   const blocking = hasBlockingReviewErrors(checks) || isDeployed;
   const validChecks = checks.filter((check) => check.status === 'valid').length;
   const kyc = identityClaims.claimTopics.find((topic) => topic.id === 'kyc');
   const accredited = identityClaims.claimTopics.find((topic) => topic.id === 'accredited');
   const enabledClaims = identityClaims.claimTopics.filter((topic) => topic.enabled);
   const networkLabel =
-    wallet.requiredChain?.name || tokenInformation.network || 'Arc Testnet';
+    wallet.requiredChain?.name || tokenInformation.network || web3Config.requiredChain.name;
   const connectedNetworkLabel = wallet.isConnected
     ? wallet.chain?.name ||
       `Unsupported network${wallet.chainId ? ` (Chain ID ${wallet.chainId})` : ''}`
     : 'No network connected';
   useDocumentTitle('Review & Create');
+
+
+  // The management roles are intentionally read-only and always use the approved organization
+  // wallet. On a hard refresh / logout-login, GET /tokens/me can return currentStep=review while
+  // omitting the duplicated governance wallet fields. Restore the local role values immediately so
+  // Review & Create does not incorrectly show "Action Needed" for an already-completed step.
+  useEffect(() => {
+    if (!approvedOrganizationWallet) return;
+    hydrateWalletDefaults(approvedOrganizationWallet);
+  }, [approvedOrganizationWallet, hydrateWalletDefaults]);
+
+  const persistReviewGovernance = useCallback(
+    async ({ silent = false } = {}) => {
+      if (!governanceNeedsSync) return true;
+      if (!approvedOrganizationWallet || syncingGovernance) return false;
+
+      setSyncingGovernance(true);
+      try {
+        const response = await tokenApi.saveGovernance(
+          toGovernancePayload(
+            {
+              tokenAgent: { address: approvedOrganizationWallet },
+              identityRegistryAgent: { address: approvedOrganizationWallet },
+            },
+            false,
+          ),
+        );
+        recordBackendSave('agents', response);
+        hydrateWalletDefaults(approvedOrganizationWallet);
+        setBackendState({ governanceNeedsSync: false, governanceSyncError: '' });
+        return true;
+      } catch (error) {
+        const message = getTokenApiErrorMessage(
+          error,
+          'The completed management assignment could not be restored. Please try again.',
+        );
+        setBackendState({ governanceSyncError: message });
+        if (!silent) {
+          toast.error('Asset management access could not be restored.', { description: message });
+        }
+        return false;
+      } finally {
+        setSyncingGovernance(false);
+      }
+    },
+    [
+      approvedOrganizationWallet,
+      governanceNeedsSync,
+      hydrateWalletDefaults,
+      recordBackendSave,
+      setBackendState,
+      syncingGovernance,
+    ],
+  );
+
+  // Repair the backend draft once per page load. This is the same idempotent governance PUT that
+  // previously only happened when the user went Back to Management and clicked Save again.
+  useEffect(() => {
+    if (!governanceNeedsSync) return;
+    const repairKey = `${backend.tokenUid || 'draft'}:${approvedOrganizationWallet.toLowerCase()}`;
+    if (governanceRepairAttemptedRef.current === repairKey) return;
+    governanceRepairAttemptedRef.current = repairKey;
+    void persistReviewGovernance({ silent: true });
+  }, [
+    approvedOrganizationWallet,
+    backend.tokenUid,
+    governanceNeedsSync,
+    persistReviewGovernance,
+  ]);
 
   const switchToRequiredNetwork = async () => {
     if (!wallet.isConnected || wallet.isCorrectNetwork || wallet.isBusy) return;
@@ -152,7 +245,7 @@ export default function ReviewDeployPage() {
     }
   };
 
-  const openDeployment = () => {
+  const openDeployment = async () => {
     if (isDeploymentPending || isConfigurationFailed) {
       const retryMode = normalizedBackendStatus === 'priceconfirmationrequired'
         ? 'price-confirmation'
@@ -245,6 +338,14 @@ export default function ReviewDeployPage() {
       return;
     }
 
+    // A draft at Review is the expected pre-deployment state. If the backend omitted the two
+    // read-only governance addresses after a refresh, persist them again before starting a
+    // deployment attempt so backend validation sees the same completed wizard state.
+    if (governanceNeedsSync) {
+      const restored = await persistReviewGovernance();
+      if (!restored) return;
+    }
+
     const incompleteStep = TOKEN_ISSUANCE_STEPS.filter(
       (step) => step.key !== 'review',
     ).find((step) => !completedSteps.includes(step.key));
@@ -297,7 +398,7 @@ export default function ReviewDeployPage() {
         onContinue={openDeployment}
         continueLabel={isDeploymentPending || isConfigurationFailed ? 'Continue Setup' : 'Create Asset'}
         continueIcon={Rocket}
-        continueDisabled={blocking}
+        continueDisabled={blocking || syncingGovernance}
         hideFooter
         pageClassName="issuance-review-page"
       >
@@ -619,8 +720,8 @@ export default function ReviewDeployPage() {
             </div>
 
             {wallet.isConnected &&
-            tokenInformation.treasuryWallet &&
-            wallet.address?.toLowerCase() !== tokenInformation.treasuryWallet.toLowerCase() ? (
+            approvedOrganizationWallet &&
+            wallet.address?.toLowerCase() !== approvedOrganizationWallet.toLowerCase() ? (
               <InfoCallout title="Approved secure account required" tone="warning" icon={ShieldCheck}>
                 Reconnect with the approved organization account shown in Asset Details before creating this asset.
               </InfoCallout>
@@ -653,8 +754,8 @@ export default function ReviewDeployPage() {
               <Button
                 icon={Rocket}
                 onClick={openDeployment}
-                disabled={blocking}
-                loading={startingDeployment}
+                disabled={blocking || syncingGovernance}
+                loading={startingDeployment || syncingGovernance}
               >
                 {isDeploymentPending
                   ? 'Continue Creation'

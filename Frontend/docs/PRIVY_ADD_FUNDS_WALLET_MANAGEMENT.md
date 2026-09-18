@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Wallet Management includes an **Add funds** action for the currently authenticated Privy secure account. The action opens Privy's `useAddFunds` flow. Funding is intentionally directed to **Ethereum Mainnet USDC**, while the rest of the T-REX application continues to use its existing Arc Testnet configuration.
+Wallet Management includes an **Add funds** action for the currently authenticated Privy secure account. The action opens Privy's `useAddFunds` flow. Funding is intentionally directed to **Ethereum Mainnet USDC**, while the rest of the T-REX application continues to use its existing Arc configuration.
 
 ## Destination
 
@@ -29,7 +29,7 @@ Providing both methods allows Privy to present whichever configured funding meth
 - Repeated clicks are prevented while a funding flow is opening/running.
 - User cancellation is treated as a non-error and does not claim that funds were added.
 - Fiat `submitted`, fiat `confirmed`, and crypto `completed` results receive distinct user feedback.
-- Funding-success messages explicitly identify Ethereum Mainnet so users are not led to believe their Arc Testnet balance changed.
+- Funding-success messages explicitly identify Ethereum Mainnet so users are not led to believe their Arc balance changed.
 - Existing Wallet Management responsiveness and all existing Arc asset/balance behavior are unchanged.
 
 ## Privy dashboard requirement

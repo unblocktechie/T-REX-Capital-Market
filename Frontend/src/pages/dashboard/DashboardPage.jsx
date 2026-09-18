@@ -30,6 +30,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { ROLES } from '@/config/permissions';
 import { ROUTES } from '@/config/routes';
 import { TOKEN_ISSUANCE_STEPS } from '@/config/tokenIssuance';
+import { web3Config } from '@/config/web3';
 import { useAuth } from '@/hooks/useAuth';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useInvestorProfileData } from '@/hooks/useInvestorProfileData';
@@ -1303,7 +1304,7 @@ function InvestorDashboardPage() {
                   <span>{[token.issuer, token.assetClass].filter((value) => value && value !== '—').join(' · ') || 'Created offering'}</span>
                 </span>
                 <span className="investor-dashboard-live__offering-actions">
-                  <span className="investor-dashboard-live__offering-network" aria-label="Arc Testnet" title="Arc Testnet">
+                  <span className="investor-dashboard-live__offering-network" aria-label={web3Config.requiredChain.name} title={web3Config.requiredChain.name}>
                     <ArcNetworkIcon size="xs" decorative />
                   </span>
                   <ArrowRight size={16} aria-hidden="true" />

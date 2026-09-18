@@ -213,7 +213,7 @@ test('portfolio presents confirmed canonical transaction aggregates', async () =
 test('portfolio supports canonical transfer-only holdings without a purchase price', async () => {
   const row = {
     tokenUid: 'token-1', organizationUid: 'org-1', tokenName: 'Acme Token', tokenSymbol: 'ACME',
-    decimals: 2, initialTokenPrice: '1', status: 'deployed', chainId: 5042002,
+    decimals: 2, initialTokenPrice: '1', status: 'deployed', chainId: 5042,
     investorWalletAddress: address('1'), purchaseCount: 0, redemptionCount: 0,
     sentTransferCount: 0, receivedTransferCount: 1,
     totalPurchasedTokenAmount: '0', totalPurchasedTokenAmountRaw: '0',

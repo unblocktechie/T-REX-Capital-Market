@@ -1,4 +1,5 @@
 import { BadgeCheck, FileCheck2, Fingerprint, Gavel, Settings2 } from 'lucide-react';
+import { centralizedConfig } from './app.config';
 
 export const TOKEN_ISSUANCE_STEPS = Object.freeze([
   {
@@ -182,7 +183,7 @@ export const COUNTRY_OPTIONS = Object.freeze([
 ]);
 
 export const DEPLOYMENT_STAGES = Object.freeze([
-  'Checking your Arc identity and Privy secure account',
+  `Checking your ${centralizedConfig.blockchain.requiredChain.shortDisplayName} identity and Privy secure account`,
   'Preparing investor verification and transfer rules',
   'Preparing secure token creation',
   'Confirming token creation and transfer access',

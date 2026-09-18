@@ -49,7 +49,7 @@ and does not perform a USDT conversion. It stores normalized authoritative value
     "functionName": "transfer",
     "args": ["0xRecipient", "125"],
     "from": "0xSender",
-    "chainId": 5042002
+    "chainId": 5042
   }
 }
 ```

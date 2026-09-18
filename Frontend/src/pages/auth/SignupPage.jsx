@@ -20,6 +20,7 @@ import { AuthButton } from '@/components/auth/AuthButton';
 import { AuthRecoveryNotice } from '@/components/auth/AuthRecoveryNotice';
 import { Input } from '@/components/ui/Input';
 import { PasswordInput } from '@/components/ui/PasswordInput';
+import { appConfig } from '@/config/app.config';
 import { ROUTES } from '@/config/routes';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { usePrivyEmailAuth } from '@/hooks/usePrivyEmailAuth';
@@ -31,7 +32,7 @@ const accountNotFoundMessages = {
   login:
     'We could not find an account matching those sign-in details. Create an account to continue.',
   'forgot-password':
-    'No account was found for that email address. Create an account to start using T-REX Capital Market.',
+    `No account was found for that email address. Create an account to start using ${appConfig.name}.`,
   'resend-verification':
     'We could not find an account that needs email verification. Create an account to continue.',
   'verify-email':
@@ -122,7 +123,7 @@ export default function SignupPage() {
     <div className="mx-auto w-full max-w-[560px]">
       <div className="mb-4">
         <span className="text-[11px] font-semibold tracking-[0.12em] text-[var(--primary-500)] uppercase">
-          Join T-REX Capital Market
+          Join {appConfig.name}
         </span>
         <h2 className="my-1.5 font-[var(--font-display)] text-[clamp(27px,3vw,36px)] leading-[1.14] tracking-[-0.025em] text-[var(--text)]">
           Create your account
@@ -152,7 +153,7 @@ export default function SignupPage() {
           render={({ field }) => (
             <fieldset className="m-0 min-w-0 border-0 p-0">
               <legend className="mb-2 text-[13px] font-bold text-[var(--text)]">
-                How will you use T-REX Capital Market?
+                How will you use {appConfig.name}?
               </legend>
               <div
                 className="grid gap-2 sm:grid-cols-2 sm:gap-2.5"

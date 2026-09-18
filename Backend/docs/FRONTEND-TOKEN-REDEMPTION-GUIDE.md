@@ -48,7 +48,7 @@ Content-Type: application/json
 
 ```json
 {
-  "chainId": 5042002,
+  "chainId": 5042,
   "txHash": "0x...",
   "tokenUid": "<tokenUid>",
   "expectedAction": "REDEMPTION"

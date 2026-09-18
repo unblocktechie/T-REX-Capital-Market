@@ -2,6 +2,24 @@
 
 A responsive React application for issuers and investors to access compliant digital-security workflows powered by the T-REX ecosystem and ERC-3643 architecture.
 
+## Arc Testnet / Mainnet configuration
+
+The frontend now uses a single generic **Arc** chain implementation. Testnet remains the default profile, while Mainnet can be selected entirely with `VITE_*` configuration values; no source-code branch or duplicate implementation is required.
+
+- Testnet template: `.env.testnet.example`
+- Mainnet template: `.env.mainnet.example`
+- Full variable reference and switching instructions: `docs/ARC_NETWORK_CONFIGURATION.md`
+
+The UI displays the network generically as **Arc**. Network-specific chain IDs, RPC/explorer URLs, secondary wallet/bridge network values, Circle App Kit identifiers, T-REX contracts, ONCHAINID contracts, compliance modules, and payment-token addresses are configuration-driven. Mainnet application-contract addresses must be supplied from the actual Mainnet deployment; Testnet addresses are never assumed to be valid on Mainnet.
+
+## Centralized configuration
+
+Runtime/build configuration is consumed through `src/config/app.config.js` and validated in `src/config/config.factory.js`. `VITE_*` values take precedence, while omitted keys fall back to the legacy/default values so existing local/Testnet behavior is preserved. Invalid values still fail validation.
+
+Use `.env` for the common/default profile, `.env.testnet` for an explicit Testnet build, and `.env.mainnet` for an explicit Mainnet build. Mainnet network-critical values must be provided directly in `.env.mainnet`; they are not allowed to silently inherit Testnet defaults.
+
+Do not place private keys, passwords, API secrets, or other credentials in `VITE_*` values or frontend source code; Vite exposes `VITE_*` values to the browser bundle.
+
 ## Highlights
 
 - Unified T-REX product identity across authentication and the application
@@ -13,7 +31,7 @@ A responsive React application for issuers and investors to access compliant dig
 - Responsive layouts for desktop, laptop, tablet, mobile and narrow mobile screens
 - Guided issuer dashboard, identity, compliance and investor-management modules
 - Backend-powered organization KYB onboarding with server drafts, location UIDs, UBOs, document vault and final submission
-- Privy embedded-wallet flow restricted to Arc Testnet (chain ID `5042002`)
+- Privy embedded-wallet flow restricted to the configured Arc network (`VITE_ARC_CHAIN_ID`)
 
 ## Authentication backend
 
@@ -42,14 +60,14 @@ Organization onboarding integration is documented in [`docs/ORGANIZATION_BACKEND
 
 ## Run locally
 
-Use Node.js `22.22.1` or newer, configure the Privy application ID and Arc Testnet environment variables in `.env`, then run:
+Use Node.js `22.22.1` or newer. The checked-in defaults are enough for the existing local/Testnet behavior. Override any required browser-safe values in `.env` (or use `.env.testnet` / `.env.mainnet`), then run:
 
 ```bash
 npm install
 npm run dev
 ```
 
-`npm install` installs the React, Privy, Viem, and supporting application dependencies recorded in the lockfile.
+`npm install` installs the React, Privy, Viem, and supporting application dependencies and regenerates `package-lock.json`. The previous lockfile was removed because it pinned the Circle bridge stack from before Arc Mainnet support. Commit the regenerated lockfile after installation so later CI deployments can use `npm ci`.
 
 Production checks:
 
@@ -57,6 +75,15 @@ Production checks:
 npm run lint
 npm run build
 ```
+
+For Arc Mainnet, run the bridge preflight and the explicit Mainnet build:
+
+```bash
+npm run verify:bridge -- mainnet
+npm run build:mainnet
+```
+
+The Mainnet build preflight requires Circle App Kit with Arc Mainnet bridge support and verifies the `Ethereum -> Arc` bridge-chain identifiers before Vite starts. See `docs/ARC_MAINNET_BRIDGE_FIX.md`. The bridge profile uses Circle's standard self-mint flow with SDK-managed fee estimation. Before `bridge()` is called, the UI validates fresh source USDC, source gas, and destination gas balances. Circle gas rows are preferred; if a usable per-chain gas amount is missing, the app falls back to the current RPC gas price multiplied by a conservative configured gas-unit reserve. The complete preflight is repeated immediately before signing. See `docs/BRIDGE_PREFLIGHT_GAS_VALIDATION.md`.
 
 The browser running the frontend must be able to reach `192.168.29.90:3000`, and the backend must allow the frontend origin through CORS.
 
@@ -92,7 +119,7 @@ The five-step token wizard is connected to the authenticated `/api/v1/tokens/me`
 - `GET /tokens/me` restores the current issuer token form and completed backend step. Browser-local token drafts are not used.
 - Step 1 sends multipart token information and the validated token image to `/tokens/me/information`.
 - Step 2 renders the claim topics returned by `/token-options` and submits their backend UIDs; Steps 3–4 save compliance rules and governance wallets.
-- Step 5 calls `/tokens/me/submit` only after all earlier API saves, local validation, wallet authorization, and Arc Testnet checks pass.
+- Step 5 calls `/tokens/me/submit` only after all earlier API saves, local validation, wallet authorization, and configured Arc network checks pass.
 
 The current backend contract marks a successful submission as `readyToDeploy`; it does not yet return deployed smart-contract addresses. The UI therefore presents a truthful ready-to-deploy success state and keeps the submitted configuration read-only.
 
@@ -100,9 +127,9 @@ Bearer authentication continues through the centralized Axios interceptor. Multi
 
 Token wizard values are kept only in memory while the current page session is active and are reset when the authenticated user changes. Refreshing or restarting the wizard always reloads the authoritative form from the backend.
 
-## Arc Testnet deployment transport
+## Arc deployment transport
 
-Public Arc Testnet reads and transaction confirmation use the configured Arc RPC, while signed writes use the authenticated Privy embedded wallet provider. See `docs/METAMASK_TRANSPORT_TIMEOUT_FIX.md` for the transport separation retained by the deployment flow.
+Public Arc reads and transaction confirmation use the configured Arc RPC, while signed writes use the authenticated Privy embedded wallet provider. See `docs/METAMASK_TRANSPORT_TIMEOUT_FIX.md` for the transport separation retained by the deployment flow.
 
 ## Investor dashboard live API
 
@@ -113,4 +140,4 @@ See [`docs/INVESTOR_DASHBOARD_LIVE_API.md`](docs/INVESTOR_DASHBOARD_LIVE_API.md)
 
 ## USDC and Arc visual context
 
-Investor-facing portfolio, marketplace, profile, and invest/send/redeem views use the existing data-driven settlement currency together with Arc Testnet visual context. USDC/USDT icons are display-only and do not change transaction values, wallet handling, routing, or smart-contract calls.
+Investor-facing portfolio, marketplace, profile, and invest/send/redeem views use the existing data-driven settlement currency together with Arc visual context. USDC/USDT icons are display-only and do not change transaction values, wallet handling, routing, or smart-contract calls.

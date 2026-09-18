@@ -1,4 +1,5 @@
 import { TrexLogo, TrexMark } from '@/components/branding/TrexLogo';
+import { appConfig } from '@/config/app.config';
 import { cn } from '@/utils/cn';
 
 export function TrexMiniLoader({ className, label = 'Loading', ...props }) {
@@ -13,8 +14,8 @@ export function TrexMiniLoader({ className, label = 'Loading', ...props }) {
 export function TrexLoader({
   className,
   title = 'Preparing your workspace',
-  message = 'Connecting securely to T-REX Capital Market…',
-  eyebrow = 'T-REX secure flow',
+  message = `Connecting securely to ${appConfig.name}…`,
+  eyebrow = `${appConfig.shortProductName} secure flow`,
   variant = 'page',
   compact = false,
 }) {
