@@ -1,0 +1,32 @@
+{
+  "network": "arc",
+  "chainId": "5042",
+  "deployedAt": "2026-09-17T11:59:00.120Z",
+  "deployer": "0x14c2B244f7d861813EE60FcFA8E20467629D5dD6",
+  "platform": {
+    "trexImplementationAuthority": "0xC075F6F82be42CfCc29e8A98A04E9D14Ab214b99",
+    "trexFactory": "0xaa3cF6087b19Dd4a269E9EcaB774D7B7e403419B",
+    "trexGateway": "0x14DDE3B8520663Dd89462f4D5d3348c3ae8E4B96",
+    "identityImplementationAuthority": "0x124a3e645f554171bf004574be90E101448A10fb",
+    "identityFactory": "0x5c01E6DBFaB1fec3Dbe55987641849A471c8FFE0",
+    "complianceModules": {
+      "countryRestrict": "0xc9D022c4aB57238E2aa4D4524635B770afda4594",
+      "maxBalance": "0x734A60B476C29852b4eD188ca648DCCf39b28292",
+      "maxInvestors": "0xE97Bfb2F7fE9a07A37cA62A31d2F9bc315847D3E"
+    },
+    "platformController": "0x63d336febda546CaF57543bd398bB061F3eA6005",
+    "paymentTokens": "0x3600000000000000000000000000000000000000",
+    "platformControllerOwner": "0x14c2B244f7d861813EE60FcFA8E20467629D5dD6",
+    "idFactoryAccessManager": "0x761d84A334df6ab610863c5b46d67f060536eB7d",
+    "idFactoryAccessManagerAdmin": "0x14c2B244f7d861813EE60FcFA8E20467629D5dD6"
+  },
+  "implementations": {
+    "token": "0xCa176C3C16065F773b4E980e97474A99c80FE66b",
+    "claimTopicsRegistry": "0xE15f7B89802232F8FD5f7635A1964151987a0Dc8",
+    "identityRegistry": "0x8944bbD24d970E73941D15831114530b0Bd05871",
+    "identityRegistryStorage": "0x4f8E2dfea629E236Bc21AD349AB41676948E775d",
+    "trustedIssuersRegistry": "0xa37acD31e0CD43763bA2D127c993bf187B1594FB",
+    "modularCompliance": "0xB6EEDb080D1C0C123e39525d87f0f05802440aFb",
+    "identity": "0x6386A3F2A84FEdd435040630C56520CC045f49e5"
+  }
+}

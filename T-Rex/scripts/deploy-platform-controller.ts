@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { ethers } from 'ethers';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getNetwork, deploymentsPathFor } from './network-config';
+import { loadNetworkConfig, parseNetworkArg } from './lib/network-config';
 
 /**
  * One-time platform deployment for TREXPlatformController
@@ -15,19 +15,16 @@ import { getNetwork, deploymentsPathFor } from './network-config';
  * Requires `npm run compile` to have been run first, so the artifact this
  * address comes from actually exists on disk.
  *
- * Required env vars (see .env.example):
- *   NETWORK                   "arcTestnet" (default) or "sepolia".
- *   ARC_TESTNET_RPC_URL / SEPOLIA_RPC_URL   matching the NETWORK above.
- *   DEPLOYER_PRIVATE_KEY      the platform/backend wallet — becomes the
- *                             controller's owner unless PLATFORM_OWNER_ADDRESS
- *                             is set to something else.
- *   PAYMENT_TOKEN_ADDRESS     stablecoin contract address on that network
- *                             (e.g. Arc's native USDC or a mock USDT/USDC).
- * Optional:
- *   PLATFORM_OWNER_ADDRESS    defaults to the deployer's own address.
+ * Network + payment tokens come from networks.json (see network-config.ts) —
+ * pass --network <name> (defaults to "sepolia"). The RPC URL and deployer
+ * key env var names are looked up per-network from networks.json; set the
+ * actual values in .env. Payment token addresses / platform owner default
+ * to the network's networks.json entry, falling back to PAYMENT_TOKEN_ADDRESSES
+ * / PLATFORM_OWNER_ADDRESS in .env if that entry leaves them empty. More
+ * payment tokens can be whitelisted later via add-payment-token.ts, from the
+ * owner wallet, with no redeploy.
  */
 
-const deploymentsPath = deploymentsPathFor(getNetwork().name);
 const artifactPath = path.join(
   __dirname,
   '..',
@@ -39,31 +36,40 @@ const artifactPath = path.join(
 );
 
 async function main() {
-  const { rpcUrl } = getNetwork();
-  const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
-  const paymentTokenAddress = process.env.PAYMENT_TOKEN_ADDRESS;
+  const networkConfig = loadNetworkConfig(parseNetworkArg());
+  const deploymentsPath = networkConfig.deploymentsPath;
 
-  if (!privateKey) {
-    throw new Error('Missing DEPLOYER_PRIVATE_KEY in .env');
-  }
-  if (!paymentTokenAddress || !ethers.isAddress(paymentTokenAddress)) {
-    throw new Error('Missing or invalid PAYMENT_TOKEN_ADDRESS in .env (stablecoin contract address on this network)');
+  const envPaymentTokenAddresses = (process.env.PAYMENT_TOKEN_ADDRESSES || '')
+    .split(',')
+    .map((address) => address.trim())
+    .filter(Boolean);
+  const paymentTokenAddresses = networkConfig.paymentTokenAddresses.length > 0
+    ? networkConfig.paymentTokenAddresses
+    : envPaymentTokenAddresses;
+
+  if (paymentTokenAddresses.length === 0 || !paymentTokenAddresses.every((address) => ethers.isAddress(address))) {
+    throw new Error(
+      `Missing or invalid payment token addresses for network "${networkConfig.name}" — set paymentTokenAddresses in networks.json or PAYMENT_TOKEN_ADDRESSES in .env (comma-separated ERC-20 addresses).`,
+    );
   }
 
-  const provider = new ethers.JsonRpcProvider(rpcUrl);
-  const deployer = new ethers.Wallet(privateKey, provider);
-  const platformOwnerAddress = process.env.PLATFORM_OWNER_ADDRESS && ethers.isAddress(process.env.PLATFORM_OWNER_ADDRESS)
+  const provider = new ethers.JsonRpcProvider(networkConfig.rpcUrl);
+  const deployer = new ethers.Wallet(networkConfig.deployerPrivateKey, provider);
+  const envPlatformOwnerAddress = process.env.PLATFORM_OWNER_ADDRESS && ethers.isAddress(process.env.PLATFORM_OWNER_ADDRESS)
     ? process.env.PLATFORM_OWNER_ADDRESS
-    : deployer.address;
+    : undefined;
+  const platformOwnerAddress = (networkConfig.platformOwnerAddress && ethers.isAddress(networkConfig.platformOwnerAddress))
+    ? networkConfig.platformOwnerAddress
+    : envPlatformOwnerAddress || deployer.address;
 
   console.log('--- Deploying TREXPlatformController ---');
-  console.log('Deployer:      ', deployer.address);
-  console.log('Platform owner:', platformOwnerAddress);
-  console.log('Payment token: ', paymentTokenAddress);
+  console.log('Deployer:       ', deployer.address);
+  console.log('Platform owner: ', platformOwnerAddress);
+  console.log('Payment tokens: ', paymentTokenAddresses.join(', '));
 
   const artifact = JSON.parse(fs.readFileSync(artifactPath, 'utf8'));
   const factory = new ethers.ContractFactory(artifact.abi, artifact.bytecode, deployer);
-  const controller = await factory.deploy(platformOwnerAddress, paymentTokenAddress);
+  const controller = await factory.deploy(platformOwnerAddress, paymentTokenAddresses.join(', '));
   const receipt = await controller.deploymentTransaction()?.wait();
   const controllerAddress = await controller.getAddress();
 
@@ -71,7 +77,7 @@ async function main() {
 
   const deployment = JSON.parse(fs.readFileSync(deploymentsPath, 'utf8'));
   deployment.platform.platformController = controllerAddress;
-  deployment.platform.paymentToken = paymentTokenAddress;
+  deployment.platform.paymentTokens = paymentTokenAddresses.join(', ');
   deployment.platform.platformControllerOwner = platformOwnerAddress;
   fs.writeFileSync(deploymentsPath, JSON.stringify(deployment, null, 2));
 

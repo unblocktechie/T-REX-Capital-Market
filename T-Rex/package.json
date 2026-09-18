@@ -11,6 +11,11 @@
     "wire:platform-controller": "ts-node scripts/wire-platform-controller.ts",
     "phase0:deploy-platform": "ts-node scripts/phase0-01-deploy-platform.ts",
     "phase0:redeploy-factory": "ts-node scripts/phase0-01b-redeploy-factory.ts",
+    "deploy:id-factory-access-manager": "ts-node scripts/deploy-id-factory-access-manager.ts",
+    "deploy:chain": "ts-node scripts/deploy-chain.ts",
+    "preflight": "ts-node scripts/preflight-check.ts",
+    "compile:verify": "hardhat compile --config hardhat.verify.config.ts",
+    "verify:chain": "hardhat run scripts/verify-chain.ts --config hardhat.verify.config.ts",
     "sync:erc3643-artifacts": "ts-node scripts/sync-erc3643-artifacts.ts",
     "diagnose:transfer": "ts-node scripts/diagnose-transfer.ts"
   },
@@ -23,6 +28,7 @@
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
     "@openzeppelin/contracts": "^4.9.6",
+    "@openzeppelin/contracts-upgradeable": "^4.9.6",
     "@types/node": "^20.14.0",
     "hardhat": "^2.29.0",
     "ts-node": "^10.9.2",

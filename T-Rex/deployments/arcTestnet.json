@@ -1,0 +1,30 @@
+{
+  "network": "arcTestnet",
+  "chainId": "5042002",
+  "deployedAt": "2026-09-07T13:10:46.294Z",
+  "deployer": "0x849F887daec1B14c161ec377C95549ef83dDf3ff",
+  "platform": {
+    "trexImplementationAuthority": "0x1aB6CAb19D0B955a009625c8010F0Cd2Ec97B86d",
+    "trexFactory": "0x667ce07e2C17CeB4089823B7d542494B6c2aA042",
+    "trexGateway": "0x9b0077e6000C9937eE769A61519F9CdFc3f30331",
+    "identityImplementationAuthority": "0xb836449a9CfE276A815eb8Fd795C555EF7efF43E",
+    "identityFactory": "0xA30A9FC6d6ea2Fa3fa3F01265a3C1253125481D8",
+    "complianceModules": {
+      "countryRestrict": "0x7f3a67C7b520a0F01d7A3d98A5B7F2a3bfc7A54D",
+      "maxBalance": "0x08B942c8aCFdB143F0096Cc4D80160221B589804",
+      "maxInvestors": "0xa893BFEE2eCd38A61De91D74Ec15427dA6f7890f"
+    },
+    "platformController": "0x972E9CEf9eA9d3A9d7f3261bb8e16bA59E76a0FB",
+    "paymentToken": "0x3600000000000000000000000000000000000000",
+    "platformControllerOwner": "0x849F887daec1B14c161ec377C95549ef83dDf3ff"
+  },
+  "implementations": {
+    "token": "0x3086039d5c6fB14707aeD079e811ddfCc6D307E7",
+    "claimTopicsRegistry": "0x75B4DBdC9479cDF0Fe11B4aCA36D31296ca2F07A",
+    "identityRegistry": "0xFE989679763F1D3F6C1eC6E46A1cB01d6408e1c5",
+    "identityRegistryStorage": "0xF3f45572D0946DC26A9DB66273410cFC7C9e9E08",
+    "trustedIssuersRegistry": "0x0b9FfeB19126AFDE6f1E01b860D5a9368c2B8147",
+    "modularCompliance": "0x3Ed4FDd2700a4527A04b0BC1Eb934190C1EA7549",
+    "identity": "0x9F16a130a4527B18A52c9a02142F5566d95Ad3Bc"
+  }
+}

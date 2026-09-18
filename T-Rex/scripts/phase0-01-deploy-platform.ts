@@ -5,7 +5,7 @@ import TREX from '@erc3643org/erc-3643';
 import * as fs from 'fs';
 import * as path from 'path';
 import { platform } from 'os';
-import { getNetwork } from './network-config';
+import { loadNetworkConfig, parseNetworkArg } from './lib/network-config';
 
 /**
  * Phase 0 / Step 1 — deploy the PLATFORM contracts.
@@ -17,10 +17,9 @@ import { getNetwork } from './network-config';
  *   - TREXFactory (does the actual per-issuer proxy deployment)
  *   - TREXGateway (the access-controlled front door apps call instead of the Factory directly)
  *
- * This is NOT run per-issuer. Run it exactly once per environment (once per network —
- * NETWORK=arcTestnet or NETWORK=sepolia — see scripts/network-config.ts). Step 2
- * (deploying one issuer's own token suite) is a separate script that reuses the
- * addresses this script writes out.
+ * This is NOT run per-issuer. Run it exactly once per environment (once for Sepolia,
+ * later once for mainnet). Step 2 (deploying one issuer's own token suite) is a
+ * separate script that reuses the addresses this script writes out.
  */
 
 async function deployContract(name: string, abi: any, bytecode: string, signer: ethers.Wallet, args: any[] = []) {
@@ -34,24 +33,19 @@ async function deployContract(name: string, abi: any, bytecode: string, signer: 
 }
 
 async function main() {
-  const { name: networkName, rpcUrl, gasToken } = getNetwork();
-  const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
-  if (!privateKey) {
-    throw new Error('Missing DEPLOYER_PRIVATE_KEY in .env');
-  }
+  const networkConfig = loadNetworkConfig(parseNetworkArg());
 
-  const provider = new ethers.JsonRpcProvider(rpcUrl);
-  const deployer = new ethers.Wallet(privateKey, provider);
+  const provider = new ethers.JsonRpcProvider(networkConfig.rpcUrl);
+  const deployer = new ethers.Wallet(networkConfig.deployerPrivateKey, provider);
 
   console.log('--- Where are we running? ---');
   const network = await provider.getNetwork();
-  console.log('Network:  ', networkName);
   console.log('Chain ID:', network.chainId.toString());
   console.log('Deployer:', deployer.address);
   const balance = await provider.getBalance(deployer.address);
-  console.log('Balance: ', ethers.formatEther(balance), gasToken);
+  console.log('Balance: ', ethers.formatEther(balance), 'ETH');
   if (balance === 0n) {
-    throw new Error(`Deployer ${deployer.address} has 0 ${gasToken} on ${networkName}. Fund it from a ${networkName} faucet first.`);
+    throw new Error(`Deployer ${deployer.address} has 0 ETH on this network. Fund it from a Sepolia faucet first.`);
   }
 
   // --- 1. Deploy the 6 T-REX implementation contracts ---
@@ -133,7 +127,7 @@ async function main() {
 
   // --- Persist everything Step 2 (and the eventual backend) will need ---
   const deployment = {
-    network: networkName,
+    network: networkConfig.name,
     chainId: network.chainId.toString(),
     deployedAt: new Date().toISOString(),
     deployer: deployer.address,
@@ -155,9 +149,9 @@ async function main() {
     },
   };
 
-  const outDir = path.join(__dirname, '..', 'deployments');
+  const outDir = path.dirname(networkConfig.deploymentsPath);
   fs.mkdirSync(outDir, { recursive: true });
-  const outPath = path.join(outDir, `${networkName}.json`);
+  const outPath = networkConfig.deploymentsPath;
   fs.writeFileSync(outPath, JSON.stringify(deployment, null, 2));
 
   console.log('\n=== Done ===');

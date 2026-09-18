@@ -1,0 +1,28 @@
+{
+  "arcTestnet": {
+    "chainId": 5042002,
+    "rpcUrlEnv": "ARC_TESTNET_RPC_URL",
+    "deployerPrivateKeyEnv": "DEPLOYER_PRIVATE_KEY",
+    "paymentTokenAddresses": [
+      "0x3600000000000000000000000000000000000000"
+    ],
+    "platformOwnerAddress": "DEPLOYER_ADDRESS",
+    "explorerApiUrl": "https://explorer.testnet.arc.io/api",
+    "explorerBrowserUrl": "https://explorer.testnet.arc.io",
+    "explorerApiKeyEnv": "ARC_API_KEY"
+  },
+  "arc": {
+    "chainId": 5042,
+    "rpcUrlEnv": "ARC_RPC_URL",
+    "deployerPrivateKeyEnv": "DEPLOYER_PRIVATE_KEY",
+    "paymentTokenAddresses": [
+      "0x3600000000000000000000000000000000000000"
+    ],
+    "platformOwnerAddress": "DEPLOYER_ADDRESS",
+    "explorerApiUrl": "https://api.arc-scan.org/api",
+    "explorerBrowserUrl": "https://explorer.arc.io",
+    "explorerApiKeyEnv": "ARC_API_KEY"
+  }
+
+}
+

@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { ethers } from 'ethers';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getNetwork, deploymentsPathFor } from './network-config';
+import { loadNetworkConfig, parseNetworkArg } from './lib/network-config';
 
 /**
  * One-time platform deployment for our custom compliance modules
@@ -16,7 +16,6 @@ import { getNetwork, deploymentsPathFor } from './network-config';
  * addresses come from actually exist on disk.
  */
 
-const deploymentsPath = deploymentsPathFor(getNetwork().name);
 const artifactsDir = path.join(__dirname, '..', 'artifacts', 'contracts', 'modules');
 
 function loadArtifact(contractName: string) {
@@ -36,14 +35,11 @@ async function deployModule(name: string, signer: ethers.Wallet) {
 }
 
 async function main() {
-  const { rpcUrl } = getNetwork();
-  const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
-  if (!privateKey) {
-    throw new Error('Missing DEPLOYER_PRIVATE_KEY in .env');
-  }
+  const networkConfig = loadNetworkConfig(parseNetworkArg());
+  const deploymentsPath = networkConfig.deploymentsPath;
 
-  const provider = new ethers.JsonRpcProvider(rpcUrl);
-  const platform = new ethers.Wallet(privateKey, provider);
+  const provider = new ethers.JsonRpcProvider(networkConfig.rpcUrl);
+  const platform = new ethers.Wallet(networkConfig.deployerPrivateKey, provider);
 
   const deployment = JSON.parse(fs.readFileSync(deploymentsPath, 'utf8'));
 
