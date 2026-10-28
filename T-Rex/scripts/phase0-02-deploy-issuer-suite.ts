@@ -4,7 +4,6 @@ import OnchainID from '@onchain-id/solidity';
 import TREX from '@erc3643org/erc-3643';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getNetwork, deploymentsPathFor } from './network-config';
 
 // TREXFactory.getTokenPriceStorage() and the TokenPriceStorage contract itself
 // aren't in the npm package yet (see phase0-01b-redeploy-factory.ts) — read
@@ -33,7 +32,7 @@ const tokenPriceStorageArtifact = JSON.parse(
  *     ongoing authority over this token after this transaction confirms.
  */
 
-const deploymentsPath = deploymentsPathFor(getNetwork().name);
+const deploymentsPath = path.join(__dirname, '..', 'deployments', 'sepolia.json');
 
 /**
  * Turns the issuer's business-level compliance choices (whatever their
@@ -76,7 +75,7 @@ function buildComplianceArrays(
 }
 
 async function main() {
-  const provider = new ethers.JsonRpcProvider(getNetwork().rpcUrl);
+  const provider = new ethers.JsonRpcProvider(process.env.SEPOLIA_RPC_URL);
   const platform = new ethers.Wallet(process.env.DEPLOYER_PRIVATE_KEY as string, provider);
   const issuerAddress = process.env.ISSUER_ADDRESS as string;
   const issuerSigner = new ethers.Wallet(process.env.ISSUER_PRIVATE_KEY as string, provider);
@@ -254,7 +253,7 @@ main().catch((error) => {
 // tokenOnchainID	the token's own auto-created ONCHAINID (from token.setOnchainID / TokenLinked event, if you want it)
 // ownerWalletAddress	tokenDetails.owner (should match organizationId's stored wallet — per your earlier point, never trust a client-supplied value here)
 // deployTxHash, deployedAtBlock, deployedAt	receipt.hash, receipt.blockNumber, timestamp
-// chainId / network	'arcTestnet', 'sepolia' etc.
+// chainId / network	'sepolia' etc.
 // status	flip to 'deployed' (or 'failed' + errorMessage if the tx reverts)
 // isPaused	starts true — flip to false once the issuer calls unpause() later
 

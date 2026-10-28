@@ -29,6 +29,8 @@ export interface ReentrantERC20Interface extends Interface {
       | "allowance"
       | "approve"
       | "attackAmount"
+      | "attackInvestor"
+      | "attackPaymentToken"
       | "attackTarget"
       | "attackToken"
       | "balanceOf"
@@ -62,6 +64,14 @@ export interface ReentrantERC20Interface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
+    functionFragment: "attackInvestor",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "attackPaymentToken",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "attackTarget",
     values?: undefined
   ): string;
@@ -79,7 +89,7 @@ export interface ReentrantERC20Interface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "configureRedeemReentrancy",
-    values: [AddressLike, AddressLike, BigNumberish]
+    values: [AddressLike, AddressLike, AddressLike, BigNumberish]
   ): string;
   encodeFunctionData(functionFragment: "decimals", values?: undefined): string;
   encodeFunctionData(
@@ -121,6 +131,14 @@ export interface ReentrantERC20Interface extends Interface {
   decodeFunctionResult(functionFragment: "approve", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "attackAmount",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "attackInvestor",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "attackPaymentToken",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -264,6 +282,10 @@ export interface ReentrantERC20 extends BaseContract {
 
   attackAmount: TypedContractMethod<[], [bigint], "view">;
 
+  attackInvestor: TypedContractMethod<[], [string], "view">;
+
+  attackPaymentToken: TypedContractMethod<[], [string], "view">;
+
   attackTarget: TypedContractMethod<[], [string], "view">;
 
   attackToken: TypedContractMethod<[], [string], "view">;
@@ -277,7 +299,12 @@ export interface ReentrantERC20 extends BaseContract {
   >;
 
   configureRedeemReentrancy: TypedContractMethod<
-    [target: AddressLike, token: AddressLike, amount: BigNumberish],
+    [
+      target: AddressLike,
+      investor: AddressLike,
+      token: AddressLike,
+      amount: BigNumberish
+    ],
     [void],
     "nonpayable"
   >;
@@ -346,6 +373,12 @@ export interface ReentrantERC20 extends BaseContract {
     nameOrSignature: "attackAmount"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
+    nameOrSignature: "attackInvestor"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "attackPaymentToken"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
     nameOrSignature: "attackTarget"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
@@ -364,7 +397,12 @@ export interface ReentrantERC20 extends BaseContract {
   getFunction(
     nameOrSignature: "configureRedeemReentrancy"
   ): TypedContractMethod<
-    [target: AddressLike, token: AddressLike, amount: BigNumberish],
+    [
+      target: AddressLike,
+      investor: AddressLike,
+      token: AddressLike,
+      amount: BigNumberish
+    ],
     [void],
     "nonpayable"
   >;

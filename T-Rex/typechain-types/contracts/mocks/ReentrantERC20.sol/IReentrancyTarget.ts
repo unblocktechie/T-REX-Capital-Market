@@ -26,11 +26,11 @@ export interface IReentrancyTargetInterface extends Interface {
 
   encodeFunctionData(
     functionFragment: "buy",
-    values: [AddressLike, BigNumberish]
+    values: [AddressLike, AddressLike, BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "redeem",
-    values: [AddressLike, BigNumberish]
+    values: [AddressLike, AddressLike, AddressLike, BigNumberish]
   ): string;
 
   decodeFunctionResult(functionFragment: "buy", data: BytesLike): Result;
@@ -81,13 +81,18 @@ export interface IReentrancyTarget extends BaseContract {
   ): Promise<this>;
 
   buy: TypedContractMethod<
-    [token: AddressLike, amount: BigNumberish],
+    [token: AddressLike, paymentToken: AddressLike, amount: BigNumberish],
     [void],
     "nonpayable"
   >;
 
   redeem: TypedContractMethod<
-    [token: AddressLike, amount: BigNumberish],
+    [
+      investor: AddressLike,
+      token: AddressLike,
+      paymentToken: AddressLike,
+      amount: BigNumberish
+    ],
     [void],
     "nonpayable"
   >;
@@ -99,14 +104,19 @@ export interface IReentrancyTarget extends BaseContract {
   getFunction(
     nameOrSignature: "buy"
   ): TypedContractMethod<
-    [token: AddressLike, amount: BigNumberish],
+    [token: AddressLike, paymentToken: AddressLike, amount: BigNumberish],
     [void],
     "nonpayable"
   >;
   getFunction(
     nameOrSignature: "redeem"
   ): TypedContractMethod<
-    [token: AddressLike, amount: BigNumberish],
+    [
+      investor: AddressLike,
+      token: AddressLike,
+      paymentToken: AddressLike,
+      amount: BigNumberish
+    ],
     [void],
     "nonpayable"
   >;

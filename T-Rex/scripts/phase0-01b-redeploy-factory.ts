@@ -23,7 +23,7 @@ import * as path from 'path';
  *      sync-erc3643-artifacts.ts. Run that (after compiling ERC-3643) any
  *      time TREXFactory/TokenPriceStorage change, before running this script.
  *   2. Deploys a new TREXFactory pointing at the SAME
- *      TREXImplementationAuthority + IdFactory already in deployments/<network>.json.
+ *      TREXImplementationAuthority + IdFactory already in deployments/sepolia.json.
  *   3. Whitelists the new Factory on IdFactory (addTokenFactory) and removes
  *      the old one (removeTokenFactory) so only the live Factory can create
  *      token identities going forward.
@@ -31,7 +31,7 @@ import * as path from 'path';
  *      (deployTREXSuite is onlyOwner).
  *   5. Calls TREXGateway.setFactory(newFactory) — your backend keeps using the
  *      same Gateway address it always has; only the Factory it forwards to changes.
- *   6. Updates deployments/<network>.json, keeping the old Factory address in
+ *   6. Updates deployments/sepolia.json, keeping the old Factory address in
  *      `platform.trexFactoryHistory` for audit purposes.
  *
  * IMPORTANT — long-term fix: this script reads TREXFactory from
@@ -49,9 +49,8 @@ import * as path from 'path';
 // and can keep using the npm package's ABI.
 import TREXGatewayPkg from '@erc3643org/erc-3643';
 import OnchainID from '@onchain-id/solidity';
-import { getNetwork, deploymentsPathFor } from './network-config';
 
-const deploymentsPath = deploymentsPathFor(getNetwork().name);
+const deploymentsPath = path.join(__dirname, '..', 'deployments', 'sepolia.json');
 const vendorArtifactsRoot = path.join(__dirname, '..', 'vendor', 'erc3643', 'artifacts', 'contracts');
 
 function loadLocalArtifact(relativeContractPath: string) {
@@ -73,10 +72,10 @@ async function deployContract(name: string, abi: any, bytecode: string, signer: 
 }
 
 async function main() {
-  const { rpcUrl } = getNetwork();
+  const rpcUrl = process.env.SEPOLIA_RPC_URL;
   const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
-  if (!privateKey) {
-    throw new Error('Missing DEPLOYER_PRIVATE_KEY in .env');
+  if (!rpcUrl || !privateKey) {
+    throw new Error('Missing SEPOLIA_RPC_URL or DEPLOYER_PRIVATE_KEY in .env');
   }
 
   if (!fs.existsSync(deploymentsPath)) {

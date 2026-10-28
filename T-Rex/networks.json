@@ -1,0 +1,80 @@
+{
+  "sepolia": {
+    "chainId": 11155111,
+    "rpcUrlEnv": "SEPOLIA_RPC_URL",
+    "deployerPrivateKeyEnv": "DEPLOYER_PRIVATE_KEY",
+    "paymentTokenAddresses": [
+      "0x86B14D29A59b745bF08c42661322d13142d5eb49",
+      "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
+    ],
+    "platformOwnerAddress": "DEPLOYER_ADDRESS"
+  },
+  "arcTestnet": {
+    "chainId": 5042002,
+    "rpcUrlEnv": "ARC_TESTNET_RPC_URL",
+    "deployerPrivateKeyEnv": "DEPLOYER_PRIVATE_KEY",
+    "paymentTokenAddresses": [
+      "0x3600000000000000000000000000000000000000"
+    ],
+    "platformOwnerAddress": "DEPLOYER_ADDRESS",
+    "explorerApiUrl": "https://explorer.testnet.arc.io/api",
+    "explorerBrowserUrl": "https://explorer.testnet.arc.io",
+    "explorerApiKeyEnv": "ARC_TESTNET_EXPLORER_API_KEY"
+  },
+  "arbitrumSepolia": {
+    "chainId": 421614,
+    "rpcUrlEnv": "ARBITRUM_SEPOLIA_RPC_URL",
+    "deployerPrivateKeyEnv": "DEPLOYER_PRIVATE_KEY",
+    "paymentTokenAddresses": [
+      "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",
+      "0xFFC95faa3d63Cde504a05B567C600B78C0b41892"
+    ],
+    "platformOwnerAddress": "DEPLOYER_ADDRESS"
+  },
+  "robinhoodTestnet": {
+    "chainId": 46630,
+    "rpcUrlEnv": "ROBINHOOD_TESTNET_RPC_URL",
+    "deployerPrivateKeyEnv": "DEPLOYER_PRIVATE_KEY",
+    "paymentTokenAddresses": [
+      "0x7E955252E15c84f5768B83c41a71F9eba181802F"
+    ],
+    "platformOwnerAddress": "DEPLOYER_ADDRESS",
+    "explorerApiUrl": "https://explorer.testnet.chain.robinhood.com/api",
+    "explorerBrowserUrl": "https://explorer.testnet.chain.robinhood.com"
+  },
+  "arbitrum": {
+    "chainId": 42161,
+    "rpcUrlEnv": "ARBITRUM_RPC_URL",
+    "deployerPrivateKeyEnv": "DEPLOYER_PRIVATE_KEY",
+    "paymentTokenAddresses": [
+      "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+      "0x004B506865409877C9fA29bfb1ebA929984B9bbC"
+    ],
+    "platformOwnerAddress": "DEPLOYER_ADDRESS",
+    "explorerBrowserUrl": "https://arbiscan.io"
+  },
+  "robinhood": {
+    "chainId": 4663,
+    "rpcUrlEnv": "ROBINHOOD_RPC_URL",
+    "deployerPrivateKeyEnv": "DEPLOYER_PRIVATE_KEY",
+    "paymentTokenAddresses": [
+      "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168"
+    ],
+    "platformOwnerAddress": "DEPLOYER_ADDRESS",
+    "explorerApiUrl": "https://robinhoodchain.blockscout.com/api",
+    "explorerBrowserUrl": "https://robinhoodchain.blockscout.com",
+    "explorerApiKeyEnv": "ROBINHOOD_EXPLORER_API_KEY"
+  },
+  "arc": {
+    "chainId": 5042,
+    "rpcUrlEnv": "ARC_RPC_URL",
+    "deployerPrivateKeyEnv": "DEPLOYER_PRIVATE_KEY",
+    "paymentTokenAddresses": [
+      "0x3600000000000000000000000000000000000000"
+    ],
+    "platformOwnerAddress": "DEPLOYER_ADDRESS",
+    "explorerApiUrl": "https://api.arc-scan.org/api",
+    "explorerBrowserUrl": "https://explorer.arc.io",
+    "explorerApiKeyEnv": "ARC_API_KEY"
+  }
+}

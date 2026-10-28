@@ -1,0 +1,35 @@
+{
+  "network": "sepolia",
+  "chainId": "11155111",
+  "deployedAt": "2026-09-22T05:10:28.254Z",
+  "deployer": "0xDbBdcA99d568B54feaAb6c6D34e8f0093c509859",
+  "platform": {
+    "trexImplementationAuthority": "0xB50555f42401507d5fB882B395AF6d458cFfBb9C",
+    "trexFactory": "0x21679403cE4BC1390e390e9B7196e7a325dbD1ea",
+    "trexGateway": "0x51D42F190F8B4b52013338F44bd7D32B38266A8b",
+    "identityImplementationAuthority": "0x0ABB6819e90c300B938b16618287656296346E93",
+    "identityFactory": "0x7B0C5924ec21DcD45E1c98c1141Cb0C680Afc947",
+    "complianceModules": {
+      "countryRestrict": "0x310586dCF087EbF5Ce22EE5b14c3D121b4Ae0edb",
+      "maxBalance": "0xd128E07F166628E127ab1931bE3f9Aa198F24F1E",
+      "maxInvestors": "0x390864C1Cd02BA8fc890f72f34C0fdffeC4A3C46"
+    },
+    "platformController": "0xdf290bA0D8E84632A85FAc0CAE7bEa1Cf9c50556",
+    "paymentTokens": [
+      "0x86B14D29A59b745bF08c42661322d13142d5eb49",
+      "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
+    ],
+    "platformControllerOwner": "0xDbBdcA99d568B54feaAb6c6D34e8f0093c509859",
+    "idFactoryAccessManager": "0x03DF916C6Bbc9396B80fd7583567A6A1D5479846",
+    "idFactoryAccessManagerAdmin": "0xDbBdcA99d568B54feaAb6c6D34e8f0093c509859"
+  },
+  "implementations": {
+    "token": "0x0B2EeEfe34ADBF9cb412217E2548C6d450E13CdC",
+    "claimTopicsRegistry": "0x760a3edd8B33CF9eF0D70bd8f9A53bACa2859E12",
+    "identityRegistry": "0xc6A40dED0D9Dc5ce26358A889176237A79cCD47d",
+    "identityRegistryStorage": "0x89A89163c26025f93eC1f1079fB3E20c9BAA12dc",
+    "trustedIssuersRegistry": "0x48eeF537eFcbA6abaDB888E72954AdDc6ccEDAD6",
+    "modularCompliance": "0x843171E6ad9F631ed8861c7423D47BeD7295921d",
+    "identity": "0xb18631a4Ef92f181e4f3fe5D0822033F44c4e0AE"
+  }
+}

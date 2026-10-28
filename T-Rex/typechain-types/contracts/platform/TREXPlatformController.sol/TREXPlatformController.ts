@@ -26,17 +26,20 @@ import type {
 export interface TREXPlatformControllerInterface extends Interface {
   getFunction(
     nameOrSignature:
+      | "PRICE_DECIMALS"
+      | "addPaymentToken"
       | "buy"
       | "getTokenInfo"
+      | "isPaymentToken"
       | "owner"
       | "pause"
       | "paused"
-      | "paymentToken"
+      | "paymentTokens"
       | "quoteBuy"
       | "quoteRedeem"
       | "redeem"
+      | "removePaymentToken"
       | "renounceOwnership"
-      | "setPaymentToken"
       | "setPrice"
       | "tokenPrice"
       | "transferOwnership"
@@ -47,7 +50,8 @@ export interface TREXPlatformControllerInterface extends Interface {
     nameOrSignatureOrTopic:
       | "OwnershipTransferred"
       | "Paused"
-      | "PaymentTokenUpdated"
+      | "PaymentTokenAdded"
+      | "PaymentTokenRemoved"
       | "TokenPriceUpdated"
       | "TokensPurchased"
       | "TokensRedeemed"
@@ -55,39 +59,51 @@ export interface TREXPlatformControllerInterface extends Interface {
   ): EventFragment;
 
   encodeFunctionData(
+    functionFragment: "PRICE_DECIMALS",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "addPaymentToken",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
     functionFragment: "buy",
-    values: [AddressLike, BigNumberish]
+    values: [AddressLike, AddressLike, BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "getTokenInfo",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "isPaymentToken",
     values: [AddressLike]
   ): string;
   encodeFunctionData(functionFragment: "owner", values?: undefined): string;
   encodeFunctionData(functionFragment: "pause", values?: undefined): string;
   encodeFunctionData(functionFragment: "paused", values?: undefined): string;
   encodeFunctionData(
-    functionFragment: "paymentToken",
+    functionFragment: "paymentTokens",
     values?: undefined
   ): string;
   encodeFunctionData(
     functionFragment: "quoteBuy",
-    values: [AddressLike, BigNumberish]
+    values: [AddressLike, AddressLike, BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "quoteRedeem",
-    values: [AddressLike, BigNumberish]
+    values: [AddressLike, AddressLike, BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "redeem",
-    values: [AddressLike, AddressLike, BigNumberish]
+    values: [AddressLike, AddressLike, AddressLike, BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "removePaymentToken",
+    values: [AddressLike]
   ): string;
   encodeFunctionData(
     functionFragment: "renounceOwnership",
     values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "setPaymentToken",
-    values: [AddressLike]
   ): string;
   encodeFunctionData(
     functionFragment: "setPrice",
@@ -103,16 +119,28 @@ export interface TREXPlatformControllerInterface extends Interface {
   ): string;
   encodeFunctionData(functionFragment: "unpause", values?: undefined): string;
 
+  decodeFunctionResult(
+    functionFragment: "PRICE_DECIMALS",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "addPaymentToken",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "buy", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "getTokenInfo",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "isPaymentToken",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "pause", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "paused", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "paymentToken",
+    functionFragment: "paymentTokens",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "quoteBuy", data: BytesLike): Result;
@@ -122,11 +150,11 @@ export interface TREXPlatformControllerInterface extends Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "redeem", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "renounceOwnership",
+    functionFragment: "removePaymentToken",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "setPaymentToken",
+    functionFragment: "renounceOwnership",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "setPrice", data: BytesLike): Result;
@@ -163,15 +191,23 @@ export namespace PausedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export namespace PaymentTokenUpdatedEvent {
-  export type InputTuple = [
-    oldPaymentToken: AddressLike,
-    newPaymentToken: AddressLike
-  ];
-  export type OutputTuple = [oldPaymentToken: string, newPaymentToken: string];
+export namespace PaymentTokenAddedEvent {
+  export type InputTuple = [paymentToken: AddressLike];
+  export type OutputTuple = [paymentToken: string];
   export interface OutputObject {
-    oldPaymentToken: string;
-    newPaymentToken: string;
+    paymentToken: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace PaymentTokenRemovedEvent {
+  export type InputTuple = [paymentToken: AddressLike];
+  export type OutputTuple = [paymentToken: string];
+  export interface OutputObject {
+    paymentToken: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -202,6 +238,7 @@ export namespace TokensPurchasedEvent {
     investor: AddressLike,
     token: AddressLike,
     issuer: AddressLike,
+    paymentToken: AddressLike,
     tokenAmount: BigNumberish,
     paymentAmount: BigNumberish,
     pricePerToken: BigNumberish
@@ -210,6 +247,7 @@ export namespace TokensPurchasedEvent {
     investor: string,
     token: string,
     issuer: string,
+    paymentToken: string,
     tokenAmount: bigint,
     paymentAmount: bigint,
     pricePerToken: bigint
@@ -218,6 +256,7 @@ export namespace TokensPurchasedEvent {
     investor: string;
     token: string;
     issuer: string;
+    paymentToken: string;
     tokenAmount: bigint;
     paymentAmount: bigint;
     pricePerToken: bigint;
@@ -233,6 +272,7 @@ export namespace TokensRedeemedEvent {
     investor: AddressLike,
     token: AddressLike,
     issuer: AddressLike,
+    paymentToken: AddressLike,
     tokenAmount: BigNumberish,
     paymentAmount: BigNumberish,
     pricePerToken: BigNumberish
@@ -241,6 +281,7 @@ export namespace TokensRedeemedEvent {
     investor: string,
     token: string,
     issuer: string,
+    paymentToken: string,
     tokenAmount: bigint,
     paymentAmount: bigint,
     pricePerToken: bigint
@@ -249,6 +290,7 @@ export namespace TokensRedeemedEvent {
     investor: string;
     token: string;
     issuer: string;
+    paymentToken: string;
     tokenAmount: bigint;
     paymentAmount: bigint;
     pricePerToken: bigint;
@@ -314,8 +356,16 @@ export interface TREXPlatformController extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
+  PRICE_DECIMALS: TypedContractMethod<[], [bigint], "view">;
+
+  addPaymentToken: TypedContractMethod<
+    [token: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+
   buy: TypedContractMethod<
-    [token: AddressLike, tokenAmount: BigNumberish],
+    [token: AddressLike, paymentToken: AddressLike, tokenAmount: BigNumberish],
     [void],
     "nonpayable"
   >;
@@ -333,16 +383,18 @@ export interface TREXPlatformController extends BaseContract {
     "view"
   >;
 
+  isPaymentToken: TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
+
   owner: TypedContractMethod<[], [string], "view">;
 
   pause: TypedContractMethod<[], [void], "nonpayable">;
 
   paused: TypedContractMethod<[], [boolean], "view">;
 
-  paymentToken: TypedContractMethod<[], [string], "view">;
+  paymentTokens: TypedContractMethod<[], [string[]], "view">;
 
   quoteBuy: TypedContractMethod<
-    [token: AddressLike, tokenAmount: BigNumberish],
+    [token: AddressLike, paymentToken: AddressLike, tokenAmount: BigNumberish],
     [
       [bigint, bigint, bigint, string] & {
         paymentAmount: bigint;
@@ -355,7 +407,7 @@ export interface TREXPlatformController extends BaseContract {
   >;
 
   quoteRedeem: TypedContractMethod<
-    [token: AddressLike, tokenAmount: BigNumberish],
+    [token: AddressLike, paymentToken: AddressLike, tokenAmount: BigNumberish],
     [
       [bigint, bigint, bigint, string] & {
         paymentAmount: bigint;
@@ -368,18 +420,23 @@ export interface TREXPlatformController extends BaseContract {
   >;
 
   redeem: TypedContractMethod<
-    [investor: AddressLike, token: AddressLike, tokenAmount: BigNumberish],
+    [
+      investor: AddressLike,
+      token: AddressLike,
+      paymentToken: AddressLike,
+      tokenAmount: BigNumberish
+    ],
+    [void],
+    "nonpayable"
+  >;
+
+  removePaymentToken: TypedContractMethod<
+    [token: AddressLike],
     [void],
     "nonpayable"
   >;
 
   renounceOwnership: TypedContractMethod<[], [void], "nonpayable">;
-
-  setPaymentToken: TypedContractMethod<
-    [newPaymentToken: AddressLike],
-    [void],
-    "nonpayable"
-  >;
 
   setPrice: TypedContractMethod<
     [token: AddressLike, newPrice: BigNumberish],
@@ -402,9 +459,15 @@ export interface TREXPlatformController extends BaseContract {
   ): T;
 
   getFunction(
+    nameOrSignature: "PRICE_DECIMALS"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "addPaymentToken"
+  ): TypedContractMethod<[token: AddressLike], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "buy"
   ): TypedContractMethod<
-    [token: AddressLike, tokenAmount: BigNumberish],
+    [token: AddressLike, paymentToken: AddressLike, tokenAmount: BigNumberish],
     [void],
     "nonpayable"
   >;
@@ -423,6 +486,9 @@ export interface TREXPlatformController extends BaseContract {
     "view"
   >;
   getFunction(
+    nameOrSignature: "isPaymentToken"
+  ): TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
+  getFunction(
     nameOrSignature: "owner"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
@@ -432,12 +498,12 @@ export interface TREXPlatformController extends BaseContract {
     nameOrSignature: "paused"
   ): TypedContractMethod<[], [boolean], "view">;
   getFunction(
-    nameOrSignature: "paymentToken"
-  ): TypedContractMethod<[], [string], "view">;
+    nameOrSignature: "paymentTokens"
+  ): TypedContractMethod<[], [string[]], "view">;
   getFunction(
     nameOrSignature: "quoteBuy"
   ): TypedContractMethod<
-    [token: AddressLike, tokenAmount: BigNumberish],
+    [token: AddressLike, paymentToken: AddressLike, tokenAmount: BigNumberish],
     [
       [bigint, bigint, bigint, string] & {
         paymentAmount: bigint;
@@ -451,7 +517,7 @@ export interface TREXPlatformController extends BaseContract {
   getFunction(
     nameOrSignature: "quoteRedeem"
   ): TypedContractMethod<
-    [token: AddressLike, tokenAmount: BigNumberish],
+    [token: AddressLike, paymentToken: AddressLike, tokenAmount: BigNumberish],
     [
       [bigint, bigint, bigint, string] & {
         paymentAmount: bigint;
@@ -465,16 +531,21 @@ export interface TREXPlatformController extends BaseContract {
   getFunction(
     nameOrSignature: "redeem"
   ): TypedContractMethod<
-    [investor: AddressLike, token: AddressLike, tokenAmount: BigNumberish],
+    [
+      investor: AddressLike,
+      token: AddressLike,
+      paymentToken: AddressLike,
+      tokenAmount: BigNumberish
+    ],
     [void],
     "nonpayable"
   >;
   getFunction(
+    nameOrSignature: "removePaymentToken"
+  ): TypedContractMethod<[token: AddressLike], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "renounceOwnership"
   ): TypedContractMethod<[], [void], "nonpayable">;
-  getFunction(
-    nameOrSignature: "setPaymentToken"
-  ): TypedContractMethod<[newPaymentToken: AddressLike], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "setPrice"
   ): TypedContractMethod<
@@ -507,11 +578,18 @@ export interface TREXPlatformController extends BaseContract {
     PausedEvent.OutputObject
   >;
   getEvent(
-    key: "PaymentTokenUpdated"
+    key: "PaymentTokenAdded"
   ): TypedContractEvent<
-    PaymentTokenUpdatedEvent.InputTuple,
-    PaymentTokenUpdatedEvent.OutputTuple,
-    PaymentTokenUpdatedEvent.OutputObject
+    PaymentTokenAddedEvent.InputTuple,
+    PaymentTokenAddedEvent.OutputTuple,
+    PaymentTokenAddedEvent.OutputObject
+  >;
+  getEvent(
+    key: "PaymentTokenRemoved"
+  ): TypedContractEvent<
+    PaymentTokenRemovedEvent.InputTuple,
+    PaymentTokenRemovedEvent.OutputTuple,
+    PaymentTokenRemovedEvent.OutputObject
   >;
   getEvent(
     key: "TokenPriceUpdated"
@@ -565,15 +643,26 @@ export interface TREXPlatformController extends BaseContract {
       PausedEvent.OutputObject
     >;
 
-    "PaymentTokenUpdated(address,address)": TypedContractEvent<
-      PaymentTokenUpdatedEvent.InputTuple,
-      PaymentTokenUpdatedEvent.OutputTuple,
-      PaymentTokenUpdatedEvent.OutputObject
+    "PaymentTokenAdded(address)": TypedContractEvent<
+      PaymentTokenAddedEvent.InputTuple,
+      PaymentTokenAddedEvent.OutputTuple,
+      PaymentTokenAddedEvent.OutputObject
     >;
-    PaymentTokenUpdated: TypedContractEvent<
-      PaymentTokenUpdatedEvent.InputTuple,
-      PaymentTokenUpdatedEvent.OutputTuple,
-      PaymentTokenUpdatedEvent.OutputObject
+    PaymentTokenAdded: TypedContractEvent<
+      PaymentTokenAddedEvent.InputTuple,
+      PaymentTokenAddedEvent.OutputTuple,
+      PaymentTokenAddedEvent.OutputObject
+    >;
+
+    "PaymentTokenRemoved(address)": TypedContractEvent<
+      PaymentTokenRemovedEvent.InputTuple,
+      PaymentTokenRemovedEvent.OutputTuple,
+      PaymentTokenRemovedEvent.OutputObject
+    >;
+    PaymentTokenRemoved: TypedContractEvent<
+      PaymentTokenRemovedEvent.InputTuple,
+      PaymentTokenRemovedEvent.OutputTuple,
+      PaymentTokenRemovedEvent.OutputObject
     >;
 
     "TokenPriceUpdated(address,uint256,uint256)": TypedContractEvent<
@@ -587,7 +676,7 @@ export interface TREXPlatformController extends BaseContract {
       TokenPriceUpdatedEvent.OutputObject
     >;
 
-    "TokensPurchased(address,address,address,uint256,uint256,uint256)": TypedContractEvent<
+    "TokensPurchased(address,address,address,address,uint256,uint256,uint256)": TypedContractEvent<
       TokensPurchasedEvent.InputTuple,
       TokensPurchasedEvent.OutputTuple,
       TokensPurchasedEvent.OutputObject
@@ -598,7 +687,7 @@ export interface TREXPlatformController extends BaseContract {
       TokensPurchasedEvent.OutputObject
     >;
 
-    "TokensRedeemed(address,address,address,uint256,uint256,uint256)": TypedContractEvent<
+    "TokensRedeemed(address,address,address,address,uint256,uint256,uint256)": TypedContractEvent<
       TokensRedeemedEvent.InputTuple,
       TokensRedeemedEvent.OutputTuple,
       TokensRedeemedEvent.OutputObject

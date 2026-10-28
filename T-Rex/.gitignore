@@ -1,4 +1,9 @@
 node_modules/
 dist/
 .env
-deployments/
+
+
+# scripts/verify-chain.ts's own isolated Hardhat build (see hardhat.verify.config.ts)
+verify/artifacts/
+verify/cache/
+verify/typechain-types/

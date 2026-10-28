@@ -1,0 +1,38 @@
+{
+  "network": "robinhoodTestnet",
+  "chainId": "46630",
+  "deployer": "0xDbBdcA99d568B54feaAb6c6D34e8f0093c509859",
+  "platform": {
+    "identityImplementationAuthority": "0x74be2518d75Fd26609FFc689448379C3eF9871fC",
+    "identityFactory": "0xe1da45b88C9d3f4347A6E1C6e8ee63e360068a15",
+    "trexImplementationAuthority": "0xe7804f28bC78164d276BC2e2a2E82bb6863afAEc",
+    "trexFactory": "0xe221247C52ece62027eb7D01D0f522d7363Fe875",
+    "trexGateway": "0x32c06Dcd426ee86c4FDD2514c58785ff7A5DDAc0",
+    "complianceModules": {
+      "countryRestrict": "0xbcDeFb563f46B95c4dD626051A70f5e6286D5Fa4",
+      "maxBalance": "0x69d19cD0fDd741a0ebF76282893B9B57Cf44B38A",
+      "maxInvestors": "0xfFfC0785CD31998a53608a600cf1FA1E444aaA7D"
+    },
+    "platformController": "0xB9E24956fb7F8Ca814ff54F31Ed19A57626Dd8D3",
+    "paymentTokens": [
+      "0x7E955252E15c84f5768B83c41a71F9eba181802F"
+    ],
+    "platformControllerOwner": "0xDbBdcA99d568B54feaAb6c6D34e8f0093c509859",
+    "idFactoryAccessManager": "0xC4eA19D8370eAF4BDa1e30E4c5B68761EAb0BbAB",
+    "idFactoryAccessManagerAdmin": "0xDbBdcA99d568B54feaAb6c6D34e8f0093c509859"
+  },
+  "implementations": {
+    "claimTopicsRegistry": "0xafCBa964CE9571fcd04e739bd62700d4eFdd252F",
+    "trustedIssuersRegistry": "0xcE362411ff899d1Ba0B25Ac2a0C691E6cEa4f001",
+    "identityRegistryStorage": "0x449d70138f5bc2298c6210B42B9a6380D81221D4",
+    "identityRegistry": "0x19571a0B2c67Fd75A34c00Eb7779A8B64C94EBf0",
+    "modularCompliance": "0xAAB98EF37558568D52BadE8ffc3eDE2492989efc",
+    "token": "0x109af7c2C5339E4B0AC8014cB8866A4dc6eD7586",
+    "identity": "0x56C546F59F75B5e09b65f03d381e9C884b30d822"
+  },
+  "deployedAt": "2026-09-23T11:42:43.640Z",
+  "versionRegistered": true,
+  "trexFactoryAllowedOnIdentityFactory": true,
+  "trexFactoryOwnershipTransferred": true,
+  "deployerApprovedOnGateway": true
+}
