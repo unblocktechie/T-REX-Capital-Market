@@ -71,10 +71,11 @@ filtered CSV result, not only the visible page.
 1. Use the token's returned `tokenAgentWalletAddress` as its assigned Platform Controller, then read
    that Controller's token configuration and quote on-chain. Do not replace an existing token's
    stored Controller with the current new-token default.
-2. Read `USDT.allowance(investorWallet, controllerAddress)` on-chain.
-3. If insufficient, investor signs `USDT.approve(controllerAddress, amount or MaxUint256)`.
+2. Use the token's `paymentTokenAddress` and metadata returned by the marketplace/token-detail API.
+   Read `paymentToken.allowance(investorWallet, controllerAddress)` on-chain.
+3. If insufficient, investor signs `paymentToken.approve(controllerAddress, amount or MaxUint256)`.
 4. Re-read allowance after the approval receipt succeeds.
-5. Investor signs `PlatformController.buy(tokenAddress, tokenAmountRaw)`.
+5. Investor signs `PlatformController.buy(tokenAddress, paymentTokenAddress, tokenAmountRaw)`.
 6. As soon as a hash is returned, call `/transactions/confirm` with `expectedAction: INVEST`.
 7. Show `SUBMITTED` immediately and refresh canonical history. Never submit `buy` again solely
    because the backend request failed or timed out.
@@ -116,9 +117,9 @@ execution:
 
 1. Investor creates and authorizes the redemption request.
 2. Issuer approves or rejects it.
-3. Issuer performs the reusable USDT allowance approval directly from the issuer wallet. Current
+3. Issuer performs the reusable selected-payment-token allowance approval directly from the issuer wallet. Current
    on-chain allowance and balance—not a database boolean—determine readiness.
-4. Issuer signs `PlatformController.redeem(investorWalletAddress, tokenAddress, tokenAmountRaw)`.
+4. Issuer signs `PlatformController.redeem(investorWalletAddress, tokenAddress, paymentTokenAddress, tokenAmountRaw)`.
 5. Call `/transactions/confirm` with the Issuer JWT and `expectedAction: REDEMPTION`.
 6. Refresh canonical history and the redemption detail. The verified atomic controller transaction
    changes the matching legacy request to `COMPLETED` during migration.

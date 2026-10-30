@@ -34,13 +34,14 @@ independently of any frontend state.
 | `TrexDeploymentSyncInterval` | `60` | Runner interval in minutes. |
 | `TrexDeploymentLastSyncBlock` | `0` | Checkpoint — last fully processed block. Never rescans the whole chain. |
 | `TrexDeploymentBlockOffset` | `500` | Blocks per `eth_getLogs` request (prevents RPC range/timeout limits). |
-| `TrexDeploymentConfirmationBlocks` | `1` | Arc deterministic-finality buffer; only blocks up to `latest - this` are processed. |
+| `TrexDeploymentConfirmationBlocks` | `2` | Reorg buffer; only blocks up to `latest - this` are processed. |
 | `TrexDeploymentStartBlock` | `0` | Optional first-run start block. Set to the factory deploy block for full recovery; `0` starts one offset window behind the safe head. |
 | `TrexDeploymentSyncEnabled` | `true` | On/off switch (DB-level). |
 
-Blockchain config is reused from the existing env: `BLOCKCHAIN_RPC_URL`, Arc Testnet chain `5042002`, and
-`TREX_FACTORY_ADDRESS` (`0x667ce07e2C17CeB4089823B7d542494B6c2aA042`). No RPC URL or key is
-hardcoded.
+Each run loads the active chain from `chainMaster`, including its RPC URLs, chain ID,
+`trexFactoryAddress`, confirmation count, scan start block, and indexer flag. The checkpoint is
+scoped by chain ID, so two networks never share progress. No RPC URL, factory address, or chain ID
+is hardcoded in the runner.
 
 ## Processing flow
 

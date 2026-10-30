@@ -8,7 +8,7 @@ const createOrganizationController = (service, optionRepository) => ({
     message: 'Organization form options fetched successfully.', data: await optionRepository.listAll(),
   }),
   getMine: async (req, res) => sendSuccess(req, res, {
-    message: 'Organization form fetched successfully.', data: await service.getFullForm(req.user),
+    message: 'Organization form fetched successfully.', data: await service.getFullForm(req.user, req.selectedChain),
   }),
   markUserNotified: async (req, res) => sendSuccess(req, res, {
     message: 'Organization user notification marked successfully.',
@@ -51,7 +51,7 @@ const createOrganizationController = (service, optionRepository) => ({
     return sendSuccess(req, res, { message: 'Organization document deleted successfully.' });
   },
   submit: async (req, res) => sendSuccess(req, res, {
-    message: 'Organization submitted successfully for review.', data: await service.submit(req.user, req.body),
+    message: 'Organization submitted successfully for review.', data: await service.submit(req.user, req.body, req.selectedChain),
   }),
 });
 

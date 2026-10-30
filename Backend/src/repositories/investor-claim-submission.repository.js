@@ -4,7 +4,7 @@ const { sqlInteger } = require('../utils/sql');
 const { identifier } = require('./base.repository');
 
 const submissionFields = [
-  'interestUid', 'claimSignatureUid', 'investorUid', 'tokenUid', 'organizationUid',
+  'interestUid', 'claimSignatureUid', 'investorUid', 'tokenUid', 'organizationUid', 'chainUid', 'chainId',
   'claimTopic', 'data', 'signature', 'investorIdentityAddress', 'issuerIdentityAddress',
   'preparedAtBlock', 'lastScannedBlock', 'txHash', 'blockNumber', 'transactionIndex', 'logIndex',
   'status', 'failureReason', 'syncStatus', 'syncRequestedAt', 'syncStartedAt', 'syncCompletedAt',
@@ -90,16 +90,17 @@ class InvestorClaimSubmissionRepository {
 
   // Recovery candidates: prepared submissions that never recorded a transaction. These are the
   // suspicious/incomplete rows the fallback runner tries to reconcile from the chain.
-  async findRecoveryCandidates(limit = 100, executor) {
+  async findRecoveryCandidates(limit = 100, executor, chainId = null) {
     const limitSql = sqlInteger(Math.max(1, Math.trunc(limit)), { min: 1, name: 'limit' });
     return execute(
       `SELECT * FROM \`investorClaimSubmission\`
        WHERE \`status\` = 'PENDING' AND \`txHash\` IS NULL AND \`isDeleted\` = 0
          AND \`syncStatus\` IN ('IDLE', 'QUEUED', 'FAILED')
          AND (\`nextSyncAt\` IS NULL OR \`nextSyncAt\` <= UTC_TIMESTAMP(3))
+         ${chainId === null ? '' : 'AND `chainId` = ?'}
        ORDER BY (\`syncStatus\` = 'QUEUED') DESC, COALESCE(\`syncRequestedAt\`, \`createdAt\`) ASC
        LIMIT ${limitSql}`,
-      [],
+      chainId === null ? [] : [Number(chainId)],
       executor,
     );
   }
@@ -150,14 +151,14 @@ class InvestorClaimSubmissionRepository {
     );
   }
 
-  async findChainMatchCandidates({ identityAddress, issuerIdentityAddress, claimTopic }, executor) {
+  async findChainMatchCandidates({ chainId, identityAddress, issuerIdentityAddress, claimTopic }, executor) {
     return execute(
       `SELECT * FROM \`investorClaimSubmission\`
-       WHERE LOWER(\`investorIdentityAddress\`) = LOWER(?)
+       WHERE ${chainId === undefined ? '' : '\`chainId\` = ? AND '}LOWER(\`investorIdentityAddress\`) = LOWER(?)
          AND LOWER(\`issuerIdentityAddress\`) = LOWER(?)
          AND \`claimTopic\` = ? AND \`status\` IN ('PENDING', 'FAILED') AND \`isDeleted\` = 0
        ORDER BY \`submittedAt\` ASC, \`createdAt\` ASC`,
-      [identityAddress, issuerIdentityAddress, claimTopic],
+      [...(chainId === undefined ? [] : [Number(chainId)]), identityAddress, issuerIdentityAddress, claimTopic],
       executor,
     );
   }

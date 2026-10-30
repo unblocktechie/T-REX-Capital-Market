@@ -4,7 +4,8 @@ This worker is the fallback/source-of-truth ingestion path for frontend-executed
 and Redemption transactions.
 
 It scans sequential safe block ranges using the global `canonicalTransactions` row in
-`blockchainIndexerCheckpoint`. It monitors the configured USDT contract for settlement events sent
+`blockchainIndexerCheckpoint`. It loads every active payment-token contract from
+`paymentTokenMaster` and monitors it for settlement events sent
 through the Platform Controller stored on each active token (including older Controller versions),
 and every active deployed token for ERC-20 `Transfer` events. Every
 candidate is passed to the same strict verifier used by the fast confirmation endpoint.
@@ -12,7 +13,8 @@ candidate is passed to the same strict verifier used by the fast confirmation en
 The verifier requires the configured chain, the Controller assigned to that token, the correct
 target and supported function, deployed token,
 canonical successful receipt, exact issue/burn/transfer event, exact settlement direction and
-amount from `quoteBuy`/`quoteRedeem`, configured payment token, controller token metadata, and the
+amount from the matching `quoteBuy`/`quoteRedeem` overload, token-selected payment address,
+controller payment-token allowlist, controller token metadata, and the
 configured confirmation threshold. API confirmation additionally requires the authenticated
 investor wallet to equal `tx.from`.
 
@@ -26,6 +28,8 @@ have been examined. On checkpoint block-hash mismatch, the worker marks affected
 rewinds by the configured lookback, and replays the range.
 
 Runtime settings are available in `.env` and `generalSettings`. Apply
-`database/migrations/20260911_add_canonical_blockchain_transactions.sql` before starting the app.
+`database/migrations/20260911_add_canonical_blockchain_transactions.sql` and
+`database/migrations/20260908_add_multi_payment_tokens.sql`, followed by
+`database/migrations/20260915_move_payment_tokens_to_database.sql`, before starting the app.
 Set `TRANSACTION_INDEXER_START_BLOCK` to the earliest relevant Platform Controller transaction or
 deployed-token activity block when historical backfill is required.

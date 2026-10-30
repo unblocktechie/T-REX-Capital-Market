@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const schemas = require('../../src/schemas/investment.schema');
 const { InvestmentService } = require('../../src/services/investment.service');
+const { InvestmentRepository } = require('../../src/repositories/investment.repository');
 
 const investor = { userUid: 'user-inv', roleName: 'Investor' };
 const issuer = { userUid: 'user-iss', roleName: 'Issuer' };
@@ -74,7 +75,15 @@ const makeService = (over = {}) => {
       findSubmissionDocument: async (interestUid, documentUid) => state.submissionDocs
         .filter((d) => d.interestUid === interestUid && d.documentUid === documentUid)
         .sort((a, b) => b.submissionNumber - a.submissionNumber)[0] || null,
-      listInterestsByInvestor: async () => [{ interestUid: 'int-1', tokenUid: 'tok-1', status: 'submitIntrest', maxInvestors: 100, maxBalancePerInvestor: '5000' }],
+      listInterestsByInvestor: async () => [{
+        interestUid: 'int-1',
+        tokenUid: 'tok-1',
+        status: 'submitIntrest',
+        maxInvestors: 100,
+        maxBalancePerInvestor: '5000',
+        imageStorageKey: 'interest-token.webp',
+        imageMimeType: 'image/webp',
+      }],
       listInterestsByOrganization: async () => [{ interestUid: 'int-1', status: 'submitIntrest' }],
     },
     tokenRepository: { listClaimTopics: async () => state.requiredTopics },
@@ -92,6 +101,7 @@ const makeService = (over = {}) => {
     tokenImageService: { resolve: (key) => `/tmp/${key}` },
     issuerClaimRepository: { findLatestVerificationByStatus: async () => state.signedVerification },
     investorUploadsDir: '/tmp',
+    getHolderSummary: over.getHolderSummary,
   });
   return { service, state };
 };
@@ -146,17 +156,60 @@ test('an admin may filter by any status; an investor is forced to deployed', asy
   assert.equal(i.state.listArgs.investorUserUid, investor.userUid);
 });
 
+test('marketplace country filter applies allowlist or blocklist only when restrictions exist', async () => {
+  const calls = [];
+  const executor = {
+    execute: async (sql, params) => {
+      calls.push({ sql, params });
+      return [/COUNT\(\*\)/i.test(sql) ? [{ total: 0 }] : []];
+    },
+  };
+  await new InvestmentRepository().listMarketplaceTokens({
+    investorUserUid: investor.userUid,
+  }, executor);
+  assert.equal(calls.length, 2);
+  for (const call of calls) {
+    assert.match(call.sql, /EXISTS \(\s*SELECT 1 FROM `tokenCountryRestriction` configuredRestriction/i);
+  }
+});
+
 test('token details include the treasury wallet address', async () => {
   const { service } = makeService();
   const result = await service.getTokenDetails('tok-1');
   assert.equal(result.treasuryWalletAddress, deployedToken.treasuryWalletAddress);
 });
 
-test('my-interests returns token cap fields', async () => {
+test('token details include shared holder counts for the selected token without investor records', async () => {
+  const token = { ...deployedToken, chainUid: 'chain-1', chainId: 11155111 };
+  const holderSummary = { totalInvestors: 4, currentHolders: 2, formerHolders: 1, unknownHolders: 1 };
+  let checkedToken;
+  const { service } = makeService({ token, getHolderSummary: async value => {
+    checkedToken = value;
+    return holderSummary;
+  } });
+  const result = await service.getTokenDetails('tok-1');
+  assert.equal(checkedToken, token);
+  assert.deepEqual(result.holderSummary, holderSummary);
+  assert.equal(result.investors, undefined);
+  assert.equal(result.treasuryWalletAddress, token.treasuryWalletAddress);
+});
+
+test('missing token does not trigger holder balance checks', async () => {
+  let called = false;
+  const { service } = makeService({ token: null, getHolderSummary: async () => { called = true; } });
+  await assert.rejects(() => service.getTokenDetails('missing'), error => error.statusCode === 404);
+  assert.equal(called, false);
+});
+
+test('my-interests returns token cap and public image fields without exposing storage data', async () => {
   const { service } = makeService();
   const interests = await service.listMyInterests(investor, {});
   assert.equal(interests[0].maxInvestors, 100);
   assert.equal(interests[0].maxBalancePerInvestor, '5000');
+  assert.equal(interests[0].hasImage, true);
+  assert.equal(interests[0].imageUrl, '/api/v1/investments/tokens/tok-1/image');
+  assert.equal(interests[0].imageStorageKey, undefined);
+  assert.equal(interests[0].imageMimeType, undefined);
 });
 
 // -------------------------------------------------------- submit interest

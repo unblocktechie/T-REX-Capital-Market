@@ -1,0 +1,2839 @@
+{
+  "generatedAt": "2026-10-28T06:28:14.411Z",
+  "latestDatabase": "trexCapitalMarket",
+  "comparedDatabase": "trexCapitalMarketMultichainTemp",
+  "tableCounts": {
+    "latest": 59,
+    "liveCopy": 51
+  },
+  "addedTables": {
+    "issuerapikey": {
+      "table": {
+        "TABLE_TYPE": "BASE TABLE",
+        "ENGINE": "InnoDB",
+        "TABLE_COLLATION": "utf8mb4_general_ci"
+      },
+      "columns": [
+        {
+          "COLUMN_NAME": "issuerApiKeyUid",
+          "ORDINAL_POSITION": 1,
+          "COLUMN_TYPE": "char(36)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "publicId",
+          "ORDINAL_POSITION": 2,
+          "COLUMN_TYPE": "char(24)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "userUid",
+          "ORDINAL_POSITION": 3,
+          "COLUMN_TYPE": "char(36)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "organizationUid",
+          "ORDINAL_POSITION": 4,
+          "COLUMN_TYPE": "char(36)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "keyName",
+          "ORDINAL_POSITION": 5,
+          "COLUMN_TYPE": "varchar(100)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "keyHash",
+          "ORDINAL_POSITION": 6,
+          "COLUMN_TYPE": "char(64)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "keyPrefix",
+          "ORDINAL_POSITION": 7,
+          "COLUMN_TYPE": "varchar(32)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "keyLastFour",
+          "ORDINAL_POSITION": 8,
+          "COLUMN_TYPE": "char(4)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "scopes",
+          "ORDINAL_POSITION": 9,
+          "COLUMN_TYPE": "longtext",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_bin",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "expiresAt",
+          "ORDINAL_POSITION": 10,
+          "COLUMN_TYPE": "datetime(3)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "lastUsedAt",
+          "ORDINAL_POSITION": 11,
+          "COLUMN_TYPE": "datetime(3)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "lastUsedIp",
+          "ORDINAL_POSITION": 12,
+          "COLUMN_TYPE": "varchar(64)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "revokedAt",
+          "ORDINAL_POSITION": 13,
+          "COLUMN_TYPE": "datetime(3)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "isActive",
+          "ORDINAL_POSITION": 14,
+          "COLUMN_TYPE": "tinyint(1)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "1",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "isDeleted",
+          "ORDINAL_POSITION": 15,
+          "COLUMN_TYPE": "tinyint(1)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "0",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "createdAt",
+          "ORDINAL_POSITION": 16,
+          "COLUMN_TYPE": "datetime(3)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "utc_timestamp(3)",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "updatedAt",
+          "ORDINAL_POSITION": 17,
+          "COLUMN_TYPE": "datetime(3)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "utc_timestamp(3)",
+          "EXTRA": "on update current_timestamp(3)",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        }
+      ],
+      "indexes": [
+        {
+          "INDEX_NAME": "fkIssuerApiKeyOrganization",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "organizationUid",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "idxIssuerApiKeyOwner",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "userUid",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "idxIssuerApiKeyOwner",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 2,
+          "COLUMN_NAME": "organizationUid",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "idxIssuerApiKeyOwner",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 3,
+          "COLUMN_NAME": "isActive",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "idxIssuerApiKeyOwner",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 4,
+          "COLUMN_NAME": "expiresAt",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "PRIMARY",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "issuerApiKeyUid",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "ukIssuerApiKeyHash",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "keyHash",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "ukIssuerApiKeyPublicId",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "publicId",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        }
+      ],
+      "constraints": [
+        {
+          "CONSTRAINT_NAME": "fkIssuerApiKeyOrganization",
+          "COLUMN_NAME": "organizationUid",
+          "ORDINAL_POSITION": 1,
+          "REFERENCED_TABLE_NAME": "organizationmaster",
+          "REFERENCED_COLUMN_NAME": "organizationUid"
+        },
+        {
+          "CONSTRAINT_NAME": "fkIssuerApiKeyUser",
+          "COLUMN_NAME": "userUid",
+          "ORDINAL_POSITION": 1,
+          "REFERENCED_TABLE_NAME": "usermaster",
+          "REFERENCED_COLUMN_NAME": "userUid"
+        },
+        {
+          "CONSTRAINT_NAME": "PRIMARY",
+          "COLUMN_NAME": "issuerApiKeyUid",
+          "ORDINAL_POSITION": 1,
+          "REFERENCED_TABLE_NAME": null,
+          "REFERENCED_COLUMN_NAME": null
+        },
+        {
+          "CONSTRAINT_NAME": "ukIssuerApiKeyHash",
+          "COLUMN_NAME": "keyHash",
+          "ORDINAL_POSITION": 1,
+          "REFERENCED_TABLE_NAME": null,
+          "REFERENCED_COLUMN_NAME": null
+        },
+        {
+          "CONSTRAINT_NAME": "ukIssuerApiKeyPublicId",
+          "COLUMN_NAME": "publicId",
+          "ORDINAL_POSITION": 1,
+          "REFERENCED_TABLE_NAME": null,
+          "REFERENCED_COLUMN_NAME": null
+        }
+      ],
+      "rules": [
+        {
+          "CONSTRAINT_NAME": "fkIssuerApiKeyOrganization",
+          "UPDATE_RULE": "RESTRICT",
+          "DELETE_RULE": "RESTRICT"
+        },
+        {
+          "CONSTRAINT_NAME": "fkIssuerApiKeyUser",
+          "UPDATE_RULE": "RESTRICT",
+          "DELETE_RULE": "RESTRICT"
+        }
+      ],
+      "checks": [
+        {
+          "CONSTRAINT_NAME": "scopes",
+          "CHECK_CLAUSE": "json_valid(`scopes`)"
+        }
+      ]
+    },
+    "issuerapikeyaudit": {
+      "table": {
+        "TABLE_TYPE": "BASE TABLE",
+        "ENGINE": "InnoDB",
+        "TABLE_COLLATION": "utf8mb4_general_ci"
+      },
+      "columns": [
+        {
+          "COLUMN_NAME": "issuerApiKeyAuditUid",
+          "ORDINAL_POSITION": 1,
+          "COLUMN_TYPE": "char(36)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "issuerApiKeyUid",
+          "ORDINAL_POSITION": 2,
+          "COLUMN_TYPE": "char(36)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "userUid",
+          "ORDINAL_POSITION": 3,
+          "COLUMN_TYPE": "char(36)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "action",
+          "ORDINAL_POSITION": 4,
+          "COLUMN_TYPE": "enum('CREATED','AUTHENTICATED','REVOKED','ROTATED','POLICY_UPDATED')",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "httpMethod",
+          "ORDINAL_POSITION": 5,
+          "COLUMN_TYPE": "varchar(10)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "apiPath",
+          "ORDINAL_POSITION": 6,
+          "COLUMN_TYPE": "varchar(255)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "ipAddress",
+          "ORDINAL_POSITION": 7,
+          "COLUMN_TYPE": "varchar(64)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "userAgent",
+          "ORDINAL_POSITION": 8,
+          "COLUMN_TYPE": "varchar(500)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "requestId",
+          "ORDINAL_POSITION": 9,
+          "COLUMN_TYPE": "varchar(100)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "details",
+          "ORDINAL_POSITION": 10,
+          "COLUMN_TYPE": "longtext",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_bin",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "createdAt",
+          "ORDINAL_POSITION": 11,
+          "COLUMN_TYPE": "datetime(3)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "utc_timestamp(3)",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        }
+      ],
+      "indexes": [
+        {
+          "INDEX_NAME": "idxIssuerApiKeyAuditKey",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "issuerApiKeyUid",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "idxIssuerApiKeyAuditKey",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 2,
+          "COLUMN_NAME": "createdAt",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "idxIssuerApiKeyAuditUser",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "userUid",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "idxIssuerApiKeyAuditUser",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 2,
+          "COLUMN_NAME": "createdAt",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "PRIMARY",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "issuerApiKeyAuditUid",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        }
+      ],
+      "constraints": [
+        {
+          "CONSTRAINT_NAME": "fkIssuerApiKeyAuditKey",
+          "COLUMN_NAME": "issuerApiKeyUid",
+          "ORDINAL_POSITION": 1,
+          "REFERENCED_TABLE_NAME": "issuerapikey",
+          "REFERENCED_COLUMN_NAME": "issuerApiKeyUid"
+        },
+        {
+          "CONSTRAINT_NAME": "fkIssuerApiKeyAuditUser",
+          "COLUMN_NAME": "userUid",
+          "ORDINAL_POSITION": 1,
+          "REFERENCED_TABLE_NAME": "usermaster",
+          "REFERENCED_COLUMN_NAME": "userUid"
+        },
+        {
+          "CONSTRAINT_NAME": "PRIMARY",
+          "COLUMN_NAME": "issuerApiKeyAuditUid",
+          "ORDINAL_POSITION": 1,
+          "REFERENCED_TABLE_NAME": null,
+          "REFERENCED_COLUMN_NAME": null
+        }
+      ],
+      "rules": [
+        {
+          "CONSTRAINT_NAME": "fkIssuerApiKeyAuditKey",
+          "UPDATE_RULE": "RESTRICT",
+          "DELETE_RULE": "RESTRICT"
+        },
+        {
+          "CONSTRAINT_NAME": "fkIssuerApiKeyAuditUser",
+          "UPDATE_RULE": "RESTRICT",
+          "DELETE_RULE": "RESTRICT"
+        }
+      ],
+      "checks": [
+        {
+          "CONSTRAINT_NAME": "details",
+          "CHECK_CLAUSE": "json_valid(`details`)"
+        }
+      ]
+    },
+    "issuerapikeypolicy": {
+      "table": {
+        "TABLE_TYPE": "BASE TABLE",
+        "ENGINE": "InnoDB",
+        "TABLE_COLLATION": "utf8mb4_general_ci"
+      },
+      "columns": [
+        {
+          "COLUMN_NAME": "issuerApiKeyUid",
+          "ORDINAL_POSITION": 1,
+          "COLUMN_TYPE": "char(36)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "threshold",
+          "ORDINAL_POSITION": 2,
+          "COLUMN_TYPE": "decimal(5,2)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "maxCumulative24hPercent",
+          "ORDINAL_POSITION": 3,
+          "COLUMN_TYPE": "decimal(5,2)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "cooldownSeconds",
+          "ORDINAL_POSITION": 4,
+          "COLUMN_TYPE": "int(10) unsigned",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "frequency",
+          "ORDINAL_POSITION": 5,
+          "COLUMN_TYPE": "enum('hourly','daily','weekly','monthly')",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "allowedDays",
+          "ORDINAL_POSITION": 6,
+          "COLUMN_TYPE": "longtext",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_bin",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "startTime",
+          "ORDINAL_POSITION": 7,
+          "COLUMN_TYPE": "char(5)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "endTime",
+          "ORDINAL_POSITION": 8,
+          "COLUMN_TYPE": "char(5)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "timezone",
+          "ORDINAL_POSITION": 9,
+          "COLUMN_TYPE": "varchar(100)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "'UTC'",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "allowedIps",
+          "ORDINAL_POSITION": 10,
+          "COLUMN_TYPE": "longtext",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_bin",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "createdAt",
+          "ORDINAL_POSITION": 11,
+          "COLUMN_TYPE": "datetime(3)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "utc_timestamp(3)",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "updatedAt",
+          "ORDINAL_POSITION": 12,
+          "COLUMN_TYPE": "datetime(3)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "utc_timestamp(3)",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        }
+      ],
+      "indexes": [
+        {
+          "INDEX_NAME": "PRIMARY",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "issuerApiKeyUid",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        }
+      ],
+      "constraints": [
+        {
+          "CONSTRAINT_NAME": "fkApiKeyPolicyKey",
+          "COLUMN_NAME": "issuerApiKeyUid",
+          "ORDINAL_POSITION": 1,
+          "REFERENCED_TABLE_NAME": "issuerapikey",
+          "REFERENCED_COLUMN_NAME": "issuerApiKeyUid"
+        },
+        {
+          "CONSTRAINT_NAME": "PRIMARY",
+          "COLUMN_NAME": "issuerApiKeyUid",
+          "ORDINAL_POSITION": 1,
+          "REFERENCED_TABLE_NAME": null,
+          "REFERENCED_COLUMN_NAME": null
+        }
+      ],
+      "rules": [
+        {
+          "CONSTRAINT_NAME": "fkApiKeyPolicyKey",
+          "UPDATE_RULE": "RESTRICT",
+          "DELETE_RULE": "RESTRICT"
+        }
+      ],
+      "checks": [
+        {
+          "CONSTRAINT_NAME": "allowedDays",
+          "CHECK_CLAUSE": "json_valid(`allowedDays`)"
+        },
+        {
+          "CONSTRAINT_NAME": "allowedIps",
+          "CHECK_CLAUSE": "json_valid(`allowedIps`)"
+        }
+      ]
+    },
+    "organizationservicewallet": {
+      "table": {
+        "TABLE_TYPE": "BASE TABLE",
+        "ENGINE": "InnoDB",
+        "TABLE_COLLATION": "utf8mb4_general_ci"
+      },
+      "columns": [
+        {
+          "COLUMN_NAME": "organizationServiceWalletUid",
+          "ORDINAL_POSITION": 1,
+          "COLUMN_TYPE": "char(36)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "organizationUid",
+          "ORDINAL_POSITION": 2,
+          "COLUMN_TYPE": "char(36)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "chainUid",
+          "ORDINAL_POSITION": 3,
+          "COLUMN_TYPE": "char(36)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "chainId",
+          "ORDINAL_POSITION": 4,
+          "COLUMN_TYPE": "bigint(20) unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "controllerAddress",
+          "ORDINAL_POSITION": 5,
+          "COLUMN_TYPE": "varchar(42)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "mainWalletAddress",
+          "ORDINAL_POSITION": 6,
+          "COLUMN_TYPE": "varchar(42)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "serviceWalletAddress",
+          "ORDINAL_POSITION": 7,
+          "COLUMN_TYPE": "varchar(42)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "sourceTxHash",
+          "ORDINAL_POSITION": 8,
+          "COLUMN_TYPE": "varchar(66)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "sourceBlockNumber",
+          "ORDINAL_POSITION": 9,
+          "COLUMN_TYPE": "bigint(20) unsigned",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "sourceBlockHash",
+          "ORDINAL_POSITION": 10,
+          "COLUMN_TYPE": "varchar(66)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "sourceLogIndex",
+          "ORDINAL_POSITION": 11,
+          "COLUMN_TYPE": "int(10) unsigned",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "verifiedAt",
+          "ORDINAL_POSITION": 12,
+          "COLUMN_TYPE": "datetime(3)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "isActive",
+          "ORDINAL_POSITION": 13,
+          "COLUMN_TYPE": "tinyint(1)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "1",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "isDeleted",
+          "ORDINAL_POSITION": 14,
+          "COLUMN_TYPE": "tinyint(1)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "0",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "createdAt",
+          "ORDINAL_POSITION": 15,
+          "COLUMN_TYPE": "datetime(3)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "utc_timestamp(3)",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "updatedAt",
+          "ORDINAL_POSITION": 16,
+          "COLUMN_TYPE": "datetime(3)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "utc_timestamp(3)",
+          "EXTRA": "on update current_timestamp(3)",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        }
+      ],
+      "indexes": [
+        {
+          "INDEX_NAME": "fkOrganizationServiceWalletChain",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "chainUid",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "idxOrganizationServiceWalletLookup",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "chainId",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "idxOrganizationServiceWalletLookup",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 2,
+          "COLUMN_NAME": "mainWalletAddress",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "idxOrganizationServiceWalletLookup",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 3,
+          "COLUMN_NAME": "isDeleted",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "PRIMARY",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "organizationServiceWalletUid",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "ukOrganizationServiceWalletChain",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "organizationUid",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "ukOrganizationServiceWalletChain",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 2,
+          "COLUMN_NAME": "chainUid",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "ukOrganizationServiceWalletEvent",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "chainId",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "ukOrganizationServiceWalletEvent",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 2,
+          "COLUMN_NAME": "sourceTxHash",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "ukOrganizationServiceWalletEvent",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 3,
+          "COLUMN_NAME": "sourceLogIndex",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        }
+      ],
+      "constraints": [
+        {
+          "CONSTRAINT_NAME": "fkOrganizationServiceWalletChain",
+          "COLUMN_NAME": "chainUid",
+          "ORDINAL_POSITION": 1,
+          "REFERENCED_TABLE_NAME": "chainmaster",
+          "REFERENCED_COLUMN_NAME": "chainUid"
+        },
+        {
+          "CONSTRAINT_NAME": "fkOrganizationServiceWalletOrganization",
+          "COLUMN_NAME": "organizationUid",
+          "ORDINAL_POSITION": 1,
+          "REFERENCED_TABLE_NAME": "organizationmaster",
+          "REFERENCED_COLUMN_NAME": "organizationUid"
+        },
+        {
+          "CONSTRAINT_NAME": "PRIMARY",
+          "COLUMN_NAME": "organizationServiceWalletUid",
+          "ORDINAL_POSITION": 1,
+          "REFERENCED_TABLE_NAME": null,
+          "REFERENCED_COLUMN_NAME": null
+        },
+        {
+          "CONSTRAINT_NAME": "ukOrganizationServiceWalletChain",
+          "COLUMN_NAME": "organizationUid",
+          "ORDINAL_POSITION": 1,
+          "REFERENCED_TABLE_NAME": null,
+          "REFERENCED_COLUMN_NAME": null
+        },
+        {
+          "CONSTRAINT_NAME": "ukOrganizationServiceWalletChain",
+          "COLUMN_NAME": "chainUid",
+          "ORDINAL_POSITION": 2,
+          "REFERENCED_TABLE_NAME": null,
+          "REFERENCED_COLUMN_NAME": null
+        },
+        {
+          "CONSTRAINT_NAME": "ukOrganizationServiceWalletEvent",
+          "COLUMN_NAME": "chainId",
+          "ORDINAL_POSITION": 1,
+          "REFERENCED_TABLE_NAME": null,
+          "REFERENCED_COLUMN_NAME": null
+        },
+        {
+          "CONSTRAINT_NAME": "ukOrganizationServiceWalletEvent",
+          "COLUMN_NAME": "sourceTxHash",
+          "ORDINAL_POSITION": 2,
+          "REFERENCED_TABLE_NAME": null,
+          "REFERENCED_COLUMN_NAME": null
+        },
+        {
+          "CONSTRAINT_NAME": "ukOrganizationServiceWalletEvent",
+          "COLUMN_NAME": "sourceLogIndex",
+          "ORDINAL_POSITION": 3,
+          "REFERENCED_TABLE_NAME": null,
+          "REFERENCED_COLUMN_NAME": null
+        }
+      ],
+      "rules": [
+        {
+          "CONSTRAINT_NAME": "fkOrganizationServiceWalletChain",
+          "UPDATE_RULE": "RESTRICT",
+          "DELETE_RULE": "RESTRICT"
+        },
+        {
+          "CONSTRAINT_NAME": "fkOrganizationServiceWalletOrganization",
+          "UPDATE_RULE": "RESTRICT",
+          "DELETE_RULE": "RESTRICT"
+        }
+      ],
+      "checks": []
+    },
+    "tokenpriceapirequest": {
+      "table": {
+        "TABLE_TYPE": "BASE TABLE",
+        "ENGINE": "InnoDB",
+        "TABLE_COLLATION": "utf8mb4_general_ci"
+      },
+      "columns": [
+        {
+          "COLUMN_NAME": "requestUid",
+          "ORDINAL_POSITION": 1,
+          "COLUMN_TYPE": "char(36)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "userUid",
+          "ORDINAL_POSITION": 2,
+          "COLUMN_TYPE": "char(36)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "createdAt",
+          "ORDINAL_POSITION": 3,
+          "COLUMN_TYPE": "datetime(3)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "utc_timestamp(3)",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        }
+      ],
+      "indexes": [
+        {
+          "INDEX_NAME": "idxTokenPriceApiRequestUserTime",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "userUid",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "idxTokenPriceApiRequestUserTime",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 2,
+          "COLUMN_NAME": "createdAt",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "PRIMARY",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "requestUid",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        }
+      ],
+      "constraints": [
+        {
+          "CONSTRAINT_NAME": "fkTokenPriceApiRequestUser",
+          "COLUMN_NAME": "userUid",
+          "ORDINAL_POSITION": 1,
+          "REFERENCED_TABLE_NAME": "usermaster",
+          "REFERENCED_COLUMN_NAME": "userUid"
+        },
+        {
+          "CONSTRAINT_NAME": "PRIMARY",
+          "COLUMN_NAME": "requestUid",
+          "ORDINAL_POSITION": 1,
+          "REFERENCED_TABLE_NAME": null,
+          "REFERENCED_COLUMN_NAME": null
+        }
+      ],
+      "rules": [
+        {
+          "CONSTRAINT_NAME": "fkTokenPriceApiRequestUser",
+          "UPDATE_RULE": "RESTRICT",
+          "DELETE_RULE": "RESTRICT"
+        }
+      ],
+      "checks": []
+    },
+    "tokenpriceupdate": {
+      "table": {
+        "TABLE_TYPE": "BASE TABLE",
+        "ENGINE": "InnoDB",
+        "TABLE_COLLATION": "utf8mb4_general_ci"
+      },
+      "columns": [
+        {
+          "COLUMN_NAME": "priceUpdateUid",
+          "ORDINAL_POSITION": 1,
+          "COLUMN_TYPE": "char(36)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "chainUid",
+          "ORDINAL_POSITION": 2,
+          "COLUMN_TYPE": "char(36)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "chainId",
+          "ORDINAL_POSITION": 3,
+          "COLUMN_TYPE": "bigint(20) unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "tokenUid",
+          "ORDINAL_POSITION": 4,
+          "COLUMN_TYPE": "char(36)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "organizationUid",
+          "ORDINAL_POSITION": 5,
+          "COLUMN_TYPE": "char(36)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "issuerUserUid",
+          "ORDINAL_POSITION": 6,
+          "COLUMN_TYPE": "char(36)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "controllerAddress",
+          "ORDINAL_POSITION": 7,
+          "COLUMN_TYPE": "varchar(42)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "tokenAddress",
+          "ORDINAL_POSITION": 8,
+          "COLUMN_TYPE": "varchar(42)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "issuerWalletAddress",
+          "ORDINAL_POSITION": 9,
+          "COLUMN_TYPE": "varchar(42)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "serviceWalletAddress",
+          "ORDINAL_POSITION": 10,
+          "COLUMN_TYPE": "varchar(42)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "submissionMode",
+          "ORDINAL_POSITION": 11,
+          "COLUMN_TYPE": "enum('RELAYED','DIRECT','INDEXED','LEGACY')",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "'RELAYED'",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "priceDecimals",
+          "ORDINAL_POSITION": 12,
+          "COLUMN_TYPE": "tinyint(3) unsigned",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "6",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "oldPriceRaw",
+          "ORDINAL_POSITION": 13,
+          "COLUMN_TYPE": "varchar(78)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "newPriceRaw",
+          "ORDINAL_POSITION": 14,
+          "COLUMN_TYPE": "varchar(78)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "newPriceFormatted",
+          "ORDINAL_POSITION": 15,
+          "COLUMN_TYPE": "decimal(65,18)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "signerNonce",
+          "ORDINAL_POSITION": 16,
+          "COLUMN_TYPE": "varchar(78)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "signatureDeadline",
+          "ORDINAL_POSITION": 17,
+          "COLUMN_TYPE": "bigint(20) unsigned",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "signatureV",
+          "ORDINAL_POSITION": 18,
+          "COLUMN_TYPE": "tinyint(3) unsigned",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "signatureR",
+          "ORDINAL_POSITION": 19,
+          "COLUMN_TYPE": "varchar(66)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "signatureS",
+          "ORDINAL_POSITION": 20,
+          "COLUMN_TYPE": "varchar(66)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "status",
+          "ORDINAL_POSITION": 21,
+          "COLUMN_TYPE": "enum('PENDING','SUBMITTED','CONFIRMED','FAILED','ORPHANED','APPLIED','CANCELLED','EXPIRED')",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "'PENDING'",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "transactionHash",
+          "ORDINAL_POSITION": 22,
+          "COLUMN_TYPE": "varchar(66)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "blockNumber",
+          "ORDINAL_POSITION": 23,
+          "COLUMN_TYPE": "bigint(20) unsigned",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "blockHash",
+          "ORDINAL_POSITION": 24,
+          "COLUMN_TYPE": "varchar(66)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "transactionIndex",
+          "ORDINAL_POSITION": 25,
+          "COLUMN_TYPE": "int(10) unsigned",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "logIndex",
+          "ORDINAL_POSITION": 26,
+          "COLUMN_TYPE": "int(10) unsigned",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "gasUsed",
+          "ORDINAL_POSITION": 27,
+          "COLUMN_TYPE": "varchar(78)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "effectiveGasPrice",
+          "ORDINAL_POSITION": 28,
+          "COLUMN_TYPE": "varchar(78)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "submittedAt",
+          "ORDINAL_POSITION": 29,
+          "COLUMN_TYPE": "datetime(3)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "confirmedAt",
+          "ORDINAL_POSITION": 30,
+          "COLUMN_TYPE": "datetime(3)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "errorCode",
+          "ORDINAL_POSITION": 31,
+          "COLUMN_TYPE": "varchar(100)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "errorMessage",
+          "ORDINAL_POSITION": 32,
+          "COLUMN_TYPE": "varchar(2000)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "isCanonical",
+          "ORDINAL_POSITION": 33,
+          "COLUMN_TYPE": "tinyint(1)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "1",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "isActive",
+          "ORDINAL_POSITION": 34,
+          "COLUMN_TYPE": "tinyint(1)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "1",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "isDeleted",
+          "ORDINAL_POSITION": 35,
+          "COLUMN_TYPE": "tinyint(1)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "0",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "createdAt",
+          "ORDINAL_POSITION": 36,
+          "COLUMN_TYPE": "datetime(3)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "utc_timestamp(3)",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "updatedAt",
+          "ORDINAL_POSITION": 37,
+          "COLUMN_TYPE": "datetime(3)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "utc_timestamp(3)",
+          "EXTRA": "on update current_timestamp(3)",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "oldPriceFormatted",
+          "ORDINAL_POSITION": 38,
+          "COLUMN_TYPE": "decimal(65,18)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "isLegacyUpdate",
+          "ORDINAL_POSITION": 39,
+          "COLUMN_TYPE": "tinyint(1)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "STORED GENERATED",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": "`submissionMode` = 'LEGACY'"
+        },
+        {
+          "COLUMN_NAME": "isOnchainUpdate",
+          "ORDINAL_POSITION": 40,
+          "COLUMN_TYPE": "tinyint(1)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "STORED GENERATED",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": "`submissionMode` <> 'LEGACY'"
+        },
+        {
+          "COLUMN_NAME": "directTransactionNonce",
+          "ORDINAL_POSITION": 41,
+          "COLUMN_TYPE": "bigint(20) unsigned",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "preparedAtBlock",
+          "ORDINAL_POSITION": 42,
+          "COLUMN_TYPE": "bigint(20) unsigned",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "updateType",
+          "ORDINAL_POSITION": 43,
+          "COLUMN_TYPE": "varchar(20)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "STORED GENERATED",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": "case when `submissionMode` = 'RELAYED' or `serviceWalletAddress` is not null then 'Automated (bot)' else 'Manual' end"
+        }
+      ],
+      "indexes": [
+        {
+          "INDEX_NAME": "fkTokenPriceUpdateChain",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "chainUid",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "fkTokenPriceUpdateOrganization",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "organizationUid",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "idxTokenPriceUpdateRateLimit",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "chainId",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "idxTokenPriceUpdateRateLimit",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 2,
+          "COLUMN_NAME": "serviceWalletAddress",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "idxTokenPriceUpdateRateLimit",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 3,
+          "COLUMN_NAME": "createdAt",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "idxTokenPriceUpdateToken",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "tokenUid",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "idxTokenPriceUpdateToken",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 2,
+          "COLUMN_NAME": "status",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "idxTokenPriceUpdateToken",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 3,
+          "COLUMN_NAME": "createdAt",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "PRIMARY",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "priceUpdateUid",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "ukTokenPriceUpdateEvent",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "chainId",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "ukTokenPriceUpdateEvent",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 2,
+          "COLUMN_NAME": "transactionHash",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "ukTokenPriceUpdateEvent",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 3,
+          "COLUMN_NAME": "logIndex",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "ukTokenPriceUpdateSignerNonce",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "chainId",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "ukTokenPriceUpdateSignerNonce",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 2,
+          "COLUMN_NAME": "serviceWalletAddress",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "ukTokenPriceUpdateSignerNonce",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 3,
+          "COLUMN_NAME": "signerNonce",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "ukTokenPriceUpdateTransaction",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "chainId",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "ukTokenPriceUpdateTransaction",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 2,
+          "COLUMN_NAME": "transactionHash",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        }
+      ],
+      "constraints": [
+        {
+          "CONSTRAINT_NAME": "fkTokenPriceUpdateChain",
+          "COLUMN_NAME": "chainUid",
+          "ORDINAL_POSITION": 1,
+          "REFERENCED_TABLE_NAME": "chainmaster",
+          "REFERENCED_COLUMN_NAME": "chainUid"
+        },
+        {
+          "CONSTRAINT_NAME": "fkTokenPriceUpdateOrganization",
+          "COLUMN_NAME": "organizationUid",
+          "ORDINAL_POSITION": 1,
+          "REFERENCED_TABLE_NAME": "organizationmaster",
+          "REFERENCED_COLUMN_NAME": "organizationUid"
+        },
+        {
+          "CONSTRAINT_NAME": "fkTokenPriceUpdateToken",
+          "COLUMN_NAME": "tokenUid",
+          "ORDINAL_POSITION": 1,
+          "REFERENCED_TABLE_NAME": "tokenmaster",
+          "REFERENCED_COLUMN_NAME": "tokenUid"
+        },
+        {
+          "CONSTRAINT_NAME": "PRIMARY",
+          "COLUMN_NAME": "priceUpdateUid",
+          "ORDINAL_POSITION": 1,
+          "REFERENCED_TABLE_NAME": null,
+          "REFERENCED_COLUMN_NAME": null
+        },
+        {
+          "CONSTRAINT_NAME": "ukTokenPriceUpdateEvent",
+          "COLUMN_NAME": "chainId",
+          "ORDINAL_POSITION": 1,
+          "REFERENCED_TABLE_NAME": null,
+          "REFERENCED_COLUMN_NAME": null
+        },
+        {
+          "CONSTRAINT_NAME": "ukTokenPriceUpdateEvent",
+          "COLUMN_NAME": "transactionHash",
+          "ORDINAL_POSITION": 2,
+          "REFERENCED_TABLE_NAME": null,
+          "REFERENCED_COLUMN_NAME": null
+        },
+        {
+          "CONSTRAINT_NAME": "ukTokenPriceUpdateEvent",
+          "COLUMN_NAME": "logIndex",
+          "ORDINAL_POSITION": 3,
+          "REFERENCED_TABLE_NAME": null,
+          "REFERENCED_COLUMN_NAME": null
+        },
+        {
+          "CONSTRAINT_NAME": "ukTokenPriceUpdateSignerNonce",
+          "COLUMN_NAME": "chainId",
+          "ORDINAL_POSITION": 1,
+          "REFERENCED_TABLE_NAME": null,
+          "REFERENCED_COLUMN_NAME": null
+        },
+        {
+          "CONSTRAINT_NAME": "ukTokenPriceUpdateSignerNonce",
+          "COLUMN_NAME": "serviceWalletAddress",
+          "ORDINAL_POSITION": 2,
+          "REFERENCED_TABLE_NAME": null,
+          "REFERENCED_COLUMN_NAME": null
+        },
+        {
+          "CONSTRAINT_NAME": "ukTokenPriceUpdateSignerNonce",
+          "COLUMN_NAME": "signerNonce",
+          "ORDINAL_POSITION": 3,
+          "REFERENCED_TABLE_NAME": null,
+          "REFERENCED_COLUMN_NAME": null
+        },
+        {
+          "CONSTRAINT_NAME": "ukTokenPriceUpdateTransaction",
+          "COLUMN_NAME": "chainId",
+          "ORDINAL_POSITION": 1,
+          "REFERENCED_TABLE_NAME": null,
+          "REFERENCED_COLUMN_NAME": null
+        },
+        {
+          "CONSTRAINT_NAME": "ukTokenPriceUpdateTransaction",
+          "COLUMN_NAME": "transactionHash",
+          "ORDINAL_POSITION": 2,
+          "REFERENCED_TABLE_NAME": null,
+          "REFERENCED_COLUMN_NAME": null
+        }
+      ],
+      "rules": [
+        {
+          "CONSTRAINT_NAME": "fkTokenPriceUpdateChain",
+          "UPDATE_RULE": "RESTRICT",
+          "DELETE_RULE": "RESTRICT"
+        },
+        {
+          "CONSTRAINT_NAME": "fkTokenPriceUpdateOrganization",
+          "UPDATE_RULE": "RESTRICT",
+          "DELETE_RULE": "RESTRICT"
+        },
+        {
+          "CONSTRAINT_NAME": "fkTokenPriceUpdateToken",
+          "UPDATE_RULE": "RESTRICT",
+          "DELETE_RULE": "RESTRICT"
+        }
+      ],
+      "checks": []
+    },
+    "tokenservicewallet": {
+      "table": {
+        "TABLE_TYPE": "BASE TABLE",
+        "ENGINE": "InnoDB",
+        "TABLE_COLLATION": "utf8mb4_general_ci"
+      },
+      "columns": [
+        {
+          "COLUMN_NAME": "tokenServiceWalletUid",
+          "ORDINAL_POSITION": 1,
+          "COLUMN_TYPE": "char(36)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "tokenUid",
+          "ORDINAL_POSITION": 2,
+          "COLUMN_TYPE": "char(36)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "tokenAddress",
+          "ORDINAL_POSITION": 3,
+          "COLUMN_TYPE": "varchar(42)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "organizationUid",
+          "ORDINAL_POSITION": 4,
+          "COLUMN_TYPE": "char(36)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "chainUid",
+          "ORDINAL_POSITION": 5,
+          "COLUMN_TYPE": "char(36)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "chainId",
+          "ORDINAL_POSITION": 6,
+          "COLUMN_TYPE": "bigint(20) unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "controllerAddress",
+          "ORDINAL_POSITION": 7,
+          "COLUMN_TYPE": "varchar(42)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "mainWalletAddress",
+          "ORDINAL_POSITION": 8,
+          "COLUMN_TYPE": "varchar(42)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "serviceWalletAddress",
+          "ORDINAL_POSITION": 9,
+          "COLUMN_TYPE": "varchar(42)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "sourceTxHash",
+          "ORDINAL_POSITION": 10,
+          "COLUMN_TYPE": "varchar(66)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "sourceBlockNumber",
+          "ORDINAL_POSITION": 11,
+          "COLUMN_TYPE": "bigint(20) unsigned",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "sourceBlockHash",
+          "ORDINAL_POSITION": 12,
+          "COLUMN_TYPE": "varchar(66)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "sourceLogIndex",
+          "ORDINAL_POSITION": 13,
+          "COLUMN_TYPE": "int(10) unsigned",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "verifiedAt",
+          "ORDINAL_POSITION": 14,
+          "COLUMN_TYPE": "datetime(3)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "isActive",
+          "ORDINAL_POSITION": 15,
+          "COLUMN_TYPE": "tinyint(1)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "1",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "isDeleted",
+          "ORDINAL_POSITION": 16,
+          "COLUMN_TYPE": "tinyint(1)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "0",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "createdAt",
+          "ORDINAL_POSITION": 17,
+          "COLUMN_TYPE": "datetime(3)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "utc_timestamp(3)",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "updatedAt",
+          "ORDINAL_POSITION": 18,
+          "COLUMN_TYPE": "datetime(3)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "utc_timestamp(3)",
+          "EXTRA": "on update current_timestamp(3)",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        }
+      ],
+      "indexes": [
+        {
+          "INDEX_NAME": "chainUid",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "chainUid",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "organizationUid",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "organizationUid",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "PRIMARY",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "tokenServiceWalletUid",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "ukTokenServiceWallet",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "tokenUid",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "ukTokenServiceWallet",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 2,
+          "COLUMN_NAME": "chainUid",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "ukTokenServiceWalletEvent",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "chainId",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "ukTokenServiceWalletEvent",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 2,
+          "COLUMN_NAME": "sourceTxHash",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "ukTokenServiceWalletEvent",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 3,
+          "COLUMN_NAME": "sourceLogIndex",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        }
+      ],
+      "constraints": [
+        {
+          "CONSTRAINT_NAME": "PRIMARY",
+          "COLUMN_NAME": "tokenServiceWalletUid",
+          "ORDINAL_POSITION": 1,
+          "REFERENCED_TABLE_NAME": null,
+          "REFERENCED_COLUMN_NAME": null
+        },
+        {
+          "CONSTRAINT_NAME": "tokenservicewallet_ibfk_1",
+          "COLUMN_NAME": "tokenUid",
+          "ORDINAL_POSITION": 1,
+          "REFERENCED_TABLE_NAME": "tokenmaster",
+          "REFERENCED_COLUMN_NAME": "tokenUid"
+        },
+        {
+          "CONSTRAINT_NAME": "tokenservicewallet_ibfk_2",
+          "COLUMN_NAME": "organizationUid",
+          "ORDINAL_POSITION": 1,
+          "REFERENCED_TABLE_NAME": "organizationmaster",
+          "REFERENCED_COLUMN_NAME": "organizationUid"
+        },
+        {
+          "CONSTRAINT_NAME": "tokenservicewallet_ibfk_3",
+          "COLUMN_NAME": "chainUid",
+          "ORDINAL_POSITION": 1,
+          "REFERENCED_TABLE_NAME": "chainmaster",
+          "REFERENCED_COLUMN_NAME": "chainUid"
+        },
+        {
+          "CONSTRAINT_NAME": "ukTokenServiceWallet",
+          "COLUMN_NAME": "tokenUid",
+          "ORDINAL_POSITION": 1,
+          "REFERENCED_TABLE_NAME": null,
+          "REFERENCED_COLUMN_NAME": null
+        },
+        {
+          "CONSTRAINT_NAME": "ukTokenServiceWallet",
+          "COLUMN_NAME": "chainUid",
+          "ORDINAL_POSITION": 2,
+          "REFERENCED_TABLE_NAME": null,
+          "REFERENCED_COLUMN_NAME": null
+        },
+        {
+          "CONSTRAINT_NAME": "ukTokenServiceWalletEvent",
+          "COLUMN_NAME": "chainId",
+          "ORDINAL_POSITION": 1,
+          "REFERENCED_TABLE_NAME": null,
+          "REFERENCED_COLUMN_NAME": null
+        },
+        {
+          "CONSTRAINT_NAME": "ukTokenServiceWalletEvent",
+          "COLUMN_NAME": "sourceTxHash",
+          "ORDINAL_POSITION": 2,
+          "REFERENCED_TABLE_NAME": null,
+          "REFERENCED_COLUMN_NAME": null
+        },
+        {
+          "CONSTRAINT_NAME": "ukTokenServiceWalletEvent",
+          "COLUMN_NAME": "sourceLogIndex",
+          "ORDINAL_POSITION": 3,
+          "REFERENCED_TABLE_NAME": null,
+          "REFERENCED_COLUMN_NAME": null
+        }
+      ],
+      "rules": [
+        {
+          "CONSTRAINT_NAME": "tokenservicewallet_ibfk_1",
+          "UPDATE_RULE": "RESTRICT",
+          "DELETE_RULE": "RESTRICT"
+        },
+        {
+          "CONSTRAINT_NAME": "tokenservicewallet_ibfk_2",
+          "UPDATE_RULE": "RESTRICT",
+          "DELETE_RULE": "RESTRICT"
+        },
+        {
+          "CONSTRAINT_NAME": "tokenservicewallet_ibfk_3",
+          "UPDATE_RULE": "RESTRICT",
+          "DELETE_RULE": "RESTRICT"
+        }
+      ],
+      "checks": []
+    },
+    "verificationteamnotification": {
+      "table": {
+        "TABLE_TYPE": "BASE TABLE",
+        "ENGINE": "InnoDB",
+        "TABLE_COLLATION": "utf8mb4_general_ci"
+      },
+      "columns": [
+        {
+          "COLUMN_NAME": "notificationUid",
+          "ORDINAL_POSITION": 1,
+          "COLUMN_TYPE": "char(36)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "userUid",
+          "ORDINAL_POSITION": 2,
+          "COLUMN_TYPE": "char(36)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "fullName",
+          "ORDINAL_POSITION": 3,
+          "COLUMN_TYPE": "varchar(255)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "email",
+          "ORDINAL_POSITION": 4,
+          "COLUMN_TYPE": "varchar(255)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "roleName",
+          "ORDINAL_POSITION": 5,
+          "COLUMN_TYPE": "varchar(40)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "status",
+          "ORDINAL_POSITION": 6,
+          "COLUMN_TYPE": "enum('PENDING','SENDING','SENT')",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "'PENDING'",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "attempts",
+          "ORDINAL_POSITION": 7,
+          "COLUMN_TYPE": "int(10) unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "0",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "leaseToken",
+          "ORDINAL_POSITION": 8,
+          "COLUMN_TYPE": "char(36)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "leaseUntil",
+          "ORDINAL_POSITION": 9,
+          "COLUMN_TYPE": "datetime(3)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "nextAttemptAt",
+          "ORDINAL_POSITION": 10,
+          "COLUMN_TYPE": "datetime(3)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "lastError",
+          "ORDINAL_POSITION": 11,
+          "COLUMN_TYPE": "varchar(100)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": "utf8mb4",
+          "COLLATION_NAME": "utf8mb4_general_ci",
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "sentAt",
+          "ORDINAL_POSITION": 12,
+          "COLUMN_TYPE": "datetime(3)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": "NULL",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        },
+        {
+          "COLUMN_NAME": "createdAt",
+          "ORDINAL_POSITION": 13,
+          "COLUMN_TYPE": "datetime(3)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "utc_timestamp(3)",
+          "EXTRA": "",
+          "CHARACTER_SET_NAME": null,
+          "COLLATION_NAME": null,
+          "GENERATION_EXPRESSION": null
+        }
+      ],
+      "indexes": [
+        {
+          "INDEX_NAME": "idxVerificationTeamDelivery",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "status",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "idxVerificationTeamDelivery",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 2,
+          "COLUMN_NAME": "nextAttemptAt",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "idxVerificationTeamDelivery",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 3,
+          "COLUMN_NAME": "leaseUntil",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "PRIMARY",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "notificationUid",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        },
+        {
+          "INDEX_NAME": "ukVerificationTeamUser",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "userUid",
+          "SUB_PART": null,
+          "INDEX_TYPE": "BTREE",
+          "COLLATION": "A"
+        }
+      ],
+      "constraints": [
+        {
+          "CONSTRAINT_NAME": "fkVerificationTeamUser",
+          "COLUMN_NAME": "userUid",
+          "ORDINAL_POSITION": 1,
+          "REFERENCED_TABLE_NAME": "usermaster",
+          "REFERENCED_COLUMN_NAME": "userUid"
+        },
+        {
+          "CONSTRAINT_NAME": "PRIMARY",
+          "COLUMN_NAME": "notificationUid",
+          "ORDINAL_POSITION": 1,
+          "REFERENCED_TABLE_NAME": null,
+          "REFERENCED_COLUMN_NAME": null
+        },
+        {
+          "CONSTRAINT_NAME": "ukVerificationTeamUser",
+          "COLUMN_NAME": "userUid",
+          "ORDINAL_POSITION": 1,
+          "REFERENCED_TABLE_NAME": null,
+          "REFERENCED_COLUMN_NAME": null
+        }
+      ],
+      "rules": [
+        {
+          "CONSTRAINT_NAME": "fkVerificationTeamUser",
+          "UPDATE_RULE": "RESTRICT",
+          "DELETE_RULE": "RESTRICT"
+        }
+      ],
+      "checks": []
+    }
+  },
+  "onlyInLiveCopy": [],
+  "changedTables": [
+    {
+      "table": "chainmaster",
+      "checks": {
+        "liveCopy": [],
+        "latest": [
+          {
+            "CONSTRAINT_NAME": "delegationManagerAddresses",
+            "CHECK_CLAUSE": "json_valid(`delegationManagerAddresses`)"
+          },
+          {
+            "CONSTRAINT_NAME": "fallbackRpcUrls",
+            "CHECK_CLAUSE": "json_valid(`fallbackRpcUrls`)"
+          }
+        ]
+      }
+    },
+    {
+      "table": "chainmasteraudit",
+      "checks": {
+        "liveCopy": [],
+        "latest": [
+          {
+            "CONSTRAINT_NAME": "afterData",
+            "CHECK_CLAUSE": "json_valid(`afterData`)"
+          },
+          {
+            "CONSTRAINT_NAME": "beforeData",
+            "CHECK_CLAUSE": "json_valid(`beforeData`)"
+          },
+          {
+            "CONSTRAINT_NAME": "changedFields",
+            "CHECK_CLAUSE": "json_valid(`changedFields`)"
+          }
+        ]
+      }
+    },
+    {
+      "table": "investormaster",
+      "columns": {
+        "added": [],
+        "removed": [],
+        "changed": [
+          {
+            "name": "registeredWalletAddress",
+            "fields": {
+              "GENERATION_EXPRESSION": {
+                "liveCopy": "case when `status` = _utf8mb4'submitted' and `walletAddress` is not null and trim(`walletAddress`) <> _utf8mb4'' then lcase(trim(`walletAddress`)) else NULL end",
+                "latest": "case when `status` = 'submitted' and `walletAddress` is not null and trim(`walletAddress`) <> '' then lcase(trim(`walletAddress`)) else NULL end"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "table": "organizationmaster",
+      "columns": {
+        "added": [
+          {
+            "COLUMN_NAME": "serviceWalletAddress",
+            "ORDINAL_POSITION": 18,
+            "COLUMN_TYPE": "varchar(42)",
+            "IS_NULLABLE": "YES",
+            "COLUMN_DEFAULT": "NULL",
+            "EXTRA": "",
+            "CHARACTER_SET_NAME": "utf8mb4",
+            "COLLATION_NAME": "utf8mb4_general_ci",
+            "GENERATION_EXPRESSION": null
+          }
+        ],
+        "removed": [],
+        "changed": [
+          {
+            "name": "onboardingChainUid",
+            "fields": {
+              "ORDINAL_POSITION": {
+                "liveCopy": 18,
+                "latest": 19
+              }
+            }
+          },
+          {
+            "name": "registeredWalletAddress",
+            "fields": {
+              "ORDINAL_POSITION": {
+                "liveCopy": 19,
+                "latest": 20
+              },
+              "GENERATION_EXPRESSION": {
+                "liveCopy": "case when `walletAddress` is not null and trim(`walletAddress`) <> _utf8mb4'' and `isDeleted` = 0 then lcase(trim(`walletAddress`)) else NULL end",
+                "latest": "case when `walletAddress` is not null and trim(`walletAddress`) <> '' and `isDeleted` = 0 then lcase(trim(`walletAddress`)) else NULL end"
+              }
+            }
+          },
+          {
+            "name": "contractAddress",
+            "fields": {
+              "ORDINAL_POSITION": {
+                "liveCopy": 20,
+                "latest": 21
+              }
+            }
+          },
+          {
+            "name": "contractTxnHash",
+            "fields": {
+              "ORDINAL_POSITION": {
+                "liveCopy": 21,
+                "latest": 22
+              }
+            }
+          },
+          {
+            "name": "contractTxnMessage",
+            "fields": {
+              "ORDINAL_POSITION": {
+                "liveCopy": 22,
+                "latest": 23
+              }
+            }
+          },
+          {
+            "name": "currentStep",
+            "fields": {
+              "ORDINAL_POSITION": {
+                "liveCopy": 23,
+                "latest": 24
+              }
+            }
+          },
+          {
+            "name": "isDraft",
+            "fields": {
+              "ORDINAL_POSITION": {
+                "liveCopy": 24,
+                "latest": 25
+              }
+            }
+          },
+          {
+            "name": "status",
+            "fields": {
+              "ORDINAL_POSITION": {
+                "liveCopy": 25,
+                "latest": 26
+              }
+            }
+          },
+          {
+            "name": "isUserNotified",
+            "fields": {
+              "ORDINAL_POSITION": {
+                "liveCopy": 26,
+                "latest": 27
+              }
+            }
+          },
+          {
+            "name": "submittedAt",
+            "fields": {
+              "ORDINAL_POSITION": {
+                "liveCopy": 27,
+                "latest": 28
+              }
+            }
+          },
+          {
+            "name": "isActive",
+            "fields": {
+              "ORDINAL_POSITION": {
+                "liveCopy": 28,
+                "latest": 29
+              }
+            }
+          },
+          {
+            "name": "isDeleted",
+            "fields": {
+              "ORDINAL_POSITION": {
+                "liveCopy": 29,
+                "latest": 30
+              }
+            }
+          },
+          {
+            "name": "createdAt",
+            "fields": {
+              "ORDINAL_POSITION": {
+                "liveCopy": 30,
+                "latest": 31
+              }
+            }
+          },
+          {
+            "name": "updatedAt",
+            "fields": {
+              "ORDINAL_POSITION": {
+                "liveCopy": 31,
+                "latest": 32
+              }
+            }
+          },
+          {
+            "name": "rejectionReason",
+            "fields": {
+              "ORDINAL_POSITION": {
+                "liveCopy": 32,
+                "latest": 33
+              }
+            }
+          },
+          {
+            "name": "rejectionCount",
+            "fields": {
+              "ORDINAL_POSITION": {
+                "liveCopy": 33,
+                "latest": 34
+              }
+            }
+          },
+          {
+            "name": "canResubmit",
+            "fields": {
+              "ORDINAL_POSITION": {
+                "liveCopy": 34,
+                "latest": 35
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "table": "tokendeploymentattempt",
+      "checks": {
+        "liveCopy": [],
+        "latest": [
+          {
+            "CONSTRAINT_NAME": "metadata",
+            "CHECK_CLAUSE": "json_valid(`metadata`)"
+          }
+        ]
+      }
+    },
+    {
+      "table": "tokenpurchase",
+      "columns": {
+        "added": [],
+        "removed": [],
+        "changed": [
+          {
+            "name": "activeInterestUid",
+            "fields": {
+              "GENERATION_EXPRESSION": {
+                "liveCopy": "case when `status` in (_utf8mb4'PENDING_PAYMENT',_utf8mb4'PAYMENT_CONFIRMED',_utf8mb4'MINT_SUBMITTED') then `interestUid` else NULL end",
+                "latest": "case when `status` in ('PENDING_PAYMENT','PAYMENT_CONFIRMED','MINT_SUBMITTED') then `interestUid` else NULL end"
+              }
+            }
+          },
+          {
+            "name": "activeInvestorUid",
+            "fields": {
+              "GENERATION_EXPRESSION": {
+                "liveCopy": "case when `status` in (_utf8mb4'PENDING_PAYMENT',_utf8mb4'PAYMENT_CONFIRMED',_utf8mb4'MINT_SUBMITTED') then `investorUid` else NULL end",
+                "latest": "case when `status` in ('PENDING_PAYMENT','PAYMENT_CONFIRMED','MINT_SUBMITTED') then `investorUid` else NULL end"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "table": "tokenredemption",
+      "columns": {
+        "added": [],
+        "removed": [],
+        "changed": [
+          {
+            "name": "activeInterestUid",
+            "fields": {
+              "GENERATION_EXPRESSION": {
+                "liveCopy": "case when `status` not in (_utf8mb4'COMPLETED',_utf8mb4'ISSUER_REJECTED',_utf8mb4'CANCELLED',_utf8mb4'EXPIRED') then `interestUid` else NULL end",
+                "latest": "case when `status` not in ('COMPLETED','ISSUER_REJECTED','CANCELLED','EXPIRED') then `interestUid` else NULL end"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "table": "tokenredemptionhistory",
+      "checks": {
+        "liveCopy": [],
+        "latest": [
+          {
+            "CONSTRAINT_NAME": "metadata",
+            "CHECK_CLAUSE": "json_valid(`metadata`)"
+          }
+        ]
+      }
+    },
+    {
+      "table": "tokentransfer",
+      "columns": {
+        "added": [],
+        "removed": [],
+        "changed": [
+          {
+            "name": "activeSenderTokenKey",
+            "fields": {
+              "GENERATION_EXPRESSION": {
+                "liveCopy": "case when `status` = _utf8mb4'PENDING_TRANSFER' then concat(lcase(`senderWalletAddress`),_utf8mb4':',lcase(`tokenAddress`)) else NULL end",
+                "latest": "case when `status` = 'PENDING_TRANSFER' then concat(lcase(`senderWalletAddress`),':',lcase(`tokenAddress`)) else NULL end"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

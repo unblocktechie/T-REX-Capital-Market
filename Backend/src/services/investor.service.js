@@ -62,7 +62,7 @@ const isRegisteredWalletDuplicate = (error) => error?.code === 'ER_DUP_ENTRY'
   && String(error.sqlMessage || error.message || '').includes('ukInvestorMasterRegisteredWallet');
 
 class InvestorService {
-  constructor({ repository, optionRepository, locationService, identityService, walletOwnershipRepository, userRepository, investmentService = null, transactionRunner = withTransaction }) {
+  constructor({ repository, optionRepository, locationService, identityService, walletOwnershipRepository, chainRuntimeService = null, userChainIdentityService = null, investmentService = null, transactionRunner = withTransaction }) {
     this.repository = repository;
     this.optionRepository = optionRepository;
     this.locationService = locationService;
@@ -70,7 +70,8 @@ class InvestorService {
     // approval flow uses) to create the investor's on-chain identity.
     this.identityService = identityService;
     this.walletOwnershipRepository = walletOwnershipRepository;
-    this.userRepository = userRepository;
+    this.chainRuntimeService = chainRuntimeService;
+    this.userChainIdentityService = userChainIdentityService;
     // Optional: enforces the investment-interest document-upload gate and promotes/repairs
     // interest records after a submitted investor uploads claim documents.
     this.investmentService = investmentService;
@@ -114,15 +115,18 @@ class InvestorService {
     }
   }
 
-  async getFullForm(user) {
+  async getFullForm(user, selectedChain = null) {
     this.assertInvestor(user);
     const investor = await this.repository.findByUserUid(user.userUid);
     if (!investor) return null;
-    const [investmentCategories, documents] = await Promise.all([
+    const [investmentCategories, documents, selectedChainIdentity] = await Promise.all([
       this.repository.listInvestmentCategories(investor.investorUid),
       this.repository.listDocuments(investor.investorUid),
+      selectedChain && this.userChainIdentityService
+        ? this.userChainIdentityService.getForUser(user, selectedChain.chainUid)
+        : null,
     ]);
-    return { ...investor, investmentCategories, documents };
+    return { ...investor, investmentCategories, documents, selectedChainIdentity };
   }
 
   async saveIdentity(user, input) {
@@ -277,16 +281,19 @@ class InvestorService {
     });
   }
 
-  async submit(user) {
+  async submit(user, { walletAddress, chainUid }, selectedChainContext = null) {
     this.assertInvestor(user);
     const investor = await this.repository.findByUserUid(user.userUid);
     if (!investor) throw ApiError.badRequest('Investor onboarding has not been started.');
     this.assertEditable(investor);
-    const authUser = await this.userRepository.findAuthIdentityByUid(user.userUid);
-    const normalizedWalletAddress = normalizeWalletAddress(authUser?.privyWalletAddress);
-    if (!/^0x[a-f0-9]{40}$/.test(normalizedWalletAddress)) {
-      throw ApiError.forbidden('Complete Privy email verification and wallet setup before submitting investor onboarding.');
+    const normalizedWalletAddress = normalizeWalletAddress(walletAddress);
+    if (selectedChainContext && chainUid && chainUid !== selectedChainContext.chainUid) {
+      throw new ApiError(422, 'Onboarding chain does not match the selected network.', undefined, 'SELECTED_CHAIN_MISMATCH');
     }
+    const authoritativeChainUid = selectedChainContext?.chainUid || chainUid;
+    const selectedChain = this.chainRuntimeService
+      ? (authoritativeChainUid ? await this.chainRuntimeService.byUid(authoritativeChainUid) : await this.chainRuntimeService.default())
+      : { chainUid: chainUid || null };
 
     const issuerWalletOwner = await this.walletOwnershipRepository.findIssuerOwner(normalizedWalletAddress);
     if (issuerWalletOwner) throw issuerWalletConflictError();
@@ -323,7 +330,14 @@ class InvestorService {
     try {
       // Same OnchainID identity factory call the organization approval uses
       // (createOrganizationIdentity is the generic getIdentity/createIdentity routine).
-      contractResult = await this.identityService.createOrganizationIdentity(normalizedWalletAddress, `investor-${investor.investorUid}`);
+      contractResult = this.userChainIdentityService
+        ? await this.userChainIdentityService.createOrGet({
+          user,
+          chainUid: selectedChain.chainUid,
+          walletAddress: normalizedWalletAddress,
+          sourceUid: investor.investorUid,
+        })
+        : await this.identityService.createOrganizationIdentity(normalizedWalletAddress, `investor-${investor.investorUid}`);
     } catch (error) {
       const contractTxnMessage = this.identityFailureMessage(error);
       await this.repository.updateByUserUid(user.userUid, {
@@ -334,17 +348,20 @@ class InvestorService {
       throw new ApiError(502, contractTxnMessage, { contractTxnMessage }, 'INVESTOR_IDENTITY_CREATION_FAILED');
     }
 
-    const contractTxnMessage = contractResult.alreadyExisted
+    const identityAddress = contractResult.identityAddress;
+    const transactionHash = contractResult.creationTxHash || contractResult.txHash || null;
+    const contractTxnMessage = contractResult.alreadyExisted || !transactionHash
       ? 'On-chain investor identity already existed; onboarding submitted successfully.'
       : 'On-chain investor identity created; onboarding submitted successfully.';
 
     try {
       return await this.repository.updateByUserUid(user.userUid, {
         walletAddress: normalizedWalletAddress,
+        ...(selectedChain.chainUid ? { onboardingChainUid: selectedChain.chainUid } : {}),
         profileReference: investor.profileReference || generateProfileReference(),
-        onchainIdReference: contractResult.identityAddress,
-        contractAddress: contractResult.identityAddress,
-        contractTxnHash: contractResult.txHash,
+        onchainIdReference: identityAddress,
+        contractAddress: identityAddress,
+        contractTxnHash: transactionHash,
         contractTxnMessage,
         currentStep: 'completed',
         isDraft: false,

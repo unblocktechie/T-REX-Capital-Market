@@ -2,7 +2,7 @@ const { sendSuccess } = require('../../../utils/response');
 
 const createTokenRedemptionController = (service) => ({
   create: async (req, res) => {
-    const result = await service.create(req.user, req.params.tokenUid, req.body);
+    const result = await service.create(req.user, req.params.tokenUid, req.body, req.selectedChain);
     return sendSuccess(req, res, {
       statusCode: result.existing ? 200 : 201,
       message: result.existing ? 'Existing redemption request returned.' : 'Redemption request created.',
@@ -10,21 +10,21 @@ const createTokenRedemptionController = (service) => ({
     });
   },
   authorize: async (req, res) => {
-    const result = await service.authorize(req.user, req.params.redemptionUid, req.body.signature);
+    const result = await service.authorize(req.user, req.params.redemptionUid, req.body.signature, req.selectedChain);
     return sendSuccess(req, res, {
       message: result.idempotent ? 'Redemption was already authorized.' : 'Redemption authorization verified.',
       data: result.redemption,
     });
   },
   investorGet: async (req, res) => sendSuccess(req, res, {
-    message: 'Redemption fetched successfully.', data: await service.getInvestor(req.user, req.params.redemptionUid),
+    message: 'Redemption fetched successfully.', data: await service.getInvestor(req.user, req.params.redemptionUid, req.selectedChain),
   }),
   investorList: async (req, res) => {
-    const result = await service.listInvestor(req.user, req.params.tokenUid, req.query);
+    const result = await service.listInvestor(req.user, req.params.tokenUid, req.query, req.selectedChain);
     return sendSuccess(req, res, { message: 'Redemption history fetched successfully.', data: result.items, meta: result.pagination });
   },
   cancel: async (req, res) => {
-    const result = await service.cancel(req.user, req.params.redemptionUid);
+    const result = await service.cancel(req.user, req.params.redemptionUid, req.selectedChain);
     return sendSuccess(req, res, {
       message: result.redemption.status === 'CANCELLATION_PENDING'
         ? 'Cancellation queued while the token lock is safely released.'
@@ -33,28 +33,28 @@ const createTokenRedemptionController = (service) => ({
     });
   },
   retry: async (req, res) => {
-    const result = await service.retry(req.user, req.params.redemptionUid);
+    const result = await service.retry(req.user, req.params.redemptionUid, req.selectedChain);
     return sendSuccess(req, res, {
       message: result.terminal ? 'Current terminal redemption state returned.' : 'Redemption reconciliation queued.',
       data: result.redemption,
     });
   },
   issuerList: async (req, res) => {
-    const result = await service.listIssuer(req.user, req.query);
+    const result = await service.listIssuer(req.user, req.query, req.selectedChain);
     return sendSuccess(req, res, { message: 'Issuer redemption requests fetched successfully.', data: result.items, meta: result.pagination });
   },
   issuerGet: async (req, res) => sendSuccess(req, res, {
-    message: 'Issuer redemption request fetched successfully.', data: await service.getIssuer(req.user, req.params.redemptionUid),
+    message: 'Issuer redemption request fetched successfully.', data: await service.getIssuer(req.user, req.params.redemptionUid, req.selectedChain),
   }),
   approve: async (req, res) => {
-    const result = await service.approve(req.user, req.params.redemptionUid, req.body.note);
+    const result = await service.approve(req.user, req.params.redemptionUid, req.body.note, req.selectedChain);
     return sendSuccess(req, res, {
       message: result.lockSubmitted ? 'Redemption approved and token lock submitted.' : 'Redemption approved; token lock is queued.',
       data: result.redemption,
     });
   },
   reject: async (req, res) => {
-    const result = await service.reject(req.user, req.params.redemptionUid, req.body.reason);
+    const result = await service.reject(req.user, req.params.redemptionUid, req.body.reason, req.selectedChain);
     return sendSuccess(req, res, {
       message: result.idempotent ? 'Redemption was already rejected.' : 'Redemption rejected.', data: result.redemption,
     });

@@ -160,6 +160,7 @@ const confirmBlockchainTransaction = Joi.object({
 });
 
 const transactionHistoryFilters = {
+  chainId: Joi.number().integer().positive(),
   tokenUid: uid,
   type: Joi.string().uppercase().valid(
     'INVEST', 'TRANSFER', 'REDEMPTION', 'USDT_APPROVAL', 'TOKEN_ISSUE', 'TOKEN_BURN', 'PRICE_UPDATE', 'ALL',

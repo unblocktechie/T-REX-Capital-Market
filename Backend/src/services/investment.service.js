@@ -3,16 +3,18 @@ const path = require('node:path');
 const { ApiError } = require('../core/errors/api-error');
 const { env } = require('../core/config/env');
 const { logger } = require('./common/log.service');
+const { assertSelectedChain } = require('../utils/selected-chain');
 
 const IMAGE_URL = (tokenUid) => `/api/v1/investments/tokens/${tokenUid}/image`;
 
 // Shapes a raw marketplace token row for the API, adding the image URL and country
 // restrictions, and dropping the storage key (an internal detail the client never needs).
-const presentToken = (row, countryRestrictions = []) => {
+const presentToken = (row, countryRestrictions = [], paymentToken = null) => {
   if (!row) return row;
   const { imageStorageKey, imageMimeType, ...rest } = row;
   return {
     ...rest,
+    paymentToken,
     hasImage: Boolean(imageStorageKey),
     imageUrl: imageStorageKey ? IMAGE_URL(row.tokenUid) : null,
     countryRestrictions: countryRestrictions.map((restriction) => ({
@@ -24,6 +26,18 @@ const presentToken = (row, countryRestrictions = []) => {
   };
 };
 
+// Investor interest rows include token summary data. Keep token-image output
+// consistent with marketplace/portfolio responses and do not expose storage keys.
+const presentInterest = (row) => {
+  if (!row) return row;
+  const { imageStorageKey, imageMimeType, ...rest } = row;
+  return {
+    ...rest,
+    hasImage: Boolean(imageStorageKey),
+    imageUrl: imageStorageKey ? IMAGE_URL(row.tokenUid) : null,
+  };
+};
+
 class InvestmentService {
   constructor({
     repository,
@@ -32,6 +46,10 @@ class InvestmentService {
     organizationRepository,
     tokenImageService,
     issuerClaimRepository = null,
+    paymentTokenRepository = null,
+    userChainIdentityRepository = null,
+    getHolderSummary = null,
+    journeyService = null,
     investorUploadsDir = env.investorUploads.directory,
   }) {
     this.repository = repository;
@@ -41,6 +59,10 @@ class InvestmentService {
     this.tokenImageService = tokenImageService;
     // Used by approveInterest to require a SIGNED issuer claim verification before promoting.
     this.issuerClaimRepository = issuerClaimRepository;
+    this.paymentTokenRepository = paymentTokenRepository;
+    this.userChainIdentityRepository = userChainIdentityRepository;
+    this.getHolderSummary = getHolderSummary;
+    this.journeyService = journeyService;
     this.investorUploadsDir = investorUploadsDir;
   }
 
@@ -58,7 +80,7 @@ class InvestmentService {
 
   // -------------------------------------------------------------- marketplace
 
-  async listTokens(user, query = {}) {
+  async listTokens(user, query = {}, selectedChain = null) {
     const page = query.page || 1;
     const limit = query.limit || 20;
     // Investors may only ever see deployed tokens; the status filter is ignored for them.
@@ -72,11 +94,24 @@ class InvestmentService {
       // Restriction filtering is investor-specific. Admin marketplace requests must keep
       // their complete catalogue view and therefore do not provide an investor identity.
       investorUserUid: user.roleName === 'Investor' ? user.userUid : null,
+      chainUid: selectedChain?.chainUid || null,
     });
 
-    const restrictionsByToken = await this.groupCountryRestrictions(rows.map((row) => row.tokenUid));
+    const [restrictionsByToken, paymentTokens] = await Promise.all([
+      this.groupCountryRestrictions(rows.map((row) => row.tokenUid)),
+      this.paymentTokenRepository?.listActive(null) || [],
+    ]);
+    const paymentTokensByAddress = new Map(paymentTokens.map(
+      (token) => [token.contractAddress.toLowerCase(), token],
+    ));
     return {
-      items: rows.map((row) => presentToken(row, restrictionsByToken.get(row.tokenUid) || [])),
+      items: rows.map((row) => presentToken(
+        row,
+        restrictionsByToken.get(row.tokenUid) || [],
+        row.paymentTokenAddress
+          ? paymentTokensByAddress.get(row.paymentTokenAddress.toLowerCase()) || null
+          : null,
+      )),
       pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
     };
   }
@@ -93,19 +128,24 @@ class InvestmentService {
     return grouped;
   }
 
-  async getTokenDetails(tokenUid) {
-    const token = await this.repository.findMarketplaceTokenByUid(tokenUid);
+  async getTokenDetails(tokenUid, selectedChain = null) {
+    const token = await this.repository.findMarketplaceTokenByUid(tokenUid, selectedChain?.chainUid || null);
     if (!token) throw ApiError.notFound('Token was not found.');
-    const [requiredClaimTopics, countryRestrictions] = await Promise.all([
+    const [requiredClaimTopics, countryRestrictions, paymentToken, holderSummary] = await Promise.all([
       this.tokenRepository.listClaimTopics(tokenUid),
       this.repository.listCountryRestrictionsForTokens([tokenUid]),
+      token.paymentTokenAddress && this.paymentTokenRepository
+        ? this.paymentTokenRepository.findActiveByAddress(token.paymentTokenAddress, token.chainId)
+        : null,
+      this.getHolderSummary ? this.getHolderSummary(token) : null,
     ]);
-    return { ...presentToken(token, countryRestrictions), requiredClaimTopics };
+    return { ...presentToken(token, countryRestrictions, paymentToken), requiredClaimTopics,
+      ...(holderSummary ? { holderSummary } : {}) };
   }
 
   // Role-agnostic (admin + investor): serves the optimized token image file.
-  async getTokenImageFile(tokenUid) {
-    const token = await this.repository.findTokenImageByUid(tokenUid);
+  async getTokenImageFile(tokenUid, selectedChain = null) {
+    const token = await this.repository.findTokenImageByUid(tokenUid, selectedChain?.chainUid || null);
     if (!token?.imageStorageKey) throw ApiError.notFound('Token image was not found.');
     const filePath = this.tokenImageService.resolve(token.imageStorageKey);
     if (!fs.existsSync(filePath)) throw ApiError.notFound('Token image was not found.');
@@ -285,23 +325,25 @@ class InvestmentService {
     };
   }
 
-  async getMyInterestHistory(user, interestUid) {
+  async getMyInterestHistory(user, interestUid, selectedChain = null) {
     this.assertInvestor(user);
     const investor = await this.investorRepository.findByUserUid(user.userUid);
     const interest = await this.repository.findInterestByUid(interestUid);
     if (!investor || !interest || interest.investorUid !== investor.investorUid) {
       throw ApiError.notFound('Investment interest was not found.');
     }
+    assertSelectedChain(interest, selectedChain, 'Investment interest');
     // Investor downloads their own document versions via the investor documents endpoint.
     return this.assembleHistory(interest, (documentUid) => `/api/v1/investors/me/documents/${documentUid}/download`);
   }
 
-  async getIssuerInterestHistory(user, interestUid) {
+  async getIssuerInterestHistory(user, interestUid, selectedChain = null) {
     const organization = await this.issuerOrganization(user);
     const interest = await this.repository.findInterestByUid(interestUid);
     if (!interest || interest.organizationUid !== organization.organizationUid) {
       throw ApiError.notFound('Investment interest was not found.');
     }
+    assertSelectedChain(interest, selectedChain, 'Investment interest');
     // Issuer downloads only within their own application's submission snapshot.
     return this.assembleHistory(interest, (documentUid) => `/api/v1/investments/issuer/interests/${interest.interestUid}/documents/${documentUid}/download`);
   }
@@ -320,9 +362,9 @@ class InvestmentService {
   // investor already has a document for it, and the documents they've submitted. The frontend
   // uses this to prompt the investor to upload the missing claim-topic documents (via the
   // existing investor document upload endpoint) before expressing interest.
-  async getRequiredDocuments(user, tokenUid) {
+  async getRequiredDocuments(user, tokenUid, selectedChain = null) {
     this.assertInvestor(user);
-    const token = await this.repository.findMarketplaceTokenByUid(tokenUid);
+    const token = await this.repository.findMarketplaceTokenByUid(tokenUid, selectedChain?.chainUid || null);
     if (!token) throw ApiError.notFound('Token was not found.');
 
     const requiredClaimTopics = await this.tokenRepository.listClaimTopics(tokenUid);
@@ -363,6 +405,7 @@ class InvestmentService {
       interestStatus: interest ? interest.status : null,
       rejection,
       ...eligibility,
+      ...(this.journeyService && interest ? await this.journeyService.progress(interest) : {}),
     };
   }
 
@@ -372,7 +415,7 @@ class InvestmentService {
   // claim-topic document is present the record is 'submitIntrest' (visible to the issuer);
   // when a required document is still missing it is 'pending' (invisible to the issuer, but
   // it authorizes the investor to upload the missing documents afterwards).
-  async submitInterest(user, tokenUid, { note } = {}) {
+  async submitInterest(user, tokenUid, { note } = {}, selectedChain = null) {
     this.assertInvestor(user);
     const investor = await this.investorRepository.findByUserUid(user.userUid);
     if (!investor) throw ApiError.badRequest('Complete your investor onboarding before expressing interest.');
@@ -383,10 +426,18 @@ class InvestmentService {
       throw ApiError.badRequest('Your investor profile does not have a wallet address.');
     }
 
-    const token = await this.repository.findMarketplaceTokenByUid(tokenUid);
+    const token = await this.repository.findMarketplaceTokenByUid(tokenUid, selectedChain?.chainUid || null);
     if (!token) throw ApiError.notFound('Token was not found.');
     if (token.status !== 'deployed') {
       throw ApiError.conflict('This token is not open for investment yet.');
+    }
+    if (this.userChainIdentityRepository && token.chainUid) {
+      const chainIdentity = await this.userChainIdentityRepository.find(user.userUid, token.chainUid);
+      if (!chainIdentity?.isUnlocked || chainIdentity.status !== 'CREATED') {
+        throw new ApiError(409, 'Unlock this token network and create your ONCHAINID before expressing interest.', {
+          chainUid: token.chainUid,
+        }, 'CHAIN_IDENTITY_REQUIRED');
+      }
     }
 
     // Claim-topic eligibility decides pending vs submitIntrest.
@@ -507,11 +558,16 @@ class InvestmentService {
     }
   }
 
-  async listMyInterests(user, query = {}) {
+  async listMyInterests(user, query = {}, selectedChain = null) {
     this.assertInvestor(user);
     const investor = await this.investorRepository.findByUserUid(user.userUid);
     if (!investor) return [];
-    return this.repository.listInterestsByInvestor(investor.investorUid, { status: query.status });
+    const interests = await this.repository.listInterestsByInvestor(investor.investorUid, {
+      status: query.status,
+      chainUid: selectedChain?.chainUid || null,
+    });
+    return Promise.all(interests.map(async row => ({ ...presentInterest(row),
+      ...(this.journeyService ? await this.journeyService.progress(row) : {}) })));
   }
 
   // ------------------------------------------------------------- issuer view
@@ -523,21 +579,25 @@ class InvestmentService {
     return organization;
   }
 
-  async listIssuerInterests(user, query = {}) {
+  async listIssuerInterests(user, query = {}, selectedChain = null) {
     const organization = await this.issuerOrganization(user);
     // Issuers only ever review submitted ('submitIntrest') interests by default.
-    return this.repository.listInterestsByOrganization(organization.organizationUid, {
+    const interests = await this.repository.listInterestsByOrganization(organization.organizationUid, {
       status: query.status || 'submitIntrest',
+      chainUid: selectedChain?.chainUid || null,
     });
+    return Promise.all(interests.map(async row => ({ ...row,
+      ...(this.journeyService ? await this.journeyService.progress(row) : {}) })));
   }
 
   // Loads a submitted interest the issuer owns and asserts it is reviewable.
-  async loadReviewableInterest(user, interestUid) {
+  async loadReviewableInterest(user, interestUid, selectedChain = null) {
     const organization = await this.issuerOrganization(user);
     const interest = await this.repository.findInterestByUid(interestUid);
     if (!interest || interest.organizationUid !== organization.organizationUid) {
       throw ApiError.notFound('Investment interest was not found.');
     }
+    assertSelectedChain(interest, selectedChain, 'Investment interest');
     if (interest.status !== 'submitIntrest') {
       throw ApiError.conflict('Only submitted interests can be approved or rejected.');
     }
@@ -548,8 +608,8 @@ class InvestmentService {
   // issuer's claim signatures for this subscription have been cryptographically verified (a
   // SIGNED issuerClaimVerification exists). Otherwise the status is left unchanged. A separate
   // 'approved' status is reserved for a future step (to be wired when requested).
-  async approveInterest(user, interestUid) {
-    const interest = await this.loadReviewableInterest(user, interestUid);
+  async approveInterest(user, interestUid, selectedChain = null) {
+    const interest = await this.loadReviewableInterest(user, interestUid, selectedChain);
     if (this.issuerClaimRepository) {
       const signed = await this.issuerClaimRepository.findLatestVerificationByStatus(interest.interestUid, 'SIGNED');
       if (!signed) {
@@ -581,8 +641,8 @@ class InvestmentService {
   // Rejects a submitted interest. DOC_REJECTED requires the rejected claim-topic codes (stored
   // comma-separated in rejectedClaim); OTHER needs no claim selection. canResubmitClaim is not
   // reset — it accumulates across the interest lifecycle so the rejectedCount cap is real.
-  async rejectInterest(user, interestUid, { rejectReasonType, rejectReason, rejectedClaims = [] }) {
-    const interest = await this.loadReviewableInterest(user, interestUid);
+  async rejectInterest(user, interestUid, { rejectReasonType, rejectReason, rejectedClaims = [] }, selectedChain = null) {
+    const interest = await this.loadReviewableInterest(user, interestUid, selectedChain);
 
     let rejectedClaim = null;
     if (rejectReasonType === 'DOC_REJECTED') {
@@ -621,12 +681,13 @@ class InvestmentService {
   // Loads a single interest, asserts it belongs to the issuer's organization, and returns
   // it together with every document the investor submitted and the token's required
   // claim-topic breakdown (so the issuer can confirm the KYC / accreditation documents).
-  async getIssuerInterest(user, interestUid) {
+  async getIssuerInterest(user, interestUid, selectedChain = null) {
     const organization = await this.issuerOrganization(user);
     const interest = await this.repository.findInterestByUid(interestUid);
     if (!interest || interest.organizationUid !== organization.organizationUid) {
       throw ApiError.notFound('Investment interest was not found.');
     }
+    assertSelectedChain(interest, selectedChain, 'Investment interest');
     const [requiredClaimTopics, submissionDocs, timeline] = await Promise.all([
       this.tokenRepository.listClaimTopics(interest.tokenUid),
       this.repository.listSubmissionDocumentsByInterest(interest.interestUid),
@@ -657,15 +718,17 @@ class InvestmentService {
         downloadUrl: `/api/v1/investments/issuer/interests/${interestUid}/documents/${doc.documentUid}/download`,
       })),
       ...eligibility,
+      ...(this.journeyService ? await this.journeyService.progress(interest) : {}),
     };
   }
 
-  async getIssuerInterestDocumentForDownload(user, interestUid, documentUid) {
+  async getIssuerInterestDocumentForDownload(user, interestUid, documentUid, selectedChain = null) {
     const organization = await this.issuerOrganization(user);
     const interest = await this.repository.findInterestByUid(interestUid);
     if (!interest || interest.organizationUid !== organization.organizationUid) {
       throw ApiError.notFound('Investment interest was not found.');
     }
+    assertSelectedChain(interest, selectedChain, 'Investment interest');
     // The document must belong to a submission snapshot of THIS application — the issuer can
     // never reach the investor's other document versions or other applications' documents.
     const document = await this.repository.findSubmissionDocument(interestUid, documentUid);

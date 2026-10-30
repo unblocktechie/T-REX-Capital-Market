@@ -134,6 +134,40 @@ test('approved application clears rejection data and remains read-only', async (
   assert.match(fields.contractTxnMessage, /created/i);
 });
 
+test('organization approval never waits for blockchain identity creation inside a database transaction', async () => {
+  let transactionActive = false;
+  let transactionCount = 0;
+  const transactionRunner = async (work) => {
+    transactionCount += 1;
+    transactionActive = true;
+    try {
+      return await work({ transaction: transactionCount });
+    } finally {
+      transactionActive = false;
+    }
+  };
+  const organization = {
+    organizationUid: 'organization-1',
+    userUid: 'issuer-1',
+    walletAddress: '0x1111111111111111111111111111111111111111',
+    status: 'submitted',
+  };
+  const service = new OrganizationAdminService({
+    findForReview: async () => organization,
+    updateByOrganizationUid: async (_organizationUid, fields) => ({ ...organization, ...fields }),
+  }, {
+    createOrganizationIdentity: async () => {
+      assert.equal(transactionActive, false);
+      return successfulIdentityService.createOrganizationIdentity();
+    },
+  }, transactionRunner);
+
+  const result = await service.reviewApplication('organization-1', { status: 'approved' });
+
+  assert.equal(result.status, 'approved');
+  assert.equal(transactionCount, 2);
+});
+
 test('failed identity creation is recorded without approving the application', async () => {
   const updates = [];
   const failure = new Error('execution reverted');

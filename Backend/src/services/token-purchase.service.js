@@ -4,6 +4,7 @@ const { env } = require('../core/config/env');
 const { withTransaction } = require('../database/connection');
 const { PurchaseBlockchainError } = require('./blockchain/token-purchase-blockchain.service');
 const { presentToken } = require('./investment.service');
+const { assertSelectedChain } = require('../utils/selected-chain');
 
 const ceilDiv = (value, divisor) => (value + divisor - 1n) / divisor;
 
@@ -14,6 +15,7 @@ class TokenPurchaseService {
     mintService,
     investmentRepository = null,
     tokenRepository = null,
+    paymentTokenRepository = null,
     transactionService = null,
     config = env.blockchain,
     transactionRunner = withTransaction,
@@ -23,6 +25,7 @@ class TokenPurchaseService {
     this.mintService = mintService;
     this.investmentRepository = investmentRepository;
     this.tokenRepository = tokenRepository;
+    this.paymentTokenRepository = paymentTokenRepository;
     this.transactionService = transactionService;
     this.config = config;
     this.transactionRunner = transactionRunner;
@@ -83,12 +86,16 @@ class TokenPurchaseService {
     };
   }
 
-  validateContext(context) {
+  async validateContext(context) {
     if (!context) throw new ApiError(404, 'Registered investment was not found.', undefined, 'REGISTERED_INVESTMENT_NOT_FOUND');
     if (context.interestStatus !== 'registered') throw new ApiError(409, 'Investor must be registered for this token before purchasing.', undefined, 'INVESTOR_NOT_REGISTERED');
     if (context.tokenStatus !== 'deployed' || !context.tokenActive) throw new ApiError(409, 'Token is not available for purchase.', undefined, 'TOKEN_NOT_AVAILABLE');
     if (context.investorStatus !== 'submitted' || !context.investorActive || context.investorDeleted) throw new ApiError(409, 'Investor profile is not active.', undefined, 'INVESTOR_NOT_ACTIVE');
-    const addresses = [context.tokenAddress, context.treasuryWalletAddress, context.investorWalletAddress, this.config.purchaseUsdtAddress];
+    if (!context.paymentTokenAddress) {
+      const paymentToken = await this.paymentTokenRepository?.findDefault(this.config.chainId, 'PURCHASE');
+      context.paymentTokenAddress = paymentToken?.contractAddress || null;
+    }
+    const addresses = [context.tokenAddress, context.treasuryWalletAddress, context.investorWalletAddress, context.paymentTokenAddress];
     if (!addresses.every(ethers.isAddress)) throw new ApiError(409, 'Purchase wallet or contract configuration is incomplete.', undefined, 'PURCHASE_CONFIGURATION_INVALID');
   }
 
@@ -114,7 +121,7 @@ class TokenPurchaseService {
     const previous = await this.repository.findByIdempotency(user.userUid, input.idempotencyKey);
     if (previous) return { purchase: this.present(previous), existing: true };
     const context = await this.repository.findContext(user.userUid, tokenUid);
-    this.validateContext(context);
+    await this.validateContext(context);
     const active = await this.repository.findActiveByInterest(context.interestUid);
     if (active) return { purchase: this.present(active), existing: true };
     const activeRedemption = typeof this.repository.findActiveRedemptionByInterest === 'function'
@@ -130,7 +137,7 @@ class TokenPurchaseService {
     let preparation;
     try {
       preparation = await this.blockchain.prepare({
-        usdtContractAddress: this.config.purchaseUsdtAddress,
+        usdtContractAddress: context.paymentTokenAddress,
         tokenAddress: context.tokenAddress,
         investorWalletAddress: context.investorWalletAddress,
       });
@@ -154,7 +161,7 @@ class TokenPurchaseService {
     try {
       const created = await this.repository.create({
         ...context, ...amounts, idempotencyKey: input.idempotencyKey,
-        chainId: preparation.chainId, usdtContractAddress: ethers.getAddress(this.config.purchaseUsdtAddress),
+        chainId: preparation.chainId, usdtContractAddress: ethers.getAddress(context.paymentTokenAddress),
         tokenAddress: ethers.getAddress(context.tokenAddress), investorWalletAddress: ethers.getAddress(context.investorWalletAddress),
         treasuryWalletAddress: ethers.getAddress(context.treasuryWalletAddress), platformWalletAddress: preparation.platformWalletAddress,
         usdtDecimals: preparation.usdtDecimals, tokenDecimals: Number(context.tokenDecimals),
@@ -173,23 +180,26 @@ class TokenPurchaseService {
     }
   }
 
-  async get(user, purchaseUid) {
+  async get(user, purchaseUid, selectedChain = null) {
     this.assertInvestor(user);
     const row = await this.repository.findOwnedByUid(purchaseUid, user.userUid);
     if (!row) throw new ApiError(404, 'Purchase was not found.', undefined, 'PURCHASE_NOT_FOUND');
+    assertSelectedChain(row, selectedChain, 'Purchase');
     return this.present(row, await this.repository.listTransactions(purchaseUid));
   }
 
-  async listByToken(user, tokenUid, query = {}) {
+  async listByToken(user, tokenUid, query = {}, selectedChain = null) {
     this.assertInvestor(user);
     const page = Number(query.page || 1);
     const limit = Number(query.limit || 20);
-    const result = await this.repository.listOwnedByToken(user.userUid, tokenUid, {
+    const options = {
       page,
       limit,
       search: query.search || '',
       status: query.status || 'all',
-    });
+    };
+    if (selectedChain) options.chainId = selectedChain.chainId;
+    const result = await this.repository.listOwnedByToken(user.userUid, tokenUid, options);
     return {
       items: result.rows.map((row) => this.present(row)),
       pagination: {
@@ -201,13 +211,13 @@ class TokenPurchaseService {
     };
   }
 
-  async portfolio(user, query = {}) {
+  async portfolio(user, query = {}, selectedChain = null) {
     this.assertInvestor(user);
     const page = Number(query.page || 1);
     const limit = Number(query.limit || 20);
-    const result = await this.repository.listPortfolio(user.userUid, {
-      page, limit, search: query.search || '',
-    });
+    const options = { page, limit, search: query.search || '' };
+    if (selectedChain) options.chainUid = selectedChain.chainUid;
+    const result = await this.repository.listPortfolio(user.userUid, options);
     const tokenUids = result.rows.map((row) => row.tokenUid);
     const restrictions = this.investmentRepository
       ? await this.investmentRepository.listCountryRestrictionsForTokens(tokenUids) : [];
@@ -222,10 +232,17 @@ class TokenPurchaseService {
         topicsByToken.set(tokenUid, await this.tokenRepository.listClaimTopics(tokenUid));
       }));
     }
+    const paymentTokens = this.paymentTokenRepository
+      ? await this.paymentTokenRepository.listActive()
+      : [];
+    const paymentTokensByAddress = new Map(paymentTokens.map(
+      (token) => [`${token.chainId}:${token.contractAddress.toLowerCase()}`, token],
+    ));
     return {
       items: result.rows.map((row) => {
         const {
-          interestUid, chainId, investorWalletAddress, usdtContractAddress, usdtDecimals,
+          interestUid, chainId, configuredChainId, chainUid, chainName, networkName, chainExplorerUrl,
+          investorWalletAddress, usdtContractAddress, usdtDecimals,
           purchaseCount, redemptionCount, totalPurchasedTokenAmount, totalPurchasedTokenAmountRaw,
           totalInvestedUsdtAmount, totalInvestedUsdtAmountRaw, totalRedeemedTokenAmount,
           totalRedeemedTokenAmountRaw, totalSentTokenAmount, totalSentTokenAmountRaw,
@@ -234,17 +251,26 @@ class TokenPurchaseService {
           firstPurchaseAt, latestPurchaseAt, latestRedemptionAt, latestSentAt, latestReceivedAt,
           ...tokenRow
         } = row;
-        const token = presentToken(tokenRow, restrictionsByToken.get(row.tokenUid) || []);
+        const token = presentToken(
+          tokenRow,
+          restrictionsByToken.get(row.tokenUid) || [],
+          tokenRow.paymentTokenAddress
+            ? paymentTokensByAddress.get(`${Number(configuredChainId || chainId)}:${tokenRow.paymentTokenAddress.toLowerCase()}`) || null
+            : null,
+        );
         return {
           ...token,
-          chainId: Number(chainId),
-          networkName: this.config.networkName || null,
+          chainUid,
+          chainId: Number(configuredChainId || chainId),
+          chainName: chainName || null,
+          networkName: networkName || null,
+          chainExplorerUrl: chainExplorerUrl || null,
           requiredClaimTopics: topicsByToken.get(row.tokenUid) || [],
           portfolio: {
             interestUid,
             investorWalletAddress,
-            usdtContractAddress: usdtContractAddress || this.config.purchaseUsdtAddress || null,
-            usdtDecimals: Number(usdtDecimals ?? this.config.purchaseUsdtDecimals ?? 6),
+            usdtContractAddress,
+            usdtDecimals: Number(usdtDecimals),
             purchaseCount: Number(purchaseCount),
             redemptionCount: Number(redemptionCount || 0),
             totalPurchasedTokenAmount: String(totalPurchasedTokenAmount),
@@ -261,7 +287,7 @@ class TokenPurchaseService {
             receivedTransferCount: Number(receivedTransferCount || 0),
             netTokenAmount: String(netTokenAmount),
             netTokenAmountRaw: String(netTokenAmountRaw),
-            averagePurchasePrice: averagePurchasePrice == null ? null : String(averagePurchasePrice),
+            averagePurchasePrice: String(averagePurchasePrice),
             firstPurchaseAt,
             latestPurchaseAt,
             latestRedemptionAt: latestRedemptionAt || null,
@@ -330,7 +356,7 @@ class TokenPurchaseService {
     try {
       await this.repository.recordTransaction(purchaseUid, 'PAYMENT', normalized, 'RECEIVED');
       const verified = await this.blockchain.verifyPayment(normalized, this.expected(row), {
-        confirmations: Math.max(1, Number(this.config.purchasePaymentConfirmations || 1)),
+        confirmations: Math.max(1, Number(this.config.purchasePaymentConfirmations || 2)),
       });
       await this.transactionRunner(async (connection) => {
         const changed = await this.repository.confirmPayment(purchaseUid, verified, connection);

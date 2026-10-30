@@ -9,7 +9,7 @@ const corsMiddleware = cors({
   },
   credentials: env.cors.credentials,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id', 'X-Chain-Uid'],
   exposedHeaders: ['X-Request-Id'],
   maxAge: 86400,
 });

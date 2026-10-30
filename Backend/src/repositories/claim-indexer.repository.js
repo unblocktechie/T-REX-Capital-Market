@@ -80,16 +80,24 @@ class ClaimIndexerRepository {
     );
   }
 
-  async listIdentityAddresses(executor) {
-    const rows = await execute(
-      `SELECT DISTINCT LOWER(\`contractAddress\`) AS \`identityAddress\`
-       FROM \`investorMaster\`
-       WHERE \`contractAddress\` IS NOT NULL AND \`contractAddress\` <> ''
-         AND \`status\` = 'submitted' AND \`isActive\` = 1 AND \`isDeleted\` = 0
-       ORDER BY \`identityAddress\``,
-      [],
-      executor,
-    );
+  async listIdentityAddresses(chainId = null, executor) {
+    const rows = chainId === null || chainId === undefined
+      ? await execute(
+        `SELECT DISTINCT LOWER(\`contractAddress\`) AS \`identityAddress\`
+         FROM \`investorMaster\`
+         WHERE \`contractAddress\` IS NOT NULL AND \`contractAddress\` <> ''
+           AND \`status\` = 'submitted' AND \`isActive\` = 1 AND \`isDeleted\` = 0
+         ORDER BY \`identityAddress\``, [], executor,
+      )
+      : await execute(
+        `SELECT DISTINCT LOWER(uci.\`identityAddress\`) AS \`identityAddress\`
+         FROM \`userChainIdentity\` uci
+         INNER JOIN \`chainMaster\` c ON c.\`chainUid\` = uci.\`chainUid\` AND c.\`chainId\` = ?
+         WHERE uci.\`roleName\` = 'Investor' AND uci.\`status\` = 'CREATED'
+           AND uci.\`isUnlocked\` = 1 AND uci.\`identityAddress\` IS NOT NULL
+           AND uci.\`isActive\` = 1 AND uci.\`isDeleted\` = 0
+         ORDER BY \`identityAddress\``, [Number(chainId)], executor,
+      );
     return rows.map((row) => row.identityAddress);
   }
 

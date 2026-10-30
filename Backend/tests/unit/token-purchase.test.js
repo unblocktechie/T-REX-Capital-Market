@@ -6,12 +6,14 @@ const { PurchaseBlockchainError } = require('../../src/services/blockchain/token
 const investor = { userUid: 'user-1', roleName: 'Investor' };
 const address = (char) => `0x${char.repeat(40)}`;
 const TX = `0x${'a'.repeat(64)}`;
+const PAYMENT_TOKEN = '0x86B14D29A59b745bF08c42661322d13142d5eb49';
 
 const context = {
   interestUid: 'interest-1', interestStatus: 'registered', organizationUid: 'org-1', investorUid: 'investor-1',
   investorUserUid: investor.userUid, investorWalletAddress: address('1'), investorStatus: 'submitted',
   investorActive: true, investorDeleted: false, tokenUid: 'token-1', tokenAddress: address('2'),
   treasuryWalletAddress: address('3'), tokenDecimals: 18, tokenPrice: '1.5', maxBalancePerInvestor: '1000',
+  paymentTokenAddress: PAYMENT_TOKEN,
   tokenStatus: 'deployed', tokenActive: true,
 };
 
@@ -73,7 +75,7 @@ const make = (over = {}) => {
     repository, blockchain, mintService,
     investmentRepository: { listCountryRestrictionsForTokens: async () => over.restrictions || [] },
     tokenRepository: { listClaimTopics: async () => over.claimTopics || [] },
-    config: { purchaseUsdtAddress: address('5'), purchasePaymentConfirmations: 1 },
+    config: { purchasePaymentConfirmations: 1 },
     transactionRunner: (work) => work({}),
   }) };
 };
@@ -179,12 +181,12 @@ test('lists investor-owned purchase history with pagination, search, and status 
   });
 });
 
-test('portfolio presents confirmed canonical transaction aggregates', async () => {
+test('portfolio returns completed token metadata with purchase and redemption aggregates', async () => {
   const portfolioRows = [{
     tokenUid: 'token-1', organizationUid: 'org-1', tokenName: 'Acme Token', tokenSymbol: 'ACME',
     decimals: 2, initialTokenPrice: '190', imageStorageKey: 'acme.webp', imageMimeType: 'image/webp',
     status: 'deployed', chainId: 11155111, interestUid: 'interest-1', investorWalletAddress: address('1'),
-    purchaseCount: 3, redemptionCount: 1,
+    usdtContractAddress: address('5'), usdtDecimals: 6, purchaseCount: 3, redemptionCount: 1,
     totalPurchasedTokenAmount: '10.00', totalPurchasedTokenAmountRaw: '1000',
     totalInvestedUsdtAmount: '1900.00', totalInvestedUsdtAmountRaw: '1900000000',
     totalRedeemedTokenAmount: '2.00', totalRedeemedTokenAmountRaw: '200',
@@ -199,8 +201,6 @@ test('portfolio presents confirmed canonical transaction aggregates', async () =
   assert.equal(result.items[0].tokenName, 'Acme Token');
   assert.equal(result.items[0].imageUrl, '/api/v1/investments/tokens/token-1/image');
   assert.equal(result.items[0].chainId, 11155111);
-  assert.equal(result.items[0].portfolio.usdtContractAddress, address('5'));
-  assert.equal(result.items[0].portfolio.usdtDecimals, 6);
   assert.equal(result.items[0].portfolio.totalPurchasedTokenAmount, '10.00');
   assert.equal(result.items[0].portfolio.netTokenAmount, '8.00');
   assert.equal(result.items[0].countryRestrictions[0].numericCode, '356');
@@ -208,25 +208,4 @@ test('portfolio presents confirmed canonical transaction aggregates', async () =
   assert.deepEqual(setup.state.portfolioRequest, {
     userUid: investor.userUid, options: { page: 1, limit: 20, search: 'acme' },
   });
-});
-
-test('portfolio supports canonical transfer-only holdings without a purchase price', async () => {
-  const row = {
-    tokenUid: 'token-1', organizationUid: 'org-1', tokenName: 'Acme Token', tokenSymbol: 'ACME',
-    decimals: 2, initialTokenPrice: '1', status: 'deployed', chainId: 5042002,
-    investorWalletAddress: address('1'), purchaseCount: 0, redemptionCount: 0,
-    sentTransferCount: 0, receivedTransferCount: 1,
-    totalPurchasedTokenAmount: '0', totalPurchasedTokenAmountRaw: '0',
-    totalInvestedUsdtAmount: '0', totalInvestedUsdtAmountRaw: '0',
-    totalRedeemedTokenAmount: '0', totalRedeemedTokenAmountRaw: '0',
-    totalSentTokenAmount: '0', totalSentTokenAmountRaw: '0',
-    totalReceivedTokenAmount: '5', totalReceivedTokenAmountRaw: '500',
-    netTokenAmount: '5', netTokenAmountRaw: '500', averagePurchasePrice: null,
-  };
-  const result = await make({ portfolioRows: [row] }).service.portfolio(investor);
-
-  assert.equal(result.items[0].portfolio.purchaseCount, 0);
-  assert.equal(result.items[0].portfolio.receivedTransferCount, 1);
-  assert.equal(result.items[0].portfolio.netTokenAmount, '5');
-  assert.equal(result.items[0].portfolio.averagePurchasePrice, null);
 });

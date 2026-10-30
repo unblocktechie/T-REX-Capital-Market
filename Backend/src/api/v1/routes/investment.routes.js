@@ -9,6 +9,7 @@ const schemas = require('../../../schemas/investment.schema');
 const createInvestmentRouter = ({ controller, registryController, purchaseController, redemptionController, transferController, transactionController, invitationController, authenticate, authorize }) => {
   const router = express.Router();
   router.use(authenticate);
+  router.use(requireInvestorChain);
 
   // Wallet transactions are executed by the frontend. This endpoint is only a fast,
   // independently verified path into the same canonical history used by the indexer.

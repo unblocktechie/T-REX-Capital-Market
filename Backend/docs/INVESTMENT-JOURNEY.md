@@ -91,7 +91,9 @@ status `submitIntrest` (visible to the issuer). Enforced server-side: onboarding
 
 `GET /api/v1/investments/me/interests`  (query: `status` optional)
 The investor's own interests with token summary, including the token's `maxInvestors` and
-`maxBalancePerInvestor` caps.
+`maxBalancePerInvestor` caps. Each item also contains `hasImage` and the authenticated,
+relative token `imageUrl` (or `null` when no image exists). Fetch `imageUrl` with the same
+Bearer token and selected-chain `X-Chain-Uid` header used for this request.
 
 `GET /api/v1/investments/me/interests/:interestUid/history`
 The full rejection / resubmission **timeline** for one of the investor's own interests

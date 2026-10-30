@@ -4,6 +4,7 @@ const { env } = require('../core/config/env');
 const { withTransaction } = require('../database/connection');
 const { createUid } = require('../utils/token');
 const { RedemptionBlockchainError } = require('./blockchain/token-redemption-blockchain.service');
+const { assertSelectedChain } = require('../utils/selected-chain');
 
 const PENDING_CODES = new Set(['TRANSACTION_NOT_FOUND', 'INSUFFICIENT_CONFIRMATIONS', 'RPC_UNAVAILABLE', 'CHAIN_REORGANIZATION']);
 const TERMINAL_STATUSES = new Set(['COMPLETED', 'ISSUER_REJECTED', 'CANCELLED', 'EXPIRED', 'MANUAL_REVIEW']);
@@ -11,12 +12,22 @@ const TERMINAL_STATUSES = new Set(['COMPLETED', 'ISSUER_REJECTED', 'CANCELLED', 
 const ceilDiv = (value, divisor) => (value + divisor - 1n) / divisor;
 
 class TokenRedemptionService {
-  constructor({ repository, blockchain, executionService, config = env.blockchain, transactionRunner = withTransaction }) {
+  constructor({ repository, blockchain, executionService, paymentTokenRepository = null, chainRuntimeService = null, config = env.blockchain, transactionRunner = withTransaction }) {
     this.repository = repository;
     this.blockchain = blockchain;
     this.executionService = executionService;
+    this.paymentTokenRepository = paymentTokenRepository;
+    this.chainRuntimeService = chainRuntimeService;
     this.config = config;
     this.transactionRunner = transactionRunner;
+  }
+
+  async blockchainFor(context) {
+    if (!this.chainRuntimeService) return { blockchain: this.blockchain, config: this.config };
+    const config = context.chainUid
+      ? await this.chainRuntimeService.byUid(context.chainUid)
+      : await this.chainRuntimeService.byChainId(context.chainId);
+    return { blockchain: new (this.blockchain.constructor)(config), config };
   }
 
   assertInvestor(user) {
@@ -100,14 +111,18 @@ class TokenRedemptionService {
     return result;
   }
 
-  validateContext(context) {
+  async validateContext(context, chainConfig = this.config) {
     if (!context) throw new ApiError(404, 'Registered investment was not found.', undefined, 'REGISTERED_INVESTMENT_NOT_FOUND');
     if (context.interestStatus !== 'registered') throw new ApiError(409, 'Investor must be registered for this token before redeeming.', undefined, 'INVESTOR_NOT_REGISTERED');
     if (context.tokenStatus !== 'deployed' || !context.tokenActive) throw new ApiError(409, 'Token is not available for redemption.', undefined, 'TOKEN_NOT_AVAILABLE');
     if (context.investorStatus !== 'submitted' || !context.investorActive || context.investorDeleted) throw new ApiError(409, 'Investor profile is not active.', undefined, 'INVESTOR_NOT_ACTIVE');
     if (context.organizationStatus !== 'approved' || !context.organizationActive) throw new ApiError(409, 'Issuer organization is not active.', undefined, 'ISSUER_NOT_ACTIVE');
     if (context.hasActivePurchase) throw new ApiError(409, 'Complete the active token purchase before starting a redemption.', undefined, 'ACTIVE_PURCHASE_EXISTS');
-    if (![context.tokenAddress, context.investorWalletAddress, context.treasuryWalletAddress, this.config.redemptionUsdtAddress].every(ethers.isAddress)) {
+    if (!context.paymentTokenAddress) {
+      const paymentToken = await this.paymentTokenRepository?.findDefault(chainConfig.chainId, 'REDEMPTION');
+      context.paymentTokenAddress = paymentToken?.contractAddress || null;
+    }
+    if (![context.tokenAddress, context.investorWalletAddress, context.treasuryWalletAddress, context.paymentTokenAddress].every(ethers.isAddress)) {
       throw new ApiError(409, 'Redemption wallet or contract configuration is incomplete.', undefined, 'REDEMPTION_CONFIGURATION_INVALID');
     }
   }
@@ -128,18 +143,26 @@ class TokenRedemptionService {
     };
   }
 
-  async create(user, tokenUid, input) {
+  async create(user, tokenUid, input, selectedChain = null) {
     this.assertInvestor(user);
     const previous = await this.repository.findByIdempotency(user.userUid, input.idempotencyKey);
-    if (previous) return { redemption: this.present(previous), existing: true };
+    if (previous) {
+      assertSelectedChain(previous, selectedChain, 'Redemption');
+      return { redemption: this.present(previous), existing: true };
+    }
     const context = await this.repository.findContext(user.userUid, tokenUid);
-    this.validateContext(context);
+    assertSelectedChain(context, selectedChain, 'Token');
+    const selected = context ? await this.blockchainFor(context) : { blockchain: this.blockchain, config: this.config };
+    await this.validateContext(context, selected.config);
     const active = await this.repository.findActiveByInterest(context.interestUid);
-    if (active) return { redemption: this.present(active), existing: true };
+    if (active) {
+      assertSelectedChain(active, selectedChain, 'Redemption');
+      return { redemption: this.present(active), existing: true };
+    }
     let preparation;
     try {
-      preparation = await this.blockchain.prepare({
-        usdtContractAddress: this.config.redemptionUsdtAddress,
+      preparation = await selected.blockchain.prepare({
+        usdtContractAddress: context.paymentTokenAddress,
         tokenAddress: context.tokenAddress, investorWalletAddress: context.investorWalletAddress,
       });
     } catch (error) {
@@ -152,7 +175,7 @@ class TokenRedemptionService {
     if (BigInt(amounts.tokenAmountRaw) > freeBalance) {
       throw new ApiError(409, 'Redemption amount exceeds the investor available token balance.', undefined, 'INSUFFICIENT_AVAILABLE_TOKEN_BALANCE');
     }
-    const ttlMinutes = Math.max(5, Number(this.config.redemptionAuthorizationTtlMinutes || 30));
+    const ttlMinutes = Math.max(5, Number(selected.config.redemptionAuthorizationTtlMinutes || this.config.redemptionAuthorizationTtlMinutes || 30));
     const deadline = new Date(Date.now() + ttlMinutes * 60000);
     try {
       const created = await this.transactionRunner(async (connection) => {
@@ -160,7 +183,7 @@ class TokenRedemptionService {
           ...context, ...preparation, ...amounts, investorUserUid: user.userUid,
           idempotencyKey: input.idempotencyKey, authorizationNonce: createUid(),
           authorizationDeadline: deadline, expiresAt: deadline,
-          usdtContractAddress: ethers.getAddress(this.config.redemptionUsdtAddress),
+          usdtContractAddress: ethers.getAddress(context.paymentTokenAddress),
           tokenAddress: ethers.getAddress(context.tokenAddress),
           investorWalletAddress: ethers.getAddress(context.investorWalletAddress),
           issuerPaymentWalletAddress: ethers.getAddress(context.treasuryWalletAddress),
@@ -183,10 +206,11 @@ class TokenRedemptionService {
     }
   }
 
-  async authorize(user, redemptionUid, signature) {
+  async authorize(user, redemptionUid, signature, selectedChain = null) {
     this.assertInvestor(user);
     let row = await this.repository.findOwned(redemptionUid, user.userUid);
     if (!row) throw new ApiError(404, 'Redemption was not found.', undefined, 'REDEMPTION_NOT_FOUND');
+    assertSelectedChain(row, selectedChain, 'Redemption');
     if (row.status === 'PENDING_ISSUER_APPROVAL' && row.authorizationSignature) return { redemption: this.present(row), idempotent: true };
     if (row.status !== 'PENDING_INVESTOR_AUTHORIZATION') throw new ApiError(409, 'Redemption can no longer be authorized.', undefined, 'REDEMPTION_NOT_AWAITING_AUTHORIZATION');
     let verified;
@@ -212,25 +236,31 @@ class TokenRedemptionService {
     return { redemption: this.present(row), idempotent: false };
   }
 
-  async getInvestor(user, redemptionUid) {
+  async getInvestor(user, redemptionUid, selectedChain = null) {
     this.assertInvestor(user);
     const row = await this.repository.findOwned(redemptionUid, user.userUid);
     if (!row) throw new ApiError(404, 'Redemption was not found.', undefined, 'REDEMPTION_NOT_FOUND');
+    assertSelectedChain(row, selectedChain, 'Redemption');
     return this.present(row, {
       history: await this.repository.listHistory(redemptionUid),
       transactions: await this.repository.listTransactions(redemptionUid),
     });
   }
 
-  async listInvestor(user, tokenUid, query) {
+  async listInvestor(user, tokenUid, query, selectedChain = null) {
     this.assertInvestor(user);
-    const result = await this.repository.listInvestor(user.userUid, tokenUid, query);
+    const options = { ...query };
+    if (selectedChain) options.chainId = selectedChain.chainId;
+    const result = await this.repository.listInvestor(user.userUid, tokenUid, options);
     return { items: result.rows.map((row) => this.present(row)), pagination: this.pagination(result) };
   }
 
-  async listIssuer(user, query) {
+  async listIssuer(user, query, selectedChain = null) {
     this.assertIssuer(user);
-    const result = await this.repository.listIssuer(user.userUid, query);
+    const result = await this.repository.listIssuer(user.userUid, {
+      ...query,
+      chainId: selectedChain?.chainId ?? null,
+    });
     return { items: result.rows.map((row) => this.present(row, { includeAuthorization: false })), pagination: this.pagination(result) };
   }
 
@@ -238,20 +268,22 @@ class TokenRedemptionService {
     return { page: result.page, limit: result.limit, total: result.total, totalPages: result.total ? Math.ceil(result.total / result.limit) : 0 };
   }
 
-  async getIssuer(user, redemptionUid) {
+  async getIssuer(user, redemptionUid, selectedChain = null) {
     this.assertIssuer(user);
     const row = await this.repository.findIssuerOwned(redemptionUid, user.userUid);
     if (!row) throw new ApiError(404, 'Redemption was not found.', undefined, 'REDEMPTION_NOT_FOUND');
+    assertSelectedChain(row, selectedChain, 'Redemption');
     return this.present(row, {
       history: await this.repository.listHistory(redemptionUid),
       transactions: await this.repository.listTransactions(redemptionUid), includeAuthorization: false,
     });
   }
 
-  async approve(user, redemptionUid, note) {
+  async approve(user, redemptionUid, note, selectedChain = null) {
     this.assertIssuer(user);
     let row = await this.repository.findIssuerOwned(redemptionUid, user.userUid);
     if (!row) throw new ApiError(404, 'Redemption was not found.', undefined, 'REDEMPTION_NOT_FOUND');
+    assertSelectedChain(row, selectedChain, 'Redemption');
     if (!['PENDING_ISSUER_APPROVAL', 'ISSUER_APPROVED', 'TOKEN_LOCK_SUBMITTED'].includes(row.status)) {
       throw new ApiError(409, 'Redemption is not awaiting issuer approval.', undefined, 'REDEMPTION_NOT_AWAITING_APPROVAL');
     }
@@ -278,10 +310,11 @@ class TokenRedemptionService {
     };
   }
 
-  async reject(user, redemptionUid, reason) {
+  async reject(user, redemptionUid, reason, selectedChain = null) {
     this.assertIssuer(user);
     const row = await this.repository.findIssuerOwned(redemptionUid, user.userUid);
     if (!row) throw new ApiError(404, 'Redemption was not found.', undefined, 'REDEMPTION_NOT_FOUND');
+    assertSelectedChain(row, selectedChain, 'Redemption');
     if (row.status === 'ISSUER_REJECTED') return { redemption: this.present(row), idempotent: true };
     await this.transactionRunner(async (connection) => {
       const changed = await this.repository.transition(redemptionUid, 'PENDING_ISSUER_APPROVAL', {
@@ -376,20 +409,13 @@ class TokenRedemptionService {
     });
   }
 
-  async cancel(user, redemptionUid) {
+  async cancel(user, redemptionUid, selectedChain = null) {
     this.assertInvestor(user);
     const row = await this.repository.findOwned(redemptionUid, user.userUid);
     if (!row) throw new ApiError(404, 'Redemption was not found.', undefined, 'REDEMPTION_NOT_FOUND');
+    assertSelectedChain(row, selectedChain, 'Redemption');
     if (row.status === 'CANCELLED') return { redemption: this.present(row), idempotent: true };
-    if (row.status === 'ISSUER_APPROVED') {
-      throw new ApiError(
-        409,
-        'Redemption cannot be cancelled after issuer approval.',
-        undefined,
-        'REDEMPTION_CANCELLATION_NOT_ALLOWED_AFTER_ISSUER_APPROVAL',
-      );
-    }
-    if (['PENDING_INVESTOR_AUTHORIZATION', 'PENDING_ISSUER_APPROVAL'].includes(row.status)) {
+    if (['PENDING_INVESTOR_AUTHORIZATION', 'PENDING_ISSUER_APPROVAL', 'ISSUER_APPROVED'].includes(row.status)) {
       await this.transactionRunner(async (connection) => {
         const changed = await this.repository.transition(redemptionUid, row.status, {
           status: 'CANCELLED', lockStatus: 'NOT_REQUIRED', paymentStatus: 'NOT_REQUIRED',
@@ -406,12 +432,13 @@ class TokenRedemptionService {
     throw new ApiError(409, 'Redemption cannot be cancelled after its blockchain transaction is submitted.', undefined, 'REDEMPTION_CANCELLATION_NOT_ALLOWED');
   }
 
-  async retry(user, redemptionUid) {
+  async retry(user, redemptionUid, selectedChain = null) {
     if (!['Investor', 'Issuer'].includes(user.roleName)) throw ApiError.forbidden();
     const row = user.roleName === 'Investor'
       ? await this.repository.findOwned(redemptionUid, user.userUid)
       : await this.repository.findIssuerOwned(redemptionUid, user.userUid);
     if (!row) throw new ApiError(404, 'Redemption was not found.', undefined, 'REDEMPTION_NOT_FOUND');
+    if (user.roleName === 'Investor') assertSelectedChain(row, selectedChain, 'Redemption');
     if (!TERMINAL_STATUSES.has(row.status)) await this.repository.queue(redemptionUid);
     return { redemption: this.present(await this.repository.findByUid(redemptionUid)), terminal: TERMINAL_STATUSES.has(row.status) };
   }

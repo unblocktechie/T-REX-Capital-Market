@@ -8,6 +8,7 @@ const schemas = require('../../../schemas/issuer-claim.schema');
 const createIssuerClaimRouter = ({ controller, authenticate, authorize }) => {
   const router = express.Router();
   router.use(authenticate);
+  router.use(requireInvestorChain);
   router.post('/sign', validate({ body: schemas.signClaims }), authorize, asyncHandler(controller.sign));
   router.get('/:subscriptionId', validate({ params: schemas.subscriptionParams }), authorize, asyncHandler(controller.status));
   return router;

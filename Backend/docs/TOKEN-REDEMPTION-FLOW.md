@@ -63,7 +63,7 @@ verifier.
 2. Read `USDT.allowance(issuerWallet, controllerAddress)` from chain.
 3. If insufficient, have the Issuer approve the Controller and re-read allowance after mining.
 4. Check the Issuer USDT balance for UX; the contract remains authoritative.
-5. Call `redeem(investorWalletAddress, tokenAddress, tokenAmountRaw)` on the Controller.
+5. Call `redeem(investorWalletAddress, tokenAddress, paymentTokenAddress, tokenAmountRaw)` on the Controller.
 6. Persist the returned hash locally and call `/investments/transactions/confirm` with the Issuer JWT.
 7. Treat `SUBMITTED` as waiting, not failure. Refresh transaction/redemption history.
 8. Treat only `CONFIRMED`/`COMPLETED` as final success. Never send a second redemption because the

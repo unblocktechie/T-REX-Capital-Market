@@ -328,6 +328,21 @@
     {
       "key": "transferTxHash",
       "value": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "key": "chainUid",
+      "value": "60000000-0000-4000-8000-000000000001",
+      "type": "string"
+    },
+    {
+      "key": "paymentTokenUid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "chainDeployerPrivateKey",
+      "value": "",
+      "type": "string"
     }
   ],
   "item": [
@@ -1649,7 +1664,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"walletAddress\": \"{{walletAddress}}\"\n}",
+              "raw": "{\n  \"walletAddress\": \"{{walletAddress}}\",\n  \"chainUid\": \"{{chainUid}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1785,7 +1800,7 @@
               }
             },
             "url": "{{baseUrl}}/api/v1/admin/organizations/{{adminOrganizationUid}}/status",
-            "description": "Requires configured Sepolia RPC, identity factory, and funded deployer. Creates or reuses the organization's OnchainID before status becomes approved. Run either this request or the rejection example against a submitted application."
+            "description": "Requires configured Network RPC, identity factory, and funded deployer. Creates or reuses the organization's OnchainID before status becomes approved. Run either this request or the rejection example against a submitted application."
           },
           "event": [
             {
@@ -1881,6 +1896,32 @@
           ]
         },
         {
+          "name": "Supported Payment Tokens",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/payment-tokens",
+            "description": "Returns the authoritative payment-token catalogue used by token creation, purchase, and redemption."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Payment tokens are returned', () => pm.response.to.have.status(200));",
+                  "const tokens = pm.response.json().data;",
+                  "pm.expect(tokens.length).to.be.at.least(2);",
+                  "pm.collectionVariables.set('paymentTokenAddress', tokens[0].contractAddress);"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Get My Token Form",
           "request": {
             "method": "GET",
@@ -1908,6 +1949,11 @@
               "mode": "formdata",
               "formdata": [
                 {
+                  "key": "chainUid",
+                  "value": "{{chainUid}}",
+                  "type": "text"
+                },
+                {
                   "key": "tokenName",
                   "value": "Acme Security Token",
                   "type": "text"
@@ -1930,6 +1976,11 @@
                 {
                   "key": "treasuryWalletAddress",
                   "value": "{{walletAddress}}",
+                  "type": "text"
+                },
+                {
+                  "key": "paymentTokenAddress",
+                  "value": "{{paymentTokenAddress}}",
                   "type": "text"
                 },
                 {
@@ -2042,7 +2093,8 @@
                 }
               }
             },
-            "url": "{{baseUrl}}/api/v1/tokens/me/compliance"
+            "url": "{{baseUrl}}/api/v1/tokens/me/compliance",
+            "description": "Use unique country UIDs for allowlist/blocklist behavior. Set countryUids to [] to create a token with no geographic restriction."
           },
           "event": [
             {
@@ -2051,8 +2103,9 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Token compliance rules are saved', () => pm.response.to.have.status(200));",
-                  "const restriction = pm.response.json().data.countryRestrictions[0];",
-                  "pm.expect(restriction.iso3166NumericCode).to.match(/^\\d{3}$/);"
+                  "const restrictions = pm.response.json().data.countryRestrictions;",
+                  "pm.expect(restrictions).to.be.an('array');",
+                  "if (restrictions.length) pm.expect(restrictions[0].iso3166NumericCode).to.match(/^\\d{3}$/);"
                 ]
               }
             }
@@ -2089,7 +2142,7 @@
                   "pm.test('Token governance roles are saved', () => pm.response.to.have.status(200));",
                   "const token = pm.response.json().data;",
                   "pm.expect(token.currentStep).to.eql('review');",
-                  "pm.expect(token.tokenAgentWalletAddress.toLowerCase()).to.eql('0x40e81faa4e6d54ae0632df146939bb5858359271');"
+                  "pm.expect(token.tokenAgentWalletAddress.toLowerCase()).to.eql('0x4052d80c222111234b89afdfff597b5de8da50cd');"
                 ]
               }
             }
@@ -2601,7 +2654,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"walletAddress\": \"{{walletAddress}}\"\n}",
+              "raw": "{\n  \"walletAddress\": \"{{walletAddress}}\",\n  \"chainUid\": \"{{chainUid}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2715,54 +2768,109 @@
         {
           "name": "Confirm Frontend Wallet Transaction",
           "request": {
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{investorToken}}", "type": "string" }] },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{investorToken}}",
+                  "type": "string"
+                }
+              ]
+            },
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"chainId\": 11155111,\n  \"txHash\": \"{{blockchainTransactionHash}}\",\n  \"tokenUid\": \"{{investmentTokenUid}}\",\n  \"expectedAction\": \"INVEST\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{baseUrl}}/api/v1/investments/transactions/confirm",
             "description": "Optional fast path after the investor signs PlatformController.buy() or token.transfer(). Use the separate Issuer Redemption request for the issuer-executed redeem call. The backend independently verifies canonical chain data; the fallback indexer recovers the transaction if this call is missed."
           },
-          "event": [{
-            "listen": "test",
-            "script": { "type": "text/javascript", "exec": [
-              "pm.test('Canonical transaction state returned', () => pm.response.to.have.status(200));",
-              "const data = pm.response.json().data;",
-              "pm.expect(data.status).to.be.oneOf(['SUBMITTED', 'CONFIRMED', 'FAILED']);"
-            ] }
-          }]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Canonical transaction state returned', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "pm.expect(data.status).to.be.oneOf(['SUBMITTED', 'CONFIRMED', 'FAILED']);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Issuer - Confirm Redemption Transaction",
           "request": {
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{userToken}}", "type": "string" }] },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{userToken}}",
+                  "type": "string"
+                }
+              ]
+            },
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"chainId\": 11155111,\n  \"txHash\": \"{{blockchainTransactionHash}}\",\n  \"tokenUid\": \"{{investmentTokenUid}}\",\n  \"expectedAction\": \"REDEMPTION\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{baseUrl}}/api/v1/investments/transactions/confirm",
-            "description": "Call after the owning issuer signs PlatformController.redeem(investor, token, tokenAmount). The backend verifies issuer ownership and sender, the exact calldata, TokensRedeemed event, token burn, USDT settlement, quote, receipt, and confirmations."
+            "description": "Call after the owning issuer signs PlatformController.redeem(investor, token, paymentToken, tokenAmount). The backend verifies issuer ownership and sender, selected payment token, exact calldata, TokensRedeemed event, token burn, settlement, quote, receipt, and confirmations."
           },
-          "event": [{
-            "listen": "test",
-            "script": { "type": "text/javascript", "exec": [
-              "pm.test('Issuer redemption transaction state returned', () => pm.response.to.have.status(200));",
-              "const data = pm.response.json().data;",
-              "pm.expect(data.type).to.eql('REDEMPTION');",
-              "pm.expect(data.status).to.be.oneOf(['SUBMITTED', 'CONFIRMED', 'FAILED']);"
-            ] }
-          }]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Issuer redemption transaction state returned', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "pm.expect(data.type).to.eql('REDEMPTION');",
+                  "pm.expect(data.status).to.be.oneOf(['SUBMITTED', 'CONFIRMED', 'FAILED']);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "List Canonical Blockchain Transactions",
           "request": {
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{investorToken}}", "type": "string" }] },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{investorToken}}",
+                  "type": "string"
+                }
+              ]
+            },
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/api/v1/investments/transactions?page=1&limit=20&tokenUid={{investmentTokenUid}}&type=ALL&status=ALL&search=",
@@ -2772,7 +2880,16 @@
         {
           "name": "Export Canonical Blockchain Transactions",
           "request": {
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{investorToken}}", "type": "string" }] },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{investorToken}}",
+                  "type": "string"
+                }
+              ]
+            },
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/api/v1/investments/transactions/export?tokenUid={{investmentTokenUid}}&type=ALL&status=ALL&search=",
@@ -2782,47 +2899,98 @@
         {
           "name": "Legacy - List Token Purchase History",
           "request": {
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{investorToken}}", "type": "string" }] },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{investorToken}}",
+                  "type": "string"
+                }
+              ]
+            },
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/api/v1/investments/tokens/{{investmentTokenUid}}/purchases?page=1&limit=20&search=&status=all",
             "description": "Read-only legacy production history. New purchase UI must use /investments/transactions?type=INVEST."
           },
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
-            "pm.test('Purchase history fetched', () => pm.response.to.have.status(200));",
-            "const body = pm.response.json();",
-            "pm.expect(body.data).to.be.an('array');",
-            "pm.expect(body.meta).to.have.keys('page', 'limit', 'total', 'totalPages');"
-          ] } }]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Purchase history fetched', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.data).to.be.an('array');",
+                  "pm.expect(body.meta).to.have.keys('page', 'limit', 'total', 'totalPages');"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Get Investor Portfolio",
           "request": {
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{investorToken}}", "type": "string" }] },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{investorToken}}",
+                  "type": "string"
+                }
+              ]
+            },
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/api/v1/investments/me/portfolio?page=1&limit=20&search=",
             "description": "Returns one row per token with at least one completed purchase. Includes marketplace token/image/issuer/claim/restriction data, chain ID, purchased and redeemed totals, net token amount, USDT invested, average price, counts, and activity dates."
           },
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
-            "pm.test('Investor portfolio fetched', () => pm.response.to.have.status(200));",
-            "const body = pm.response.json(); pm.expect(body.data).to.be.an('array');",
-            "pm.expect(body.meta).to.have.keys('page', 'limit', 'total', 'totalPages');"
-          ] } }]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Investor portfolio fetched', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json(); pm.expect(body.data).to.be.an('array');",
+                  "pm.expect(body.meta).to.have.keys('page', 'limit', 'total', 'totalPages');"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Legacy - Get Token Purchase Settlement",
           "request": {
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{investorToken}}", "type": "string" }] },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{investorToken}}",
+                  "type": "string"
+                }
+              ]
+            },
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/api/v1/investments/purchases/{{purchaseUid}}",
             "description": "Poll until COMPLETED. Returns full USDT payment metadata, platform mint metadata, synchronization/error state, and append-only transactionHistory."
           },
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
-            "pm.test('Purchase settlement fetched', () => pm.response.to.have.status(200));",
-            "console.log('Purchase status:', pm.response.json().data?.status);"
-          ] } }]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Purchase settlement fetched', () => pm.response.to.have.status(200));",
+                  "console.log('Purchase status:', pm.response.json().data?.status);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Get Required Documents (Eligibility)",
@@ -3004,31 +3172,48 @@
           "name": "Create or Resume Registry Registration (Issuer)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{baseUrl}}/api/v1/investments/issuer/interests/{{interestUid}}/registry-registration",
             "description": "Requires a claimSubmitted or already synchronized registered interest. For a new on-chain registration, creates PENDING before MetaMask. If matching on-chain registry state already exists, no PENDING row or MetaMask call is created: the backend finds and verifies the authoritative IdentityRegistered transaction, inserts CONFIRMED directly, and returns 200. A temporary 503 must be retried without opening MetaMask. Use only the returned registry/wallet/identity/country values for registerIdentity().",
             "auth": {
               "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{userToken}}", "type": "string" }]
-            }
-          },
-          "event": [{
-            "listen": "test",
-            "script": {
-              "type": "text/javascript",
-              "exec": [
-                "pm.test('Registry operation created, resumed, or synchronized', () => pm.expect([200, 201]).to.include(pm.response.code));",
-                "const data = pm.response.json().data;",
-                "pm.expect(data.status).to.be.oneOf(['PENDING', 'CONFIRMED']);",
-                "if (data.registryOperationId) pm.collectionVariables.set('registryRegistrationUid', data.registryOperationId);"
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{userToken}}",
+                  "type": "string"
+                }
               ]
             }
-          }]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Registry operation created, resumed, or synchronized', () => pm.expect([200, 201]).to.include(pm.response.code));",
+                  "const data = pm.response.json().data;",
+                  "pm.expect(data.status).to.be.oneOf(['PENDING', 'CONFIRMED']);",
+                  "if (data.registryOperationId) pm.collectionVariables.set('registryRegistrationUid', data.registryOperationId);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Get Registry Registration (Issuer)",
@@ -3039,45 +3224,72 @@
             "description": "Resume state after refresh. The backend returns its current PENDING/CONFIRMED record.",
             "auth": {
               "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{userToken}}", "type": "string" }]
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{userToken}}",
+                  "type": "string"
+                }
+              ]
             }
           },
-          "event": [{
-            "listen": "test",
-            "script": {
-              "type": "text/javascript",
-              "exec": ["pm.test('Registry operation fetched', () => pm.response.to.have.status(200));"]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Registry operation fetched', () => pm.response.to.have.status(200));"
+                ]
+              }
             }
-          }]
+          ]
         },
         {
           "name": "Confirm Registry Transaction (Issuer)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"txHash\": \"{{registryTxHash}}\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{baseUrl}}/api/v1/investments/issuer/interests/{{interestUid}}/registry-registration/{{registryRegistrationUid}}/confirm",
             "description": "Send only the MetaMask hash. Backend supports a direct registerIdentity transaction or a strictly decoded single execution through a configured MetaMask Delegation Manager. It verifies chain, issuer sender, zero native value, direct/nested registry target and calldata, canonical receipt, IdentityRegistered event, and final state. A successful confirmation atomically sets the interest to registered and records registered history. 202 means wait/poll; only 200 with status CONFIRMED is complete.",
             "auth": {
               "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{userToken}}", "type": "string" }]
-            }
-          },
-          "event": [{
-            "listen": "test",
-            "script": {
-              "type": "text/javascript",
-              "exec": [
-                "pm.test('Registry verification responded', () => pm.expect([200, 202]).to.include(pm.response.code));",
-                "const data = pm.response.json().data;",
-                "if (pm.response.code === 200) pm.expect(data.status).to.eql('CONFIRMED');"
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{userToken}}",
+                  "type": "string"
+                }
               ]
             }
-          }]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Registry verification responded', () => pm.expect([200, 202]).to.include(pm.response.code));",
+                  "const data = pm.response.json().data;",
+                  "if (pm.response.code === 200) pm.expect(data.status).to.eql('CONFIRMED');"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Approve Investment Interest (Issuer)",
@@ -3283,11 +3495,20 @@
           "name": "Prepare Investor Claim",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"interestId\": \"{{interestUid}}\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{baseUrl}}/api/v1/investor/claims/{{investorClaimId}}/prepare",
             "description": "Creates/resets the single PENDING row and returns trusted ONCHAINID call arguments. Call this before MetaMask."
@@ -3310,11 +3531,20 @@
           "name": "Submit Investor Claim Transaction",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"interestId\": \"{{interestUid}}\",\n  \"txHash\": \"{{investorClaimTxHash}}\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{baseUrl}}/api/v1/investor/claims/{{investorClaimId}}/submit",
             "description": "Set investorClaimTxHash to the real MetaMask transaction hash. The backend persists it before receipt verification."
@@ -3337,11 +3567,20 @@
           "name": "Retry Investor Claim (Fast)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"interestId\": \"{{interestUid}}\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{baseUrl}}/api/v1/investor/claims/{{investorClaimId}}/retry",
             "description": "Fast recovery. CONFIRMED=no action; PENDING_CONFIRMATION=wait; SYNCING=poll; TRANSACTION_REQUIRED=frontend may open MetaMask."
@@ -3371,47 +3610,103 @@
           "name": "Issuer - List Completed Investors",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
             "url": "{{baseUrl}}/api/v1/investments/issuer/investors?tokenUid={{investmentTokenUid}}&page=1&limit=20&search=&invitationStatus=all",
             "description": "Lists only active submitted investor profiles. Each row includes top-level accreditationType, invitation state, existing-interest state, and country eligibility for the issuer-owned deployed token."
           },
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
-            "pm.test('Completed investors listed', () => pm.response.to.have.status(200));",
-            "const first = pm.response.json().data?.[0]; if (first?.investorUid) pm.collectionVariables.set('invitationInvestorUid', first.investorUid);"
-          ] } }]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Completed investors listed', () => pm.response.to.have.status(200));",
+                  "const first = pm.response.json().data?.[0]; if (first?.investorUid) pm.collectionVariables.set('invitationInvestorUid', first.investorUid);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Issuer - Invite Investor",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }, { "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"tokenUid\": \"{{investmentTokenUid}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tokenUid\": \"{{investmentTokenUid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
             "url": "{{baseUrl}}/api/v1/investments/issuer/investors/{{invitationInvestorUid}}/invitations",
             "description": "Creates the unique invitation and sends its styled email. Repeating a successfully sent invitation returns the same row and does not send another email."
           },
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
-            "pm.test('Invitation created or returned idempotently', () => pm.expect([200, 201]).to.include(pm.response.code));",
-            "const uid = pm.response.json().data?.invitation?.invitationUid; if (uid) pm.collectionVariables.set('investorInvitationUid', uid);"
-          ] } }]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Invitation created or returned idempotently', () => pm.expect([200, 201]).to.include(pm.response.code));",
+                  "const uid = pm.response.json().data?.invitation?.invitationUid; if (uid) pm.collectionVariables.set('investorInvitationUid', uid);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Investor - List Invitations",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{investorToken}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{investorToken}}"
+              }
+            ],
             "url": "{{baseUrl}}/api/v1/investments/me/invitations?page=1&limit=20&search=&status=all",
             "description": "Returns delivered invitations with marketplace-equivalent token detail and issuer organization detail."
           },
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
-            "pm.test('Investor invitations listed', () => pm.response.to.have.status(200));",
-            "const uid = pm.response.json().data?.[0]?.invitationUid; if (uid) pm.collectionVariables.set('investorInvitationUid', uid);"
-          ] } }]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Investor invitations listed', () => pm.response.to.have.status(200));",
+                  "const uid = pm.response.json().data?.[0]?.invitationUid; if (uid) pm.collectionVariables.set('investorInvitationUid', uid);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Investor - Get Invitation",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{investorToken}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{investorToken}}"
+              }
+            ],
             "url": "{{baseUrl}}/api/v1/investments/me/invitations/{{investorInvitationUid}}",
             "description": "Gets one investor-owned invitation. Other investors receive INVITATION_NOT_FOUND."
           }
@@ -3420,8 +3715,25 @@
           "name": "Investor - Mark Invitation Viewed",
           "request": {
             "method": "PATCH",
-            "header": [{ "key": "Authorization", "value": "Bearer {{investorToken}}" }, { "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{}", "options": { "raw": { "language": "json" } } },
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{investorToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
             "url": "{{baseUrl}}/api/v1/investments/me/invitations/{{investorInvitationUid}}/viewed",
             "description": "Idempotently changes SENT to VIEWED and stores viewedAt."
           }
@@ -3430,28 +3742,70 @@
     },
     {
       "name": "Token Redemption",
-      "description": "Off-chain redemption request and issuer decision. Issuer grants controller USDT allowance when needed and signs PlatformController.redeem(investor, token, amount); canonical confirmation/indexing records the atomic burn and payout.",
+      "description": "Off-chain redemption request and issuer decision. Issuer grants the controller allowance for the token-selected payment currency when needed and signs PlatformController.redeem(investor, token, paymentToken, amount); canonical confirmation/indexing records the atomic burn and payout.",
       "item": [
         {
           "name": "Investor - Create Redemption",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Authorization", "value": "Bearer {{investorToken}}" }, { "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"tokenAmount\": \"{{redemptionTokenAmount}}\",\n  \"idempotencyKey\": \"{{redemptionIdempotencyKey}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{investorToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tokenAmount\": \"{{redemptionTokenAmount}}\",\n  \"idempotencyKey\": \"{{redemptionIdempotencyKey}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
             "url": "{{baseUrl}}/api/v1/investments/tokens/{{investmentTokenUid}}/redemptions",
             "description": "Creates the authoritative redemption request. Sign data.authorization.typedData with the registered investor wallet, then store the signature in redemptionSignature."
           },
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
-            "pm.test('Redemption intent created or resumed', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
-            "const json = pm.response.json(); if (json.data?.redemptionUid) pm.collectionVariables.set('redemptionUid', json.data.redemptionUid);"
-          ] } }]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Redemption intent created or resumed', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "const json = pm.response.json(); if (json.data?.redemptionUid) pm.collectionVariables.set('redemptionUid', json.data.redemptionUid);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Investor - Authorize Redemption",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Authorization", "value": "Bearer {{investorToken}}" }, { "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"signature\": \"{{redemptionSignature}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{investorToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"signature\": \"{{redemptionSignature}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
             "url": "{{baseUrl}}/api/v1/investments/redemptions/{{redemptionUid}}/authorize"
           }
         },
@@ -3459,7 +3813,12 @@
           "name": "Investor - Redemption History",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{investorToken}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{investorToken}}"
+              }
+            ],
             "url": "{{baseUrl}}/api/v1/investments/tokens/{{investmentTokenUid}}/redemptions?page=1&limit=20&search=&status=all"
           }
         },
@@ -3467,7 +3826,12 @@
           "name": "Investor - Redemption Detail",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{investorToken}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{investorToken}}"
+              }
+            ],
             "url": "{{baseUrl}}/api/v1/investments/redemptions/{{redemptionUid}}"
           }
         },
@@ -3475,8 +3839,25 @@
           "name": "Investor - Cancel Redemption",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Authorization", "value": "Bearer {{investorToken}}" }, { "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{}", "options": { "raw": { "language": "json" } } },
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{investorToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
             "url": "{{baseUrl}}/api/v1/investments/redemptions/{{redemptionUid}}/cancel"
           }
         },
@@ -3484,7 +3865,12 @@
           "name": "Issuer - List Redemption Requests",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
             "url": "{{baseUrl}}/api/v1/investments/issuer/redemptions?page=1&limit=20&search=&status=all"
           }
         },
@@ -3492,7 +3878,12 @@
           "name": "Issuer - Redemption Detail",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
             "url": "{{baseUrl}}/api/v1/investments/issuer/redemptions/{{redemptionUid}}"
           }
         },
@@ -3500,8 +3891,25 @@
           "name": "Issuer - Approve Redemption Request",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }, { "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"note\": \"Redemption approved after review.\"\n}", "options": { "raw": { "language": "json" } } },
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Redemption approved after review.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
             "url": "{{baseUrl}}/api/v1/investments/issuer/redemptions/{{redemptionUid}}/approve"
           }
         },
@@ -3509,8 +3917,25 @@
           "name": "Issuer - Reject Redemption",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }, { "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"reason\": \"Redemption request requires additional review.\"\n}", "options": { "raw": { "language": "json" } } },
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Redemption request requires additional review.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
             "url": "{{baseUrl}}/api/v1/investments/issuer/redemptions/{{redemptionUid}}/reject"
           }
         }
@@ -3523,7 +3948,12 @@
           "name": "Investor - Get Transfer Detail",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{investorToken}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{investorToken}}"
+              }
+            ],
             "url": "{{baseUrl}}/api/v1/investments/transfers/{{transferUid}}"
           }
         },
@@ -3531,7 +3961,12 @@
           "name": "Investor - List Sent and Received Transfers",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{investorToken}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{investorToken}}"
+              }
+            ],
             "url": "{{baseUrl}}/api/v1/investments/tokens/{{investmentTokenUid}}/transfers?page=1&limit=20&search=&status=all&direction=all"
           }
         }
@@ -3686,6 +4121,391 @@
               }
             }
           ]
+        }
+      ]
+    },
+    {
+      "name": "Multichain Configuration",
+      "item": [
+        {
+          "name": "List Supported Chains",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/chains"
+          }
+        },
+        {
+          "name": "Get Selected Chain Configuration",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/chains/{{chainUid}}/config",
+            "description": "Returns the browser-safe complete deployment contract suite and controller-verified payment tokens for the selected active chain. Internal RPCs and signer secrets are never returned."
+          }
+        },
+        {
+          "name": "My Chain Access",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{userToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/chains/me"
+          }
+        },
+        {
+          "name": "Unlock Chain ONCHAINID",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{userToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/chains/{{chainUid}}/unlock",
+            "description": "Issuer/Investor only. Idempotently creates ONCHAINID for a completed profile on the selected chain."
+          }
+        },
+        {
+          "name": "Supported Payment Tokens",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/payment-tokens?chainUid={{chainUid}}&action=PURCHASE"
+          }
+        },
+        {
+          "name": "Admin - List Chains",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/admin/chains?page=1&limit=20"
+          }
+        },
+        {
+          "name": "Admin - Get Chain",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/admin/chains/{{chainUid}}"
+          }
+        },
+        {
+          "name": "Admin - Create Chain",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chainCode\": \"AMOY\",\n  \"chainName\": \"Polygon Amoy\",\n  \"chainId\": 80002,\n  \"networkName\": \"amoy\",\n  \"nativeCurrencyName\": \"POL\",\n  \"nativeCurrencySymbol\": \"POL\",\n  \"nativeCurrencyDecimals\": 18,\n  \"rpcUrl\": \"https://rpc-amoy.polygon.technology\",\n  \"publicRpcUrl\": \"https://rpc-amoy.polygon.technology\",\n  \"explorerUrl\": \"https://amoy.polygonscan.com\",\n  \"contractSuiteDeployedAt\": \"2026-09-22T05:10:28.254Z\",\n  \"trexImplementationAuthorityAddress\": \"0x0000000000000000000000000000000000000001\",\n  \"trexFactoryAddress\": \"0x0000000000000000000000000000000000000002\",\n  \"trexGatewayAddress\": \"0x0000000000000000000000000000000000000003\",\n  \"identityImplementationAuthorityAddress\": \"0x0000000000000000000000000000000000000004\",\n  \"identityFactoryAddress\": \"0x0000000000000000000000000000000000000005\",\n  \"platformControllerAddress\": \"0x0000000000000000000000000000000000000006\",\n  \"countryRestrictModuleAddress\": \"0x0000000000000000000000000000000000000007\",\n  \"maxBalanceModuleAddress\": \"0x0000000000000000000000000000000000000008\",\n  \"maxInvestorsModuleAddress\": \"0x0000000000000000000000000000000000000009\",\n  \"platformControllerOwnerAddress\": \"0x0000000000000000000000000000000000000010\",\n  \"idFactoryAccessManagerAddress\": null,\n  \"idFactoryAccessManagerAdminAddress\": null,\n  \"tokenImplementationAddress\": \"0x0000000000000000000000000000000000000011\",\n  \"claimTopicsRegistryImplementationAddress\": \"0x0000000000000000000000000000000000000012\",\n  \"identityRegistryImplementationAddress\": \"0x0000000000000000000000000000000000000013\",\n  \"identityRegistryStorageImplementationAddress\": \"0x0000000000000000000000000000000000000014\",\n  \"trustedIssuersRegistryImplementationAddress\": \"0x0000000000000000000000000000000000000015\",\n  \"modularComplianceImplementationAddress\": \"0x0000000000000000000000000000000000000016\",\n  \"identityImplementationAddress\": \"0x0000000000000000000000000000000000000017\",\n  \"paymentTokenAddresses\": [\"0x0000000000000000000000000000000000000018\"],\n  \"deployerPrivateKey\": \"{{chainDeployerPrivateKey}}\",\n  \"confirmations\": 2,\n  \"registryConfirmations\": 2,\n  \"indexersEnabled\": true,\n  \"isTestnet\": true,\n  \"isDefault\": false,\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/admin/chains",
+            "description": "Replace every placeholder with the deployed contract list for the new chain. The backend verifies bytecode and requires paymentTokenAddresses to exactly match PlatformController.paymentTokens(). The private key is write-only and encrypted; never export a real key in a shared environment."
+          }
+        },
+        {
+          "name": "Admin - Update Chain",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"publicRpcUrl\": \"https://rpc-amoy.polygon.technology\",\n  \"explorerUrl\": \"https://amoy.polygonscan.com\",\n  \"fallbackRpcUrls\": [\n    \"https://fallback-rpc.example\"\n  ],\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/admin/chains/{{chainUid}}"
+          }
+        },
+        {
+          "name": "Admin - Add or Replace Chain Image",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/api/v1/admin/chains/{{chainUid}}/image",
+            "description": "Upload PNG, JPEG, WebP, or safe SVG as multipart field image (maximum 2 MB)."
+          }
+        },
+        {
+          "name": "Admin - Chain Audit History",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/admin/chains/{{chainUid}}/audits?page=1&limit=20"
+          }
+        },
+        {
+          "name": "Admin - List Payment Tokens",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/admin/payment-tokens?chainUid={{chainUid}}&page=1&limit=20"
+          }
+        },
+        {
+          "name": "Admin - Get Payment Token",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/admin/payment-tokens/{{paymentTokenUid}}"
+          }
+        },
+        {
+          "name": "Admin - Create Payment Token",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chainUid\": \"{{chainUid}}\",\n  \"paymentTokenCode\": \"USDC\",\n  \"paymentTokenName\": \"USD Coin\",\n  \"paymentTokenSymbol\": \"USDC\",\n  \"contractAddress\": \"0x0000000000000000000000000000000000000004\",\n  \"decimals\": 6,\n  \"supportsPurchase\": true,\n  \"supportsRedemption\": true,\n  \"isDefault\": false,\n  \"displayOrder\": 20,\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/admin/payment-tokens"
+          }
+        },
+        {
+          "name": "Admin - Update Payment Token",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentTokenName\": \"USD Coin\",\n  \"displayOrder\": 20,\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/admin/payment-tokens/{{paymentTokenUid}}"
+          }
+        },
+        {
+          "name": "Admin - Add or Replace Payment Token Image",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/api/v1/admin/payment-tokens/{{paymentTokenUid}}/image",
+            "description": "Upload PNG, JPEG, WebP, or safe SVG as multipart field image (maximum 2 MB)."
+          }
+        },
+        {
+          "name": "Admin - Delete Payment Token",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/admin/payment-tokens/{{paymentTokenUid}}"
+          }
         }
       ]
     }

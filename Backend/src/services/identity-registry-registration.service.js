@@ -2,7 +2,8 @@ const ethers = require('ethers');
 const { env } = require('../core/config/env');
 const { ApiError } = require('../core/errors/api-error');
 const { withTransaction } = require('../database/connection');
-const { RegistryVerificationError } = require('./blockchain/identity-registry-verifier.service');
+const { RegistryVerificationError, IdentityRegistryVerifierService } = require('./blockchain/identity-registry-verifier.service');
+const { assertSelectedChain } = require('../utils/selected-chain');
 
 const PENDING_VERIFICATION_CODES = new Set([
   'TRANSACTION_NOT_FOUND', 'INSUFFICIENT_CONFIRMATIONS', 'RPC_UNAVAILABLE',
@@ -11,12 +12,14 @@ const PENDING_VERIFICATION_CODES = new Set([
 ]);
 
 class IdentityRegistryRegistrationService {
-  constructor({ repository, interestRepository, verifier, transactionRunner = withTransaction, config = env.blockchain }) {
+  constructor({ repository, interestRepository, verifier, journeyService = null, chainRuntimeService = null, transactionRunner = withTransaction, config = env.blockchain }) {
+    this.journeyService = journeyService;
     this.repository = repository;
     this.interestRepository = interestRepository;
     this.verifier = verifier;
     this.transactionRunner = transactionRunner;
     this.config = config;
+    this.chainRuntimeService = chainRuntimeService;
   }
 
   assertIssuer(user) {
@@ -44,18 +47,23 @@ class IdentityRegistryRegistrationService {
     };
   }
 
-  async loadOwnedContext(user, interestUid) {
+  async presentProgress(row, interest) {
+    return { ...this.present(row), ...(this.journeyService ? await this.journeyService.progress(interest) : {}) };
+  }
+
+  async loadOwnedContext(user, interestUid, selectedChain = null) {
     this.assertIssuer(user);
     const context = await this.repository.findContextByInterest(interestUid);
     if (!context || context.issuerUserUid !== user.userUid) {
       throw new ApiError(404, 'Subscription was not found.', undefined, 'SUBSCRIPTION_NOT_FOUND');
     }
+    assertSelectedChain(context, selectedChain, 'Subscription');
     return context;
   }
 
   validateContext(context) {
-    if (!['claimSubmitted', 'registered'].includes(context.interestStatus)) {
-      throw new ApiError(409, 'All required investor claims must be confirmed before registry registration.', undefined, 'CLAIMS_NOT_COMPLETED');
+    if (!['verifiedByIssuer', 'claimSubmitted', 'registered'].includes(context.interestStatus)) {
+      throw new ApiError(409, 'Issuer claim verification must succeed before registry registration.', undefined, 'ISSUER_CLAIMS_NOT_VERIFIED');
     }
     if (context.tokenStatus !== 'deployed') {
       throw new ApiError(409, 'The subscription token is not deployed.', undefined, 'TOKEN_NOT_DEPLOYED');
@@ -84,18 +92,20 @@ class IdentityRegistryRegistrationService {
     if (!context.countryActive || context.countryDeleted || !Number.isInteger(country) || country < 1 || country > 999) {
       throw new ApiError(409, 'Investor verified ISO-3166 numeric country is unavailable.', undefined, 'INVESTOR_COUNTRY_INVALID');
     }
-    if (context.countryRestrictionMode === 'allowlist' && !context.countryListed) {
+    const hasCountryRestrictions = Number(context.countryRestrictionCount || 0) > 0;
+    if (hasCountryRestrictions && context.countryRestrictionMode === 'allowlist' && !context.countryListed) {
       throw new ApiError(409, 'Investor country is not permitted by this token.', undefined, 'INVESTOR_COUNTRY_NOT_ELIGIBLE');
     }
-    if (context.countryRestrictionMode === 'blocklist' && context.countryListed) {
+    if (hasCountryRestrictions && context.countryRestrictionMode === 'blocklist' && context.countryListed) {
       throw new ApiError(409, 'Investor country is restricted for this token.', undefined, 'INVESTOR_COUNTRY_NOT_ELIGIBLE');
     }
     return country;
   }
 
-  expectedFrom(context, countryCode) {
+  expectedFrom(context, countryCode, config = this.config) {
     return {
-      chainId: Number(this.config.chainId),
+      chainId: Number(config.chainId),
+      chainUid: context.chainUid || config.chainUid,
       identityRegistryAddress: ethers.getAddress(context.identityRegistryAddress),
       issuerWalletAddress: ethers.getAddress(context.issuerWalletAddress),
       investorWalletAddress: ethers.getAddress(context.investorWalletAddress),
@@ -115,10 +125,10 @@ class IdentityRegistryRegistrationService {
     };
   }
 
-  async inspectBeforeCreate(expected) {
+  async inspectBeforeCreate(expected, verifier = this.verifier) {
     try {
-      const state = await this.verifier.inspectRegistryState(expected);
-      const preparedAtBlock = await this.verifier.getLatestBlockNumber();
+      const state = await verifier.inspectRegistryState(expected);
+      const preparedAtBlock = await verifier.getLatestBlockNumber();
       return { state, preparedAtBlock };
     } catch (error) {
       if (!(error instanceof RegistryVerificationError)) throw error;
@@ -131,20 +141,20 @@ class IdentityRegistryRegistrationService {
     }
   }
 
-  recoveryStartBlock(context, latestBlock) {
+  recoveryStartBlock(context, latestBlock, config = this.config) {
     const deployedAtBlock = Number(context.deployedAtBlock || 0);
     if (deployedAtBlock > 0) return deployedAtBlock;
-    const lookback = Math.max(1000, Number(this.config.registryRecoveryLookbackBlocks || 200000));
+    const lookback = Math.max(1000, Number(config.registryRecoveryLookbackBlocks || 200000));
     return Math.max(0, Number(latestBlock) - lookback + 1);
   }
 
-  async findExistingRegistrationEvidence(expected, context, latestBlock) {
+  async findExistingRegistrationEvidence(expected, context, latestBlock, verifier = this.verifier, config = this.config) {
     let event;
     try {
       event = await this.repository.findCanonicalEvent(expected);
       if (!event) {
-        event = await this.verifier.findRegistrationEvent(expected, {
-          fromBlock: this.recoveryStartBlock(context, latestBlock),
+        event = await verifier.findRegistrationEvent(expected, {
+          fromBlock: this.recoveryStartBlock(context, latestBlock, config),
         });
       }
       if (!event) {
@@ -154,7 +164,7 @@ class IdentityRegistryRegistrationService {
           { transient: true },
         );
       }
-      const verified = await this.verifier.verifyRegistration({
+      const verified = await verifier.verifyRegistration({
         txHash: event.txHash,
         blockNumberHint: event.blockNumber,
         ...expected,
@@ -176,7 +186,7 @@ class IdentityRegistryRegistrationService {
     }
   }
 
-  async persistExistingRegistration(user, context, expected, evidence, existing = null) {
+  async persistExistingRegistration(user, context, expected, evidence, existing = null, config = this.config) {
     try {
       const finalized = await this.transactionRunner(async (connection) => {
         let registration = existing
@@ -194,7 +204,7 @@ class IdentityRegistryRegistrationService {
             investorUid: context.investorUid,
             issuerUserUid: user.userUid,
             ...expected,
-            preparedAtBlock: this.recoveryStartBlock(context, evidence.verified.blockNumber),
+            preparedAtBlock: this.recoveryStartBlock(context, evidence.verified.blockNumber, config),
           }, evidence.verified, connection);
         } else if (registration.status === 'PENDING') {
           const confirmed = await this.repository.confirm(
@@ -206,17 +216,18 @@ class IdentityRegistryRegistrationService {
           registration = await this.repository.findByUidForUpdate(registration.registryRegistrationUid, connection);
         }
 
-        const interest = await this.interestRepository.findInterestForUpdate(context.interestUid, connection);
-        if (!interest || !['claimSubmitted', 'registered'].includes(interest.status)) {
+        let interest = await this.interestRepository.findInterestForUpdate(context.interestUid, connection);
+        if (!interest || !['verifiedByIssuer', 'claimSubmitted', 'registered'].includes(interest.status)) {
           throw new ApiError(409, 'Subscription is not ready for registry synchronization.', undefined, 'SUBSCRIPTION_NOT_READY_FOR_REGISTRATION');
         }
-        const transitioned = await this.interestRepository.transitionInterestStatus(
+        const transitioned = !this.journeyService && await this.interestRepository.transitionInterestStatus(
           context.interestUid,
           'claimSubmitted',
           'registered',
           connection,
         );
         if (transitioned) {
+          interest = { ...interest, status: 'registered' };
           await this.interestRepository.createHistory({
             interestUid: context.interestUid,
             tokenUid: context.tokenUid,
@@ -227,6 +238,10 @@ class IdentityRegistryRegistrationService {
             actorUserUid: user.userUid,
             note: `Existing Identity Registry registration confirmed in transaction ${evidence.verified.txHash}.`,
           }, connection);
+        }
+        if (this.journeyService) {
+          if (!existing || existing.status !== 'CONFIRMED') await this.recordRegistrationHistory(registration, connection);
+          interest = await this.journeyService.synchronize(interest, connection);
         }
         await this.repository.storeEvents([evidence.event], connection);
         const storedEvent = await this.repository.findCanonicalEvent(expected, connection);
@@ -242,11 +257,11 @@ class IdentityRegistryRegistrationService {
         }
         return {
           operation: await this.repository.findByUid(registration.registryRegistrationUid, connection),
-          interest: await this.interestRepository.findInterestForUpdate(context.interestUid, connection),
+          interest,
         };
       });
       return {
-        operation: { ...this.present(finalized.operation), subscriptionStatus: finalized.interest.status },
+        operation: { ...await this.presentProgress(finalized.operation, finalized.interest), subscriptionStatus: finalized.interest.status },
         existing: true,
         alreadyRegistered: true,
       };
@@ -259,33 +274,37 @@ class IdentityRegistryRegistrationService {
         raced.status === 'PENDING' ? evidence.verified : null,
       );
       return {
-        operation: { ...this.present(finalized.operation), subscriptionStatus: finalized.interest.status },
+        operation: { ...await this.presentProgress(finalized.operation, finalized.interest), subscriptionStatus: finalized.interest.status },
         existing: true,
         alreadyRegistered: true,
       };
     }
   }
 
-  async create(user, interestUid) {
-    const context = await this.loadOwnedContext(user, interestUid);
+  async create(user, interestUid, selectedChain = null) {
+    const context = await this.loadOwnedContext(user, interestUid, selectedChain);
+    const config = this.chainRuntimeService
+      ? await this.chainRuntimeService.byUid(context.chainUid)
+      : this.config;
+    const verifier = this.chainRuntimeService ? new IdentityRegistryVerifierService(config) : this.verifier;
     let existing = await this.repository.findByInterest(interestUid);
     if (existing?.status === 'CONFIRMED') {
       const finalized = await this.finalizeConfirmedOperation(existing.registryRegistrationUid);
       return {
-        operation: { ...this.present(finalized.operation), subscriptionStatus: finalized.interest.status },
+        operation: { ...await this.presentProgress(finalized.operation, finalized.interest), subscriptionStatus: finalized.interest.status },
         existing: true,
         alreadyRegistered: true,
       };
     }
 
     const countryCode = this.validateContext(context);
-    const completion = await this.repository.getClaimCompletion(context.interestUid, context.tokenUid);
+    const completion = await this.repository.getIssuerClaimCompletion(context.interestUid, context.tokenUid);
     if (completion.required < 1 || completion.missing.length) {
-      throw new ApiError(409, 'Every token-required claim must be confirmed on-chain before registration.', completion.missing, 'CLAIMS_NOT_COMPLETED');
+      throw new ApiError(409, 'Every token-required claim must be verified and signed by the issuer before registration.', completion.missing, 'ISSUER_CLAIMS_NOT_VERIFIED');
     }
 
-    const expected = existing ? this.expectedFromRegistration(existing) : this.expectedFrom(context, countryCode);
-    const { state, preparedAtBlock } = await this.inspectBeforeCreate(expected);
+    const expected = existing ? this.expectedFromRegistration(existing) : this.expectedFrom(context, countryCode, config);
+    const { state, preparedAtBlock } = await this.inspectBeforeCreate(expected, verifier);
     if (!state.issuerIsAgent) {
       throw new ApiError(409, 'The issuer wallet is not an agent of this Identity Registry.', undefined, 'ISSUER_NOT_REGISTRY_AGENT');
     }
@@ -298,11 +317,11 @@ class IdentityRegistryRegistrationService {
           'REGISTRY_STATE_MISMATCH',
         );
       }
-      const evidence = await this.findExistingRegistrationEvidence(expected, context, preparedAtBlock);
-      return this.persistExistingRegistration(user, context, expected, evidence, existing);
+      const evidence = await this.findExistingRegistrationEvidence(expected, context, preparedAtBlock, verifier, config);
+      return this.persistExistingRegistration(user, context, expected, evidence, existing, config);
     }
     if (existing) {
-      return { operation: this.present(existing), existing: true, alreadyRegistered: false };
+      return { operation: await this.presentProgress(existing, { ...context, status: context.interestStatus }), existing: true, alreadyRegistered: false };
     }
     try {
       const created = await this.repository.createPending({
@@ -314,7 +333,7 @@ class IdentityRegistryRegistrationService {
         ...expected,
         preparedAtBlock,
       });
-      return { operation: this.present(created), existing: false, alreadyRegistered: false };
+      return { operation: await this.presentProgress(created, { ...context, status: context.interestStatus }), existing: false, alreadyRegistered: false };
     } catch (error) {
       if (error?.code !== 'ER_DUP_ENTRY') throw error;
       const raced = await this.repository.findByInterest(interestUid);
@@ -323,20 +342,24 @@ class IdentityRegistryRegistrationService {
     }
   }
 
-  async get(user, interestUid) {
-    await this.loadOwnedContext(user, interestUid);
+  async get(user, interestUid, selectedChain = null) {
+    const context = await this.loadOwnedContext(user, interestUid, selectedChain);
     const operation = await this.repository.findByInterest(interestUid);
     if (!operation) throw new ApiError(404, 'Registry operation was not found.', undefined, 'REGISTRY_OPERATION_NOT_FOUND');
-    return this.present(operation);
+    assertSelectedChain(operation, selectedChain, 'Registry operation');
+    return { ...this.present(operation), ...(this.journeyService ? await this.journeyService.progress({
+      ...context, status: context.interestStatus,
+    }) : {}) };
   }
 
-  async loadOwnedOperation(user, interestUid, registryRegistrationUid) {
-    const context = await this.loadOwnedContext(user, interestUid);
+  async loadOwnedOperation(user, interestUid, registryRegistrationUid, selectedChain = null) {
+    const context = await this.loadOwnedContext(user, interestUid, selectedChain);
     const operation = await this.repository.findByUid(registryRegistrationUid);
     if (!operation || operation.interestUid !== interestUid
       || operation.organizationUid !== context.organizationUid || operation.issuerUserUid !== user.userUid) {
       throw new ApiError(404, 'Registry operation was not found.', undefined, 'REGISTRY_OPERATION_NOT_FOUND');
     }
+    assertSelectedChain(operation, selectedChain, 'Registry operation');
     return operation;
   }
 
@@ -347,6 +370,15 @@ class IdentityRegistryRegistrationService {
     return 422;
   }
 
+  async recordRegistrationHistory(registration, connection) {
+    await this.interestRepository.createHistory({
+      interestUid: registration.interestUid, tokenUid: registration.tokenUid,
+      organizationUid: registration.organizationUid, investorUid: registration.investorUid,
+      eventType: 'registered', actorRole: 'issuer', actorUserUid: registration.issuerUserUid,
+      note: 'Identity Registry registration confirmed on-chain. Application completes only after all investor claims are confirmed.',
+    }, connection);
+  }
+
   // Shared by the HTTP confirmation path and the background reconciler. The registration row,
   // investment status, and timeline event commit atomically. Conditional status transition makes
   // repeated/concurrent calls idempotent and prevents duplicate history entries.
@@ -354,9 +386,10 @@ class IdentityRegistryRegistrationService {
     return this.transactionRunner(async (connection) => {
       const registration = await this.repository.findByUidForUpdate(registryRegistrationUid, connection);
       if (!registration) throw new ApiError(404, 'Registry operation was not found.', undefined, 'REGISTRY_OPERATION_NOT_FOUND');
-      const interest = await this.interestRepository.findInterestForUpdate(registration.interestUid, connection);
+      const wasConfirmed = registration.status === 'CONFIRMED';
+      let interest = await this.interestRepository.findInterestForUpdate(registration.interestUid, connection);
       if (!interest) throw new ApiError(409, 'Subscription no longer exists.', undefined, 'SUBSCRIPTION_NOT_FOUND');
-      if (!['claimSubmitted', 'registered'].includes(interest.status)) {
+      if (!['verifiedByIssuer', 'claimSubmitted', 'registered'].includes(interest.status)) {
         throw new ApiError(
           409,
           'Subscription is not in a state that can be registered.',
@@ -371,6 +404,13 @@ class IdentityRegistryRegistrationService {
         if (!confirmed) throw new ApiError(409, 'Registry operation changed during confirmation.', undefined, 'REGISTRY_OPERATION_STATE_CHANGED');
       }
 
+      if (this.journeyService) {
+        if (!wasConfirmed) await this.recordRegistrationHistory(registration, connection);
+        const before = interest.status;
+        interest = await this.journeyService.synchronize(interest, connection);
+        return { operation: await this.repository.findByUid(registration.registryRegistrationUid, connection),
+          interest, transitioned: before !== interest.status };
+      }
       const transitioned = await this.interestRepository.transitionInterestStatus(
         registration.interestUid,
         'claimSubmitted',
@@ -397,25 +437,31 @@ class IdentityRegistryRegistrationService {
     });
   }
 
-  async confirm(user, interestUid, registryRegistrationUid, txHash) {
-    let operation = await this.loadOwnedOperation(user, interestUid, registryRegistrationUid);
+  async confirm(user, interestUid, registryRegistrationUid, txHash, selectedChain = null) {
+    let operation = await this.loadOwnedOperation(user, interestUid, registryRegistrationUid, selectedChain);
     if (!ethers.isHexString(txHash, 32)) {
       throw new ApiError(422, 'Transaction hash must be a 32-byte hexadecimal value.', undefined, 'INVALID_TX_HASH');
     }
     const normalizedHash = txHash.toLowerCase();
+    const config = this.chainRuntimeService
+      ? (operation.chainUid
+        ? await this.chainRuntimeService.byUid(operation.chainUid)
+        : await this.chainRuntimeService.byChainId(operation.chainId))
+      : this.config;
+    const verifier = this.chainRuntimeService ? new IdentityRegistryVerifierService(config) : this.verifier;
     if (operation.status === 'CONFIRMED') {
       if (String(operation.txHash).toLowerCase() !== normalizedHash) {
         throw new ApiError(409, 'Registry operation is already confirmed with a different transaction.', undefined, 'REGISTRY_OPERATION_ALREADY_CONFIRMED');
       }
       const finalized = await this.finalizeConfirmedOperation(operation.registryRegistrationUid);
       return {
-        operation: { ...this.present(finalized.operation), subscriptionStatus: finalized.interest.status },
+        operation: { ...await this.presentProgress(finalized.operation, finalized.interest), subscriptionStatus: finalized.interest.status },
         idempotent: true,
         pendingVerification: false,
       };
     }
 
-    const used = await this.repository.findByTxHash(normalizedHash);
+    const used = await this.repository.findByTxHash(normalizedHash, undefined, operation.chainId);
     if (used && used.registryRegistrationUid !== operation.registryRegistrationUid) {
       throw new ApiError(409, 'Transaction is already associated with another registry operation.', undefined, 'TRANSACTION_ALREADY_USED');
     }
@@ -445,7 +491,7 @@ class IdentityRegistryRegistrationService {
 
     let verified;
     try {
-      verified = await this.verifier.verifyRegistration({
+      verified = await verifier.verifyRegistration({
         txHash: normalizedHash,
         ...this.expectedFromRegistration(operation),
       });
@@ -473,7 +519,7 @@ class IdentityRegistryRegistrationService {
       throw new ApiError(409, 'Registry operation changed while it was being verified.', undefined, 'REGISTRY_OPERATION_STATE_CHANGED');
     }
     return {
-      operation: { ...this.present(operation), subscriptionStatus: finalized.interest.status },
+      operation: { ...await this.presentProgress(operation, finalized.interest), subscriptionStatus: finalized.interest.status },
       idempotent: false,
       pendingVerification: false,
     };

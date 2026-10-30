@@ -18,7 +18,7 @@ const SETTING_KEYS = {
 
 const DEFAULTS = {
   blockOffset: 1000,
-  confirmationBlocks: 1,
+  confirmationBlocks: 2,
   lookbackBlocks: 200000,
   batchSize: 100,
 };
@@ -61,6 +61,7 @@ class ClaimRecoveryService {
     issuerClaimRepository,
     interestRepository,
     tokenRepository,
+    journeyService = null,
     config = env.blockchain,
     transactionRunner = withTransaction,
     dependencies = {},
@@ -70,6 +71,7 @@ class ClaimRecoveryService {
     this.issuerClaimRepository = issuerClaimRepository;
     this.interestRepository = interestRepository;
     this.tokenRepository = tokenRepository;
+    this.journeyService = journeyService;
     this.config = config;
     this.transactionRunner = transactionRunner;
     this.providerFactory = dependencies.providerFactory || ((rpcUrl) => new ethers.JsonRpcProvider(rpcUrl));
@@ -164,9 +166,12 @@ class ClaimRecoveryService {
     const lookbackBlocks = Math.max(1, Math.trunc(await this.getNumber(SETTING_KEYS.lookbackBlocks, DEFAULTS.lookbackBlocks)));
     const batchSize = Math.max(1, Math.trunc(await this.getNumber(SETTING_KEYS.batchSize, DEFAULTS.batchSize)));
 
+    // Repairs a crash between confirmed submission persistence and application finalization.
+    if (this.journeyService) await this.journeyService.reconcile(this.config.chainId, this.transactionRunner);
+
     let candidates;
     try {
-      candidates = await this.submissionRepository.findRecoveryCandidates(batchSize);
+      candidates = await this.submissionRepository.findRecoveryCandidates(batchSize, undefined, this.config.chainId);
     } catch (error) {
       stats.dbErrors += 1;
       logger.error('Claim recovery: could not load candidates', { error: { message: error.message, stack: error.stack } });
@@ -390,6 +395,12 @@ class ClaimRecoveryService {
   // CONFIRMED and the interest is still verifiedByIssuer, transition it to claimSubmitted and
   // record the timeline event (system actor).
   async finalizeInterestIfComplete(candidate) {
+    if (this.journeyService) {
+      return this.transactionRunner(async connection => {
+        const interest = await this.interestRepository.findInterestForUpdate(candidate.interestUid, connection);
+        return this.journeyService.synchronize(interest, connection);
+      });
+    }
     const requiredRows = await this.tokenRepository.listClaimTopics(candidate.tokenUid);
     const required = requiredRows.map((row) => Number(row.value)).filter((value) => Number.isInteger(value));
     if (!required.length) return;

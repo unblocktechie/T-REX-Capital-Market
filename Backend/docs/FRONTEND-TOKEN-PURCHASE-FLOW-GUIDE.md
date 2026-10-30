@@ -209,14 +209,14 @@ let `purchaseUid` identify each row.
 
 ## Portfolio screen
 
-Call `GET /api/v1/investments/me/portfolio` when the Portfolio menu opens and after a purchase or
-redemption reaches `COMPLETED`. Render one card/row per returned token. Use the top-level token
+Call `GET /api/v1/investments/me/portfolio` when the Portfolio menu opens and after a canonical
+investment, transfer, or redemption becomes `CONFIRMED`. Render one card/row per returned token. Use the top-level token
 fields for name, symbol, image, price, issuer, chain, addresses, restrictions, and required claims.
 Use the nested `portfolio` object for `totalPurchasedTokenAmount`, `totalInvestedUsdtAmount`,
 `totalRedeemedTokenAmount`, `netTokenAmount`, `averagePurchasePrice`, counts, and activity dates.
 
-The endpoint contains tokens having canonical confirmed investment, transfer, or redemption activity. It excludes
-submitted, failed, orphaned, and non-canonical transactions. All purchase, redemption, transfer, and net totals
-come from the canonical `blockchainTransaction` ledger used by the V2 direct wallet flow. Use
+The endpoint uses canonical confirmed blockchain transactions and keeps legacy completed records
+only as a non-duplicating compatibility fallback. Submitted, failed, orphaned, pending, and expired
+amounts are excluded. Confirmed received/sent transfers and redemptions adjust the net amount. Use
 `imageUrl` as an authenticated relative API URL, and use `tokenUid` to navigate to the existing
 marketplace token-details route.

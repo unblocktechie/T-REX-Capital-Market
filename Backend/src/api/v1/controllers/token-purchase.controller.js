@@ -10,10 +10,10 @@ const createTokenPurchaseController = (service) => ({
     });
   },
   get: async (req, res) => sendSuccess(req, res, {
-    message: 'Token purchase fetched successfully.', data: await service.get(req.user, req.params.purchaseUid),
+    message: 'Token purchase fetched successfully.', data: await service.get(req.user, req.params.purchaseUid, req.selectedChain),
   }),
   history: async (req, res) => {
-    const result = await service.listByToken(req.user, req.params.tokenUid, req.query);
+    const result = await service.listByToken(req.user, req.params.tokenUid, req.query, req.selectedChain);
     return sendSuccess(req, res, {
       message: 'Token purchase history fetched successfully.',
       data: result.items,
@@ -21,7 +21,7 @@ const createTokenPurchaseController = (service) => ({
     });
   },
   portfolio: async (req, res) => {
-    const result = await service.portfolio(req.user, req.query);
+    const result = await service.portfolio(req.user, req.query, req.selectedChain);
     return sendSuccess(req, res, {
       message: 'Investor portfolio fetched successfully.',
       data: result.items,

@@ -6,7 +6,7 @@ const investorFields = [
   'firstName', 'lastName', 'dateOfBirth', 'gender', 'streetAddress', 'countryUid', 'stateUid', 'cityUid',
   'sourceOfWealth', 'estimatedNetWorth', 'annualInvestmentCapacity', 'yearsOfExperience', 'previousRwaExperience',
   'rwaExperienceDescription', 'accreditationType',
-  'walletAddress', 'profileReference', 'onchainIdReference',
+  'walletAddress', 'onboardingChainUid', 'profileReference', 'onchainIdReference',
   'contractAddress', 'contractTxnHash', 'contractTxnMessage',
   'currentStep', 'isDraft', 'status', 'submittedAt',
 ];

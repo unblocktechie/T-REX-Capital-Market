@@ -5,12 +5,14 @@
   "main": "src/server.js",
   "type": "commonjs",
   "scripts": {
+    "chain:bootstrap": "node scripts/bootstrap-chain-secrets.js",
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "check": "node scripts/check-syntax.js",
     "test": "node --test tests/**/*.test.js",
     "seed:admin": "node scripts/seed-admin.js",
-    "seed:locations": "node scripts/seed-locations.js"
+    "seed:locations": "node scripts/seed-locations.js",
+    "seed:test-users": "node scripts/seed-test-users.js"
   },
   "engines": {
     "node": ">=20.0.0"
@@ -34,8 +36,7 @@
     "nodemailer": "^9.0.3",
     "sharp": "^0.35.3",
     "swagger-ui-express": "^5.0.1",
-    "yaml": "^2.9.0",
-    "@privy-io/node": "^0.34.0"
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.10",

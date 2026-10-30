@@ -23,9 +23,12 @@ const historyFields = [
 ];
 
 // Token columns exposed by the investment marketplace (a read-only catalogue of tokens).
-const MARKETPLACE_TOKEN_COLUMNS = `t.\`tokenUid\`, t.\`organizationUid\`, t.\`tokenName\`, t.\`tokenSymbol\`,
+const MARKETPLACE_TOKEN_COLUMNS = `t.\`tokenUid\`, t.\`organizationUid\`, t.\`chainUid\`, chainConfig.\`chainId\`,
+  chainConfig.\`chainName\`, chainConfig.\`networkName\`, chainConfig.\`explorerUrl\`,
+  t.\`tokenName\`, t.\`tokenSymbol\`,
   t.\`decimals\`, t.\`initialTokenPrice\`, t.\`currentTokenPrice\`,
   COALESCE(t.\`currentTokenPrice\`, t.\`initialTokenPrice\`) AS \`tokenPrice\`,
+  t.\`paymentTokenAddress\`,
   t.\`tokenDescription\`, t.\`imageStorageKey\`, t.\`imageMimeType\`,
   t.\`maxInvestors\`, t.\`maxInvestors\` AS \`maxHolder\`, t.\`maxBalancePerInvestor\`, t.\`countryRestrictionMode\`,
   t.\`tokenAddress\`, t.\`status\`, t.\`deployedAt\`, t.\`createdAt\`, t.\`updatedAt\`,
@@ -35,6 +38,8 @@ const MARKETPLACE_TOKEN_COLUMNS = `t.\`tokenUid\`, t.\`organizationUid\`, t.\`to
 // Shared FROM/JOINs for the marketplace token queries: the token, its organization, and the
 // organization's country (for organizationCountryName / organizationCountryCode).
 const MARKETPLACE_TOKEN_FROM = `FROM \`tokenMaster\` t
+       INNER JOIN \`chainMaster\` chainConfig
+         ON chainConfig.\`chainUid\` = t.\`chainUid\` AND chainConfig.\`isActive\` = 1 AND chainConfig.\`isDeleted\` = 0
        INNER JOIN \`organizationMaster\` o
          ON o.\`organizationUid\` = t.\`organizationUid\` AND o.\`isDeleted\` = 0
        LEFT JOIN \`countryMaster\` oc ON oc.\`countryUid\` = o.\`countryUid\``;
@@ -50,11 +55,16 @@ class InvestmentRepository {
     page = 1,
     limit = 20,
     investorUserUid = null,
+    chainUid = null,
   } = {}, executor) {
     const safePage = Math.max(1, Math.trunc(Number(page) || 1));
     const safeLimit = Math.max(1, Math.trunc(Number(limit) || 20));
     const where = ['t.`isDeleted` = 0'];
     const params = [];
+    if (chainUid) {
+      where.push('t.`chainUid` = ?');
+      params.push(chainUid);
+    }
     if (status && status !== 'all') {
       where.push('t.`status` = ?');
       params.push(status);
@@ -74,6 +84,11 @@ class InvestmentRepository {
         FROM \`investorMaster\` i
         WHERE i.\`userUid\` = ? AND i.\`countryUid\` IS NOT NULL
           AND i.\`isActive\` = 1 AND i.\`isDeleted\` = 0
+          AND EXISTS (
+            SELECT 1 FROM \`tokenCountryRestriction\` configuredRestriction
+            WHERE configuredRestriction.\`tokenUid\` = t.\`tokenUid\`
+              AND configuredRestriction.\`isActive\` = 1 AND configuredRestriction.\`isDeleted\` = 0
+          )
           AND (
             (t.\`countryRestrictionMode\` = 'blocklist' AND EXISTS (
               SELECT 1 FROM \`tokenCountryRestriction\` tr
@@ -118,12 +133,13 @@ class InvestmentRepository {
     return { rows, total: Number(countRows[0].total) };
   }
 
-  async findMarketplaceTokenByUid(tokenUid, executor) {
+  async findMarketplaceTokenByUid(tokenUid, chainUid = null, executor) {
+    const chainSql = chainUid ? ' AND t.`chainUid` = ?' : '';
     const rows = await execute(
       `SELECT ${MARKETPLACE_TOKEN_COLUMNS}, t.\`treasuryWalletAddress\`
        ${MARKETPLACE_TOKEN_FROM}
-       WHERE t.\`tokenUid\` = ? AND t.\`isDeleted\` = 0 LIMIT 1`,
-      [tokenUid],
+       WHERE t.\`tokenUid\` = ? AND t.\`isDeleted\` = 0${chainSql} LIMIT 1`,
+      chainUid ? [tokenUid, chainUid] : [tokenUid],
       executor,
     );
     return rows[0] || null;
@@ -147,10 +163,11 @@ class InvestmentRepository {
     );
   }
 
-  async findTokenImageByUid(tokenUid, executor) {
+  async findTokenImageByUid(tokenUid, chainUid = null, executor) {
+    const chainSql = chainUid ? ' AND `chainUid` = ?' : '';
     const rows = await execute(
-      'SELECT `tokenUid`, `tokenSymbol`, `imageStorageKey`, `imageMimeType` FROM `tokenMaster` WHERE `tokenUid` = ? AND `isDeleted` = 0 LIMIT 1',
-      [tokenUid],
+      `SELECT \`tokenUid\`, \`tokenSymbol\`, \`imageStorageKey\`, \`imageMimeType\` FROM \`tokenMaster\` WHERE \`tokenUid\` = ? AND \`isDeleted\` = 0${chainSql} LIMIT 1`,
+      chainUid ? [tokenUid, chainUid] : [tokenUid],
       executor,
     );
     return rows[0] || null;
@@ -211,14 +228,21 @@ class InvestmentRepository {
               t.\`currentTokenPrice\`,
               COALESCE(t.\`currentTokenPrice\`, t.\`initialTokenPrice\`) AS \`tokenPrice\`,
               t.\`imageStorageKey\`, t.\`imageMimeType\`, t.\`tokenAddress\`, t.\`status\` AS \`tokenStatus\`,
-              o.\`legalCompanyName\`, o.\`contractAddress\` AS \`organizationIdentityAddress\`,
+              t.\`chainUid\`, chainConfig.\`chainId\`, o.\`legalCompanyName\`, issuerIdentity.\`identityAddress\` AS \`organizationIdentityAddress\`,
               i.\`firstName\`, i.\`lastName\`, i.\`profileReference\`, i.\`status\` AS \`investorStatus\`,
-              i.\`walletAddress\` AS \`investorWalletAddress\`, i.\`contractAddress\` AS \`investorIdentityAddress\`,
+              i.\`walletAddress\` AS \`investorWalletAddress\`, investorIdentity.\`identityAddress\` AS \`investorIdentityAddress\`,
               i.\`onchainIdReference\` AS \`investorOnchainIdReference\`
        FROM \`tokenInvestmentInterest\` ii
        INNER JOIN \`tokenMaster\` t ON t.\`tokenUid\` = ii.\`tokenUid\`
+       INNER JOIN \`chainMaster\` chainConfig ON chainConfig.\`chainUid\` = t.\`chainUid\` AND chainConfig.\`isDeleted\` = 0
        LEFT JOIN \`organizationMaster\` o ON o.\`organizationUid\` = ii.\`organizationUid\`
        LEFT JOIN \`investorMaster\` i ON i.\`investorUid\` = ii.\`investorUid\`
+       LEFT JOIN \`userChainIdentity\` issuerIdentity
+         ON issuerIdentity.\`userUid\` = o.\`userUid\` AND issuerIdentity.\`chainUid\` = t.\`chainUid\`
+        AND issuerIdentity.\`status\` = 'CREATED' AND issuerIdentity.\`isUnlocked\` = 1 AND issuerIdentity.\`isDeleted\` = 0
+       LEFT JOIN \`userChainIdentity\` investorIdentity
+         ON investorIdentity.\`userUid\` = i.\`userUid\` AND investorIdentity.\`chainUid\` = t.\`chainUid\`
+        AND investorIdentity.\`status\` = 'CREATED' AND investorIdentity.\`isUnlocked\` = 1 AND investorIdentity.\`isDeleted\` = 0
        WHERE ii.\`interestUid\` = ? AND ii.\`isDeleted\` = 0 LIMIT 1`,
       [interestUid],
       executor,
@@ -334,17 +358,21 @@ class InvestmentRepository {
     return result.affectedRows > 0;
   }
 
-  async listInterestsByInvestor(investorUid, { status } = {}, executor) {
+  async listInterestsByInvestor(investorUid, { status, chainUid } = {}, executor) {
     const where = ['ii.`investorUid` = ?', 'ii.`isDeleted` = 0'];
     const params = [investorUid];
     if (status) {
       where.push('ii.`status` = ?');
       params.push(status);
     }
+    if (chainUid) {
+      where.push('t.`chainUid` = ?');
+      params.push(chainUid);
+    }
     return execute(
       `SELECT ii.\`interestUid\`, ii.\`tokenUid\`, ii.\`organizationUid\`, ii.\`status\`, ii.\`note\`,
               ii.\`walletAddress\`, ii.\`submittedAt\`, ii.\`decisionAt\`, ii.\`createdAt\`,
-              t.\`tokenName\`, t.\`tokenSymbol\`, t.\`decimals\`, t.\`initialTokenPrice\`,
+              t.\`chainUid\`, t.\`tokenName\`, t.\`tokenSymbol\`, t.\`decimals\`, t.\`initialTokenPrice\`,
               t.\`currentTokenPrice\`,
               COALESCE(t.\`currentTokenPrice\`, t.\`initialTokenPrice\`) AS \`tokenPrice\`,
               t.\`maxInvestors\`, t.\`maxBalancePerInvestor\`,
@@ -362,22 +390,29 @@ class InvestmentRepository {
 
   // Issuer-facing list scoped to the issuer's organization. Defaults to submitted interests
   // ('submitIntrest') — the issuer never sees 'pending' rows (docs still missing).
-  async listInterestsByOrganization(organizationUid, { status = 'submitIntrest' } = {}, executor) {
+  async listInterestsByOrganization(organizationUid, { status = 'submitIntrest', chainUid = null } = {}, executor) {
     const where = ['ii.`organizationUid` = ?', 'ii.`isDeleted` = 0'];
     const params = [organizationUid];
     if (status && status !== 'all') {
       where.push('ii.`status` = ?');
       params.push(status);
     }
+    if (chainUid) {
+      where.push('t.`chainUid` = ?');
+      params.push(chainUid);
+    }
     return execute(
       `SELECT ii.\`interestUid\`, ii.\`tokenUid\`, ii.\`investorUid\`, ii.\`status\`, ii.\`note\`,
               ii.\`walletAddress\`, ii.\`submittedAt\`, ii.\`decisionAt\`, ii.\`createdAt\`,
-              t.\`tokenName\`, t.\`tokenSymbol\`, t.\`tokenAddress\`, t.\`status\` AS \`tokenStatus\`,
+              t.\`chainUid\`, t.\`tokenName\`, t.\`tokenSymbol\`, t.\`tokenAddress\`, t.\`status\` AS \`tokenStatus\`,
               i.\`firstName\`, i.\`lastName\`, i.\`profileReference\`, i.\`status\` AS \`investorStatus\`,
-              i.\`walletAddress\` AS \`investorWalletAddress\`, i.\`contractAddress\` AS \`investorIdentityAddress\`
+              i.\`walletAddress\` AS \`investorWalletAddress\`, investorIdentity.\`identityAddress\` AS \`investorIdentityAddress\`
        FROM \`tokenInvestmentInterest\` ii
        INNER JOIN \`tokenMaster\` t ON t.\`tokenUid\` = ii.\`tokenUid\`
        LEFT JOIN \`investorMaster\` i ON i.\`investorUid\` = ii.\`investorUid\`
+       LEFT JOIN \`userChainIdentity\` investorIdentity
+         ON investorIdentity.\`userUid\` = i.\`userUid\` AND investorIdentity.\`chainUid\` = t.\`chainUid\`
+        AND investorIdentity.\`status\` = 'CREATED' AND investorIdentity.\`isUnlocked\` = 1 AND investorIdentity.\`isDeleted\` = 0
        WHERE ${where.join(' AND ')}
        ORDER BY ii.\`submittedAt\` DESC`,
       params,

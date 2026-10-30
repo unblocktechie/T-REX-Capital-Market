@@ -1,6 +1,7 @@
 const ethers = require('ethers');
 const { ApiError } = require('../core/errors/api-error');
 const { logger } = require('./common/log.service');
+const { assertSelectedChain } = require('../utils/selected-chain');
 
 // Subscription (interest) statuses in which issuer claim signing is allowed. Signing acts ON a
 // submitted interest; a fully-successful signing is what advances it to 'verifiedByIssuer'
@@ -32,7 +33,7 @@ class IssuerClaimService {
   // organization, and returns the trusted server-side context for verification. Every trusted
   // value (issuer wallet, investor identity, required topics) is derived here from the DB —
   // never from the request body.
-  async loadContext(user, subscriptionId) {
+  async loadContext(user, subscriptionId, selectedChain = null) {
     this.assertIssuer(user);
     const organization = await this.organizationRepository.findByUserUid(user.userUid);
     if (!organization) throw ApiError.badRequest('No organization is associated with this issuer account.');
@@ -41,6 +42,7 @@ class IssuerClaimService {
     if (!interest || interest.organizationUid !== organization.organizationUid) {
       throw ApiError.notFound('Subscription was not found.');
     }
+    assertSelectedChain(interest, selectedChain, 'Subscription');
     const expectedIssuerWallet = organization.walletAddress;
     const investorIdentityAddress = interest.investorIdentityAddress;
 
@@ -53,8 +55,8 @@ class IssuerClaimService {
   }
 
   // POST /issuer/claims/sign
-  async signClaims(user, { subscriptionId, claims }) {
-    const { interest, expectedIssuerWallet, investorIdentityAddress, requiredTopics } = await this.loadContext(user, subscriptionId);
+  async signClaims(user, { subscriptionId, claims }, selectedChain = null) {
+    const { interest, expectedIssuerWallet, investorIdentityAddress, requiredTopics } = await this.loadContext(user, subscriptionId, selectedChain);
 
     if (!SIGNABLE_INTEREST_STATUSES.includes(interest.status)) {
       throw ApiError.conflict('Issuer claim signing is not allowed for this subscription in its current state.');
@@ -198,8 +200,8 @@ class IssuerClaimService {
   }
 
   // GET /issuer/claims/:subscriptionId — the current (latest) verification attempt.
-  async getStatus(user, subscriptionId) {
-    const { interest, requiredTopics } = await this.loadContext(user, subscriptionId);
+  async getStatus(user, subscriptionId, selectedChain = null) {
+    const { interest, requiredTopics } = await this.loadContext(user, subscriptionId, selectedChain);
     const verification = await this.repository.findLatestVerification(interest.interestUid);
     if (!verification) {
       return {

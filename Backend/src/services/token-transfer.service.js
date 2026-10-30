@@ -3,6 +3,7 @@ const { ApiError } = require('../core/errors/api-error');
 const { env } = require('../core/config/env');
 const { withTransaction } = require('../database/connection');
 const { TokenTransferBlockchainError } = require('./blockchain/token-transfer-blockchain.service');
+const { assertSelectedChain } = require('../utils/selected-chain');
 
 class TokenTransferService {
   constructor({
@@ -242,24 +243,27 @@ class TokenTransferService {
     }
   }
 
-  async get(user, transferUid) {
+  async get(user, transferUid, selectedChain = null) {
     this.assertInvestor(user);
     const row = await this.repository.findAccessibleByUid(transferUid, user.userUid);
     if (!row) throw new ApiError(404, 'Token transfer was not found.', undefined, 'TOKEN_TRANSFER_NOT_FOUND');
+    assertSelectedChain(row, selectedChain, 'Token transfer');
     return this.present(row, await this.repository.listTransactions(transferUid), user.userUid);
   }
 
-  async list(user, tokenUid, query = {}) {
+  async list(user, tokenUid, query = {}, selectedChain = null) {
     this.assertInvestor(user);
     const page = Number(query.page || 1);
     const limit = Number(query.limit || 20);
-    const result = await this.repository.listAccessibleByToken(user.userUid, tokenUid, {
+    const options = {
       page,
       limit,
       search: query.search || '',
       status: query.status || 'all',
       direction: query.direction || 'all',
-    });
+    };
+    if (selectedChain) options.chainId = selectedChain.chainId;
+    const result = await this.repository.listAccessibleByToken(user.userUid, tokenUid, options);
     return {
       items: result.rows.map((row) => this.present(row, null, user.userUid)),
       pagination: {
@@ -305,7 +309,7 @@ class TokenTransferService {
     await this.repository.recordTransaction(transferUid, normalized, 'RECEIVED');
     try {
       const verified = await this.blockchain.verify(normalized, this.expected(row), {
-        confirmations: Math.max(1, Number(this.config.transferConfirmations || 1)),
+        confirmations: Math.max(1, Number(this.config.transferConfirmations || 2)),
       });
       await this.transactionRunner(async (connection) => {
         const changed = await this.repository.confirm(transferUid, verified, connection);

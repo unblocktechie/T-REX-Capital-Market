@@ -2,7 +2,7 @@ const { sendSuccess } = require('../../../utils/response');
 
 const createIdentityRegistryRegistrationController = (service) => ({
   create: async (req, res) => {
-    const result = await service.create(req.user, req.params.interestUid);
+    const result = await service.create(req.user, req.params.interestUid, req.selectedChain);
     let message = 'Registry operation created.';
     if (result.alreadyRegistered) {
       message = 'Existing on-chain registry registration synchronized successfully.';
@@ -17,7 +17,7 @@ const createIdentityRegistryRegistrationController = (service) => ({
   },
   get: async (req, res) => sendSuccess(req, res, {
     message: 'Registry operation fetched successfully.',
-    data: await service.get(req.user, req.params.interestUid),
+    data: await service.get(req.user, req.params.interestUid, req.selectedChain),
   }),
   confirm: async (req, res) => {
     const result = await service.confirm(
@@ -25,6 +25,7 @@ const createIdentityRegistryRegistrationController = (service) => ({
       req.params.interestUid,
       req.params.registryRegistrationUid,
       req.body.txHash,
+      req.selectedChain,
     );
     return sendSuccess(req, res, {
       statusCode: result.pendingVerification ? 202 : 200,

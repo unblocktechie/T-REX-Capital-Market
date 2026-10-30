@@ -3,6 +3,7 @@ const { env } = require('../core/config/env');
 const { withTransaction } = require('../database/connection');
 const { investmentInvitationEmail } = require('./common/email-template.service');
 const { logger } = require('./common/log.service');
+const { assertSelectedChain } = require('../utils/selected-chain');
 
 const EMAIL_CLAIM_TTL_MS = 5 * 60 * 1000;
 
@@ -23,10 +24,11 @@ class InvestorInvitationService {
     if (user.roleName !== 'Investor') throw ApiError.forbidden('This action is available only to investor accounts.');
   }
 
-  async loadIssuerToken(user, tokenUid) {
+  async loadIssuerToken(user, tokenUid, selectedChain = null) {
     this.assertIssuer(user);
     const token = await this.repository.findIssuerTokenContext(user.userUid, tokenUid);
     if (!token) throw new ApiError(404, 'Token was not found for this issuer.', undefined, 'ISSUER_TOKEN_NOT_FOUND');
+    assertSelectedChain(token, selectedChain, 'Token');
     if (token.organizationStatus !== 'approved' || !token.organizationActive) {
       throw new ApiError(409, 'The issuer organization must be approved and active before inviting investors.', undefined, 'ISSUER_ORGANIZATION_NOT_ACTIVE');
     }
@@ -40,10 +42,11 @@ class InvestorInvitationService {
     if (!investor.countryUid || !investor.countryNumericCode) {
       return { eligible: false, code: 'INVESTOR_COUNTRY_INVALID', message: 'Investor verified country is unavailable.' };
     }
-    if (token.countryRestrictionMode === 'allowlist' && !investor.countryListed) {
+    const hasCountryRestrictions = Number(token.countryRestrictionCount || 0) > 0;
+    if (hasCountryRestrictions && token.countryRestrictionMode === 'allowlist' && !investor.countryListed) {
       return { eligible: false, code: 'INVESTOR_COUNTRY_NOT_ELIGIBLE', message: 'Investor country is not permitted by this token.' };
     }
-    if (token.countryRestrictionMode === 'blocklist' && investor.countryListed) {
+    if (hasCountryRestrictions && token.countryRestrictionMode === 'blocklist' && investor.countryListed) {
       return { eligible: false, code: 'INVESTOR_COUNTRY_NOT_ELIGIBLE', message: 'Investor country is restricted for this token.' };
     }
     return { eligible: true, code: null, message: null };
@@ -107,8 +110,8 @@ class InvestorInvitationService {
     };
   }
 
-  async listIssuerInvestors(user, query) {
-    const token = await this.loadIssuerToken(user, query.tokenUid);
+  async listIssuerInvestors(user, query, selectedChain = null) {
+    const token = await this.loadIssuerToken(user, query.tokenUid, selectedChain);
     const page = query.page || 1;
     const limit = query.limit || 20;
     const { rows, total } = await this.repository.listCompletedInvestors({
@@ -152,8 +155,8 @@ class InvestorInvitationService {
     };
   }
 
-  async invite(user, investorUid, { tokenUid }) {
-    const token = await this.loadIssuerToken(user, tokenUid);
+  async invite(user, investorUid, { tokenUid }, selectedChain = null) {
+    const token = await this.loadIssuerToken(user, tokenUid, selectedChain);
     const investor = await this.repository.findCompletedInvestor(investorUid, tokenUid);
     if (!investor) {
       throw new ApiError(404, 'Completed investor profile was not found.', undefined, 'INVESTOR_PROFILE_NOT_FOUND');
@@ -255,20 +258,21 @@ class InvestorInvitationService {
     };
   }
 
-  async tokenDetailsByUid(tokenUid) {
-    return this.investmentService.getTokenDetails(tokenUid);
+  async tokenDetailsByUid(tokenUid, selectedChain = null) {
+    return this.investmentService.getTokenDetails(tokenUid, selectedChain);
   }
 
-  async listInvestorInvitations(user, query) {
+  async listInvestorInvitations(user, query, selectedChain = null) {
     const investor = await this.requireInvestorProfile(user);
     const page = query.page || 1;
     const limit = query.limit || 20;
     const { rows, total } = await this.repository.listForInvestor(investor.investorUid, {
       search: query.search || '', status: query.status || 'all', page, limit,
+      chainUid: selectedChain?.chainUid || null,
     });
     const tokens = new Map();
     await Promise.all([...new Set(rows.map((row) => row.tokenUid))].map(async (tokenUid) => {
-      tokens.set(tokenUid, await this.tokenDetailsByUid(tokenUid));
+      tokens.set(tokenUid, await this.tokenDetailsByUid(tokenUid, selectedChain));
     }));
     return {
       items: rows.map((row) => this.invitationView(row, tokens.get(row.tokenUid))),
@@ -276,19 +280,19 @@ class InvestorInvitationService {
     };
   }
 
-  async getInvestorInvitation(user, invitationUid) {
+  async getInvestorInvitation(user, invitationUid, selectedChain = null) {
     const investor = await this.requireInvestorProfile(user);
-    const row = await this.repository.findForInvestor(invitationUid, investor.investorUid);
+    const row = await this.repository.findForInvestor(invitationUid, investor.investorUid, selectedChain?.chainUid || null);
     if (!row) throw new ApiError(404, 'Invitation was not found.', undefined, 'INVITATION_NOT_FOUND');
-    return this.invitationView(row, await this.tokenDetailsByUid(row.tokenUid));
+    return this.invitationView(row, await this.tokenDetailsByUid(row.tokenUid, selectedChain));
   }
 
-  async viewInvestorInvitation(user, invitationUid) {
+  async viewInvestorInvitation(user, invitationUid, selectedChain = null) {
     const investor = await this.requireInvestorProfile(user);
-    const current = await this.repository.findForInvestor(invitationUid, investor.investorUid);
+    const current = await this.repository.findForInvestor(invitationUid, investor.investorUid, selectedChain?.chainUid || null);
     if (!current) throw new ApiError(404, 'Invitation was not found.', undefined, 'INVITATION_NOT_FOUND');
-    const row = await this.repository.markViewed(invitationUid, investor.investorUid);
-    return this.invitationView(row, await this.tokenDetailsByUid(row.tokenUid));
+    const row = await this.repository.markViewed(invitationUid, investor.investorUid, selectedChain?.chainUid || null);
+    return this.invitationView(row, await this.tokenDetailsByUid(row.tokenUid, selectedChain));
   }
 }
 

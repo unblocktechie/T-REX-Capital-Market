@@ -7,7 +7,10 @@ class InvestorInvitationRepository {
     const rows = await execute(
       `SELECT t.*, o.\`legalCompanyName\`, o.\`status\` AS \`organizationStatus\`,
               o.\`isActive\` AS \`organizationActive\`, o.\`walletAddress\` AS \`organizationWalletAddress\`,
-              o.\`userUid\` AS \`issuerUserUid\`, u.\`fullName\` AS \`issuerFullName\`, u.\`email\` AS \`issuerEmail\`
+              o.\`userUid\` AS \`issuerUserUid\`, u.\`fullName\` AS \`issuerFullName\`, u.\`email\` AS \`issuerEmail\`,
+              (SELECT COUNT(*) FROM \`tokenCountryRestriction\` tr
+               WHERE tr.\`tokenUid\` = t.\`tokenUid\` AND tr.\`isActive\` = 1 AND tr.\`isDeleted\` = 0)
+                AS \`countryRestrictionCount\`
        FROM \`tokenMaster\` t
        INNER JOIN \`organizationMaster\` o
          ON o.\`organizationUid\` = t.\`organizationUid\` AND o.\`isDeleted\` = 0
@@ -24,7 +27,7 @@ class InvestorInvitationRepository {
       i.\`sourceOfWealth\`, i.\`estimatedNetWorth\`, i.\`annualInvestmentCapacity\`,
       i.\`yearsOfExperience\`, i.\`previousRwaExperience\`, i.\`rwaExperienceDescription\`,
       i.\`accreditationType\`, i.\`walletAddress\`, i.\`profileReference\`,
-      i.\`onchainIdReference\`, i.\`contractAddress\` AS \`onchainIdentityAddress\`,
+      i.\`onchainIdReference\`, investorChainIdentity.\`identityAddress\` AS \`onchainIdentityAddress\`,
       i.\`status\` AS \`profileStatus\`, i.\`submittedAt\`,
       u.\`fullName\`, u.\`email\`, c.\`countryName\`, c.\`countryCode\`,
       c.\`numericCode\` AS \`countryNumericCode\`, s.\`stateName\`, ci.\`cityName\``;
@@ -61,12 +64,17 @@ class InvestorInvitationRepository {
       if (invitationStatus !== 'notInvited') params.push(invitationStatus);
     }
     const joins = `
+      LEFT JOIN \`userChainIdentity\` investorChainIdentity
+        ON investorChainIdentity.\`userUid\` = i.\`userUid\`
+          AND investorChainIdentity.\`chainUid\` = (SELECT tm.\`chainUid\` FROM \`tokenMaster\` tm WHERE tm.\`tokenUid\` = ? LIMIT 1)
+          AND investorChainIdentity.\`status\` = 'CREATED' AND investorChainIdentity.\`isUnlocked\` = 1
+          AND investorChainIdentity.\`isDeleted\` = 0
       LEFT JOIN \`investorInvitation\` inv
         ON inv.\`organizationUid\` = ? AND inv.\`tokenUid\` = ? AND inv.\`investorUid\` = i.\`investorUid\`
           AND inv.\`isDeleted\` = 0
       LEFT JOIN \`tokenInvestmentInterest\` ti
         ON ti.\`tokenUid\` = ? AND ti.\`investorUid\` = i.\`investorUid\` AND ti.\`isDeleted\` = 0`;
-    const joinParams = [organizationUid, tokenUid, tokenUid];
+    const joinParams = [tokenUid, organizationUid, tokenUid, tokenUid];
     const whereSql = where.join(' AND ');
     const offset = (safePage - 1) * safeLimit;
     const limitSql = sqlInteger(safeLimit, { min: 1, name: 'limit' });
@@ -98,9 +106,14 @@ class InvestorInvitationRepository {
                 WHERE tr.\`tokenUid\` = ? AND tr.\`countryUid\` = i.\`countryUid\`
                   AND tr.\`isActive\` = 1 AND tr.\`isDeleted\` = 0) AS \`countryListed\`
        ${this.investorFrom()}
+       LEFT JOIN \`userChainIdentity\` investorChainIdentity
+         ON investorChainIdentity.\`userUid\` = i.\`userUid\`
+           AND investorChainIdentity.\`chainUid\` = (SELECT tm.\`chainUid\` FROM \`tokenMaster\` tm WHERE tm.\`tokenUid\` = ? LIMIT 1)
+           AND investorChainIdentity.\`status\` = 'CREATED' AND investorChainIdentity.\`isUnlocked\` = 1
+           AND investorChainIdentity.\`isDeleted\` = 0
        WHERE i.\`investorUid\` = ? AND i.\`status\` = 'submitted'
          AND i.\`isActive\` = 1 AND i.\`isDeleted\` = 0 LIMIT 1`,
-      [tokenUid, investorUid], executor,
+      [tokenUid, tokenUid, investorUid], executor,
     );
     return rows[0] || null;
   }
@@ -173,7 +186,7 @@ class InvestorInvitationRepository {
     return rows[0] || null;
   }
 
-  async listForInvestor(investorUid, { search = '', status = 'all', page = 1, limit = 20 }, executor) {
+  async listForInvestor(investorUid, { search = '', status = 'all', page = 1, limit = 20, chainUid = null }, executor) {
     const safePage = Math.max(1, Math.trunc(Number(page) || 1));
     const safeLimit = Math.max(1, Math.trunc(Number(limit) || 20));
     const offset = (safePage - 1) * safeLimit;
@@ -181,6 +194,7 @@ class InvestorInvitationRepository {
     const offsetSql = sqlInteger(offset, { name: 'offset' });
     const where = ['inv.`investorUid` = ?', "inv.`emailStatus` = 'SENT'", 'inv.`isDeleted` = 0'];
     const params = [investorUid];
+    if (chainUid) { where.push('t.`chainUid` = ?'); params.push(chainUid); }
     if (status !== 'all') { where.push('inv.`status` = ?'); params.push(status); }
     if (search) {
       where.push('(t.`tokenName` LIKE ? OR t.`tokenSymbol` LIKE ? OR o.`legalCompanyName` LIKE ?)');
@@ -205,7 +219,8 @@ class InvestorInvitationRepository {
     return { rows, total: Number(countRows[0].total) };
   }
 
-  async findForInvestor(invitationUid, investorUid, executor) {
+  async findForInvestor(invitationUid, investorUid, chainUid = null, executor) {
+    const chainSql = chainUid ? ' AND t.`chainUid` = ?' : '';
     const rows = await execute(
       `SELECT inv.*, o.\`legalCompanyName\`, o.\`walletAddress\` AS \`organizationWalletAddress\`,
               o.\`website\` AS \`organizationWebsite\`, c.\`countryName\` AS \`organizationCountryName\`,
@@ -216,14 +231,14 @@ class InvestorInvitationRepository {
        INNER JOIN \`organizationMaster\` o ON o.\`organizationUid\` = inv.\`organizationUid\` AND o.\`isDeleted\` = 0
        INNER JOIN \`userMaster\` u ON u.\`userUid\` = inv.\`issuerUserUid\` AND u.\`isDeleted\` = 0
        LEFT JOIN \`countryMaster\` c ON c.\`countryUid\` = o.\`countryUid\`
-       WHERE inv.\`invitationUid\` = ? AND inv.\`investorUid\` = ?
+       WHERE inv.\`invitationUid\` = ? AND inv.\`investorUid\` = ?${chainSql}
          AND inv.\`emailStatus\` = 'SENT' AND inv.\`isDeleted\` = 0 LIMIT 1`,
-      [invitationUid, investorUid], executor,
+      chainUid ? [invitationUid, investorUid, chainUid] : [invitationUid, investorUid], executor,
     );
     return rows[0] || null;
   }
 
-  async markViewed(invitationUid, investorUid, executor) {
+  async markViewed(invitationUid, investorUid, chainUid = null, executor) {
     await execute(
       `UPDATE \`investorInvitation\` SET \`status\` = 'VIEWED',
           \`viewedAt\` = COALESCE(\`viewedAt\`, UTC_TIMESTAMP(3)), \`updatedAt\` = UTC_TIMESTAMP(3)
@@ -231,7 +246,7 @@ class InvestorInvitationRepository {
          AND \`status\` IN ('SENT','VIEWED') AND \`isDeleted\` = 0`,
       [invitationUid, investorUid], executor,
     );
-    return this.findForInvestor(invitationUid, investorUid, executor);
+    return this.findForInvestor(invitationUid, investorUid, chainUid, executor);
   }
 }
 

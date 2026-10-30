@@ -130,7 +130,7 @@ class TokenTransferRepository {
   }
 
   async listAccessibleByToken(userUid, tokenUid, {
-    page = 1, limit = 20, search = '', status = 'all', direction = 'all',
+    page = 1, limit = 20, search = '', status = 'all', direction = 'all', chainId = null,
   } = {}, executor) {
     const safePage = Math.max(1, Math.trunc(page));
     const safeLimit = Math.min(100, Math.max(1, Math.trunc(limit)));
@@ -139,6 +139,7 @@ class TokenTransferRepository {
     const offsetSql = sqlInteger(offset, { name: 'offset' });
     const conditions = ['tokenUid=?', 'isDeleted=0'];
     const params = [tokenUid];
+    if (chainId !== null) { conditions.push('chainId=?'); params.push(Number(chainId)); }
     if (direction === 'sent') { conditions.push('senderUserUid=?'); params.push(userUid); }
     else if (direction === 'received') { conditions.push('recipientUserUid=?'); params.push(userUid); }
     else { conditions.push('(senderUserUid=? OR recipientUserUid=?)'); params.push(userUid, userUid); }

@@ -10,20 +10,23 @@ const config = {
   deployerPrivateKey: 'test-private-key',
   deployerAddress: '0x3333333333333333333333333333333333333333',
   identityFactoryAddress: '0xe1da45b88C9d3f4347A6E1C6e8ee63e360068a15',
+  idFactoryAccessManagerAddress: '0x2222222222222222222222222222222222222222',
   confirmations: 1,
   transactionTimeoutMs: 120000,
 };
 
-const dependencies = (contract) => ({
+const dependencies = (contractFactory) => ({
   providerFactory: () => ({ destroy() {} }),
   walletFactory: () => ({ address: config.deployerAddress }),
-  contractFactory: () => contract,
+  contractFactory,
 });
 
 test('organization identity service returns an existing factory identity without a transaction', async () => {
   const identityAddress = '0x4444444444444444444444444444444444444444';
-  const service = new OrganizationIdentityService(config, dependencies({
-    getIdentity: async () => identityAddress,
+  const calledAddresses = [];
+  const service = new OrganizationIdentityService(config, dependencies((address) => {
+    calledAddresses.push(address);
+    return { getIdentity: async () => identityAddress };
   }));
 
   const result = await service.createOrganizationIdentity(
@@ -36,17 +39,21 @@ test('organization identity service returns an existing factory identity without
     txHash: null,
     alreadyExisted: true,
   });
+  assert.deepEqual(calledAddresses, [config.identityFactoryAddress]);
 });
 
 test('organization identity service waits for confirmation and returns the deployed identity', async () => {
   const identityAddress = '0x4444444444444444444444444444444444444444';
   const transactionHash = `0x${'a'.repeat(64)}`;
   let lookupCount = 0;
-  const service = new OrganizationIdentityService(config, dependencies({
+  const calledAddresses = [];
+  const identityFactory = {
     getIdentity: async () => {
       lookupCount += 1;
       return lookupCount === 1 ? ethers.ZeroAddress : identityAddress;
     },
+  };
+  const accessManager = {
     createIdentity: async (walletAddress, salt) => {
       assert.equal(walletAddress, '0x1111111111111111111111111111111111111111');
       assert.equal(salt, 'org-organization-1');
@@ -59,6 +66,12 @@ test('organization identity service waits for confirmation and returns the deplo
         },
       };
     },
+  };
+  const service = new OrganizationIdentityService(config, dependencies((address) => {
+    calledAddresses.push(address);
+    return address.toLowerCase() === config.identityFactoryAddress.toLowerCase()
+      ? identityFactory
+      : accessManager;
   }));
 
   const result = await service.createOrganizationIdentity(
@@ -69,6 +82,26 @@ test('organization identity service waits for confirmation and returns the deplo
   assert.deepEqual(result, {
     identityAddress,
     txHash: transactionHash,
+    blockNumber: null,
+    blockHash: null,
     alreadyExisted: false,
   });
+  assert.deepEqual(calledAddresses, [
+    config.identityFactoryAddress,
+    config.idFactoryAccessManagerAddress,
+  ]);
+});
+
+test('organization identity service requires a chain access manager', async () => {
+  const service = new OrganizationIdentityService(
+    { ...config, idFactoryAccessManagerAddress: null },
+    dependencies(() => ({})),
+  );
+  await assert.rejects(
+    service.createOrganizationIdentity(
+      '0x1111111111111111111111111111111111111111',
+      'org-organization-1',
+    ),
+    /ID_FACTORY_ACCESS_MANAGER_ADDRESS/,
+  );
 });

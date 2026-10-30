@@ -10,12 +10,19 @@ copy .env.example .env
 mysql -u root -p < database/trex-capital-market.sql
 npm run seed:locations
 npm run seed:admin
+npm run seed:test-users
 npm run check
 npm test
 npm run dev
 ```
 
 For an existing database, rerun the idempotent main schema and `npm run seed:locations` before starting the updated API.
+
+`npm run seed:test-users` idempotently creates or refreshes `issuer1@mail.com` through
+`issuer100@mail.com` and `investor1@mail.com` through `investor100@mail.com`. Every account is active,
+email-verified, assigned to the matching Issuer/Investor role, and uses password `Abc@12345` by
+default. Override the count or password with `TEST_USER_COUNT` and `TEST_USER_PASSWORD`. The command
+is blocked when `NODE_ENV=production` unless `ALLOW_TEST_USER_SEED=true` is explicitly supplied.
 
 Expected startup log: `T-REX Capital Market Backend started`. If environment validation, MySQL, or SMTP configuration is invalid, startup fails clearly.
 
@@ -240,7 +247,7 @@ Approval example:
 curl -X PATCH http://localhost:3000/api/v1/admin/organizations/ORGANIZATION_UID/status -H "Authorization: Bearer ADMIN_TOKEN" -H "Content-Type: application/json" -d '{"status":"approved"}'
 ```
 
-Before testing, configure `BLOCKCHAIN_RPC_URL`, `IDENTITY_FACTORY_ADDRESS`, `DEPLOYER_PRIVATE_KEY`, and `DEPLOYER_ADDRESS` with a funded Arc Testnet deployer. Never use an exposed sample key; rotate it first.
+Before testing, configure `SEPOLIA_RPC_URL`, `IDENTITY_FACTORY_ADDRESS`, `DEPLOYER_PRIVATE_KEY`, and `DEPLOYER_ADDRESS` with a funded Sepolia deployer. Never use the exposed sample key; rotate it first.
 
 Expected after a new identity transaction: `200`, `status: approved`, `canResubmit: false`, `rejectionReason: null`, and populated `contractAddress`, `contractTxnHash`, and `contractTxnMessage`. Repeating safely after an identity already exists reuses the factory result and may return a null transaction hash.
 
@@ -296,7 +303,7 @@ curl -X PUT http://localhost:3000/api/v1/tokens/me/compliance \
   -d '{"maxInvestors":2000,"maxBalancePerInvestor":10000,"countryRestrictionMode":"allowlist","countryUids":["COUNTRY_UID"],"isDraft":false}'
 ```
 
-Expected: the response restriction includes the authoritative three-digit `iso3166NumericCode`. Multiple unique countries are supported.
+Expected: the response restriction includes the authoritative three-digit `iso3166NumericCode`. Multiple unique countries are supported. Also repeat with `"countryUids":[]`; it must succeed and return `countryRestrictions: []`, meaning no geographic restriction.
 
 Save governance with the organization address as Identity Manager. The Token Agent is assigned by
 the backend from `PLATFORM_CONTROLLER_ADDRESS`:
@@ -309,7 +316,7 @@ curl -X PUT http://localhost:3000/api/v1/tokens/me/governance \
 ```
 
 Expected: the response contains
-`tokenAgentWalletAddress: 0x972E9CEf9eA9d3A9d7f3261bb8e16bA59E76a0FB`. A different valid
+`tokenAgentWalletAddress: 0x4052D80c222111234b89AFDfff597B5De8DA50cd`. A different valid
 Identity Manager wallet must return `400`. A legacy client-supplied Token Agent is ignored.
 
 Review and submit:
@@ -323,7 +330,7 @@ curl -X POST http://localhost:3000/api/v1/tokens/me/submit \
   -d '{"transactionHash":"0xPASTE_64_HEX_CHARACTER_DEPLOYMENT_HASH"}'
 ```
 
-Before submitting, configure `TREX_FACTORY_ADDRESS` with the Arc Testnet TREX factory used by the frontend. Expected: `status: deployed`, `currentStep: deployed`, `isDraft: false`, all deployment addresses and block metadata populated, and all later mutation attempts return `409`. The unique organization constraint prevents another token row.
+Before submitting, configure `TREX_FACTORY_ADDRESS` with the Network TREX factory used by the frontend. Expected: `status: deployed`, `currentStep: deployed`, `isDraft: false`, all deployment addresses and block metadata populated, and all later mutation attempts return `409`. The unique organization constraint prevents another token row.
 
 Failure check: submit a confirmed failed transaction or a successful hash without the configured factory's `TREXSuiteDeployed` event. Expected: `422 TOKEN_DEPLOYMENT_VERIFICATION_FAILED`; `GET /tokens/me` then returns `status: deploymentFailed`, the attempted `deployTxHash`, and a diagnostic `contractTxnMessage`. A new valid transaction hash can be submitted afterward.
 
@@ -425,7 +432,7 @@ ONCHAINID, and at least one `SIGNED` issuer claim. Use the investor JWT.
    `PLATFORM_CONTROLLER_ADDRESS`, payment token, RPC, chain ID, confirmation count, and the earliest
    required `TRANSACTION_INDEXER_START_BLOCK`.
 2. Invest: from the registered investor wallet, approve live USDT allowance when needed and call
-   `PlatformController.buy(tokenAddress, tokenAmountRaw)`. The backend must not be required for
+   `PlatformController.buy(tokenAddress, paymentTokenAddress, tokenAmountRaw)`. The backend must not be required for
    either wallet transaction.
 3. Submit the resulting hash to `POST /api/v1/investments/transactions/confirm` with chain ID,
    token UID, and `expectedAction=INVEST`. Verify exact sender, controller target/function, token,
@@ -453,7 +460,7 @@ Their transaction-orchestration POST endpoints and runners are retired.
 
 ## Legacy investor token purchase and mint settlement
 
-1. Configure the Arc Testnet RPC, platform signer, and `PURCHASE_USDT_ADDRESS`. Confirm the platform wallet
+1. Configure Network RPC and platform signer. Select a currency from `GET /api/v1/payment-tokens` and confirm the Platform Controller
    is a Token Agent for the deployed token and use an investor interest with status `registered`.
 2. Create an intent:
 
@@ -522,12 +529,12 @@ Their transaction-orchestration POST endpoints and runners are retired.
    first catch the USDT indexer up; it expires the row only after catch-up and event matching.
 
 11. Apply `database/migrations/20260910_add_investor_portfolio_permission.sql` and call
-    `GET /api/v1/investments/me/portfolio?page=1&limit=20&search=`. Expect only tokens with at least
-    one canonical confirmed investment, transfer, or redemption involving the authenticated investor. Verify token name, symbol, image URL,
-    token/registry addresses, chain ID, issuer, restrictions, required claims, purchase totals, USDT
-    totals, confirmed-redemption and transfer totals, net token amount, average price, counts, and dates. Search
-    by token name, symbol, token address, and issuer company. Confirm a second investor cannot see
-    the first investor's portfolio.
+    `GET /api/v1/investments/me/portfolio?page=1&limit=20&search=`. Confirm a frontend-executed
+    investment appears after its canonical `blockchainTransaction` becomes `CONFIRMED`, even when
+    no legacy `tokenPurchase` intent exists. Verify confirmed transfers/redemptions adjust the net
+    token amount, legacy completed rows remain visible, and a legacy row synchronized to the same
+    canonical transaction hash is not counted twice. Search by token name, symbol, token address,
+    and issuer company. Confirm a second investor cannot see the first investor's portfolio.
 
 ## Legacy manual token redemption settlement
 

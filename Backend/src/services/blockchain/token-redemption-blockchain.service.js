@@ -58,6 +58,7 @@ const receiptFields = (receipt, log) => ({
 class TokenRedemptionBlockchainService {
   constructor(config = env.blockchain, dependencies = {}) {
     this.config = config;
+    this.paymentTokenRepository = dependencies.paymentTokenRepository || null;
     this.providerFactory = dependencies.providerFactory || ((url) => new ethers.JsonRpcProvider(url));
     this.walletFactory = dependencies.walletFactory || ((key, provider) => new ethers.Wallet(key, provider));
     this.contractFactory = dependencies.contractFactory || ((address, abi, runner) => new ethers.Contract(address, abi, runner));
@@ -66,7 +67,7 @@ class TokenRedemptionBlockchainService {
     this.transferTopic = this.usdtInterface.getEvent('Transfer').topicHash;
   }
 
-  confirmations() { return Math.max(1, Number(this.config.redemptionConfirmations || 1)); }
+  confirmations() { return Math.max(1, Number(this.config.redemptionConfirmations || 2)); }
 
   async withProvider(work) {
     if (!this.config.sepoliaRpcUrl) throw new RedemptionBlockchainError('RPC_UNAVAILABLE', 'Blockchain RPC is not configured.', { transient: true });
@@ -297,8 +298,13 @@ class TokenRedemptionBlockchainService {
 
   async scanPaymentEvents(fromBlock, toBlock) {
     return this.withProvider(async (provider, chainId) => {
+      const paymentTokens = this.paymentTokenRepository
+        ? await this.paymentTokenRepository.listActive(chainId, 'REDEMPTION')
+        : [];
+      const addresses = paymentTokens.map((token) => token.contractAddress);
+      if (!addresses.length) return [];
       const logs = await provider.getLogs({
-        address: this.config.redemptionUsdtAddress, topics: [this.transferTopic], fromBlock, toBlock,
+        address: addresses, topics: [this.transferTopic], fromBlock, toBlock,
       });
       return logs.map((log) => {
         const parsed = this.usdtInterface.parseLog(log);

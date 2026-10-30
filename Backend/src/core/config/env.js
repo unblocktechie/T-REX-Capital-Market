@@ -39,14 +39,17 @@ const env = Object.freeze({
     secret: process.env.JWT_SECRET,
     expiry: process.env.JWT_EXPIRY || '1h',
   },
-  privy: {
-    appId: process.env.PRIVY_APP_ID,
-    appSecret: process.env.PRIVY_APP_SECRET,
+  chainSecrets: {
+    // Database-held signer keys are encrypted with this application-level root.
+    // It must never be stored in chainMaster. JWT_SECRET is used only as a local
+    // backwards-compatible fallback by the encryption utility.
+    encryptionKey: process.env.CHAIN_SECRET_ENCRYPTION_KEY,
   },
   auth: {
     issuerRoleUid: process.env.ISSUER_ROLE_UID || '00000000-0000-4000-8000-000000000003',
     investorRoleUid: process.env.INVESTOR_ROLE_UID || '00000000-0000-4000-8000-000000000004',
     bcryptRounds: Number(process.env.BCRYPT_ROUNDS || 2),
+    verificationTtlMinutes: Number(process.env.EMAIL_VERIFICATION_TOKEN_TTL_MINUTES || 10),
     resetTtlMinutes: Number(process.env.PASSWORD_RESET_TOKEN_TTL_MINUTES || 30),
   },
   smtp: {
@@ -92,34 +95,30 @@ const env = Object.freeze({
     virusScanTimeoutMs: Number(process.env.TOKEN_IMAGE_VIRUS_SCAN_TIMEOUT_MS || 30000),
   },
   blockchain: {
-    // Legacy property names are retained internally for compatibility with existing
-    // service/test configuration objects. New deployments use chain-neutral env names.
-    sepoliaRpcUrl: process.env.BLOCKCHAIN_RPC_URL
-      || process.env.SEPOLIA_RPC_URL
-      || 'https://rpc.testnet.arc.network',
-    sepoliaFallbackRpcUrls: csv(
-      process.env.BLOCKCHAIN_FALLBACK_RPC_URLS || process.env.SEPOLIA_FALLBACK_RPC_URLS,
-    ),
+    sepoliaRpcUrl: process.env.SEPOLIA_RPC_URL,
+    sepoliaFallbackRpcUrls: csv(process.env.SEPOLIA_FALLBACK_RPC_URLS),
     deployerPrivateKey: process.env.DEPLOYER_PRIVATE_KEY,
-    deployerAddress: process.env.DEPLOYER_ADDRESS
-      || '0x849F887daec1B14c161ec377C95549ef83dDf3ff',
+    deployerAddress: process.env.DEPLOYER_ADDRESS,
     // Backend-authoritative Token Agent assigned to every newly configured TREX token.
     platformControllerAddress: process.env.PLATFORM_CONTROLLER_ADDRESS
-      || '0x972E9CEf9eA9d3A9d7f3261bb8e16bA59E76a0FB',
-    identityFactoryAddress: process.env.IDENTITY_FACTORY_ADDRESS
-      || '0xA30A9FC6d6ea2Fa3fa3F01265a3C1253125481D8',
-    trexFactoryAddress: process.env.TREX_FACTORY_ADDRESS
-      || '0x667ce07e2C17CeB4089823B7d542494B6c2aA042',
-    // Arc has deterministic BFT finality, so one committed block is authoritative.
-    confirmations: Number(process.env.BLOCKCHAIN_CONFIRMATIONS || 1),
-    registryConfirmations: Number(process.env.REGISTRY_CONFIRMATIONS || 1),
-    // A wallet provider may wrap registerIdentity through an audited Delegation Manager. Only explicitly
+      || '0x4052D80c222111234b89AFDfff597B5De8DA50cd',
+    identityFactoryAddress: process.env.IDENTITY_FACTORY_ADDRESS,
+    idFactoryAccessManagerAddress: process.env.ID_FACTORY_ACCESS_MANAGER_ADDRESS,
+    trexFactoryAddress: process.env.TREX_FACTORY_ADDRESS,
+    confirmations: Number(process.env.BLOCKCHAIN_CONFIRMATIONS || 2),
+    // Registry confirmation is intentionally conservative because CONFIRMED is authoritative.
+    registryConfirmations: Number(process.env.REGISTRY_CONFIRMATIONS || 2),
+    // MetaMask may wrap registerIdentity through its audited Delegation Manager. Only explicitly
     // configured executors are accepted; the nested target, value, function and arguments are
     // still decoded and verified against the pending operation.
-    registryDelegationManagerAddresses: csv(process.env.REGISTRY_DELEGATION_MANAGER_ADDRESSES),
+    registryDelegationManagerAddresses: csv(
+      process.env.REGISTRY_DELEGATION_MANAGER_ADDRESSES
+        || '0xdb9B1e94B5b69Df7e401DDbedE43491141047dB3',
+    ),
     transactionDelegationManagerAddresses: csv(
       process.env.TRANSACTION_DELEGATION_MANAGER_ADDRESSES
-        || process.env.REGISTRY_DELEGATION_MANAGER_ADDRESSES,
+        || process.env.REGISTRY_DELEGATION_MANAGER_ADDRESSES
+        || '0xdb9B1e94B5b69Df7e401DDbedE43491141047dB3',
     ),
     registryRecoveryLookbackBlocks: Number(process.env.REGISTRY_RECOVERY_LOOKBACK_BLOCKS || 200000),
     registryRecoveryBlockOffset: Number(process.env.REGISTRY_RECOVERY_BLOCK_OFFSET || 20000),
@@ -135,20 +134,18 @@ const env = Object.freeze({
     // and the maximum blocks to look back when no start block is configured.
     reconcileBlockOffset: Number(process.env.RECONCILE_BLOCK_OFFSET || 9000),
     reconcileMaxLookbackBlocks: Number(process.env.RECONCILE_MAX_LOOKBACK_BLOCKS || 1000000),
-    // Chain configuration for the deployment-attempt flow. Arc Testnet = 5042002.
-    chainId: Number(process.env.BLOCKCHAIN_CHAIN_ID || 5042002),
-    supportedChainIds: csvNumbers(process.env.SUPPORTED_CHAIN_IDS || process.env.BLOCKCHAIN_CHAIN_ID || '5042002'),
-    networkName: process.env.BLOCKCHAIN_NETWORK_NAME || 'arc-testnet',
+    // Chain configuration for the deployment-attempt flow. Sepolia = 11155111.
+    chainId: Number(process.env.BLOCKCHAIN_CHAIN_ID || 11155111),
+    supportedChainIds: csvNumbers(process.env.SUPPORTED_CHAIN_IDS || process.env.BLOCKCHAIN_CHAIN_ID || '11155111'),
+    networkName: process.env.BLOCKCHAIN_NETWORK_NAME || 'sepolia',
     // How long a pending (pre-broadcast) deployment attempt stays valid.
     deploymentAttemptTtlMinutes: Number(process.env.DEPLOYMENT_ATTEMPT_TTL_MINUTES || 20),
     // Master switch for the background deployment-sync runner (overrides the DB setting when false).
     deploymentSyncEnabled: booleanValue(process.env.TREX_DEPLOYMENT_SYNC_ENABLED, true),
-    purchaseUsdtAddress: process.env.PURCHASE_USDT_ADDRESS || '0x3600000000000000000000000000000000000000',
-    purchaseUsdtDecimals: Number(process.env.PURCHASE_USDT_DECIMALS || 6),
     // The interactive confirm API may accept a successfully mined payment earlier than the
     // conservative worker finality threshold so it can submit the platform mint immediately.
-    purchasePaymentConfirmations: Number(process.env.PURCHASE_PAYMENT_CONFIRMATIONS || 1),
-    purchaseConfirmations: Number(process.env.PURCHASE_CONFIRMATIONS || 1),
+    purchasePaymentConfirmations: Number(process.env.PURCHASE_PAYMENT_CONFIRMATIONS || 2),
+    purchaseConfirmations: Number(process.env.PURCHASE_CONFIRMATIONS || 2),
     // A payment intent with no submitted hash is abandoned after this period. The worker
     // applies an additional indexed-chain grace period before changing it to EXPIRED.
     purchaseIntentTtlMinutes: Number(process.env.PURCHASE_INTENT_TTL_MINUTES || 15),
@@ -156,23 +153,21 @@ const env = Object.freeze({
     purchaseWorkerEnabled: booleanValue(process.env.PURCHASE_WORKER_ENABLED, true),
     // Manual issuer-funded redemption. Payment and all platform token actions are independently
     // verified at the conservative redemption confirmation threshold.
-    redemptionUsdtAddress: process.env.REDEMPTION_USDT_ADDRESS
-      || process.env.PURCHASE_USDT_ADDRESS || '0x3600000000000000000000000000000000000000',
-    redemptionConfirmations: Number(process.env.REDEMPTION_CONFIRMATIONS || 1),
+    redemptionConfirmations: Number(process.env.REDEMPTION_CONFIRMATIONS || 2),
     redemptionAuthorizationTtlMinutes: Number(process.env.REDEMPTION_AUTHORIZATION_TTL_MINUTES || 30),
     redemptionIndexerStartBlock: Number(process.env.REDEMPTION_INDEXER_START_BLOCK || 0),
     redemptionWorkerEnabled: booleanValue(process.env.REDEMPTION_WORKER_ENABLED, true),
     // Investor-to-investor ERC-3643 transfers. Interactive confirmation can be low for local
     // UX while the global fallback indexer remains behind a conservative safe head.
-    transferConfirmations: Number(process.env.TRANSFER_CONFIRMATIONS || 1),
-    transferIndexerConfirmations: Number(process.env.TRANSFER_INDEXER_CONFIRMATIONS || 1),
+    transferConfirmations: Number(process.env.TRANSFER_CONFIRMATIONS || 2),
+    transferIndexerConfirmations: Number(process.env.TRANSFER_INDEXER_CONFIRMATIONS || 2),
     transferIntentTtlMinutes: Number(process.env.TRANSFER_INTENT_TTL_MINUTES || 15),
     transferIndexerStartBlock: Number(process.env.TRANSFER_INDEXER_START_BLOCK || 0),
     transferWorkerEnabled: booleanValue(process.env.TRANSFER_WORKER_ENABLED, true),
     // Canonical read-only history for wallet-executed Platform Controller and token transactions.
     transactionIndexerEnabled: booleanValue(process.env.TRANSACTION_INDEXER_ENABLED, true),
     transactionIndexerStartBlock: Number(process.env.TRANSACTION_INDEXER_START_BLOCK || 0),
-    transactionIndexerConfirmations: Number(process.env.TRANSACTION_INDEXER_CONFIRMATIONS || process.env.BLOCKCHAIN_CONFIRMATIONS || 1),
+    transactionIndexerConfirmations: Number(process.env.TRANSACTION_INDEXER_CONFIRMATIONS || process.env.BLOCKCHAIN_CONFIRMATIONS || 2),
   },
 });
 
@@ -182,8 +177,6 @@ const requiredSchema = Joi.object({
   DB_USER: Joi.string().required(),
   DB_PASSWORD: Joi.string().allow('').required(),
   JWT_SECRET: Joi.string().min(32).required(),
-  PRIVY_APP_ID: Joi.string().required(),
-  PRIVY_APP_SECRET: Joi.string().required(),
   SMTP_HOST: Joi.string().required(),
   SMTP_USER: Joi.string().required(),
   SMTP_PASSWORD: Joi.string().required(),
@@ -194,6 +187,9 @@ const validateEnvironment = () => {
   const { error } = requiredSchema.validate(process.env, { abortEarly: false });
   if (error) {
     throw new Error(`Invalid environment configuration: ${error.details.map((item) => item.message).join('; ')}`);
+  }
+  if (env.nodeEnv === 'production' && String(env.chainSecrets.encryptionKey || '').length < 32) {
+    throw new Error('Invalid environment configuration: CHAIN_SECRET_ENCRYPTION_KEY must contain at least 32 characters in production.');
   }
 };
 

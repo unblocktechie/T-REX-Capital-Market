@@ -19,7 +19,7 @@ const SETTING_KEYS = Object.freeze({
 const DEFAULTS = Object.freeze({
   intervalSeconds: 15,
   blockOffset: 1000,
-  confirmationBlocks: 1,
+  confirmationBlocks: 2,
   addressBatchSize: 100,
   leaseSeconds: 180,
   maxChunksPerRun: 10,
@@ -51,27 +51,29 @@ class BlockchainTransactionIndexerService {
 
   async candidates(provider, tokens, fromBlock, toBlock, addressBatchSize) {
     const candidates = new Map();
-    const paymentAddress = this.transactionService.paymentAddress();
+    const paymentAddresses = typeof this.transactionService.paymentAddresses === 'function'
+      ? await this.transactionService.paymentAddresses()
+      : [await this.transactionService.paymentAddress()];
     const controllerAddresses = new Set(tokens
       .map((token) => token.tokenAgentWalletAddress)
       .filter(ethers.isAddress)
       .map((address) => ethers.getAddress(address)));
     // Include the current default even before the first token using it has been deployed.
     controllerAddresses.add(this.transactionService.controllerAddress());
-    const paymentLogs = await provider.getLogs({
-      address: paymentAddress,
-      topics: [this.transferTopic],
-      fromBlock,
-      toBlock,
-    });
-    for (const log of paymentLogs) {
-      const hash = log.transactionHash.toLowerCase();
-      if (candidates.has(hash)) continue;
-      // Filtering by the outer target prevents unrelated USDT transfers from entering verification.
+    for (let offset = 0; offset < paymentAddresses.length; offset += addressBatchSize) {
+      const address = paymentAddresses.slice(offset, offset + addressBatchSize);
+      if (!address.length) continue;
       // eslint-disable-next-line no-await-in-loop
-      const tx = await provider.getTransaction(hash);
-      if (tx && [...controllerAddresses].some((address) => sameAddress(tx.to, address))) {
-        candidates.set(hash, { txHash: hash });
+      const paymentLogs = await provider.getLogs({ address, topics: [this.transferTopic], fromBlock, toBlock });
+      for (const log of paymentLogs) {
+        const hash = log.transactionHash.toLowerCase();
+        if (candidates.has(hash)) continue;
+        // Filtering by the outer target prevents unrelated payment-token transfers from entering verification.
+        // eslint-disable-next-line no-await-in-loop
+        const tx = await provider.getTransaction(hash);
+        if (tx && [...controllerAddresses].some((controller) => sameAddress(tx.to, controller))) {
+          candidates.set(hash, { txHash: hash });
+        }
       }
     }
 
@@ -180,7 +182,7 @@ class BlockchainTransactionIndexerService {
       const network = await provider.getNetwork();
       const chainId = Number(network.chainId);
       if (chainId !== Number(this.config.chainId)) throw new Error(`Transaction indexer RPC is connected to chain ${chainId}.`);
-      const tokens = await this.repository.listIndexedTokens();
+      const tokens = await this.repository.listIndexedTokens(chainId);
       if (!tokens.length) return { ...stats, tokenCount: 0 };
       const latestBlock = Number(await provider.getBlockNumber());
       const confirmations = Math.max(1, await this.number(

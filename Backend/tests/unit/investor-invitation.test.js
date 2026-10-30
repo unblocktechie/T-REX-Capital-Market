@@ -16,6 +16,7 @@ const token = {
   tokenSymbol: 'ACME',
   status: 'deployed',
   countryRestrictionMode: 'allowlist',
+  countryRestrictionCount: 1,
   organizationStatus: 'approved',
   organizationActive: true,
   legalCompanyName: 'Acme Holdings Ltd.',
@@ -121,6 +122,16 @@ test('issuer cannot invite investor excluded by token country allowlist', async 
     (error) => error.code === 'INVESTOR_COUNTRY_NOT_ELIGIBLE' && error.statusCode === 409,
   );
   assert.equal(state.sent, 0);
+});
+
+test('issuer can invite any completed-country investor when token has no geographic restrictions', async () => {
+  const { service, state } = makeService({
+    token: { ...token, countryRestrictionCount: 0 },
+    investor: { ...investor, countryListed: false },
+  });
+  const result = await service.invite(issuer, investorUid, { tokenUid });
+  assert.equal(state.sent, 1);
+  assert.equal(result.invitation.status, 'SENT');
 });
 
 test('investor inbox contains marketplace token and issuer context', async () => {

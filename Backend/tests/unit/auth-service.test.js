@@ -5,192 +5,147 @@ const jwt = require('jsonwebtoken');
 const { AuthService } = require('../../src/services/auth.service');
 const { env } = require('../../src/core/config/env');
 
-const issuerIdentity = {
-  userUid: 'user-issuer-1',
-  roleUid: env.auth.issuerRoleUid,
-  fullName: 'Ada Lovelace',
-  email: 'ada@example.com',
-  roleName: 'Issuer',
-  emailVerified: false,
-  isActive: true,
-  roleActive: true,
-  privyUserId: null,
-  privyWalletId: null,
-  privyWalletAddress: null,
-};
-
-const boundIssuerIdentity = {
-  ...issuerIdentity,
-  emailVerified: true,
-  privyUserId: 'did:privy:user-1',
-  privyWalletId: 'wallet-1',
-  privyWalletAddress: '0x1111111111111111111111111111111111111111',
-};
-
-const verifiedPrivyIdentity = {
-  privyUserId: boundIssuerIdentity.privyUserId,
-  email: issuerIdentity.email,
-  privyWalletId: boundIssuerIdentity.privyWalletId,
-  privyWalletAddress: boundIssuerIdentity.privyWalletAddress,
-};
-
-const createService = (overrides = {}) => new AuthService({
-  userRepository: {
-    findByEmail: async () => null,
-    findAuthIdentityByEmail: async () => issuerIdentity,
-    findByPrivyUserId: async () => null,
-    findByPrivyWalletAddress: async () => null,
-    bindPrivyIdentity: async () => boundIssuerIdentity,
-    updateLastLogin: async () => undefined,
-    ...overrides.userRepository,
-  },
-  roleRepository: {
-    findByUid: async (roleUid) => ({ roleUid, isActive: true }),
-    ...overrides.roleRepository,
-  },
-  authTokenRepository: overrides.authTokenRepository || {},
-  emailService: overrides.emailService || {},
-  privyService: {
-    verifyIdentityToken: async () => verifiedPrivyIdentity,
-    ...overrides.privyService,
-  },
-  ...(overrides.transactionRunner ? { transactionRunner: overrides.transactionRunner } : {}),
+const createService = (user) => new AuthService({
+  userRepository: { findByEmail: async () => user },
+  roleRepository: {},
+  authTokenRepository: {},
+  emailService: {},
 });
 
-test('signup saves the user before Privy verification and does not create an application verification token', async () => {
-  let created;
+test('forgot password rejects an unregistered email with signup guidance', async () => {
+  await assert.rejects(
+    createService(null).forgotPassword('missing@example.com'),
+    (error) => error.statusCode === 404
+      && error.code === 'NOT_FOUND'
+      && error.message === 'This email is not registered. Please sign up first.',
+  );
+});
+
+test('forgot password rejects an inactive registered account', async () => {
+  await assert.rejects(
+    createService({ userUid: 'user-1', isActive: false }).forgotPassword('inactive@example.com'),
+    (error) => error.statusCode === 403 && error.code === 'FORBIDDEN',
+  );
+});
+
+test('resend verification reports an already-verified user without sending another email', async () => {
   let emailSent = false;
-  const service = createService({
-    userRepository: {
-      findByEmail: async () => null,
-      create: async (payload) => {
-        created = payload;
-        return { userUid: 'user-1', ...payload };
-      },
-    },
-    authTokenRepository: {
-      create: async () => assert.fail('signup must not create an emailVerification auth token'),
-    },
-    emailService: {
-      sendEmail: async () => { emailSent = true; },
-    },
+  const service = new AuthService({
+    userRepository: { findByEmail: async () => ({ userUid: 'user-1', emailVerified: true, isActive: true }) },
+    roleRepository: {}, authTokenRepository: {},
+    emailService: { sendEmail: async () => { emailSent = true; } },
   });
-
-  const user = await service.signup({
-    fullName: 'Ada Lovelace',
-    email: 'ada@example.com',
-    password: 'Launch!234',
-    isIssuer: true,
-  });
-
-  assert.equal(user.userUid, 'user-1');
-  assert.equal(created.roleUid, env.auth.issuerRoleUid);
-  assert.equal(created.emailVerified, false);
-  assert.ok(await bcrypt.compare('Launch!234', created.passwordHash));
+  const result = await service.resendVerification('verified@example.com');
+  assert.deepEqual(result, { status: 'ALREADY_VERIFIED', emailVerified: true });
   assert.equal(emailSent, false);
 });
 
-test('issuer login accepts the password first and requires Privy OTP before issuing an app JWT', async () => {
-  const passwordHash = await bcrypt.hash('Launch!234', 4);
-  const service = createService({
-    userRepository: {
-      findAuthIdentityByEmail: async () => ({ ...issuerIdentity, passwordHash }),
-    },
-  });
+test('resend verification keeps unknown and inactive accounts on the generic response state', async () => {
+  const unknown = createService(null);
+  assert.deepEqual(await unknown.resendVerification('missing@example.com'), { status: 'REQUEST_ACCEPTED' });
 
-  const result = await service.login('ada@example.com', 'Launch!234');
-  assert.equal(result.privyVerificationRequired, true);
-  assert.equal(result.email, 'ada@example.com');
-  assert.equal(result.accessToken, undefined);
+  const inactive = createService({ userUid: 'user-1', emailVerified: false, isActive: false });
+  assert.deepEqual(await inactive.resendVerification('inactive@example.com'), { status: 'REQUEST_ACCEPTED' });
 });
 
-test('complete signup verifies and binds the Privy identity before issuing the application session', async () => {
-  let boundPayload;
-  let lastLoginUserUid;
-  const service = createService({
-    userRepository: {
-      findAuthIdentityByEmail: async () => issuerIdentity,
-      bindPrivyIdentity: async (userUid, payload) => {
-        assert.equal(userUid, issuerIdentity.userUid);
-        boundPayload = payload;
-        return boundIssuerIdentity;
-      },
-      updateLastLogin: async (userUid) => { lastLoginUserUid = userUid; },
-    },
-  });
+const verifiedIdentity = {
+  userUid: 'user-1',
+  roleUid: 'role-investor',
+  fullName: 'Ada Lovelace',
+  email: 'ada@example.com',
+  roleName: 'Investor',
+  emailVerified: false,
+  isActive: true,
+  roleActive: true,
+};
 
-  const session = await service.completeSignup('ada@example.com', 'privy-identity-token');
+const createVerificationService = ({ identity = verifiedIdentity, tokenRecord = { tokenUid: 'token-1', userUid: 'user-1' } } = {}) => {
+  const state = { verified: false, used: false, lastLogin: false };
+  const executor = { name: 'test-transaction' };
+  const service = new AuthService({
+    userRepository: {
+      findByUid: async () => ({ userUid: 'user-1' }),
+      findAuthIdentityByUid: async () => identity,
+      markEmailVerified: async () => { state.verified = true; },
+      updateLastLogin: async (userUid, receivedExecutor) => {
+        assert.equal(userUid, 'user-1');
+        assert.equal(receivedExecutor, executor);
+        state.lastLogin = true;
+      },
+    },
+    roleRepository: {},
+    authTokenRepository: {
+      findValidForUpdate: async (tokenHash, tokenType, receivedExecutor) => {
+        assert.equal(tokenHash.length, 64);
+        assert.equal(tokenType, 'emailVerification');
+        assert.equal(receivedExecutor, executor);
+        return tokenRecord;
+      },
+      markUsed: async () => { state.used = true; },
+    },
+    emailService: {},
+    transactionRunner: async (work) => work(executor),
+  });
+  return { service, state };
+};
+
+test('email verification consumes the token and returns a normal authenticated session', async () => {
+  const { service, state } = createVerificationService();
+  const session = await service.verifyEmail('a'.repeat(64));
   const decoded = jwt.verify(session.accessToken, env.jwt.secret, {
     issuer: env.appName,
     audience: 'trex-capital-market-api',
   });
 
-  assert.deepEqual(boundPayload, verifiedPrivyIdentity);
-  assert.equal(lastLoginUserUid, issuerIdentity.userUid);
+  assert.equal(state.verified, true);
+  assert.equal(state.used, true);
+  assert.equal(state.lastLogin, true);
+  assert.equal(session.tokenType, 'Bearer');
+  assert.equal(session.expiresIn, env.jwt.expiry);
   assert.equal(session.user.emailVerified, true);
-  assert.equal(session.user.privyWalletAddress, verifiedPrivyIdentity.privyWalletAddress);
-  assert.equal(decoded.privyUserId, verifiedPrivyIdentity.privyUserId);
-  assert.equal(decoded.privyWalletAddress, verifiedPrivyIdentity.privyWalletAddress);
+  assert.deepEqual(
+    ['userUid', 'roleUid', 'fullName', 'email', 'roleName'].map((key) => decoded[key]),
+    ['user-1', 'role-investor', 'Ada Lovelace', 'ada@example.com', 'Investor'],
+  );
 });
 
-test('Privy binding rejects an identity token whose verified email does not match the T-REX user', async () => {
-  const service = createService({
-    privyService: {
-      verifyIdentityToken: async () => ({ ...verifiedPrivyIdentity, email: 'other@example.com' }),
-    },
-  });
-
+test('email verification never consumes the token or issues a session for an inactive role', async () => {
+  const { service, state } = createVerificationService({ identity: { ...verifiedIdentity, roleActive: false } });
   await assert.rejects(
-    service.completeSignup('ada@example.com', 'privy-identity-token'),
+    service.verifyEmail('b'.repeat(64)),
     (error) => error.statusCode === 403 && error.code === 'FORBIDDEN',
   );
+  assert.equal(state.verified, false);
+  assert.equal(state.used, false);
+  assert.equal(state.lastLogin, false);
 });
 
-test('issuer login with a valid Privy identity token restores the same bound wallet', async () => {
-  const passwordHash = await bcrypt.hash('Launch!234', 4);
-  const service = createService({
-    userRepository: {
-      findAuthIdentityByEmail: async () => ({ ...boundIssuerIdentity, passwordHash }),
-      bindPrivyIdentity: async () => boundIssuerIdentity,
-    },
-  });
-
-  const session = await service.login('ada@example.com', 'Launch!234', 'privy-identity-token');
-  assert.equal(session.user.privyUserId, boundIssuerIdentity.privyUserId);
-  assert.equal(session.user.privyWalletAddress, boundIssuerIdentity.privyWalletAddress);
-});
-
-test('administrative roles keep password-only login and do not require a Privy wallet', async () => {
-  const passwordHash = await bcrypt.hash('Launch!234', 4);
-  const admin = {
-    userUid: 'admin-1',
-    roleUid: 'admin-role',
-    fullName: 'Admin User',
-    email: 'admin@example.com',
-    roleName: 'Admin',
-    emailVerified: true,
-    isActive: true,
-    roleActive: true,
-    passwordHash,
-  };
-  const service = createService({
-    userRepository: {
-      findAuthIdentityByEmail: async () => admin,
-    },
-  });
-
-  const session = await service.login('admin@example.com', 'Launch!234');
-  assert.ok(session.accessToken);
-  assert.equal(session.user.roleName, 'Admin');
-  assert.equal(session.user.privyWalletAddress, undefined);
-});
-
-test('forgot password still rejects an unregistered email with signup guidance', async () => {
-  const service = createService({ userRepository: { findByEmail: async () => null } });
+test('an invalid, expired, or already-used verification token never issues a session', async () => {
+  const { service, state } = createVerificationService({ tokenRecord: null });
   await assert.rejects(
-    service.forgotPassword('missing@example.com'),
-    (error) => error.statusCode === 404
-      && error.code === 'NOT_FOUND'
-      && error.message === 'This email is not registered. Please sign up first.',
+    service.verifyEmail('c'.repeat(64)),
+    (error) => error.statusCode === 400 && error.code === 'BAD_REQUEST',
   );
+  assert.equal(state.verified, false);
+  assert.equal(state.used, false);
+  assert.equal(state.lastLogin, false);
+});
+
+test('password login and verification use the same JWT business claims and session shape', async () => {
+  const passwordHash = await bcrypt.hash('Launch!234', 4);
+  const state = { lastLogin: false };
+  const service = new AuthService({
+    userRepository: {
+      findAuthIdentityByEmail: async () => ({ ...verifiedIdentity, emailVerified: true, passwordHash }),
+      updateLastLogin: async () => { state.lastLogin = true; },
+    },
+    roleRepository: {}, authTokenRepository: {}, emailService: {},
+  });
+  const session = await service.login('ada@example.com', 'Launch!234');
+  const decoded = jwt.decode(session.accessToken);
+  assert.equal(state.lastLogin, true);
+  assert.equal(session.user.emailVerified, true);
+  assert.equal(decoded.userUid, session.user.userUid);
+  assert.equal(decoded.roleUid, session.user.roleUid);
+  assert.equal(decoded.roleName, session.user.roleName);
 });

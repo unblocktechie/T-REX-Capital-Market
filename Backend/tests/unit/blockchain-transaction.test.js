@@ -2,13 +2,14 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { ethers } = require('ethers');
 const {
-  BlockchainTransactionService, CONTROLLER_ABI, TOKEN_ABI, PAYMENT_ABI,
+  BlockchainTransactionService: BaseBlockchainTransactionService,
+  CONTROLLER_ABI, MULTI_PAYMENT_CONTROLLER_ABI, TOKEN_ABI, PAYMENT_ABI, sameAddress,
 } = require('../../src/services/blockchain/blockchain-transaction.service');
 const { BlockchainTransactionIndexerService } = require('../../src/services/blockchain/blockchain-transaction-indexer.service');
 
 const address = (char) => ethers.getAddress(`0x${char.repeat(40)}`);
 const CONTROLLER = address('1');
-const USDT = address('2');
+const USDT = ethers.getAddress('0x86B14D29A59b745bF08c42661322d13142d5eb49');
 const TOKEN = address('3');
 const INVESTOR = address('4');
 const ISSUER = address('5');
@@ -19,6 +20,22 @@ const BLOCK_HASH = `0x${'b'.repeat(64)}`;
 const controllerInterface = new ethers.Interface(CONTROLLER_ABI);
 const tokenInterface = new ethers.Interface(TOKEN_ABI);
 const paymentInterface = new ethers.Interface(PAYMENT_ABI);
+const paymentTokenRepository = {
+  listActive: async () => [
+    { contractAddress: USDT, name: 'USDT', symbol: 'USDT', decimals: 6 },
+    { contractAddress: ethers.getAddress('0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238'), name: 'USDC', symbol: 'USDC', decimals: 6 },
+  ],
+  findDefault: async () => ({ contractAddress: USDT, name: 'USDT', symbol: 'USDT', decimals: 6 }),
+  findActiveByAddress: async (contractAddress) => ({
+    contractAddress: ethers.getAddress(contractAddress),
+    name: sameAddress(contractAddress, USDT) ? 'USDT' : 'USDC',
+    symbol: sameAddress(contractAddress, USDT) ? 'USDT' : 'USDC',
+    decimals: 6,
+  }),
+};
+class BlockchainTransactionService extends BaseBlockchainTransactionService {
+  constructor(options) { super({ paymentTokenRepository, ...options }); }
+}
 
 const encodedLog = (iface, event, values, contract, index) => {
   const encoded = iface.encodeEventLog(iface.getEvent(event), values);
@@ -93,7 +110,7 @@ const makeContext = ({
     repository,
     config: {
       sepoliaRpcUrl: 'rpc', chainId: 11155111, platformControllerAddress: configuredController,
-      purchaseUsdtAddress: USDT, transactionIndexerConfirmations: 2,
+      transactionIndexerConfirmations: 2,
       transactionDelegationManagerAddresses: [DELEGATION_MANAGER],
     },
     transactionRunner: (work) => work({}),
@@ -168,6 +185,67 @@ test('an existing token remains verifiable through its stored legacy Controller'
   });
   assert.equal(result.status, 'CONFIRMED');
   assert.equal(result.controllerAddress, CONTROLLER);
+});
+
+test('new controller purchase verifies the issuer-selected USDC calldata, event, transfer, and quote', async () => {
+  const paymentToken = ethers.getAddress('0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238');
+  const iface = new ethers.Interface(MULTI_PAYMENT_CONTROLLER_ABI);
+  const tx = {
+    hash: TX_HASH, from: INVESTOR, to: NEW_CONTROLLER, value: 0n,
+    data: iface.encodeFunctionData('buy', [TOKEN, paymentToken, 250n]),
+  };
+  const receipt = {
+    status: 1, blockNumber: 100, blockHash: BLOCK_HASH, index: 2, gasUsed: 100000n, gasPrice: 10n,
+    logs: [
+      encodedLog(tokenInterface, 'Transfer', [ethers.ZeroAddress, INVESTOR, 250n], TOKEN, 3),
+      encodedLog(paymentInterface, 'Transfer', [INVESTOR, ISSUER, 5_000_000n], paymentToken, 4),
+      encodedLog(iface, 'TokensPurchased', [
+        INVESTOR, TOKEN, ISSUER, paymentToken, 250n, 5_000_000n, 2_000_000n,
+      ], NEW_CONTROLLER, 5),
+    ],
+  };
+  let stored;
+  const service = new BlockchainTransactionService({
+    repository: {
+      findTokenByUid: async () => ({
+        tokenUid: 'token-1', organizationUid: 'org-1', tokenAddress: TOKEN,
+        tokenAgentWalletAddress: NEW_CONTROLLER, paymentTokenAddress: paymentToken,
+        issuerUserUid: 'issuer-user-1', issuerWalletAddress: ISSUER, tokenSymbol: 'TREX', decimals: 2,
+      }),
+      findInvestorByUserUid: async () => ({ userUid: 'user-1', walletAddress: INVESTOR }),
+      upsert: async (record) => { stored = record; return { transactionUid: 'transaction-1', ...record }; },
+      synchronizeLegacy: async () => {},
+    },
+    config: {
+      sepoliaRpcUrl: 'rpc', chainId: 11155111, platformControllerAddress: NEW_CONTROLLER,
+      transactionIndexerConfirmations: 2,
+    },
+    transactionRunner: (work) => work({}),
+    dependencies: {
+      providerFactory: () => ({
+        getNetwork: async () => ({ chainId: 11155111n }), getTransaction: async () => tx,
+        getTransactionReceipt: async () => receipt,
+        getBlock: async () => ({ hash: BLOCK_HASH, timestamp: 1788400000 }),
+        getBlockNumber: async () => 101, destroy: () => {},
+      }),
+      contractFactory: (contractAddress) => {
+        if (sameAddress(contractAddress, NEW_CONTROLLER)) return {
+          isPaymentToken: async () => true,
+          getTokenInfo: async () => [ISSUER, 2, 2_000_000n, true],
+          'quoteBuy(address,address,uint256)': async () => [5_000_000n, 2_000_000n, 2, ISSUER],
+        };
+        return { decimals: async () => 6 };
+      },
+    },
+  });
+  const result = await service.confirm({ userUid: 'user-1', roleName: 'Investor' }, {
+    chainId: 11155111, txHash: TX_HASH, tokenUid: 'token-1', expectedAction: 'INVEST',
+  });
+  assert.equal(result.status, 'CONFIRMED');
+  assert.equal(stored.paymentTokenAddress, paymentToken);
+  assert.equal(stored.paymentTokenSymbol, 'USDC');
+  assert.equal(stored.paymentAmountRaw, '5000000');
+  assert.equal(stored.logIndex, 5);
 });
 
 test('token issuer can confirm the new issuer-executed atomic redemption', async () => {

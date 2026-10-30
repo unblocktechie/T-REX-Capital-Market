@@ -5,7 +5,7 @@
 > `/api/v1/investments/transactions/confirm`, and recovered by the canonical indexer. Do not call
 > the purchase create/confirm/retry endpoints. See `FRONTEND-BLOCKCHAIN-TRANSACTION-GUIDE.md`.
 
-This flow lets a registered investor pay in configured Arc Testnet USDC and receive the deployed
+This flow let a registered investor pay in the payment token snapshotted on the token and receive the deployed
 ERC-3643 token. The backend is authoritative for amounts, payment verification, and mint
 confirmation. The browser never sends trusted wallet, contract, recipient, price, or raw amount
 values.
@@ -26,17 +26,17 @@ the configured treasury wallet.
 ## Configuration
 
 ```env
-PURCHASE_USDT_ADDRESS=0x3600000000000000000000000000000000000000
-PURCHASE_PAYMENT_CONFIRMATIONS=1
-PURCHASE_CONFIRMATIONS=1
+PURCHASE_PAYMENT_CONFIRMATIONS=2
+PURCHASE_CONFIRMATIONS=2
 PURCHASE_INTENT_TTL_MINUTES=15
 PURCHASE_INDEXER_START_BLOCK=0
 PURCHASE_WORKER_ENABLED=true
 ```
 
-The USDT address is network-specific and configurable. The backend reads `decimals()` from that
-contract rather than assuming six decimals. `DEPLOYER_PRIVATE_KEY`, `DEPLOYER_ADDRESS`,
-`BLOCKCHAIN_RPC_URL`, and `BLOCKCHAIN_CHAIN_ID` use the existing blockchain configuration.
+Supported payment addresses are maintained in chain-linked `paymentTokenMaster` rows; token
+creation stores the issuer's selected address in `tokenMaster.paymentTokenAddress`. The legacy
+worker is disabled. Where retained records are reconciled, runtime RPC, chain, confirmation, and
+contract settings come from the related `chainMaster` row rather than global environment values.
 
 ## APIs
 
@@ -121,7 +121,7 @@ platform-mint lease, calls `mint(investorWalletAddress, tokenAmountRaw)`, and pe
 immediately. It then waits for `PURCHASE_CONFIRMATIONS`, independently verifies the mint transaction,
 calldata, successful receipt, zero-address `Transfer` event and final balance, persists block/hash/
 transaction-index/log-index/gas metadata, and normally returns `COMPLETED` in the same response.
-For Arc Testnet this project uses one confirmation. If mining exceeds the configured HTTP wait timeout,
+For Any Network this project uses one confirmation. If mining exceeds the configured HTTP wait timeout,
 another process owns the mint lease, or a transient RPC failure occurs, the API returns HTTP `200`
 with the current `MINT_SUBMITTED` or other persisted state; the worker verifies the same stored hash
 later without minting twice. Confirm also returns HTTP `200` with `EXPIRED` when the intent already
