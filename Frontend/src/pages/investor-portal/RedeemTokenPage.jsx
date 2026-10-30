@@ -1,3 +1,4 @@
+import { paymentContextOf } from '@/config/payment-tokens';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   MoreVertical,
@@ -14,7 +15,8 @@ import { formatUnits, parseUnits } from 'viem';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { investmentApi } from '@/api/investments';
-import { CurrencyAmount } from '@/components/common/CurrencyAmount';
+import { PaymentCurrencyAmount } from '@/components/common/PaymentCurrencyAmount';
+import { TokenPriceValue } from '@/components/common/TokenPriceValue';
 import {
   InvestorTokenActionHeader,
   InvestorTokenIdentityCard,
@@ -28,7 +30,6 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { ROUTES } from '@/config/routes';
-import { web3Config } from '@/config/web3';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useInvestorTokenWalletBalance } from '@/hooks/useInvestorTokenWalletBalance';
 import { useRegisteredInvestmentAction } from '@/hooks/useRegisteredInvestmentAction';
@@ -52,6 +53,7 @@ import {
 } from '@/services/investor/investorTokenRedemptionRecoveryStore';
 import { createLocalId } from '@/utils/createLocalId';
 import { getApiFieldErrors, getErrorMessage, sanitizeUserFacingMessage } from '@/utils/error';
+import { formatDecimalForDisplay, multiplyDecimalStrings } from '@/utils/currency';
 import { getInvestmentActionContext } from '@/utils/investmentPurchase';
 import { resolveCurrentTokenPriceExact } from '@/utils/tokenPrice';
 import { transactionExplorerName, transactionExplorerUrl } from '@/utils/blockExplorer';
@@ -61,7 +63,7 @@ const POLL_INTERVAL_MS = 7_000;
 const MAX_POLL_INTERVAL_MS = 60_000;
 const HISTORY_SEARCH_DEBOUNCE_MS = 400;
 const HISTORY_LIMIT = 5;
-const DEFAULT_REQUIRED_CONFIRMATIONS = web3Config.requiredConfirmations;
+const DEFAULT_REQUIRED_CONFIRMATIONS = 12;
 const FINALIZING_REDEMPTION_CONFIRMATIONS = DEFAULT_REQUIRED_CONFIRMATIONS * 2;
 const REDEMPTION_HISTORY_FILTERS = Object.freeze([
   { value: 'all', label: 'All statuses', description: 'Show every redemption' },
@@ -151,38 +153,6 @@ const formatExactTokenAmount = (value, fallback = '—') => {
   const [whole, fraction] = normalized.split('.');
   const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   return fraction ? `${grouped}.${fraction}` : grouped;
-};
-
-const decimalParts = (value) => {
-  const normalized = canonicalDecimal(value);
-  if (!normalized || !/^\d+(?:\.\d+)?$/.test(normalized)) return null;
-  const [whole, fraction = ''] = normalized.split('.');
-  return { digits: BigInt(`${whole}${fraction}`), scale: fraction.length };
-};
-
-const formatScaledDecimal = (raw, scale, maximumFractionDigits = 2) => {
-  const targetScale = Math.max(0, maximumFractionDigits);
-  let value = raw;
-  let currentScale = scale;
-
-  if (currentScale > targetScale) {
-    const divisor = 10n ** BigInt(currentScale - targetScale);
-    value = (value + divisor / 2n) / divisor;
-    currentScale = targetScale;
-  }
-
-  const digits = value.toString().padStart(currentScale + 1, '0');
-  const whole = currentScale ? digits.slice(0, -currentScale) || '0' : digits;
-  const fraction = currentScale ? digits.slice(-currentScale).replace(/0+$/, '') : '';
-  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  return fraction ? `${grouped}.${fraction}` : grouped;
-};
-
-const multiplyDecimalForDisplay = (left, right, maximumFractionDigits = 2) => {
-  const a = decimalParts(left);
-  const b = decimalParts(right);
-  if (!a || !b) return '';
-  return formatScaledDecimal(a.digits * b.digits, a.scale + b.scale, maximumFractionDigits);
 };
 
 const investorRedemptionStatusMeta = (status) => {
@@ -484,11 +454,12 @@ const redemptionServerError = (redemption) => {
 export default function RedeemTokenPage({
   interestUid: interestUidOverride,
   embedded = false,
+  initialApplication = null,
 }) {
   const { interestUid: routeInterestUid } = useParams();
   const interestUid = interestUidOverride || routeInterestUid;
   const navigate = useNavigate();
-  const { application, token, loading, error, ready } = useRegisteredInvestmentAction(interestUid);
+  const { application, token, loading, error, ready } = useRegisteredInvestmentAction(interestUid, { initialApplication });
   const [amount, setAmount] = useState('');
   const [serverAmountError, setServerAmountError] = useState('');
   const [redemption, setRedemption] = useState(null);
@@ -538,6 +509,7 @@ export default function RedeemTokenPage({
     embedded ? 'Manage Investments' : token ? `${token.name} · Redeem Tokens` : 'Redeem Tokens',
   );
 
+  const paymentContext = useMemo(() => paymentContextOf(token, application), [token, application]);
   const context = useMemo(() => getInvestmentActionContext(token || application), [application, token]);
   const preparedInvestorWallet = clean(redemption?.investorWalletAddress) || context.investorWalletAddress;
   const preparedChainId = redemption?.chainId || context.chainId;
@@ -595,10 +567,24 @@ export default function RedeemTokenPage({
     return '';
   }, [amount, serverAmountError, token?.symbol, tokenDecimals, tokenWalletBalanceRaw, validateAgainstBalance]);
 
-  const estimatedValue = canonicalDecimal(redemptionFunding?.paymentAmountFormatted)
-    || (normalizedAmount && tokenPriceExact
-      ? multiplyDecimalForDisplay(normalizedAmount, tokenPriceExact, 2)
-      : '');
+  const fundingPaymentExact = canonicalDecimal(redemptionFunding?.paymentAmountFormatted);
+  const estimatedValueExact = isPositiveDecimal(fundingPaymentExact)
+    ? fundingPaymentExact
+    : isPositiveDecimal(normalizedAmount) && isPositiveDecimal(tokenPriceExact)
+      ? multiplyDecimalStrings(normalizedAmount, tokenPriceExact)
+      : '';
+  const estimatedValueDisplay = formatDecimalForDisplay(estimatedValueExact);
+  const settlementSymbol = String(
+    redemptionFunding?.paymentTokenSymbol || paymentContext.paymentTokenSymbol || token?.currency || '',
+  ).trim().toUpperCase();
+  const settlementPaymentTokenAddress = clean(
+    redemptionFunding?.paymentToken
+    || redemptionFunding?.paymentTokenAddress
+    || redemption?.paymentTokenAddress
+    || paymentContext.paymentTokenAddress,
+  );
+  const settlementChainId = preparedChainId || context.chainId || token?.chainId || application?.chainId;
+  const settlementChainUid = token?.chainUid || application?.chainUid || '';
 
   const canStartOrAuthorize = Boolean(
     walletGuard.ready
@@ -622,10 +608,22 @@ export default function RedeemTokenPage({
     if (!next || typeof next !== 'object') return null;
     setRedemption(next);
     const nextAmount = canonicalDecimal(next?.tokenAmount || fallbackAmount);
-    if (nextAmount) setAmount(nextAmount);
+    const nextStatus = normalizeStatus(next?.status);
+    const completed = nextStatus === 'COMPLETED';
+
+    if (completed) {
+      // A completed redemption belongs in history, not in the next request form.
+      // Clear the active amount so the investor always starts a new redemption
+      // intentionally instead of seeing or accidentally reusing the old value.
+      setAmount('');
+      setServerAmountError('');
+      setRedemptionFunding(null);
+    } else if (nextAmount) {
+      setAmount(nextAmount);
+    }
 
     const uid = redemptionUidOf(next);
-    if (uid) {
+    if (uid && !completed) {
       persistRecovery({
         tokenUid: clean(next?.tokenUid) || tokenUid,
         redemptionUid: uid,
@@ -633,7 +631,7 @@ export default function RedeemTokenPage({
       });
     }
 
-    if (uid && normalizeStatus(next?.status) === 'COMPLETED') {
+    if (uid && completed) {
       clearInvestorTokenRedemptionRecovery(interestUid);
       setSubmittedRedemptionHash('');
       listObservedWalletTransactions({ tokenUid: clean(next?.tokenUid) || tokenUid, expectedAction: 'REDEMPTION', interestUid })
@@ -663,6 +661,9 @@ export default function RedeemTokenPage({
     clearInvestorTokenRedemptionRecovery(interestUid);
     setSubmittedRedemptionHash('');
     setFlowError('');
+    setServerAmountError('');
+    setAmount('');
+    setRedemptionFunding(null);
     setRedemption((current) => (current ? {
       ...current,
       status: 'COMPLETED',
@@ -753,7 +754,7 @@ export default function RedeemTokenPage({
     let active = true;
     setRedemptionFundingLoading(true);
     setRedemptionFundingError('');
-    getPlatformRedemptionFunding({ chainId, tokenAddress, tokenAmountRaw, tokenAmount })
+    getPlatformRedemptionFunding({ ...paymentContext, chainId, tokenAddress, tokenAmountRaw, tokenAmount })
       .then((funding) => {
         if (active) setRedemptionFunding(funding);
       })
@@ -768,6 +769,7 @@ export default function RedeemTokenPage({
 
     return () => { active = false; };
   }, [
+    paymentContext,
     context.chainId,
     context.tokenAddress,
     directRedeemReady,
@@ -1067,7 +1069,7 @@ export default function RedeemTokenPage({
   const handleRedeem = async () => {
     if (operationLockRef.current) return;
     if (!walletGuard.ready) {
-      toast.error('Your Privy secure account needs attention. Open it from the header and follow the prompt to continue.');
+      toast.error('Connect the registered investor wallet on the required network to continue.');
       return;
     }
     if (!normalizedAmount || amountError || amountRaw === null || amountRaw <= 0n) {
@@ -1153,24 +1155,22 @@ export default function RedeemTokenPage({
       // Re-check the latest server status immediately before cancellation. This prevents
       // a stale history row or an already-open dialog from exposing cancellation after
       // the issuer has approved the request. The backend remains the final authority.
-      try {
-        const latest = await investmentApi.getTokenRedemption(uid);
-        const latestStatus = normalizeStatus(latest?.status);
-        if (latestStatus && !CANCELLABLE_REDEMPTION_STATUSES.has(latestStatus)) {
-          setRedemptionHistory((items) => items.map((item) => (
-            redemptionUidOf(item) === uid ? { ...item, ...latest } : item
-          )));
-          if (uid === redemptionUid) applyRedemption(latest, latest?.tokenAmount || amount);
-          setCancelTarget(null);
-          setRedemptionHistoryRefreshVersion((value) => value + 1);
-          toast.info('Cancellation is no longer available', {
-            description: 'The issuer has already approved this redemption request, so it can no longer be cancelled.',
-          });
-          return;
-        }
-      } catch {
-        // If the latest-status read is temporarily unavailable, continue to the cancel
-        // endpoint, which must still enforce the same approval boundary server-side.
+      const latest = await investmentApi.getTokenRedemption(uid);
+      const latestStatus = normalizeStatus(latest?.status);
+      if (!latestStatus) {
+        throw new Error('Unable to verify the redemption status. Please refresh and try again.');
+      }
+      if (!CANCELLABLE_REDEMPTION_STATUSES.has(latestStatus)) {
+        setRedemptionHistory((items) => items.map((item) => (
+          redemptionUidOf(item) === uid ? { ...item, ...latest } : item
+        )));
+        if (uid === redemptionUid) applyRedemption(latest, latest?.tokenAmount || amount);
+        setCancelTarget(null);
+        setRedemptionHistoryRefreshVersion((value) => value + 1);
+        toast.info('Cancellation is no longer available', {
+          description: 'The issuer has already approved this redemption request, so it can no longer be cancelled.',
+        });
+        return;
       }
 
       const next = await investmentApi.cancelTokenRedemption(uid);
@@ -1320,8 +1320,8 @@ export default function RedeemTokenPage({
           <InvestorTokenIdentityCard token={token} readyLabel="Approved investor" />
 
           <Card className="investor-token-action-card">
-            <div className="investor-token-action-card__heading"><div><span>From</span><h2>Your Privy secure account</h2></div><WalletCards size={19} /></div>
-            <LockedAddressField label="Privy secure account" value={preparedInvestorWallet} />
+            <div className="investor-token-action-card__heading"><div><span>From</span><h2>Your registered investment wallet</h2></div><WalletCards size={19} /></div>
+            <LockedAddressField label="Registered investment wallet" value={preparedInvestorWallet} />
           </Card>
 
           <Card className="investor-token-action-card">
@@ -1354,10 +1354,19 @@ export default function RedeemTokenPage({
               Enter the number of units you want to redeem, up to your available holding. We check the amount again before submitting your request.
             </p>
             <div className="investor-token-action-calculation">
-              <span>Estimated USDC you will receive</span>
+              <span>Estimated payment token you will receive</span>
               <strong>
-                {estimatedValue ? (
-                  <CurrencyAmount symbol={token.currency || 'USDC'}>${estimatedValue}</CurrencyAmount>
+                {estimatedValueExact ? (
+                  <PaymentCurrencyAmount
+                    paymentTokenAddress={settlementPaymentTokenAddress}
+                    paymentTokenSymbol={settlementSymbol}
+                    chainUid={settlementChainUid}
+                    chainId={settlementChainId}
+                    title={estimatedValueDisplay.isAbbreviated ? `${estimatedValueDisplay.exact} ${settlementSymbol}` : undefined}
+                    ariaLabel={estimatedValueDisplay.isAbbreviated ? `${estimatedValueDisplay.exact} ${settlementSymbol}` : undefined}
+                  >
+                    {estimatedValueDisplay.display}
+                  </PaymentCurrencyAmount>
                 ) : '—'}
               </strong>
             </div>
@@ -1399,16 +1408,32 @@ export default function RedeemTokenPage({
               <span>{activeRedemption ? 'Price used' : 'Current price per unit'}</span>
               <strong>
                 {tokenPriceExact ? (
-                  <CurrencyAmount symbol={token.currency || 'USDC'}>${formatExactTokenAmount(tokenPriceExact)}</CurrencyAmount>
+                  <PaymentCurrencyAmount
+                    paymentTokenAddress={settlementPaymentTokenAddress}
+                    paymentTokenSymbol={settlementSymbol}
+                    chainUid={settlementChainUid}
+                    chainId={settlementChainId}
+                  >
+                    <TokenPriceValue value={tokenPriceExact} />
+                  </PaymentCurrencyAmount>
                 ) : '—'}
               </strong>
             </div>
             <div className="investor-token-order-row"><span>Units to redeem</span><strong>{normalizedAmount ? `${formatExactTokenAmount(normalizedAmount)} ${token.symbol}` : '—'}</strong></div>
             <div className="investor-token-order-row investor-token-order-row--primary">
-              <span>Estimated USDC you receive</span>
+              <span>Estimated payment token you receive</span>
               <strong>
-                {estimatedValue ? (
-                  <CurrencyAmount symbol={token.currency || 'USDC'}>${estimatedValue}</CurrencyAmount>
+                {estimatedValueExact ? (
+                  <PaymentCurrencyAmount
+                    paymentTokenAddress={settlementPaymentTokenAddress}
+                    paymentTokenSymbol={settlementSymbol}
+                    chainUid={settlementChainUid}
+                    chainId={settlementChainId}
+                    title={estimatedValueDisplay.isAbbreviated ? `${estimatedValueDisplay.exact} ${settlementSymbol}` : undefined}
+                    ariaLabel={estimatedValueDisplay.isAbbreviated ? `${estimatedValueDisplay.exact} ${settlementSymbol}` : undefined}
+                  >
+                    {estimatedValueDisplay.display}
+                  </PaymentCurrencyAmount>
                 ) : '—'}
               </strong>
             </div>
@@ -1458,7 +1483,7 @@ export default function RedeemTokenPage({
                   ? 'Waiting for the issuer to complete the final redemption.'
                   : 'This redemption is in progress and updates automatically. Nothing else is required from you.'
                 : !walletGuard.ready
-                  ? 'Open your Privy secure account and follow the prompt to continue.'
+                  ? 'Connect your registered investment wallet to continue.'
                   : tokenWalletBalanceLoading
                     ? 'Checking your available holding before redemption.'
                     : amountError

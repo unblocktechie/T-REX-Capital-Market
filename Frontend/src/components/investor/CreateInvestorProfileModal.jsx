@@ -2,13 +2,13 @@ import {
   AlertCircle,
   CheckCircle2,
   Info,
+  Network,
   ShieldCheck,
+  WalletCards,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { PrivyMark, PrivyTrustBadge } from '@/components/branding/PrivyBrand';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { shortenWalletAddress } from '@/utils/wallet';
 
 export function CreateInvestorProfileModal({
   open,
@@ -17,8 +17,9 @@ export function CreateInvestorProfileModal({
   loading,
   loadingMessage,
   error,
-  walletAddress,
+  wallet,
   ready,
+  profileCreated,
 }) {
   const [confirmed, setConfirmed] = useState(false);
 
@@ -30,7 +31,7 @@ export function CreateInvestorProfileModal({
     <Modal
       open={open}
       onClose={() => { if (!loading) onClose(); }}
-      title="Create your investor profile"
+      title="Create Your Investor Profile"
       className="investor-profile-dialog sm:max-w-2xl"
       trapFocus
       footer={
@@ -39,9 +40,9 @@ export function CreateInvestorProfileModal({
           <Button
             onClick={onConfirm}
             loading={loading}
-            disabled={!walletAddress || !confirmed || !ready}
+            disabled={!wallet.isConnected || !wallet.isCorrectNetwork || !confirmed || !ready}
           >
-            Create my profile
+            {profileCreated ? 'Complete Profile Setup' : 'Create Investor Profile'}
           </Button>
         </>
       }
@@ -50,35 +51,38 @@ export function CreateInvestorProfileModal({
         <div className="investor-profile-modal__intro investor-profile-modal__intro--stacked">
           <span><ShieldCheck size={22} /></span>
           <div>
-            <p>Your Privy secure account is ready. It is linked to your T-REX account and helps keep your investments safe.</p>
+            <p>You're about to create your investor profile and link your investment wallet.</p>
+            <p>Your primary wallet will be linked to your investor profile and used whenever you participate in token offerings.</p>
 
-            <h3>What happens next?</h3>
+            <h3>What happens after creation?</h3>
             <ul>
-              <li>We’ll set up your investor profile.</li>
-              <li>You’ll use your Privy account to confirm investments securely.</li>
-              <li>Your basic profile details will stay linked to your account for your protection.</li>
-              <li>You can add or update your documents at any time.</li>
-              <li>Each investment provider will review your documents before you can invest.</li>
+              <li>A secure on-chain identity will be created in the background to support verified token access.</li>
+              <li>Your primary wallet will be linked to this investor profile for token investments.</li>
+              <li>Your basic profile information will be locked to maintain a consistent investor identity.</li>
+              <li>You can upload or update your verification documents at any time.</li>
+              <li>Each issuer reviews and approves verification documents independently before allowing you to invest.</li>
             </ul>
           </div>
         </div>
 
         <section className="investor-profile-modal__section" aria-labelledby="investor-primary-wallet-heading">
-          <h3 id="investor-primary-wallet-heading">Your Privy secure account</h3>
-          <PrivyTrustBadge compact tone="soft" label="Investor embedded wallet" className="mb-3" />
+          <h3 id="investor-primary-wallet-heading">Primary Wallet</h3>
           <div className="investor-profile-wallet">
             <div className="investor-profile-wallet__title">
-              <span><PrivyMark size={22} /></span>
+              <span><WalletCards size={21} /></span>
               <div>
-                <small>PRIVY SECURE ACCOUNT</small>
-                <strong className="break-all font-mono" title={walletAddress}>
-                  {shortenWalletAddress(walletAddress, 9, 9)}
-                </strong>
+                <small>Wallet</small>
+                <strong title={wallet.address}>{wallet.displayAddress || wallet.address || 'Wallet unavailable'}</strong>
               </div>
-              <em><CheckCircle2 size={14} /> Verified</em>
+              <em><CheckCircle2 size={14} /> Connected</em>
             </div>
+            <dl>
+              <div><dt>Wallet</dt><dd title={wallet.address}>{wallet.address || 'Unavailable'}</dd></div>
+              <div><dt>Balance</dt><dd>{wallet.balance || 'Unavailable'}</dd></div>
+              <div><dt><Network size={14} /> Network</dt><dd>{wallet.network || 'Unavailable'}</dd></div>
+            </dl>
             <p className="investor-profile-wallet__notice">
-              You do not need to connect another account. This secure account was set up when you confirmed your email.
+              Make sure you control this wallet. It will represent your investor identity and be used for future token investments.
             </p>
           </div>
         </section>
@@ -93,7 +97,8 @@ export function CreateInvestorProfileModal({
               onChange={(event) => setConfirmed(event.target.checked)}
             />
             <span>
-              <strong>I understand that my Privy secure account will be used to confirm my investments.</strong>
+              <strong>I confirm that I own and control this wallet.</strong>{' '}
+              I understand this wallet will be permanently linked to my investor profile. A secure on-chain identity will be created for verification.
             </span>
           </label>
         </section>
@@ -101,9 +106,10 @@ export function CreateInvestorProfileModal({
         <section className="investor-profile-modal__good-to-know" aria-labelledby="investor-good-to-know-heading">
           <span><Info size={19} /></span>
           <div>
-            <h3 id="investor-good-to-know-heading">Good to know</h3>
+            <h3 id="investor-good-to-know-heading">Good to Know</h3>
+            <p>You don't need to complete verification today.</p>
             <p>
-              Privy helps protect your account. When you choose to invest, Privy will ask you to review and confirm the details.
+              After creating your profile, you can return anytime to upload or update verification documents. Your documents are securely stored and can be reused when applying to invest, subject to each issuer's approval requirements.
             </p>
           </div>
         </section>

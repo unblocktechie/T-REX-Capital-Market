@@ -20,7 +20,7 @@ const SUBJECT_OPTIONS = [
   {
     value: 'Investor Verification',
     label: 'Investor Verification',
-    description: 'Help with required investor verification or a Privy secure confirmation.',
+    description: 'Help with required investor verification or wallet signing.',
   },
   {
     value: 'Investment Confirmation Issue',
@@ -61,9 +61,9 @@ export function ContactSupportDialog({ open, onClose, context = {} }) {
 
   const attachedDetails = useMemo(() => ([
     ['Investor account / user ID', context.userId],
-    ['Privy wallet address', context.walletAddress],
-    ['Technical identity reference', context.onchainIdAddress],
-    ['Technical asset address', context.tokenAddress],
+    ['Investor wallet address', context.walletAddress],
+    ['On-chain identity address', context.onchainIdAddress],
+    ['Token address', context.tokenAddress],
     ['Token name', context.tokenName],
     ['Application ID', context.applicationId],
     ['Current application status', context.applicationStatus],

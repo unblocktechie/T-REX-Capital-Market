@@ -8,6 +8,9 @@ import {
   mapMarketplaceToken,
 } from '@/api/investments/investment.mapper';
 import { env } from '@/config/env';
+import { readApplicationProgress, isApplicationCompleted, isClaimSubmissionUnlocked } from '@/utils/applicationProgress';
+import { tokenService } from '@/services/token.service';
+import { networkUserKey, useNetworkStore } from '@/store/network.store';
 import {
   getLocalInvestorVerification,
   getMarketplaceApplications,
@@ -68,6 +71,14 @@ const withStatus = (token, interest, eligibility) => {
   const resolvedInterest = mergeInterestRejection(interest, eligibility);
   let status = interestStatusToMarketplace(resolvedInterest?.status || eligibility?.interestStatus);
   if (!resolvedInterest && eligibility && !eligibility.eligible) status = MARKETPLACE_STATUS.ACTION_REQUIRED;
+  const progress = readApplicationProgress(resolvedInterest);
+  if (resolvedInterest) {
+    if (isApplicationCompleted(progress, resolvedInterest.status)) status = MARKETPLACE_STATUS.READY_TO_INVEST;
+    else if (isClaimSubmissionUnlocked(progress)) status = MARKETPLACE_STATUS.CLAIM_REQUIRED;
+    else if (status === MARKETPLACE_STATUS.CLAIM_REQUIRED || status === MARKETPLACE_STATUS.READY_TO_INVEST) {
+      status = MARKETPLACE_STATUS.PENDING_REVIEW;
+    }
+  }
 
   return {
     ...token,
@@ -78,9 +89,54 @@ const withStatus = (token, interest, eligibility) => {
   };
 };
 
-const getMappedInterests = async (params) => {
-  const response = await investmentApi.listMyInterests(params);
-  return extractList(response).map(mapInterest);
+const INTERESTS_CACHE_TTL_MS = 8_000;
+const mappedInterestsCache = new Map();
+
+const currentInterestCacheScope = () => {
+  const user = tokenService.getSession()?.user || null;
+  const userKey = networkUserKey(user);
+  const networkState = useNetworkStore.getState();
+  const chainUid = String(networkState.activeChainUidByUser?.[userKey] || '').trim();
+  const chainId = String(networkState.activeChainByUser?.[userKey] || '').trim();
+  return `${userKey}:${chainUid || chainId || 'unselected'}`;
+};
+
+const interestCacheKey = (params = {}) => JSON.stringify({
+  scope: currentInterestCacheScope(),
+  status: String(params?.status || ''),
+});
+
+const clearMappedInterestsCache = () => mappedInterestsCache.clear();
+
+const getMappedInterests = async (params = {}) => {
+  const cacheKey = interestCacheKey(params);
+  const cached = mappedInterestsCache.get(cacheKey);
+  if (cached?.items && Date.now() - cached.cachedAt <= INTERESTS_CACHE_TTL_MS) {
+    return cached.items;
+  }
+  if (cached?.promise) return cached.promise;
+
+  const promise = investmentApi.listMyInterests(params)
+    .then((response) => extractList(response).map(mapInterest))
+    .then((items) => {
+      mappedInterestsCache.set(cacheKey, {
+        items,
+        cachedAt: Date.now(),
+        promise: null,
+      });
+      return items;
+    })
+    .catch((error) => {
+      mappedInterestsCache.delete(cacheKey);
+      throw error;
+    });
+
+  mappedInterestsCache.set(cacheKey, {
+    items: cached?.items || null,
+    cachedAt: cached?.cachedAt || 0,
+    promise,
+  });
+  return promise;
 };
 
 const normalizeMatchValue = (value) => String(value || '').trim().toLowerCase();
@@ -175,15 +231,22 @@ const apiService = {
     return { items, meta: catalogue.meta || {} };
   },
 
-  async getOffering(tokenUid) {
-    const [rawToken, rawEligibility, interests] = await Promise.all([
+  async getOffering(tokenUid, { interest: knownInterest, includeEligibility = true } = {}) {
+    const interestPromise = knownInterest
+      ? Promise.resolve(knownInterest)
+      : getMappedInterests().then((interests) => ({ interests }));
+    const eligibilityPromise = includeEligibility
+      ? investmentApi.getRequiredDocuments(tokenUid)
+      : Promise.resolve(null);
+    const [rawToken, rawEligibility, interestResult] = await Promise.all([
       investmentApi.getToken(tokenUid),
-      investmentApi.getRequiredDocuments(tokenUid),
-      getMappedInterests(),
+      eligibilityPromise,
+      interestPromise,
     ]);
-    const eligibility = mapEligibility(rawEligibility || {});
+    const eligibility = rawEligibility ? mapEligibility(rawEligibility) : null;
     const token = mapMarketplaceToken(rawToken || {}, { eligibility });
-    return withStatus(token, findInterest(interests, token), eligibility);
+    const interest = knownInterest || findInterest(interestResult?.interests || [], token);
+    return withStatus(token, interest, eligibility);
   },
 
   async listApplications({ status } = {}) {
@@ -202,8 +265,20 @@ const apiService = {
     });
   },
 
-  async getApplicationDetail(interestUid) {
+  async getApplicationDetail(interestUid, { application: knownApplication } = {}) {
     if (!interestUid) throw new Error('Application identifier is required.');
+
+    // Asset Management already has the selected application from listApplications().
+    // Reuse that mapped record instead of downloading the entire interest list again.
+    // The history request still runs so readiness/registry state stays authoritative.
+    if (knownApplication) {
+      const rawHistory = await investmentApi.getMyInterestHistory(interestUid);
+      return {
+        application: knownApplication,
+        history: mapInvestmentHistory(rawHistory || {}),
+      };
+    }
+
     const [interests, rawHistory] = await Promise.all([
       getMappedInterests(),
       investmentApi.getMyInterestHistory(interestUid),
@@ -268,11 +343,13 @@ const apiService = {
 
   async ensureInterest(tokenUid, note = '') {
     await investmentApi.submitInterest(tokenUid, note);
+    clearMappedInterestsCache();
     return this.getOffering(tokenUid);
   },
 
   async submitInterest(tokenUid, note = '') {
     await investmentApi.submitInterest(tokenUid, note);
+    clearMappedInterestsCache();
     return this.getOffering(tokenUid);
   },
 

@@ -3,11 +3,9 @@ import { MarketplaceTokenImage } from './MarketplaceTokenImage';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { CompactAddress } from '@/components/common/CompactAddress';
-import { ArcNetworkIcon } from '@/components/common/ArcNetworkIcon';
-import { TokenIcon } from '@/components/common/TokenIcon';
 import { WalletControl } from '@/components/wallet/WalletControl';
 import { toast } from 'sonner';
-import { getWalletErrorMessage } from '@/utils/wallet';
+import { getWalletErrorMessage, shortenWalletAddress } from '@/utils/wallet';
 
 export function InvestorTokenActionHeader({ eyebrow, title, description, onBack, backLabel = 'Back to Application' }) {
   return (
@@ -29,25 +27,13 @@ export function InvestorTokenActionHeader({ eyebrow, title, description, onBack,
 }
 
 export function InvestorTokenIdentityCard({ token, readyLabel = 'Registered investor' }) {
-  const settlementSymbol = String(token?.currency || 'USDC').trim().toUpperCase() || 'USDC';
-
   return (
     <Card className="investor-token-action-identity-card">
       <div className="investor-token-action-identity-card__main">
         <MarketplaceTokenImage token={token} size="md" />
-        <div className="investor-token-action-identity-card__copy">
+        <div>
           <h2>{token?.name || 'Token'}{token?.symbol ? ` (${token.symbol})` : ''}</h2>
           <p>{token?.issuer ? `Issued by ${token.issuer}` : 'Approved investment'}</p>
-          <div className="asset-context-badges investor-token-action-identity-card__badges" aria-label={`${settlementSymbol} on Arc Testnet`}>
-            <span className="asset-context-badge asset-context-badge--currency">
-              <TokenIcon symbol={settlementSymbol} size="xs" />
-              <span>{settlementSymbol}</span>
-            </span>
-            <span className="asset-context-badge asset-context-badge--network">
-              <ArcNetworkIcon size="xs" decorative />
-              <span>Arc Testnet</span>
-            </span>
-          </div>
         </div>
       </div>
       <span className="investor-token-action-ready"><CheckCircle2 size={15} /> {readyLabel}</span>
@@ -95,8 +81,10 @@ export function TokenActionUnavailable({ title, description, onBack, backLabel =
 export function RegisteredInvestorWalletGate({ guard, actionLabel = 'continue' }) {
   const {
     wallet,
+    registeredAddress,
     hasRegisteredWallet,
     targetChainId,
+    targetNetworkLabel,
     isRegisteredWalletConnected,
     isCorrectNetwork,
     isSupportedNetwork,
@@ -106,9 +94,9 @@ export function RegisteredInvestorWalletGate({ guard, actionLabel = 'continue' }
   const handleSwitchNetwork = async () => {
     try {
       await switchToRequiredNetwork();
-      toast.success('Your Privy secure account is ready to use.');
+      toast.success(`Switched to ${targetNetworkLabel}.`);
     } catch (error) {
-      toast.error('Unable to prepare your Privy secure account', {
+      toast.error('Unable to switch network', {
         description: getWalletErrorMessage(error),
       });
     }
@@ -119,8 +107,8 @@ export function RegisteredInvestorWalletGate({ guard, actionLabel = 'continue' }
       <div className="investor-token-wallet-gate is-warning">
         <ShieldAlert size={18} />
         <div>
-          <strong>We could not load your Privy secure account</strong>
-          <p>Refresh this page before you {actionLabel}. Your secure account is required to protect this action.</p>
+          <strong>We could not load your registered wallet</strong>
+          <p>Refresh this page before you {actionLabel}. Your registered wallet is required to protect this action.</p>
         </div>
       </div>
     );
@@ -131,10 +119,10 @@ export function RegisteredInvestorWalletGate({ guard, actionLabel = 'continue' }
       <div className="investor-token-wallet-gate is-warning">
         <WalletCards size={18} />
         <div className="investor-token-wallet-gate__content">
-          <strong>Your Privy secure account is not ready</strong>
-          <p>Open your secure account below to restore access before you {actionLabel}.</p>
+          <strong>Connect your registered wallet</strong>
+          <p>Use the wallet registered for this investment ({shortenWalletAddress(registeredAddress, 6, 5)}) to {actionLabel}.</p>
           <div className="investor-token-wallet-gate__control">
-            <WalletControl prominent expanded context="investor" purpose="registered-action" />
+            <WalletControl prominent expanded context="investor" purpose="registered-action" requiredChainId={targetChainId} />
           </div>
         </div>
       </div>
@@ -146,10 +134,10 @@ export function RegisteredInvestorWalletGate({ guard, actionLabel = 'continue' }
       <div className="investor-token-wallet-gate is-error">
         <ShieldAlert size={18} />
         <div className="investor-token-wallet-gate__content">
-          <strong>Your approved secure account is required</strong>
-          <p>The active account does not match the Privy secure account approved for this investment. Open your account details below to continue safely.</p>
+          <strong>Use your registered investment wallet</strong>
+          <p>The wallet currently connected is not the wallet approved for this investment ({shortenWalletAddress(registeredAddress, 6, 5)}). Choose the registered wallet below to continue.</p>
           <div className="investor-token-wallet-gate__control">
-            <WalletControl expanded context="investor" purpose="registered-action" />
+            <WalletControl expanded context="investor" purpose="registered-action" requiredChainId={targetChainId} />
           </div>
         </div>
       </div>
@@ -161,8 +149,8 @@ export function RegisteredInvestorWalletGate({ guard, actionLabel = 'continue' }
       <div className="investor-token-wallet-gate is-error">
         <Network size={18} />
         <div>
-          <strong>This investment is temporarily unavailable</strong>
-          <p>Your Privy secure account cannot be prepared for this action right now. Please try again later or contact support.</p>
+          <strong>Required network is unavailable</strong>
+          <p>{targetNetworkLabel} is not configured in this application. You cannot {actionLabel} until the network is supported.</p>
         </div>
       </div>
     );
@@ -173,8 +161,8 @@ export function RegisteredInvestorWalletGate({ guard, actionLabel = 'continue' }
       <div className="investor-token-wallet-gate is-warning">
         <Network size={18} />
         <div className="investor-token-wallet-gate__content">
-          <strong>Your secure account needs a quick setup check</strong>
-          <p>Prepare your Privy secure account before you {actionLabel}. This does not move funds or submit an investment.</p>
+          <strong>One wallet setting needs to change</strong>
+          <p>Your registered wallet is connected, but it needs to use {targetNetworkLabel} before you {actionLabel}.</p>
           <Button
             variant="secondary"
             className="investor-token-wallet-gate__switch"
@@ -183,7 +171,7 @@ export function RegisteredInvestorWalletGate({ guard, actionLabel = 'continue' }
             disabled={wallet.isBusy}
             onClick={handleSwitchNetwork}
           >
-            Prepare secure account
+            Switch network
           </Button>
         </div>
       </div>
@@ -194,10 +182,10 @@ export function RegisteredInvestorWalletGate({ guard, actionLabel = 'continue' }
     <div className="investor-token-wallet-gate is-success">
       <CheckCircle2 size={18} />
       <div className="investor-token-wallet-gate__content">
-        <strong>Privy secure account ready</strong>
-        <p>Your secure account is linked to your T-REX profile and ready for this action.</p>
+        <strong>Registered wallet ready</strong>
+        <p>{shortenWalletAddress(wallet.address, 6, 5)} is connected on {targetNetworkLabel}.</p>
         <div className="investor-token-wallet-gate__control">
-          <WalletControl expanded context="investor" purpose="registered-action" />
+          <WalletControl expanded context="investor" purpose="registered-action" requiredChainId={targetChainId} />
         </div>
       </div>
     </div>

@@ -1,4 +1,3 @@
-import { isAddress } from 'viem';
 import { web3Config } from '@/config/web3';
 import { isValidTransactionHash, normalizeTransactionHash } from '@/utils/transactionHash';
 
@@ -21,15 +20,6 @@ export const transactionExplorerUrl = (txHash, chainId) => {
 
   const baseUrl = clean(configuredChain(chainId)?.blockExplorers?.default?.url).replace(/\/$/, '');
   return baseUrl ? `${baseUrl}/tx/${normalizedHash}` : '';
-};
-
-
-export const addressExplorerUrl = (address, chainId) => {
-  const normalizedAddress = clean(address);
-  if (!isAddress(normalizedAddress, { strict: false })) return '';
-
-  const baseUrl = clean(configuredChain(chainId)?.blockExplorers?.default?.url).replace(/\/$/, '');
-  return baseUrl ? `${baseUrl}/address/${normalizedAddress}` : '';
 };
 
 export const transactionExplorerName = (chainId) => {

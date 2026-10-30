@@ -1,3 +1,4 @@
+import { paymentContextOf } from '@/config/payment-tokens';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CheckCircle2,
@@ -17,7 +18,8 @@ import { isAddress, parseUnits } from 'viem';
 import { useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { investmentApi } from '@/api/investments';
-import { CurrencyAmount } from '@/components/common/CurrencyAmount';
+import { PaymentCurrencyAmount } from '@/components/common/PaymentCurrencyAmount';
+import { TokenPriceValue } from '@/components/common/TokenPriceValue';
 import {
   InvestorTokenActionHeader,
   InvestorTokenIdentityCard,
@@ -41,10 +43,12 @@ import {
   saveObservedWalletTransaction,
 } from '@/services/investor/observedWalletTransactionStore';
 import {
+  getInvestorTokenTransferErrorMessage,
   isInvestorTokenTransferWalletRejection,
   submitInvestorTokenTransfer,
 } from '@/services/investor/investorTokenTransferTransaction.service';
 import { transactionExplorerName, transactionExplorerUrl } from '@/utils/blockExplorer';
+import { formatDecimalForDisplay, multiplyDecimalStrings } from '@/utils/currency';
 import { getErrorMessage } from '@/utils/error';
 import { getInvestmentActionContext } from '@/utils/investmentPurchase';
 import { resolveCurrentTokenPriceExact } from '@/utils/tokenPrice';
@@ -264,7 +268,7 @@ const transferStatusMeta = (state, { hasPreparedIntent = false } = {}) => {
       return {
         label: 'Checking',
         title: 'Checking transfer details',
-        detail: 'We are checking the recipient and amount before Privy asks you to confirm.',
+        detail: 'Your recipient and transfer amount are being verified before your wallet opens.',
         tone: 'pending',
         Icon: Clock3,
       };
@@ -337,15 +341,15 @@ const transferStatusMeta = (state, { hasPreparedIntent = false } = {}) => {
       return hasPreparedIntent
         ? {
             label: 'Prepared',
-            title: 'Transfer ready for confirmation',
-            detail: 'The recipient and amount have been checked. Continue to review and confirm this transfer with Privy.',
+            title: 'Transfer ready for wallet confirmation',
+            detail: 'The recipient and amount have been verified. Continue to submit this prepared transfer from your registered wallet.',
             tone: 'success',
             Icon: ShieldCheck,
           }
         : {
             label: 'Ready',
             title: 'Ready to send',
-            detail: 'Enter the recipient and amount. We will check both before Privy asks you to confirm.',
+            detail: 'Enter the recipient and amount. They will be verified before your wallet opens.',
             tone: 'neutral',
             Icon: ShieldCheck,
           };
@@ -373,13 +377,14 @@ const replacementTransactionRequired = (error) => {
 export default function SendTokenPage({
   interestUid: interestUidOverride,
   embedded = false,
+  initialApplication = null,
 }) {
   const { interestUid: routeInterestUid } = useParams();
   const resolvedInterestUid = interestUidOverride || routeInterestUid || '';
-  const { application, token, loading, error, ready } = useRegisteredInvestmentAction(resolvedInterestUid);
+  const { application, token, loading, error, ready } = useRegisteredInvestmentAction(resolvedInterestUid, { initialApplication });
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
-  const [addressChecked, setAddressChecked] = useState(false);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
   const [transferState, setTransferState] = useState(TRANSFER_STATE.READY);
   const [transferRecord, setTransferRecord] = useState(null);
   const [txHash, setTxHash] = useState('');
@@ -399,6 +404,9 @@ export default function SendTokenPage({
   const [historyError, setHistoryError] = useState('');
 
   const completionRef = useRef('');
+  const sendInProgressRef = useRef(false);
+  const recipientInputRef = useRef(null);
+  const amountInputRef = useRef(null);
 
   useDocumentTitle(
     embedded ? 'Manage Investments' : token ? `${token.name} · Send Tokens` : 'Send Tokens',
@@ -442,12 +450,18 @@ export default function SendTokenPage({
     ))
     || resolveCurrentTokenPriceExact(token || {}),
   );
-  const transferPriceNumber = Number(transferPriceExact);
-  const estimatedTransferValue = Number.isFinite(transferPriceNumber)
-    && transferPriceNumber > 0
-    && Number(normalizedAmount) > 0
-    ? Number(normalizedAmount) * transferPriceNumber
-    : null;
+  const estimatedTransferValueExact = isPositiveDecimal(transferPriceExact)
+    && isPositiveDecimal(normalizedAmount)
+    ? multiplyDecimalStrings(normalizedAmount, transferPriceExact)
+    : '';
+  const estimatedTransferValueDisplay = formatDecimalForDisplay(estimatedTransferValueExact);
+  const paymentContext = paymentContextOf(transferRecord, token, application);
+  const settlementSymbol = String(
+    paymentContext.paymentTokenSymbol || token?.currency || '',
+  ).trim().toUpperCase();
+  const settlementPaymentTokenAddress = paymentContext.paymentTokenAddress;
+  const settlementChainId = transferRecord?.chainId || context.chainId || token?.chainId || application?.chainId;
+  const settlementChainUid = token?.chainUid || application?.chainUid || '';
   const serverStatus = normalizeStatus(transferRecord?.status);
   const preparedTransactionRequest = null;
   const knownHash = txHashOf(transferRecord) || txHash;
@@ -459,10 +473,15 @@ export default function SendTokenPage({
     if (!recipient.trim()) return '';
     if (!isAddress(recipient.trim())) return 'Enter a valid recipient account address.';
     if (sameAddress(recipient, context.investorWalletAddress)) {
-      return 'Choose a recipient account address different from your Privy secure account.';
+      return 'Choose a recipient wallet different from your registered investment wallet.';
     }
     return '';
   }, [context.investorWalletAddress, recipient]);
+
+  const recipientReady = Boolean(recipient.trim() && isAddress(recipient.trim()) && !recipientError);
+  const recipientFieldError = submitAttempted && !recipient.trim()
+    ? 'Enter a recipient account address to continue.'
+    : recipientError;
 
   const amountError = useMemo(() => {
     if (!clean(amount)) return '';
@@ -481,6 +500,10 @@ export default function SendTokenPage({
     return '';
   }, [amount, amountRaw, balanceAvailable, normalizedAmount, token?.symbol, tokenDecimals, tokenWalletBalance, tokenWalletRawBalance]);
 
+  const amountFieldError = submitAttempted && !clean(amount)
+    ? 'Enter a token amount greater than zero.'
+    : amountError;
+
   const resetTransferComposer = useCallback(({ clearFields = true } = {}) => {
     setTransferState(TRANSFER_STATE.READY);
     setTransferRecord(null);
@@ -490,7 +513,7 @@ export default function SendTokenPage({
     if (clearFields) {
       setRecipient('');
       setAmount('');
-      setAddressChecked(false);
+      setSubmitAttempted(false);
     }
   }, []);
 
@@ -739,7 +762,6 @@ export default function SendTokenPage({
     setTransferError('');
     setReplacementAllowed(false);
     setRecipient(event.target.value);
-    setAddressChecked(false);
   };
 
   const handleAmountChange = (event) => {
@@ -751,28 +773,20 @@ export default function SendTokenPage({
     setAmount(normalized);
   };
 
-  const checkRecipient = () => {
-    if (!recipient.trim() || recipientError) {
-      setAddressChecked(false);
-      toast.error(recipientError || 'Enter a recipient account address to continue.');
-      return;
-    }
-    setAddressChecked(true);
-    toast.success('Recipient address ready', {
-      description: "We will check the recipient's eligibility before Privy asks you to confirm.",
-    });
-  };
-
   const validateFormForNewIntent = () => {
+    setSubmitAttempted(true);
     if (!walletGuard.ready) {
-      toast.error('Your Privy secure account needs attention. Open it from the header and follow the prompt to continue.');
+      toast.error('Connect the investor wallet linked to your profile on the required network to continue.');
       return false;
     }
-    if (!addressChecked || recipientError || !isAddress(recipient.trim())) {
-      toast.error(recipientError || 'Enter and check a recipient account address.');
+    // Validate the recipient here rather than requiring a separate check button.
+    if (!recipientReady) {
+      recipientInputRef.current?.focus();
+      toast.error(recipientError || 'Enter a recipient account address to continue.');
       return false;
     }
     if (!normalizedAmount || !isPositiveDecimal(normalizedAmount) || amountError) {
+      amountInputRef.current?.focus();
       toast.error(amountError || 'Enter a token amount greater than zero.');
       return false;
     }
@@ -780,7 +794,7 @@ export default function SendTokenPage({
   };
 
   const handleSend = async () => {
-    if (transferBusy) return;
+    if (transferBusy || sendInProgressRef.current) return;
     if (!validateFormForNewIntent()) return;
 
     const tokenUid = tokenUidOf(token);
@@ -790,6 +804,8 @@ export default function SendTokenPage({
       return;
     }
 
+    // Guard against a fast double-click before React renders the busy state.
+    sendInProgressRef.current = true;
     setTransferState(TRANSFER_STATE.WALLET_CONFIRMATION);
     setTransferError('');
     setReplacementAllowed(false);
@@ -805,7 +821,7 @@ export default function SendTokenPage({
         tokenAmountRaw: amountRaw?.toString?.(),
         tokenDecimals,
       });
-      if (!validTransactionHash(hash)) throw new Error('We did not receive a valid confirmation ID. Check your Privy account details before trying again.');
+      if (!validTransactionHash(hash)) throw new Error('Your wallet did not return a valid transaction ID. Check wallet activity before trying again.');
 
       saveObservedWalletTransaction({
         chainId,
@@ -873,10 +889,12 @@ export default function SendTokenPage({
         toast.info('Secure confirmation cancelled. No transfer was submitted.');
       } else {
         setTransferState(TRANSFER_STATE.FAILED);
-        const message = getErrorMessage(sendError, 'Your Privy secure account could not submit this transfer.');
+        const message = getInvestorTokenTransferErrorMessage(sendError);
         setTransferError(message);
         toast.error('Unable to send', { description: message });
       }
+    } finally {
+      sendInProgressRef.current = false;
     }
   };
 
@@ -958,16 +976,9 @@ export default function SendTokenPage({
       && (!balanceAvailable || amountRaw === null || amountRaw <= tokenWalletRawBalance),
   );
 
-  const canPrepareNew = Boolean(
-    walletGuard.ready
-      && addressChecked
-      && isAddress(recipient.trim())
-      && !recipientError
-      && normalizedAmount
-      && isPositiveDecimal(normalizedAmount)
-      && !amountError
-      && !transferBusy,
-  );
+  // Let Send be clicked so missing/invalid fields are validated on submit.
+  // Wallet readiness and in-progress transfer safeguards still apply.
+  const canPrepareNew = Boolean(walletGuard.ready && !transferBusy);
   const canBroadcastPrepared = Boolean(
     walletGuard.ready
       && pendingIntent
@@ -981,7 +992,7 @@ export default function SendTokenPage({
   const ctaLabel = transferState === TRANSFER_STATE.PREPARING
     ? 'Checking Transfer'
     : transferState === TRANSFER_STATE.WALLET_CONFIRMATION
-      ? 'Confirm securely with Privy'
+      ? 'Confirm in Wallet'
       : [TRANSFER_STATE.TRANSACTION_SUBMITTED, TRANSFER_STATE.CONFIRMING].includes(transferState)
         ? 'Finalizing Transfer'
         : transferState === TRANSFER_STATE.COMPLETED
@@ -1002,7 +1013,7 @@ export default function SendTokenPage({
       ? 'A previous confirmation could not be used. Continue only because this saved transfer needs to be submitted again.'
       : hasPreparedIntent || transferState === TRANSFER_STATE.CANCELLED
         ? 'This transfer is already prepared. Continuing uses the same verified recipient and amount.'
-        : 'We check the recipient and amount before Privy asks you to confirm.';
+        : 'Your recipient and amount are verified before your wallet opens.';
 
   const historyCurrentPage = Math.min(Math.max(historyMeta.page || historyPage, 1), Math.max(historyMeta.totalPages, 1));
   const historyHasPending = history.some((row) => normalizeStatus(row?.status) === TRANSFER_STATUS.PENDING_TRANSFER);
@@ -1013,7 +1024,7 @@ export default function SendTokenPage({
         <InvestorTokenActionHeader
           eyebrow="Token action"
           title="Send your investment"
-          description="Send units to another approved investor. We check the recipient before you confirm securely with Privy."
+          description="Send units to another approved investor. We check the recipient before your wallet asks you to confirm."
         />
       ) : null}
 
@@ -1023,10 +1034,10 @@ export default function SendTokenPage({
 
           <Card className="investor-token-action-card">
             <div className="investor-token-action-card__heading">
-              <div><span>From</span><h2>Your Privy secure account</h2></div>
+              <div><span>From</span><h2>Your registered investment wallet</h2></div>
               <WalletCards size={19} />
             </div>
-            <LockedAddressField label="Privy secure account" value={context.investorWalletAddress} />
+            <LockedAddressField label="Registered investment wallet" value={context.investorWalletAddress} />
           </Card>
 
           <Card className="investor-token-action-card">
@@ -1034,30 +1045,23 @@ export default function SendTokenPage({
               <div><span>Recipient</span><h2>Who are you sending to?</h2></div>
               <Send size={19} />
             </div>
-            <div className="investor-token-action-recipient-row">
-              <label className={`investor-token-action-text-field ${addressChecked && !recipientError ? 'is-checked' : ''} ${recipientError ? 'is-invalid' : ''} ${formLocked ? 'is-locked' : ''}`}>
-                <span className="sr-only">Recipient account address</span>
-                <input
-                  value={recipient}
-                  onChange={handleRecipientChange}
-                  placeholder="Recipient account address (0x…)"
-                  spellCheck="false"
-                  autoComplete="off"
-                  aria-invalid={Boolean(recipientError)}
-                  disabled={formLocked}
-                />
-                {addressChecked && !recipientError ? <CheckCircle2 size={17} /> : null}
-              </label>
-              <Button
-                variant="secondary"
-                onClick={checkRecipient}
-                disabled={formLocked || !recipient.trim() || Boolean(recipientError)}
-              >
-                Check recipient
-              </Button>
-            </div>
-            {recipientError ? <p className="investor-token-action-field-error">{recipientError}</p> : null}
-            <p className="investor-token-action-helper">Enter the recipient’s approved account address. We check that they can receive this asset before you continue.</p>
+            <label className={`investor-token-action-text-field ${recipientReady ? 'is-checked' : ''} ${recipientFieldError ? 'is-invalid' : ''} ${formLocked ? 'is-locked' : ''}`}>
+              <span className="sr-only">Recipient account address</span>
+              <input
+                ref={recipientInputRef}
+                value={recipient}
+                onChange={handleRecipientChange}
+                placeholder="Recipient account address (0x…)"
+                spellCheck="false"
+                autoComplete="off"
+                aria-invalid={Boolean(recipientFieldError)}
+                aria-describedby={recipientFieldError ? 'send-recipient-error' : undefined}
+                disabled={formLocked}
+              />
+              {recipientReady ? <CheckCircle2 size={17} aria-hidden="true" /> : null}
+            </label>
+            {recipientFieldError ? <p id="send-recipient-error" className="investor-token-action-field-error">{recipientFieldError}</p> : null}
+            <p className="investor-token-action-helper">Enter the recipient’s approved account address. We check that they can receive this asset when you select Send Tokens.</p>
           </Card>
 
           <Card className="investor-token-action-card">
@@ -1071,21 +1075,23 @@ export default function SendTokenPage({
                     : 'Your available amount will be checked'}
               </small>
             </div>
-            <label className={`investor-token-action-amount-field ${amountError ? 'is-invalid' : ''} ${formLocked ? 'is-locked' : ''}`}>
+            <label className={`investor-token-action-amount-field ${amountFieldError ? 'is-invalid' : ''} ${formLocked ? 'is-locked' : ''}`}>
               <span className="sr-only">Token amount to transfer</span>
               <input
+                ref={amountInputRef}
                 type="text"
                 inputMode="decimal"
                 value={amount}
                 onChange={handleAmountChange}
                 placeholder="0.00"
-                aria-invalid={Boolean(amountError)}
+                aria-invalid={Boolean(amountFieldError)}
+                aria-describedby={amountFieldError ? 'send-amount-error' : undefined}
                 disabled={formLocked}
               />
               <strong>{token.symbol}</strong>
             </label>
-            {amountError ? <p className="investor-token-action-field-error">{amountError}</p> : null}
-            <p className="investor-token-action-field-hint">Enter the number of units to send. We check your available balance again before you confirm securely with Privy.</p>
+            {amountFieldError ? <p id="send-amount-error" className="investor-token-action-field-error">{amountFieldError}</p> : null}
+            <p className="investor-token-action-field-hint">Enter the number of units to send. We check your available balance again before your wallet asks you to confirm.</p>
           </Card>
 
           <Card className="investor-token-action-card">
@@ -1095,8 +1101,8 @@ export default function SendTokenPage({
                 icon={UserRoundCheck}
                 label="Recipient account"
                 detail="We first check that the account address is valid."
-                status={addressChecked && !recipientError ? 'Ready' : 'Check needed'}
-                tone={addressChecked && !recipientError ? 'success' : 'neutral'}
+                status={recipientReady ? 'Ready' : 'Checked when you send'}
+                tone={recipientReady ? 'success' : 'neutral'}
               />
               <TokenActionCheck
                 icon={WalletCards}
@@ -1124,21 +1130,36 @@ export default function SendTokenPage({
               <span>{activeTransferUid ? 'Price used' : 'Current price per unit'}</span>
               <strong>
                 {transferPriceExact ? (
-                  <CurrencyAmount symbol={token.currency || 'USDC'}>{formatExactAmount(transferPriceExact)}</CurrencyAmount>
+                  <PaymentCurrencyAmount
+                    paymentTokenAddress={settlementPaymentTokenAddress}
+                    paymentTokenSymbol={settlementSymbol}
+                    chainUid={settlementChainUid}
+                    chainId={settlementChainId}
+                  >
+                    <TokenPriceValue value={transferPriceExact} />
+                  </PaymentCurrencyAmount>
                 ) : '—'}
               </strong>
             </div>
             <div className="investor-token-order-row investor-token-order-row--primary">
               <span>Estimated value</span>
               <strong>
-                {estimatedTransferValue === null ? '—' : (
-                  <CurrencyAmount symbol={token.currency || 'USDC'}>
-                    {estimatedTransferValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </CurrencyAmount>
+                {!estimatedTransferValueExact ? '—' : (
+                  <PaymentCurrencyAmount
+                    paymentTokenAddress={settlementPaymentTokenAddress}
+                    paymentTokenSymbol={settlementSymbol}
+                    chainUid={settlementChainUid}
+                    chainId={settlementChainId}
+                    title={estimatedTransferValueDisplay.isAbbreviated ? `${estimatedTransferValueDisplay.exact} ${settlementSymbol}` : undefined}
+                    ariaLabel={estimatedTransferValueDisplay.isAbbreviated ? `${estimatedTransferValueDisplay.exact} ${settlementSymbol}` : undefined}
+                  >
+                    {estimatedTransferValueDisplay.display}
+                  </PaymentCurrencyAmount>
                 )}
               </strong>
             </div>
             <div className="investor-token-order-row"><span>Recipient</span><strong className="investor-token-order-address">{recipient || 'Not entered'}</strong></div>
+            <div className="investor-token-order-row"><span>Network</span><strong>{walletGuard.targetNetworkLabel}</strong></div>
             <div className="investor-token-order-row">
               <span>Your current holding</span>
               <strong>

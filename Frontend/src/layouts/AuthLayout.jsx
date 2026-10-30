@@ -1,10 +1,8 @@
 import { motion } from 'framer-motion';
 import { CheckCircle2, FileCheck2, ShieldCheck, UserRoundCheck } from 'lucide-react';
-import { Outlet, useLocation } from 'react-router-dom';
-import { PrivyTrustBadge } from '@/components/branding/PrivyBrand';
+import { Outlet } from 'react-router-dom';
 import { TrexLogo, TrexMark } from '@/components/branding/TrexLogo';
 import { appConfig } from '@/config/app.config';
-import { ROUTES } from '@/config/routes';
 
 const points = [
   ['For companies', 'Create and manage your investment offering.', FileCheck2],
@@ -13,18 +11,14 @@ const points = [
 ];
 
 export function AuthLayout() {
-  const location = useLocation();
-  const showPrivyTrust = [ROUTES.login, ROUTES.signup, ROUTES.verifyEmail].includes(
-    location.pathname,
-  );
-
   return (
-    <main className="relative min-h-dvh w-full max-w-full overflow-x-hidden bg-[linear-gradient(180deg,#edf2f8_0%,#f8fafc_28%,#ffffff_100%)] text-[var(--text)] max-[900px]:grid max-[900px]:place-items-center min-[901px]:grid min-[901px]:h-dvh min-[901px]:min-h-0 min-[901px]:grid-cols-[minmax(420px,1.08fr)_minmax(480px,0.92fr)] min-[901px]:overflow-hidden">
+    <div className="flex min-h-dvh w-full flex-col">
+      <main className="relative grid min-h-0 w-full max-w-full flex-1 overflow-x-hidden bg-[linear-gradient(180deg,#edf2f8_0%,#f8fafc_28%,#ffffff_100%)] text-[var(--text)] max-[900px]:place-items-center min-[901px]:grid-cols-[minmax(420px,1.08fr)_minmax(480px,0.92fr)] min-[901px]:overflow-hidden">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[220px] bg-[radial-gradient(circle_at_top,rgba(30,64,175,0.08),transparent_58%)] max-[900px]:block min-[901px]:hidden" />
       <div className="pointer-events-none absolute left-[-70px] top-[18%] size-[180px] rounded-full bg-[rgba(59,130,246,0.08)] blur-3xl max-[900px]:block min-[901px]:hidden" />
       <div className="pointer-events-none absolute bottom-[7%] right-[-60px] size-[170px] rounded-full bg-[rgba(15,23,42,0.08)] blur-3xl max-[900px]:block min-[901px]:hidden" />
       <section
-        className="relative hidden h-dvh min-h-0 overflow-hidden [background:var(--auth-visual-bg)] px-[clamp(30px,5vw,78px)] py-7 text-[var(--brand-panel-text)] min-[901px]:grid min-[901px]:grid-rows-[auto_minmax(0,1fr)_auto] min-[901px]:gap-y-5"
+        className="relative hidden h-full min-h-0 overflow-hidden [background:var(--auth-visual-bg)] px-[clamp(30px,5vw,78px)] py-7 text-[var(--brand-panel-text)] min-[901px]:grid min-[901px]:grid-rows-[auto_minmax(0,1fr)_auto] min-[901px]:gap-y-5"
         aria-label="T-REX Capital Market product overview"
       >
         <div className="pointer-events-none absolute inset-0 opacity-[var(--brand-grid-opacity)] [background-image:var(--brand-grid)] [background-size:44px_44px] [mask-image:linear-gradient(to_bottom,black,transparent_88%)]" />
@@ -46,12 +40,12 @@ export function AuthLayout() {
             <span>
               Powered by{' '}
               <a
-                href="https://unblocktechnolabs.com/"
+                href={appConfig.companyWebsiteUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-inherit underline decoration-current underline-offset-2 transition-opacity hover:text-inherit hover:opacity-75 focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current"
+                className="inline-block whitespace-nowrap text-inherit tracking-[0.06em] underline decoration-current underline-offset-2 transition-opacity hover:text-inherit hover:opacity-75 focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current"
               >
-                Unblock Technolabs
+                {appConfig.companyWebsiteLabel}
               </a>
             </span>
           </span>
@@ -59,7 +53,7 @@ export function AuthLayout() {
             A simple, secure way to manage your digital investments
           </h1>
           <p className="mb-5 max-w-[560px] text-sm leading-6 text-[var(--brand-panel-soft)] min-[1200px]:text-base min-[1200px]:leading-7">
-            T-REX Capital Market helps companies launch investments and helps investors manage them with confidence.
+            {appConfig.name} helps companies launch investments and helps investors manage them with confidence.
           </p>
           <div className="grid gap-2.5">
             {points.map(([title, text, Icon]) => (
@@ -81,14 +75,36 @@ export function AuthLayout() {
           </div>
         </motion.div>
 
-        <div className="relative z-10 self-end border-t border-[var(--brand-panel-border)] pt-3 text-[11px] leading-4 text-[var(--brand-panel-muted)]">
-          <p className="m-0">
-            © 2026 {appConfig.companyName}. Secure digital-securities infrastructure.
-          </p>
+        <div className="relative z-10 flex self-end items-center justify-between gap-4 border-t border-[var(--brand-panel-border)] pt-3 text-[11px] leading-4 text-[var(--brand-panel-muted)]">
+          <p className="m-0">© 2026 {appConfig.companyName}.</p>
+          <div className="inline-flex shrink-0 items-center gap-2">
+            <a
+              href={appConfig.documentsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex cursor-pointer items-center rounded-md px-1.5 py-1 text-[13px] leading-4 font-semibold text-[var(--brand-panel-text)] no-underline transition-[opacity,background-color] duration-150 hover:bg-[var(--brand-panel-glass)] hover:text-[var(--brand-panel-text)] hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current"
+              aria-label="Documentation"
+            >
+              Documentation
+            </a>
+            <span
+              className="h-4 w-px shrink-0 bg-[var(--brand-panel-border)]"
+              aria-hidden="true"
+            />
+            <a
+              href={appConfig.contactUsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex cursor-pointer items-center rounded-md px-1.5 py-1 text-[13px] leading-4 font-semibold text-[var(--brand-panel-text)] no-underline transition-[opacity,background-color] duration-150 hover:bg-[var(--brand-panel-glass)] hover:text-[var(--brand-panel-text)] hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current"
+              aria-label="Contact us (opens in a new tab)"
+            >
+              Contact us
+            </a>
+          </div>
         </div>
       </section>
 
-      <section className="relative z-[1] min-h-dvh w-full min-w-0 max-w-full overflow-x-hidden bg-transparent px-4 py-5 sm:px-6 min-[901px]:h-dvh min-[901px]:min-h-0 min-[901px]:overflow-y-auto min-[901px]:overscroll-contain min-[901px]:bg-white min-[901px]:px-[clamp(28px,5vw,76px)] min-[901px]:py-5 max-[900px]:grid max-[900px]:place-items-center">
+      <section className="relative z-[1] min-h-full w-full min-w-0 max-w-full overflow-x-hidden bg-transparent px-4 py-5 sm:px-6 min-[901px]:h-full min-[901px]:min-h-0 min-[901px]:overflow-y-auto min-[901px]:overscroll-y-auto min-[901px]:bg-white min-[901px]:px-[clamp(28px,5vw,76px)] min-[901px]:py-5 max-[900px]:grid max-[900px]:place-items-center">
         <div className="mx-auto flex min-h-full w-full min-w-0 max-w-[640px] flex-col max-[900px]:min-h-0 max-[900px]:justify-center">
           <div className="mb-4 flex justify-center min-[901px]:hidden">
             <TrexLogo className="auth-trex-logo" />
@@ -107,14 +123,56 @@ export function AuthLayout() {
               </div>
             </div>
             <Outlet />
-            {showPrivyTrust ? (
-              <div className="mt-5 flex justify-center px-1">
-                <PrivyTrustBadge label="Secure access & embedded wallet" />
+            <div className="mt-5 min-[901px]:hidden">
+              <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 px-1 text-center text-[11px] leading-4 text-[var(--muted)]">
+                <span>© 2026 {appConfig.companyName}.</span>
+                <span aria-hidden="true">•</span>
+                <div className="inline-flex items-center gap-2">
+                  <a
+                    href={appConfig.documentsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex cursor-pointer items-center rounded-md px-1.5 py-1 text-[13px] leading-4 font-semibold text-[var(--text)] no-underline transition-[opacity,background-color] duration-150 hover:bg-[rgba(15,23,42,0.05)] hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--text)]"
+                    aria-label="Documentation"
+                  >
+                    Documentation
+                  </a>
+                  <span
+                    className="h-4 w-px shrink-0 bg-[var(--border-strong)]"
+                    aria-hidden="true"
+                  />
+                  <a
+                    href={appConfig.contactUsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex cursor-pointer items-center rounded-md px-1.5 py-1 text-[13px] leading-4 font-semibold text-[var(--text)] no-underline transition-[opacity,background-color] duration-150 hover:bg-[rgba(15,23,42,0.05)] hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--text)]"
+                    aria-label="Contact us (opens in a new tab)"
+                  >
+                    Contact us
+                  </a>
+                </div>
               </div>
-            ) : null}
+
+              <div className="mt-3 flex justify-center px-1">
+                <span className="inline-flex max-w-full items-center justify-center gap-1.5 rounded-full border border-[rgba(148,163,184,0.32)] bg-[rgba(248,250,252,0.92)] px-3 py-1.5 text-center text-[10px] font-semibold leading-4 text-[var(--muted)] shadow-[0_4px_14px_rgba(15,23,42,0.05)] sm:text-[11px]">
+                  <CheckCircle2 size={13} className="shrink-0" aria-hidden="true" />
+                  <span className="whitespace-nowrap">Powered by</span>
+                  <a
+                    href={appConfig.companyWebsiteUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="whitespace-nowrap font-bold tracking-[0.06em] text-[var(--text)] underline decoration-current underline-offset-2 transition-opacity hover:opacity-75 focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--text)]"
+                    aria-label={`Powered by ${appConfig.companyWebsiteLabel} (opens in a new tab)`}
+                  >
+                    {appConfig.companyWebsiteLabel}
+                  </a>
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </section>
-    </main>
+      </main>
+    </div>
   );
 }

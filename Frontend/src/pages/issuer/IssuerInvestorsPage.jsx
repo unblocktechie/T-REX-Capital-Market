@@ -15,18 +15,19 @@ import { issuerInvestorSubscriptionsService } from '@/services/issuer/issuerInve
 import { formatDate } from '@/utils/date';
 import { getErrorMessage } from '@/utils/error';
 import { getInvestmentJourney } from '@/utils/investmentJourney';
+import { readApplicationProgress } from '@/utils/applicationProgress';
+import { filterIssuerRequestsByStatus, issuerRequestApiStatus } from '@/utils/issuerRequestStatusFilter';
 
 const PAGE_SIZE = 5;
 
 const INTEREST_STATUS_OPTIONS = [
   { value: 'all', label: 'All Requests', description: 'Every investment request' },
   { value: 'submitIntrest', label: 'Needs My Review', description: 'Applications waiting for your review' },
-  { value: 'claimSubmitted', label: 'Needs Final Approval', description: 'Investors who finished verification and need your approval' },
-  { value: 'verifiedByIssuer', label: 'Waiting for Investor', description: 'Your review is complete and the investor must finish verification' },
+  { value: 'verifiedByIssuer', label: 'Issuer Verified', description: 'Registration pending or awaiting investor claims' },
   { value: 'pending', label: 'Investor Completing Application', description: 'The investor still needs to provide required information' },
   { value: 'approved', label: 'Approved', description: 'Requests that reached approval' },
   { value: 'rejected', label: 'Rejected', description: 'Requests you have already rejected' },
-  { value: 'cancelled', label: 'Cancelled', description: 'Requests that are no longer active' },
+  { value: 'completed', label: 'Completed', description: 'Applications with all required steps confirmed' },
 ];
 
 function exportTextFile(filename, text) {
@@ -43,20 +44,21 @@ function exportTextFile(filename, text) {
 
 const csvEscape = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
 
-export default function IssuerInvestorsPage() {
-  useDocumentTitle('Investment Requests');
+export default function IssuerInvestorsPage({ embedded = false } = {}) {
+  useDocumentTitle(embedded ? 'Investor Management' : 'Investment Requests');
   const navigate = useNavigate();
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const apiStatusFilter = issuerRequestApiStatus(statusFilter);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
     issuerInvestorSubscriptionsService
-      .listRequests({ status: statusFilter })
+      .listRequests({ status: apiStatusFilter })
       .then((items) => active && setRequests(items || []))
       .catch((error) => {
         if (!active) return;
@@ -65,13 +67,28 @@ export default function IssuerInvestorsPage() {
       })
       .finally(() => active && setLoading(false));
     return () => { active = false; };
-  }, [statusFilter]);
+  }, [apiStatusFilter]);
+
+  // Claim completion is backend-driven; keep the issuer queue in sync without
+  // creating a second approval step or requesting another wallet transaction.
+  useEffect(() => {
+    let active = true;
+    const timer = window.setInterval(() => {
+      void issuerInvestorSubscriptionsService.listRequests({ status: apiStatusFilter })
+        .then((items) => { if (active) setRequests(items || []); })
+        .catch(() => { /* Keep the last known rows during a transient outage. */ });
+    }, 15_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [apiStatusFilter]);
+
+  const statusFilteredRequests = useMemo(() =>
+    filterIssuerRequestsByStatus(requests, statusFilter), [requests, statusFilter]);
 
   const visibleRequests = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return requests;
+    if (!query) return statusFilteredRequests;
 
-    return requests.filter((request) => [
+    return statusFilteredRequests.filter((request) => [
       request.investorName,
       request.investorCode,
       request.email,
@@ -80,7 +97,7 @@ export default function IssuerInvestorsPage() {
       request.interestUid,
       request.requestReference,
     ].some((value) => String(value || '').toLowerCase().includes(query)));
-  }, [requests, search]);
+  }, [statusFilteredRequests, search]);
 
   useEffect(() => {
     setPage(1);
@@ -119,7 +136,7 @@ export default function IssuerInvestorsPage() {
       key: 'status',
       header: 'Where it is',
       render: (_value, request) => {
-        const journey = getInvestmentJourney({ status: request.status, viewerRole: 'issuer', canResubmit: request.canResubmit, rejectReasonType: request.rejectReasonType });
+        const journey = getInvestmentJourney({ status: request.status, viewerRole: 'issuer', canResubmit: request.canResubmit, rejectReasonType: request.rejectReasonType, progress: readApplicationProgress(request) });
         return <AppStatusBadge status={request.status} label={journey.statusLabel} tone={journey.tone} compact />;
       },
     },
@@ -127,7 +144,7 @@ export default function IssuerInvestorsPage() {
       key: 'nextAction',
       header: 'Who acts next',
       render: (_value, request) => {
-        const journey = getInvestmentJourney({ status: request.status, viewerRole: 'issuer', canResubmit: request.canResubmit, rejectReasonType: request.rejectReasonType });
+        const journey = getInvestmentJourney({ status: request.status, viewerRole: 'issuer', canResubmit: request.canResubmit, rejectReasonType: request.rejectReasonType, progress: readApplicationProgress(request) });
         return <div className="application-journey-table-copy"><strong>{journey.title}</strong><small>Next action: {journey.owner}</small></div>;
       },
     },
@@ -146,7 +163,7 @@ export default function IssuerInvestorsPage() {
 
   const handleExport = () => {
     const header = ['Investor', 'Investor Account', 'Status', 'Submitted At', 'Asset', 'Application ID'];
-    const rows = requests.map((request) => [
+    const rows = statusFilteredRequests.map((request) => [
       request.investorName,
       request.investorCode,
       request.status,
@@ -165,9 +182,9 @@ export default function IssuerInvestorsPage() {
         <div>
           <span className="issuer-redemptions-eyebrow">Investor journey tracking</span>
           <h1>Investment Requests</h1>
-          <p>See which requests need your action, which are waiting for the investor, and which are ready for final approval.</p>
+          <p>See which requests need your action, which are waiting for the investor, and which have finished registration.</p>
         </div>
-        <Button variant="secondary" icon={Download} disabled={!requests.length} onClick={handleExport}>Export CSV</Button>
+        <Button variant="secondary" icon={Download} disabled={!statusFilteredRequests.length} onClick={handleExport}>Export CSV</Button>
       </header>
 
       <Card className="issuer-subscriptions-toolbar-card">
@@ -194,7 +211,7 @@ export default function IssuerInvestorsPage() {
         <div className="issuer-subscriptions-toolbar__summary">
           <span>
             Showing <strong>{pageStart}{pageEnd > pageStart ? `–${pageEnd}` : ''}</strong> of {visibleRequests.length} request{visibleRequests.length === 1 ? '' : 's'}
-            {visibleRequests.length !== requests.length ? ` (${requests.length} total)` : ''}
+            {visibleRequests.length !== statusFilteredRequests.length ? ` (${statusFilteredRequests.length} total)` : ''}
           </span>
           <span>Each status tells you who needs to act next.</span>
         </div>

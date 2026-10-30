@@ -1,3 +1,11 @@
+// One canonical destination for investor token operations. Keep legacy route
+// helpers as aliases so existing callers open the embedded operation tabs.
+const investorOperationRoute = (tab, interestUid) => {
+  const params = new URLSearchParams({ tab });
+  if (interestUid) params.set('interestUid', interestUid);
+  return `/app/asset-management?${params.toString()}`;
+};
+
 export const ROUTES = Object.freeze({
   root: '/',
   login: '/login',
@@ -9,13 +17,16 @@ export const ROUTES = Object.freeze({
   marketplace: '/app/marketplace',
   marketplaceToken: (tokenId = ':tokenId') => `/app/marketplace/${tokenId}`,
   applications: '/app/applications',
+  investorMyInvestment: '/app/my-investment',
+  investorMyInvestmentTab: (tab = 'my-application') => `/app/my-investment?tab=${tab}`,
   assetManagement: '/app/asset-management',
+  assetManagementAction: (tab = 'invest', interestUid = '') => investorOperationRoute(tab, interestUid),
   walletManagement: '/app/wallet',
   applicationDetail: (interestUid = ':interestUid') => `/app/applications/${interestUid}`,
   applicationClaim: (interestUid = ':interestUid') => `/app/applications/${interestUid}/submit-claim`,
-  purchaseToken: (interestUid = ':interestUid') => `/app/applications/${interestUid}/purchase`,
-  sendToken: (interestUid = ':interestUid') => `/app/applications/${interestUid}/send`,
-  redeemToken: (interestUid = ':interestUid') => `/app/applications/${interestUid}/redeem`,
+  purchaseToken: (interestUid = ':interestUid') => investorOperationRoute('invest', interestUid),
+  sendToken: (interestUid = ':interestUid') => investorOperationRoute('send', interestUid),
+  redeemToken: (interestUid = ':interestUid') => investorOperationRoute('redeem', interestUid),
   projects: '/app/projects',
   createToken: '/app/tokens/new',
   tokenIssuanceStep: (step = ':step') => `/app/tokens/new/${step}`,
@@ -25,6 +36,8 @@ export const ROUTES = Object.freeze({
   identity: '/app/identity',
   compliance: '/app/compliance',
   investors: '/app/investors',
+  issuerInvestorManagement: '/app/investor-management',
+  issuerInvestorManagementTab: (tab = 'investors') => `/app/investor-management?tab=${tab}`,
   issuerInvestorDirectory: '/app/investor-directory',
   invitations: '/app/invitations',
   portfolio: '/app/portfolio',
@@ -37,10 +50,12 @@ export const ROUTES = Object.freeze({
   users: '/app/team',
   profile: '/app/profile',
   settings: '/app/settings',
+  chainAccess: '/app/networks',
   adminRoot: '/admin',
   adminDashboard: '/admin/dashboard',
   adminReviewQueue: '/admin/reviews',
   adminOrganizations: '/admin/organizations',
+  adminNetworks: '/admin/networks',
   adminOrganizationReview: (organizationId = ':organizationId') => `/admin/organizations/${organizationId}`,
   adminUsers: '/admin/users',
   adminAuditLogs: '/admin/audit-logs',

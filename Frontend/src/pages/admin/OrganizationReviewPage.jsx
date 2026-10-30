@@ -39,9 +39,7 @@ import { ROUTES } from '@/config/routes';
 import { web3Config } from '@/config/web3';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { formatAdminDate, formatAdminDateTime, formatFileSize } from '@/utils/adminFormat';
-import { addressExplorerUrl } from '@/utils/blockExplorer';
-import { sanitizeUserFacingMessage } from '@/utils/error';
-import { inspectOrganizationIdentityOnRequiredChain } from '@/services/organizationIdentity.service';
+import { getErrorMessage, sanitizeUserFacingMessage } from '@/utils/error';
 
 export default function OrganizationReviewPage() {
   const { organizationId } = useParams();
@@ -57,27 +55,11 @@ export default function OrganizationReviewPage() {
     queryFn: () => adminApi.getOrganization(organizationId),
   });
   const organization = organizationQuery.data;
+  const organizationWalletChain = organization?.wallet?.chainId
+    ? web3Config.getChainById(organization.wallet.chainId)
+    : null;
+  const organizationExplorerBase = organizationWalletChain?.blockExplorers?.default?.url || '';
   useDocumentTitle(organization ? `${organization.name} Review` : 'Organization Review');
-
-  const identityReadinessQuery = useQuery({
-    queryKey: [
-      'admin',
-      'organization-arc-identity',
-      organizationId,
-      organization?.wallet?.address || '',
-      organization?.wallet?.contractAddress || '',
-    ],
-    queryFn: () =>
-      inspectOrganizationIdentityOnRequiredChain({
-        walletAddress: organization.wallet.address,
-        recordedIdentityAddress: organization.wallet.contractAddress,
-      }),
-    enabled: Boolean(
-      organization?.status === 'approved' && organization?.wallet?.address,
-    ),
-    staleTime: 30_000,
-    retry: 1,
-  });
 
   const refresh = async () => {
     await Promise.all([
@@ -90,16 +72,18 @@ export default function OrganizationReviewPage() {
   const approveMutation = useMutation({
     mutationFn: () => adminApi.approveOrganization(organizationId),
     onSuccess: async () => {
-      toast.success('Organization approved', {
-        description:
-          'Approval is saved. The Arc Testnet ONCHAINID is verified separately before asset creation.',
-      });
+      toast.success('Organization approved', { description: 'The organization status is now approved.' });
       setApproveOpen(false);
       setDecisionSuccess(true);
       window.setTimeout(() => setDecisionSuccess(false), 1800);
       await refresh();
     },
-    onError: (error) => toast.error('Approval failed', { description: sanitizeUserFacingMessage(error.message) }),
+    onError: (error) =>
+      toast.error('Approval failed', {
+        description: getErrorMessage(error, 'The organization could not be approved. Please try again.'),
+      }),
+    // This screen owns the decision toast so React Query must not show a second one.
+    meta: { silent: true },
   });
 
   const rejectMutation = useMutation({
@@ -109,7 +93,11 @@ export default function OrganizationReviewPage() {
       setRejectOpen(false);
       await refresh();
     },
-    onError: (error) => toast.error('Rejection failed', { description: sanitizeUserFacingMessage(error.message) }),
+    onError: (error) =>
+      toast.error('Rejection failed', {
+        description: getErrorMessage(error, 'The organization could not be rejected. Please try again.'),
+      }),
+    meta: { silent: true },
   });
 
   if (organizationQuery.isLoading) return <DetailPageSkeleton />;
@@ -130,20 +118,17 @@ export default function OrganizationReviewPage() {
   const owners = organization.ubos || organization.beneficialOwners || [];
   const documents = organization.documents || [];
   const activity = organization.activity || [];
-  const walletChainId = organization.wallet?.chainId || web3Config.requiredChain.id;
-  const walletExplorerUrl = addressExplorerUrl(organization.wallet?.address, walletChainId);
-  const identityExplorerUrl = addressExplorerUrl(organization.wallet?.contractAddress, walletChainId);
 
   const copyWallet = async () => {
     if (!organization.wallet?.address) return;
     await navigator.clipboard.writeText(organization.wallet.address);
-    toast.success('Privy wallet address copied');
+    toast.success('Wallet address copied');
   };
 
   const copyOnChainId = async () => {
     if (!organization.wallet?.contractAddress) return;
     await navigator.clipboard.writeText(organization.wallet.contractAddress);
-    toast.success('Technical identity reference copied');
+    toast.success('On-chain ID copied');
   };
 
   return (
@@ -170,7 +155,7 @@ export default function OrganizationReviewPage() {
 
       <div className="grid min-w-0 gap-6 2xl:grid-cols-[minmax(0,1fr)_360px]">
         <main className="min-w-0 space-y-6">
-          <AdminPanel title="Entity summary" description="Review the organization details submitted with this application.">
+          <AdminPanel title="Entity summary" description="Organization data returned by the complete admin organization endpoint.">
             <dl className="grid gap-x-6 gap-y-5 sm:grid-cols-2 xl:grid-cols-3">
               <EntityDetail icon={Building2} label="Legal entity name" value={organization.legalName || organization.name} />
               <EntityDetail icon={BadgeCheck} label="Registration number" value={organization.registrationNumber} />
@@ -185,7 +170,7 @@ export default function OrganizationReviewPage() {
             {organization.businessActivity ? <div className="mt-5 rounded-2xl bg-slate-50 p-4"><span className="text-[10px] font-semibold tracking-[0.12em] text-slate-400 uppercase">Business activity</span><p className="mt-2 mb-0 text-sm leading-6 text-slate-700">{organization.businessActivity}</p></div> : null}
           </AdminPanel>
 
-          <AdminPanel title="Submitted documents" description="Review the files provided with this organization application.">
+          <AdminPanel title="Submitted documents" description="Uploaded files submitted by the organization for review.">
             {documents.length ? (
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {documents.map((document) => (
@@ -195,50 +180,63 @@ export default function OrganizationReviewPage() {
             ) : <EmptySection text="No organization documents are available for this review." />}
           </AdminPanel>
 
-          <AdminPanel title="Beneficial owners" description="Review the ownership information provided with this application.">
+          <AdminPanel title="Beneficial owners" description="Ownership records included in the complete organization response.">
             {owners.length ? <div className="space-y-3">{owners.map((owner, index) => <OwnerCard key={owner.id || `${owner.name}-${index}`} owner={owner} />)}</div> : <EmptySection text="No beneficial owners are available for this review." />}
           </AdminPanel>
 
-          <AdminPanel title="Privy secure account" description="Review the secure account linked to this organization profile.">
+          <AdminPanel title="Organization wallet" description="Wallet address submitted with the organization application.">
             {organization.wallet?.address ? (
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 sm:p-5">
-                <div className="flex min-w-0 items-start gap-3">
-                  <ShieldCheck className="mt-0.5 size-5 shrink-0 text-emerald-700" />
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
-                    <span className="text-xs font-semibold text-emerald-700">Securely managed by Privy</span>
-                    <p className="mt-1 mb-0 text-sm leading-6 text-slate-700">This Privy secure account is linked to the organization’s T-REX profile.</p>
+                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700"><ShieldCheck className="size-4" />Organization wallet available</span>
+                    <p className="mt-2 mb-0 break-all font-mono text-sm font-semibold text-slate-950">{organization.wallet.address}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={copyWallet} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-emerald-200 bg-white px-3 text-xs font-semibold text-emerald-700"><Copy className="size-4" />Copy</button>
+                    {organizationExplorerBase ? <a href={`${organizationExplorerBase}/address/${organization.wallet.address}`} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-emerald-700 px-3 text-xs font-semibold text-white"><ExternalLink className="size-4" />Explorer</a> : null}
                   </div>
                 </div>
-                <details className="mt-4 rounded-2xl border border-emerald-200 bg-white p-4">
-                  <summary className="cursor-pointer text-sm font-semibold text-slate-900">View account details</summary>
-                  <div className="mt-4 space-y-4">
-                    <div className="min-w-0">
-                      <span className="text-xs font-semibold text-slate-500">Privy wallet address</span>
-                      <p className="mt-2 mb-0 break-all font-mono text-xs font-semibold text-slate-950 sm:text-sm">{organization.wallet.address}</p>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <button type="button" onClick={copyWallet} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-emerald-200 bg-white px-3 text-xs font-semibold text-emerald-700"><Copy className="size-4" />Copy address</button>
-                        {walletExplorerUrl ? <a href={walletExplorerUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-emerald-700 px-3 text-xs font-semibold text-white"><ExternalLink className="size-4" />View technical record</a> : null}
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  <WalletDetail label="Network" value={organization.wallet.network || 'Configured network'} />
+                  <WalletDetail label="Chain ID" value={organization.wallet.chainId || 'Not provided'} />
+                  <WalletDetail label="Status" value="Connected" />
+                </div>
+                {organization.wallet.contractAddress ? (
+                  <div className="mt-4 rounded-2xl border border-emerald-200 bg-white p-4">
+                    <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0 flex-1">
+                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
+                          <Fingerprint className="size-4" />On-chain ID
+                        </span>
+                        <p className="mt-2 mb-0 break-all font-mono text-xs leading-5 font-semibold text-slate-950 sm:text-sm">
+                          {organization.wallet.contractAddress}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={copyOnChainId}
+                          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700"
+                        >
+                          <Copy className="size-4" />Copy
+                        </button>
+                        {organizationExplorerBase ? (
+                          <a
+                            href={`${organizationExplorerBase}/address/${organization.wallet.contractAddress}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 text-xs font-semibold text-white"
+                          >
+                            <ExternalLink className="size-4" />Contract
+                          </a>
+                        ) : null}
                       </div>
                     </div>
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      <WalletDetail label="Network" value={organization.wallet.network || web3Config.requiredChain.name} />
-                      <WalletDetail label="Chain ID" value={organization.wallet.chainId || web3Config.requiredChain.id} />
-                      <WalletDetail label="Status" value="Ready" />
-                    </div>
-                    {organization.wallet.contractAddress ? (
-                      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700"><Fingerprint className="size-4" />Technical identity reference</span>
-                        <p className="mt-2 mb-0 break-all font-mono text-xs leading-5 font-semibold text-slate-950 sm:text-sm">{organization.wallet.contractAddress}</p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <button type="button" onClick={copyOnChainId} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white px-3 text-xs font-semibold text-emerald-700"><Copy className="size-4" />Copy reference</button>
-                          {identityExplorerUrl ? <a href={identityExplorerUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 text-xs font-semibold text-white"><ExternalLink className="size-4" />View technical record</a> : null}
-                        </div>
-                      </div>
-                    ) : null}
                   </div>
-                </details>
+                ) : null}
               </div>
-            ) : <EmptySection text="No Privy secure account was returned for this organization." />}
+            ) : <EmptySection text="No wallet address was returned for this organization." />}
           </AdminPanel>
 
           <AdminPanel title="Application timeline" description="Submission and final decision events available for this application.">
@@ -253,34 +251,7 @@ export default function OrganizationReviewPage() {
                 <DecisionDetail label="Current status" value={<AdminStatusBadge status={organization.status} compact />} />
                 <DecisionDetail label="Submitted" value={formatAdminDateTime(organization.submittedAt)} />
                 <DecisionDetail label="Last updated" value={formatAdminDateTime(organization.updatedAt)} />
-                {organization.status === 'approved' ? (
-                  <DecisionDetail
-                    label="Arc ONCHAINID"
-                    value={
-                      identityReadinessQuery.isLoading ? (
-                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500">
-                          <LoaderCircle className="size-3.5 animate-spin" />Checking
-                        </span>
-                      ) : identityReadinessQuery.data?.ready ? (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
-                          <ShieldCheck className="size-3.5" />Ready on Arc
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
-                          <ShieldAlert className="size-3.5" />Setup required
-                        </span>
-                      )
-                    }
-                  />
-                ) : null}
               </div>
-
-              {organization.status === 'approved' && identityReadinessQuery.data && !identityReadinessQuery.data.ready ? (
-                <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3.5 text-xs leading-5 text-amber-900">
-                  <strong className="block font-semibold">Arc Testnet identity setup is incomplete</strong>
-                  <span className="mt-1 block">{identityReadinessQuery.data.message}</span>
-                </div>
-              ) : null}
 
               {organization.status === 'rejected' && organization.rejectionReason ? <div className="mt-5 rounded-2xl border border-rose-200 bg-rose-50 p-4"><span className="text-[10px] font-semibold tracking-[0.12em] text-rose-600 uppercase">Rejection reason</span><p className="mt-2 mb-0 text-sm leading-6 text-rose-800">{organization.rejectionReason}</p></div> : null}
 
@@ -305,7 +276,7 @@ export default function OrganizationReviewPage() {
             <motion.div initial={{ scale: 0.82, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0 }} transition={{ type: 'spring', stiffness: 240, damping: 20 }} className="w-full max-w-sm rounded-[28px] border border-emerald-200 bg-white p-7 text-center shadow-2xl">
               <motion.span initial={{ scale: 0 }} animate={{ scale: 1, rotate: [0, -8, 8, 0] }} transition={{ delay: 0.12, type: 'spring' }} className="mx-auto grid size-20 place-items-center rounded-full bg-emerald-100 text-emerald-700"><CheckCircle2 className="size-10" /></motion.span>
               <h3 className="mt-5 mb-2 text-2xl font-semibold text-slate-950">Organization approved</h3>
-              <p className="m-0 text-sm leading-6 text-slate-500">{organization.name} is approved. Arc Testnet ONCHAINID readiness is checked before the issuer can create an asset.</p>
+              <p className="m-0 text-sm leading-6 text-slate-500">{organization.name} has been approved successfully.</p>
             </motion.div>
           </motion.div>
         ) : null}

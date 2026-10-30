@@ -1,6 +1,7 @@
 import { getAddress, isAddress } from 'viem';
 import { investmentApi } from '@/api/investments';
 import { web3Config } from '@/config/web3';
+import { resolveIssuerTokenHistoryChainId, resolveIssuerTransactionChainId } from '@/utils/issuerTransactionChain';
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 const clean = (value) => String(value ?? '').trim();
@@ -107,7 +108,7 @@ const normalizedRow = (row, issuerAddresses, fallbackChainId) => {
     activityType: activity.type,
     activityLabel: activity.label,
     status: clean(row?.status || 'CONFIRMED').toLowerCase(),
-    chainId: Number(row?.chainId || fallbackChainId || web3Config.requiredChain.id),
+    chainId: resolveIssuerTransactionChainId(row, fallbackChainId, web3Config.chainRecords),
   };
 };
 
@@ -141,7 +142,7 @@ export const issuerTokenTransactionHistoryService = Object.freeze({
       page += 1;
     } while (page <= totalPages && page <= 50);
 
-    const resolvedChainId = Number(chainId || token?.chainId || token?.deployment?.chainId || web3Config.requiredChain.id);
+    const resolvedChainId = resolveIssuerTokenHistoryChainId(token, web3Config.chainRecords, chainId);
     return {
       rows: rows.map((row) => normalizedRow(row, issuerAddresses, resolvedChainId)),
       issuerAddresses,

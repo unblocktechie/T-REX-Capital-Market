@@ -22,7 +22,9 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { dashboardApi } from '@/api/dashboard/dashboard.api';
-import { ArcNetworkIcon } from '@/components/common/ArcNetworkIcon';
+import { NetworkIcon } from '@/components/common/NetworkIcon';
+import { paymentContextOf } from '@/config/payment-tokens';
+import { web3Config } from '@/config/web3';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -34,6 +36,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useInvestorProfileData } from '@/hooks/useInvestorProfileData';
 import {
+  getTokenRecordChainId,
+  getTokenRecordChainUid,
   getTokenRecordName,
   getTokenRecordSymbol,
   useMyToken,
@@ -207,6 +211,55 @@ const investorApplicationNeedsAction = (application) => {
 const isRegisteredInvestorApplication = (application) =>
   ['registered', 'readytoinvest', 'verifiedholder'].includes(compactStatus(application?.status));
 
+/** Purely decorative artwork for the completed-asset welcome card. */
+function IssuerDashboardHeroIllustration() {
+  return (
+    <div className="issuer-dashboard-hero-art" aria-hidden="true">
+      <svg className="issuer-dashboard-hero-art__chart" viewBox="0 0 440 285" fill="none" focusable="false">
+        <defs>
+          <linearGradient id="issuer-chart-surface" x1="70" y1="20" x2="400" y2="230" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#607383" stopOpacity="0.6" />
+            <stop offset="1" stopColor="#192833" stopOpacity="0.64" />
+          </linearGradient>
+          <linearGradient id="issuer-chart-fill" x1="220" y1="130" x2="220" y2="250" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#B9DFDB" stopOpacity="0.28" />
+            <stop offset="1" stopColor="#B9DFDB" stopOpacity="0" />
+          </linearGradient>
+          <linearGradient id="issuer-token-coin" x1="40" y1="0" x2="100" y2="105" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#D9E3E7" />
+            <stop offset="0.48" stopColor="#A9B9C1" />
+            <stop offset="1" stopColor="#475C69" />
+          </linearGradient>
+        </defs>
+        <ellipse cx="229" cy="251" rx="184" ry="22" fill="#111F28" opacity="0.6" />
+        <path d="M124 58L334 11L401 55L197 113L124 58Z" fill="#506472" opacity="0.26" />
+        <g transform="translate(102 14) rotate(-4 141 97)">
+          <rect x="0" y="0" width="279" height="202" rx="16" fill="url(#issuer-chart-surface)" stroke="#A8C2CD" strokeOpacity="0.28" />
+          <rect x="24" y="21" width="89" height="6" rx="3" fill="#CAD6DA" fillOpacity="0.25" />
+          <rect x="24" y="37" width="65" height="5" rx="2.5" fill="#CAD6DA" fillOpacity="0.15" />
+          <path d="M24 70H253M24 106H253M24 142H253M24 178H253" stroke="#C6D6DD" strokeOpacity="0.13" strokeDasharray="4 6" />
+          <path d="M24 165L65 135L101 149L138 91L172 116L211 72L253 47V190H24V165Z" fill="url(#issuer-chart-fill)" />
+          <path d="M24 165L65 135L101 149L138 91L172 116L211 72L253 47" stroke="#DAE9EB" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+          <circle cx="65" cy="135" r="5" fill="#F1F7F6" />
+          <circle cx="101" cy="149" r="5" fill="#F1F7F6" />
+          <circle cx="138" cy="91" r="5" fill="#F1F7F6" />
+          <circle cx="172" cy="116" r="5" fill="#F1F7F6" />
+          <circle cx="211" cy="72" r="5" fill="#F1F7F6" />
+          <circle cx="253" cy="47" r="5" fill="#F1F7F6" />
+        </g>
+        <g transform="translate(45 151)">
+          <ellipse cx="93" cy="102" rx="88" ry="27" fill="#172631" opacity="0.5" />
+          <ellipse cx="91" cy="88" rx="78" ry="30" fill="#435D6D" />
+          <rect x="13" y="47" width="156" height="42" fill="#637E8B" />
+          <ellipse cx="91" cy="47" rx="78" ry="30" fill="url(#issuer-token-coin)" stroke="#DFE9E9" strokeOpacity="0.6" />
+          <ellipse cx="91" cy="47" rx="56" ry="22" stroke="#EDF4F2" strokeOpacity="0.65" strokeWidth="2" />
+          <path d="M72 41H111M91 41V64M80 64H102" stroke="#344956" strokeWidth="7" strokeLinecap="round" />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
 function IssuerDashboardPage() {
   useDocumentTitle('Issuer dashboard');
   const { user } = useAuth();
@@ -219,6 +272,7 @@ function IssuerDashboardPage() {
     queryKey: [
       'dashboard',
       'issuer-overview',
+      tokenRecord.selectedChainUid || 'unselected',
       tokenRecord.tokenUid || 'no-token',
       tokenRecord.isDeployed ? 'deployed' : 'not-deployed',
     ],
@@ -228,7 +282,7 @@ function IssuerDashboardPage() {
         includeInvestors: tokenRecord.isDeployed,
         signal,
       }),
-    enabled: !tokenRecord.isLoading,
+    enabled: Boolean(tokenRecord.selectedChainUid) && !tokenRecord.isLoading,
     staleTime: 15_000,
     refetchOnWindowFocus: true,
   });
@@ -236,7 +290,13 @@ function IssuerDashboardPage() {
   const requests = overview.data?.requests || [];
   const redemptions = overview.data?.redemptions || [];
   const investors = overview.data?.investors || [];
-  const investorTotal = tokenRecord.isDeployed ? overview.data?.investorMeta?.total || 0 : null;
+  const hasSectionError = (section) => Boolean(
+    overview.isError || !overview.data || overview.data.errors?.some((error) => error.section === section),
+  );
+  // This endpoint lists completed investor profiles, not token-approved investors.
+  const investorTotal = tokenRecord.isDeployed && !hasSectionError('investors')
+    ? overview.data.investorMeta?.total ?? null
+    : null;
   const pendingRequests = requests.filter(requestNeedsReview);
   const redemptionActions = redemptions.filter(redemptionNeedsIssuerAction);
   const tokenName = getTokenRecordName(tokenRecord.token) || 'Investment asset';
@@ -246,19 +306,66 @@ function IssuerDashboardPage() {
   const tokenStatus = tokenStatusMeta(tokenRecord);
   const workflow = tokenWorkflowState(tokenRecord);
   const rawToken = tokenRecord.token || {};
+  // Render only data present in the issuer token response. The saved price is
+  // intentionally not presented as an on-chain quote (the asset page reads that).
+  const tokenContractAddress = firstText(
+    rawToken.tokenAddress,
+    rawToken.contractAddress,
+    rawToken.proxyAddress,
+    rawToken.contracts?.token,
+    rawToken.deployment?.contracts?.token,
+    rawToken.deployment?.tokenAddress,
+    rawToken.deployment?.contractAddress,
+  );
+  const savedPrice = firstText(
+    rawToken.currentTokenPrice,
+    rawToken.tokenInformation?.currentTokenPrice,
+    rawToken.information?.currentTokenPrice,
+    rawToken.supplyPricing?.currentPrice,
+    rawToken.currentPrice,
+    rawToken.tokenInformation?.currentPrice,
+    rawToken.information?.currentPrice,
+  );
+  const paymentSymbol = firstText(
+    paymentContextOf(rawToken.tokenInformation || {}, rawToken).paymentTokenSymbol,
+  );
+  // Issuer tokens are fetched for the selected chain UID, and older token
+  // responses do not always include a network name or chain ID. Resolve the
+  // authoritative chain from the token first, then the chain-scoped query.
+  // Reuse the same backend-derived chain record and NetworkIcon as the header.
+  const recordedChainId = getTokenRecordChainId(rawToken);
+  const recordedChainUid = getTokenRecordChainUid(rawToken);
+  const tokenChain = (recordedChainId && web3Config.getChainRecordById(recordedChainId))
+    || (recordedChainUid && web3Config.getChainRecordByUid(recordedChainUid))
+    || web3Config.getChainRecordByUid(tokenRecord.selectedChainUid)
+    || null;
+  const tokenChainId = tokenChain?.chainId || recordedChainId || undefined;
   const tokenNetwork = firstText(
-    rawToken?.networkName,
-    rawToken?.network,
-    rawToken?.tokenInformation?.networkName,
-    rawToken?.tokenInformation?.network,
-    organization?.walletNetwork,
+    tokenChain?.chainName,
+    tokenChain?.networkName,
+    rawToken.networkName,
+    rawToken.chainName,
+    rawToken.chain?.name,
+    typeof rawToken.chain === 'string' ? rawToken.chain : '',
+    rawToken.network?.name,
+    typeof rawToken.network === 'string' ? rawToken.network : '',
+    rawToken.tokenInformation?.networkName,
+    rawToken.information?.networkName,
+    rawToken.information?.chainName,
+    rawToken.deployment?.networkName,
+    rawToken.tokenInformation?.network?.name,
+    typeof rawToken.tokenInformation?.network === 'string' ? rawToken.tokenInformation.network : '',
+    typeof organization?.walletNetwork === 'string' ? organization.walletNetwork : '',
   );
-  const tokenUpdatedAt = firstText(
-    rawToken?.updatedAt,
-    rawToken?.deployedAt,
-    rawToken?.deployment?.deployedAt,
-    rawToken?.createdAt,
-  );
+  const copyTokenAddress = async () => {
+    if (!tokenContractAddress) return;
+    try {
+      await navigator.clipboard.writeText(tokenContractAddress);
+      toast.success('Token address copied');
+    } catch {
+      toast.error('Unable to copy the token address');
+    }
+  };
   const tokenDestination = tokenRecord.isDeployed
     ? ROUTES.tokenDetails(tokenRecord.tokenUid || 'token')
     : tokenRecord.isDeploymentPending
@@ -277,6 +384,9 @@ function IssuerDashboardPage() {
         : tokenRecord.hasToken
           ? 'Continue asset setup'
           : 'Create investment asset';
+  const organizationNeedsSetup = organization?.status !== ORGANIZATION_STATUSES.VERIFIED && !tokenRecord.hasToken;
+  const primaryDestination = organizationNeedsSetup ? ROUTES.organization : tokenDestination;
+  const primaryLabel = organizationNeedsSetup ? 'Continue organization setup' : tokenActionLabel;
 
   const recentRequests = useMemo(
     () => [...requests]
@@ -412,27 +522,44 @@ function IssuerDashboardPage() {
     tokenStatus.tone,
   ]);
 
+  // Count only actionable entries when both lists are complete and loaded.
+  const redemptionMeta = overview.data?.redemptionMeta || {};
+  const redemptionTotal = Number(
+    redemptionMeta.total ?? redemptionMeta.totalItems ?? redemptionMeta.count ?? redemptions.length,
+  );
+  const canCountPendingActions = Boolean(
+    tokenRecord.isDeployed && overview.data && !overview.isError
+    && Number.isFinite(redemptionTotal) && redemptionTotal <= redemptions.length
+    && !overview.data.errors?.some(({ section }) =>
+      section === 'subscription requests' || section === 'redemptions'),
+  );
+  const pendingActionCount = pendingRequests.length + redemptionActions.length;
+
   const metricCards = [
     {
       id: 'requests',
       icon: UsersRound,
       label: 'Investment requests',
-      value: numberFormatter.format(requests.length),
-      helper: pendingRequests.length
-        ? `${numberFormatter.format(pendingRequests.length)} waiting for review`
+      value: hasSectionError('subscription requests') ? '—' : numberFormatter.format(requests.length),
+      helper: hasSectionError('subscription requests')
+        ? 'Requests could not be loaded'
+        : pendingRequests.length
+          ? `${numberFormatter.format(pendingRequests.length)} pending review · total requests shown`
         : requests.length
-          ? 'No new requests need review'
+          ? 'Total requests · none pending review'
           : 'No investment requests yet',
       to: ROUTES.investors,
     },
     {
       id: 'investors',
       icon: UserRoundCheck,
-      label: 'Approved investors',
+      label: 'Investor profiles',
       value: investorTotal === null ? '—' : numberFormatter.format(investorTotal),
-      helper: tokenRecord.isDeployed
-        ? `Approved to invest in ${tokenSymbol || tokenName}`
-        : 'Available after asset creation',
+      helper: !tokenRecord.isDeployed
+        ? 'Available after asset creation'
+        : hasSectionError('investors')
+          ? 'Investor profiles could not be loaded'
+          : 'Completed profiles in the investor directory',
       to: ROUTES.issuerInvestorDirectory,
       disabled: !tokenRecord.isDeployed,
     },
@@ -440,32 +567,43 @@ function IssuerDashboardPage() {
       id: 'redemptions',
       icon: RefreshCcw,
       label: 'Redemption requests',
-      value: numberFormatter.format(redemptions.length),
-      helper: redemptionActions.length
-        ? `${numberFormatter.format(redemptionActions.length)} require issuer action`
+      value: hasSectionError('redemptions') ? '—' : numberFormatter.format(redemptions.length),
+      helper: hasSectionError('redemptions')
+        ? 'Redemptions could not be loaded'
+        : redemptionActions.length
+          ? `${numberFormatter.format(redemptionActions.length)} require issuer action`
         : redemptions.length
           ? 'No issuer action currently required'
           : 'No redemption requests yet',
       to: ROUTES.issuerRedemptions,
     },
-    {
-      id: 'token',
-      icon: Coins,
-      label: 'Asset status',
-      value: tokenStatus.label,
-      helper: tokenRecord.hasToken
-        ? tokenRecord.isDeployed
-          ? `${tokenSymbol || tokenName} creation complete`
-          : [tokenSymbol, tokenNetwork].filter(Boolean).join(' · ') || 'Current asset setup'
-        : 'No investment asset configured yet',
-      to: tokenDestination,
-    },
+    // Before asset creation, there is no asset status to show. Keep three
+    // useful metrics instead of filling the fourth card with "Not started".
+    ...(tokenRecord.hasToken ? [canCountPendingActions
+      ? {
+          id: 'pending-actions',
+          icon: FileClock,
+          label: 'Pending actions',
+          value: numberFormatter.format(pendingActionCount),
+          helper: pendingActionCount
+            ? 'Requests and redemptions needing review'
+            : 'No requests or redemptions need review',
+          to: ROUTES.dashboard,
+        }
+      : {
+          id: 'token',
+          icon: Coins,
+          label: 'Asset status',
+          value: tokenStatus.label,
+          helper: [tokenSymbol, tokenNetwork].filter(Boolean).join(' · ') || 'Current asset setup',
+          to: tokenDestination,
+        }] : []),
   ];
 
   const isDashboardLoading = overview.isLoading || tokenRecord.isLoading || organizationQuery.isLoading;
   const isRefreshing = overview.isFetching || tokenRecord.isFetching || organizationQuery.isFetching;
   const hasPartialErrors = Boolean(
-    overview.data?.errors?.length || tokenRecord.isError || Boolean(organizationQuery.error),
+    overview.isError || overview.data?.errors?.length || tokenRecord.isError || Boolean(organizationQuery.error),
   );
 
   const refreshDashboard = () => {
@@ -476,13 +614,58 @@ function IssuerDashboardPage() {
     ]);
   };
 
+  // Do not mistake an unavailable asset/organization query for an empty setup.
+  if (!tokenRecord.selectedChainUid || tokenRecord.isError || organizationQuery.error) {
+    return (
+      <div className="page-stack issuer-dashboard-live">
+        <header className="issuer-dashboard-live__header">
+          <div><h1>Dashboard</h1><p>Monitor your investment asset and investor activity.</p></div>
+          <Button variant="secondary" icon={RefreshCw} onClick={refreshDashboard}>Refresh</Button>
+        </header>
+        <Card className="issuer-dashboard-state-panel" role="status">
+          <AlertCircle size={22} />
+          <div>
+            <h2>{!tokenRecord.selectedChainUid ? 'Choose a network' : 'Dashboard information unavailable'}</h2>
+            <p>{!tokenRecord.selectedChainUid
+              ? 'Select a network to load the correct investment asset and dashboard.'
+              : 'We could not confirm your organization or asset status. Refresh to try again.'}</p>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  if (isDashboardLoading) {
+    return (
+      <div className="page-stack issuer-dashboard-live" aria-busy="true">
+        <header className="issuer-dashboard-live__header">
+          <div><h1>Dashboard</h1><p>Monitor your investment asset and investor activity.</p></div>
+        </header>
+        <Card className="issuer-dashboard-loading-card">
+          <Skeleton width="38%" height={24} />
+          <Skeleton width="62%" height={20} />
+          <Skeleton width="45%" height={18} />
+        </Card>
+        <section className="issuer-dashboard-metric-grid" aria-label="Loading dashboard metrics">
+          {Array.from({ length: 4 }, (_, index) => (
+            <Card className="issuer-dashboard-live-metric is-loading" key={index}>
+              <Skeleton width="42%" />
+              <Skeleton height={34} width="62%" />
+              <Skeleton width="72%" />
+            </Card>
+          ))}
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="page-stack issuer-dashboard-live">
       <header className="issuer-dashboard-live__header">
         <div>
           <span className="eyebrow">Issuer workspace</span>
           <h1>Dashboard</h1>
-          <p>See what is ready, what needs your attention, and what to do next across your investment activity.</p>
+          <p>Monitor your investment asset and investor activity.</p>
         </div>
         <Button
           variant="secondary"
@@ -494,32 +677,39 @@ function IssuerDashboardPage() {
         </Button>
       </header>
 
-      <Card className="issuer-dashboard-hero-live">
+      <Card className="issuer-dashboard-hero-live" data-deployed={tokenRecord.isDeployed}>
         <div className="issuer-dashboard-hero-live__content">
-          <div className="issuer-dashboard-hero-live__badges">
-            <Badge tone={organizationStatus.tone}>Organization · {organizationStatus.label}</Badge>
-            <Badge tone={tokenStatus.tone}>Asset · {tokenStatus.label}</Badge>
-          </div>
           <span className="issuer-dashboard-hero-live__eyebrow">{companyName}</span>
           <h2>Welcome back, {user?.name?.split(' ')[0] || 'Issuer'}.</h2>
           {tokenRecord.isDeployed ? (
-            <p>{`${tokenName}${tokenSymbol ? ` (${tokenSymbol})` : ''} has been created. Open the asset to review its live price and access settings, or continue to your approved investor list.`}</p>
-          ) : tokenRecord.hasToken ? (
-            <p>{`${tokenName}${tokenSymbol ? ` (${tokenSymbol})` : ''} is currently ${tokenStatus.label.toLowerCase()}. ${tokenStatus.description}`}</p>
-          ) : null}
-          <div className="issuer-dashboard-next-step" role="note">
-            <strong>Next:</strong>
-            <span>
-              {tokenRecord.isDeployed
-                ? 'Open the asset to confirm its live settings, then review approved investors and send invitations when you are ready.'
-                : tokenRecord.hasToken
-                  ? 'Continue the asset setup from where you left off.'
-                  : 'Start the guided asset setup when you are ready to raise investment.'}
-            </span>
-          </div>
+            <>
+              <p className="issuer-dashboard-hero-live__intro">Your investment asset is ready to manage.</p>
+              <div className="issuer-dashboard-asset-line">
+                <strong>{tokenName}{tokenSymbol ? ` (${tokenSymbol})` : ''}</strong>
+                <Badge tone={tokenStatus.tone}>{tokenStatus.label}</Badge>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="issuer-dashboard-hero-live__badges">
+                <Badge tone={organizationStatus.tone}>Organization · {organizationStatus.label}</Badge>
+                {tokenRecord.hasToken ? <Badge tone={tokenStatus.tone}>Asset · {tokenStatus.label}</Badge> : null}
+              </div>
+              <p className="issuer-dashboard-hero-live__intro">
+                {tokenRecord.hasToken
+                  ? tokenStatus.description
+                  : 'Start your investment asset setup when your organization is ready.'}
+              </p>
+              {tokenRecord.hasToken ? (
+                <strong className="issuer-dashboard-asset-line__name">
+                  {tokenName}{tokenSymbol ? ` (${tokenSymbol})` : ''}
+                </strong>
+              ) : null}
+            </>
+          )}
           <div className="issuer-dashboard-hero-live__actions">
-            <Button icon={Coins} onClick={() => navigate(tokenDestination)}>
-              {tokenActionLabel}
+            <Button icon={organizationNeedsSetup ? Building2 : Coins} onClick={() => navigate(primaryDestination)}>
+              {primaryLabel}
             </Button>
             <Button
               variant="secondary"
@@ -530,24 +720,39 @@ function IssuerDashboardPage() {
             </Button>
           </div>
         </div>
-        <div className="issuer-dashboard-token-snapshot">
-          <div className="issuer-dashboard-token-snapshot__top">
-            <span className="issuer-dashboard-token-snapshot__icon"><ShieldCheck size={24} /></span>
-            <div>
-              <small>Current investment asset</small>
-              <strong>{tokenRecord.hasToken ? tokenName : 'No asset yet'}</strong>
-              {tokenSymbol ? <span>{tokenSymbol}</span> : null}
+        <IssuerDashboardHeroIllustration />
+        {tokenRecord.isDeployed ? (
+          <aside className="issuer-dashboard-hero-summary" aria-label="Investment asset summary">
+            <div className="issuer-dashboard-hero-summary__row issuer-dashboard-hero-summary__row--status">
+              <span>Asset status</span>
+              <Badge tone={tokenStatus.tone}>{tokenStatus.label}</Badge>
             </div>
-          </div>
-          <dl>
-            <div><dt>Status</dt><dd>{tokenStatus.label}</dd></div>
-            <div><dt>Last updated</dt><dd>{formatDashboardDate(tokenUpdatedAt)}</dd></div>
-            <div><dt>Investor access</dt><dd>{tokenRecord.isDeployed ? 'Review on asset page' : 'Not available yet'}</dd></div>
-            {tokenRecord.isDeployed ? (
-              <div><dt>Network</dt><dd>{tokenNetwork || '—'}</dd></div>
-            ) : null}
-          </dl>
-        </div>
+            <div className="issuer-dashboard-hero-summary__row">
+              <span>Network</span>
+              <strong className="issuer-dashboard-hero-summary__network">
+                <NetworkIcon chain={tokenChain} chainId={tokenChainId} name={tokenNetwork || 'Network'} size="sm" />
+                {tokenNetwork || 'Unavailable'}
+              </strong>
+            </div>
+            <div className="issuer-dashboard-hero-summary__row">
+              <span>Token address</span>
+              {tokenContractAddress ? (
+                <div className="issuer-dashboard-hero-summary__address">
+                  <span title={tokenContractAddress}>
+                    {`${tokenContractAddress.slice(0, 6)}...${tokenContractAddress.slice(-5)}`}
+                  </span>
+                  <button type="button" className="issuer-dashboard-hero-summary__copy" onClick={copyTokenAddress} aria-label="Copy full token address" title="Copy full token address">
+                    <Copy size={15} aria-hidden="true" />
+                  </button>
+                </div>
+              ) : <strong>Unavailable</strong>}
+            </div>
+            <div className="issuer-dashboard-hero-summary__row">
+              <span>Saved investor price</span>
+              <strong>{savedPrice ? `${savedPrice}${paymentSymbol ? ` ${paymentSymbol}` : ''}` : 'Unavailable'}</strong>
+            </div>
+          </aside>
+        ) : null}
       </Card>
 
       {hasPartialErrors ? (
@@ -561,23 +766,22 @@ function IssuerDashboardPage() {
         </div>
       ) : null}
 
-      <section className="issuer-dashboard-metric-grid" aria-label="Issuer dashboard metrics">
-        {isDashboardLoading
-          ? Array.from({ length: 4 }, (_, index) => (
-              <Card className="issuer-dashboard-live-metric is-loading" key={index}>
-                <Skeleton width="42%" />
-                <Skeleton height={34} width="62%" />
-                <Skeleton width="72%" />
-              </Card>
-            ))
-          : metricCards.map((metric) => {
-              const Icon = metric.icon;
+      <section className="issuer-dashboard-metric-grid" data-card-count={metricCards.length} aria-label="Issuer dashboard metrics">
+        {metricCards.map((metric) => {
+          const Icon = metric.icon;
               return (
                 <button
                   className="issuer-dashboard-live-metric"
                   type="button"
                   key={metric.id}
-                  onClick={() => !metric.disabled && navigate(metric.to)}
+                  onClick={() => {
+                    if (metric.disabled) return;
+                    if (metric.id === 'pending-actions') {
+                      document.getElementById('issuer-dashboard-action-center')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+                    } else {
+                      navigate(metric.to);
+                    }
+                  }}
                   disabled={metric.disabled}
                 >
                   <span className="issuer-dashboard-live-metric__icon"><Icon size={20} /></span>
@@ -586,72 +790,17 @@ function IssuerDashboardPage() {
                     <strong>{metric.value}</strong>
                     <span>{metric.helper}</span>
                   </span>
-                  {!metric.disabled ? <ArrowRight size={17} className="issuer-dashboard-live-metric__arrow" /> : null}
                 </button>
               );
             })}
       </section>
 
-      <section className="issuer-dashboard-live__main-grid">
-        <Card className="issuer-dashboard-workflow-card">
-          <header className="issuer-dashboard-card-header">
-            <div>
-              <span className="eyebrow">Asset setup</span>
-              <h2>{tokenRecord.hasToken ? tokenName : 'Investment asset setup'}</h2>
-              {tokenRecord.hasToken ? <p>{tokenStatus.description}</p> : null}
-            </div>
-            <Badge tone={tokenStatus.tone}>{tokenStatus.label}</Badge>
-          </header>
-
-          {tokenRecord.hasToken ? (
-            <>
-              <div className="issuer-dashboard-progress-copy">
-                <span>Setup progress</span>
-                <strong>{workflow.progress}%</strong>
-              </div>
-              <div className="issuer-dashboard-progress-track" aria-label={`Asset setup ${workflow.progress}% complete`}>
-                <span style={{ width: `${workflow.progress}%` }} />
-              </div>
-              <div className="issuer-dashboard-workflow-list">
-                {TOKEN_ISSUANCE_STEPS.map((step, index) => {
-                  const complete = workflow.finalized || index < workflow.currentIndex;
-                  const current = !workflow.finalized && index === workflow.currentIndex;
-                  return (
-                    <div className={`issuer-dashboard-workflow-step ${current ? 'is-current' : ''}`} key={step.key}>
-                      <span className={`issuer-dashboard-workflow-step__marker ${complete ? 'is-complete' : ''} ${current ? 'is-current' : ''}`}>
-                        {complete ? <Check size={15} /> : current ? step.number : <Circle size={11} />}
-                      </span>
-                      <div>
-                        <strong>{step.label}</strong>
-                        <small>{step.description}</small>
-                      </div>
-                      {current ? <Badge tone="info">Current</Badge> : complete ? <span className="issuer-dashboard-step-done">Done</span> : null}
-                    </div>
-                  );
-                })}
-              </div>
-              <Button className="button--full" variant="secondary" onClick={() => navigate(tokenDestination)}>
-                {tokenActionLabel} <ArrowRight size={17} />
-              </Button>
-            </>
-          ) : (
-            <div className="issuer-dashboard-empty-panel">
-              <span><Coins size={28} /></span>
-              <h3>No investment asset yet</h3>
-              <p>Start the guided setup when you are ready. Your progress is saved automatically as you complete each step.</p>
-              <Button onClick={() => navigate(ROUTES.createToken)} disabled={organization?.status !== ORGANIZATION_STATUSES.VERIFIED}>
-                Create investment asset
-              </Button>
-            </div>
-          )}
-        </Card>
-
+      <section id="issuer-dashboard-action-center" className="issuer-dashboard-live__actions-section" aria-label="Action Center">
         <Card className="issuer-dashboard-action-card">
           <header className="issuer-dashboard-card-header">
             <div>
-              <span className="eyebrow">Action center</span>
-              <h2>What should I do next?</h2>
-              <p>Only actions that need you are shown here.</p>
+              <h2>Action Center</h2>
+              <p>Pending tasks and useful next steps for your account.</p>
             </div>
           </header>
           {isDashboardLoading ? (
@@ -677,10 +826,11 @@ function IssuerDashboardPage() {
               })}
             </div>
           ) : (
-            <div className="issuer-dashboard-all-clear">
-              <span><CheckCircle2 size={28} /></span>
-              <h3>You&apos;re up to date</h3>
-              <p>There are no issuer actions waiting in the currently loaded account data.</p>
+            <div className="issuer-dashboard-action-empty" role="status">
+              {hasPartialErrors ? <AlertCircle size={19} /> : <CheckCircle2 size={19} />}
+              <span>{hasPartialErrors
+                ? 'Some actions may be unavailable. Refresh to check again.'
+                : 'No pending actions in the currently loaded account data.'}</span>
             </div>
           )}
         </Card>
@@ -700,6 +850,12 @@ function IssuerDashboardPage() {
           </header>
           {overview.isLoading ? (
             <div className="issuer-dashboard-compact-list"><Skeleton height={62} /><Skeleton height={62} /><Skeleton height={62} /></div>
+          ) : hasSectionError('subscription requests') ? (
+            <div className="issuer-dashboard-list-empty" role="status">
+              <AlertCircle size={22} />
+              <strong>Investment requests unavailable</strong>
+              <span>Refresh to load recent requests.</span>
+            </div>
           ) : recentRequests.length ? (
             <div className="issuer-dashboard-compact-list">
               {recentRequests.map((request) => {
@@ -745,6 +901,12 @@ function IssuerDashboardPage() {
           </header>
           {overview.isLoading ? (
             <div className="issuer-dashboard-compact-list"><Skeleton height={62} /><Skeleton height={62} /><Skeleton height={62} /></div>
+          ) : hasSectionError('redemptions') ? (
+            <div className="issuer-dashboard-list-empty" role="status">
+              <AlertCircle size={22} />
+              <strong>Redemption activity unavailable</strong>
+              <span>Refresh to load recent redemptions.</span>
+            </div>
           ) : recentRedemptions.length ? (
             <div className="issuer-dashboard-compact-list">
               {recentRedemptions.map((redemption, index) => {
@@ -780,6 +942,77 @@ function IssuerDashboardPage() {
           )}
         </Card>
       </section>
+
+      {!tokenRecord.isDeployed ? (
+        <section className="issuer-dashboard-live__setup-section" aria-label="Investment asset setup">
+          <Card className="issuer-dashboard-workflow-card">
+            <header className="issuer-dashboard-card-header">
+              <div>
+                <span className="eyebrow">Asset setup</span>
+                <h2>{tokenRecord.hasToken ? tokenName : 'Investment asset setup'}</h2>
+                {tokenRecord.hasToken ? <p>{tokenStatus.description}</p> : null}
+              </div>
+              <Badge tone={tokenStatus.tone}>{tokenStatus.label}</Badge>
+            </header>
+
+            {tokenRecord.hasToken ? (
+              <>
+                <div className="issuer-dashboard-progress-copy">
+                  <span>Setup progress</span>
+                  <strong>{workflow.progress}%</strong>
+                </div>
+                <div className="issuer-dashboard-progress-track" aria-label={`Asset setup ${workflow.progress}% complete`}>
+                  <span style={{ width: `${workflow.progress}%` }} />
+                </div>
+                <div className="issuer-dashboard-workflow-list">
+                  {TOKEN_ISSUANCE_STEPS.map((step, index) => {
+                    const complete = workflow.finalized || index < workflow.currentIndex;
+                    const current = !workflow.finalized && index === workflow.currentIndex;
+                    return (
+                      <div className={`issuer-dashboard-workflow-step ${current ? 'is-current' : ''}`} key={step.key}>
+                        <span className={`issuer-dashboard-workflow-step__marker ${complete ? 'is-complete' : ''} ${current ? 'is-current' : ''}`}>
+                          {complete ? <Check size={15} /> : current ? step.number : <Circle size={11} />}
+                        </span>
+                        <div>
+                          <strong>{step.label}</strong>
+                          <small>{step.description}</small>
+                        </div>
+                        {current ? <Badge tone="info">Current</Badge> : complete ? <span className="issuer-dashboard-step-done">Done</span> : null}
+                      </div>
+                    );
+                  })}
+                </div>
+                <Button className="button--full" variant="secondary" onClick={() => navigate(tokenDestination)}>
+                  {tokenActionLabel} <ArrowRight size={17} />
+                </Button>
+              </>
+            ) : (
+              <>
+                <div className="issuer-dashboard-empty-panel">
+                  <span><Coins size={28} /></span>
+                  <h3>No investment asset yet</h3>
+                  <p>Start the guided setup when you are ready. Your progress is saved automatically as you complete each step.</p>
+                  <Button onClick={() => navigate(ROUTES.createToken)} disabled={organization?.status !== ORGANIZATION_STATUSES.VERIFIED}>
+                    Create investment asset
+                  </Button>
+                </div>
+                <div className="issuer-dashboard-workflow-list" aria-label="Asset creation steps">
+                  {TOKEN_ISSUANCE_STEPS.map((step, index) => (
+                    <div className="issuer-dashboard-workflow-step" key={step.key}>
+                      <span className="issuer-dashboard-workflow-step__marker">{step.number}</span>
+                      <div>
+                        <strong>{step.label}</strong>
+                        <small>{step.description}</small>
+                      </div>
+                      {index === 0 ? <Badge tone="neutral">Not started</Badge> : null}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </Card>
+        </section>
+      ) : null}
     </div>
   );
 }
@@ -792,8 +1025,9 @@ function InvestorDashboardPage() {
   const investorQuery = useInvestorProfileData();
 
   const overview = useQuery({
-    queryKey: ['dashboard', 'investor-overview'],
+    queryKey: ['dashboard', 'investor-overview', investorQuery.selectedChainUid || 'unselected'],
     queryFn: ({ signal }) => dashboardApi.getInvestorOverview({ signal }),
+    enabled: Boolean(investorQuery.selectedChainUid),
     staleTime: 15_000,
     refetchOnWindowFocus: true,
   });
@@ -1041,8 +1275,12 @@ function InvestorDashboardPage() {
                 <summary>Technical details</summary>
                 <div>
                   <span>Technical identity reference</span>
-                  <strong title={profile.onchainId || undefined}>{profile.onchainId ? `${profile.onchainId.slice(0, 8)}…${profile.onchainId.slice(-6)}` : 'Not available'}</strong>
-                  <button type="button" onClick={copyIdentity}><Copy size={13} /> Copy reference</button>
+                  <div className="investor-dashboard-live__identity-reference-value">
+                    <strong title={profile.onchainId || undefined}>{profile.onchainId ? `${profile.onchainId.slice(0, 8)}…${profile.onchainId.slice(-6)}` : 'Not available'}</strong>
+                    <button type="button" onClick={copyIdentity} aria-label="Copy technical identity reference" title="Copy identity reference">
+                      <Copy size={14} aria-hidden="true" />
+                    </button>
+                  </div>
                 </div>
               </details>
             ) : null}
@@ -1176,9 +1414,9 @@ function InvestorDashboardPage() {
           <div className="investor-dashboard-live__account-block">
             <span className="investor-dashboard-live__account-icon"><WalletCards size={18} /></span>
             <div>
-              <small>Privy secure account</small>
-              <strong>{walletAddress ? 'Securely managed by Privy' : 'Not linked yet'}</strong>
-              <span>{walletAddress ? 'Your Privy account is linked to your T-REX profile' : 'Complete Privy secure account setup to continue'}</span>
+              <small>Primary wallet</small>
+              <strong title={walletAddress || undefined}>{displayWallet}</strong>
+              <span>{walletAddress ? (connectedMatches ? walletConnection.chain?.name || 'Connected' : 'Linked to investor profile') : 'No wallet is linked to this investor profile'}</span>
             </div>
           </div>
           <Button className="button--full" variant="secondary" onClick={() => navigate(ROUTES.profile)}>
@@ -1302,12 +1540,7 @@ function InvestorDashboardPage() {
                   <strong>{token.name || 'Token offering'}</strong>
                   <span>{[token.issuer, token.assetClass].filter((value) => value && value !== '—').join(' · ') || 'Created offering'}</span>
                 </span>
-                <span className="investor-dashboard-live__offering-actions">
-                  <span className="investor-dashboard-live__offering-network" aria-label="Arc Testnet" title="Arc Testnet">
-                    <ArcNetworkIcon size="xs" decorative />
-                  </span>
-                  <ArrowRight size={16} aria-hidden="true" />
-                </span>
+                <ArrowRight size={16} />
               </button>
             ))}
           </div>

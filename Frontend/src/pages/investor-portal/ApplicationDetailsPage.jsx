@@ -3,6 +3,7 @@ import { ArrowLeft, LockKeyhole, RefreshCw } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ApplicationHistory } from '@/components/application-history/ApplicationHistory';
+import { visibleApplicationHistoryEntries } from '@/utils/applicationHistoryEntries';
 import { InvestmentJourneyTracker } from '@/components/application-history/InvestmentJourneyTracker';
 import { ApplicationSummary } from '@/components/application-history/ApplicationSummary';
 import { SecureDocumentPreviewModal } from '@/components/common/SecureDocumentPreviewModal';
@@ -17,6 +18,7 @@ import { MARKETPLACE_STATUS } from '@/services/investor/investorMarketplaceLocal
 import { getErrorMessage } from '@/utils/error';
 import { isApplicationPurchaseReady } from '@/utils/investmentPurchase';
 import { getInvestmentJourney } from '@/utils/investmentJourney';
+import { readApplicationProgress, isClaimSubmissionUnlocked, isApplicationCompleted } from '@/utils/applicationProgress';
 
 export default function ApplicationDetailsPage() {
   const { interestUid } = useParams();
@@ -45,7 +47,7 @@ export default function ApplicationDetailsPage() {
       setHistory(result.history || null);
       return result;
     } catch (error) {
-      toast.error(getErrorMessage(error, 'Unable to load this application and its activity history.'));
+      if (!silent) toast.error(getErrorMessage(error, 'Unable to load this application and its activity history.'));
       return null;
     } finally {
       if (!silent) setLoading(false);
@@ -80,15 +82,30 @@ export default function ApplicationDetailsPage() {
   const currentRejectType = String(history?.summary?.rejectReasonType || application?.interest?.rejectReasonType || '').toUpperCase();
   const canResubmit = Boolean(history?.summary?.canResubmit ?? application?.interest?.canResubmit);
 
+  const progress = useMemo(() => readApplicationProgress(application?.interest, application, history?.summary), [application, history]);
   const purchaseReady = useMemo(() => isApplicationPurchaseReady(history, application), [application, history]);
+  const applicationComplete = isApplicationCompleted(progress, currentStatus);
+  const historyUpdateCount = useMemo(() => visibleApplicationHistoryEntries(history?.timeline, {
+    viewerRole: 'investor',
+    issuerVerificationConfirmed: progress.issuerVerificationConfirmed === true,
+    registryRegistrationConfirmed: progress.registryRegistrationConfirmed === true,
+    applicationComplete,
+  }).length, [history?.timeline, progress.issuerVerificationConfirmed, progress.registryRegistrationConfirmed, applicationComplete]);
   const journey = useMemo(() => getInvestmentJourney({
     status: application?.interest?.status || history?.summary?.status || history?.status || application?.status,
     viewerRole: 'investor',
     purchaseReady,
     canResubmit,
     rejectReasonType: currentRejectType,
-  }), [application, canResubmit, currentRejectType, history, purchaseReady]);
+    progress,
+  }), [application, canResubmit, currentRejectType, history, progress, purchaseReady]);
 
+
+  useEffect(() => {
+    if (loading || journey.complete || !interestUid) return undefined;
+    const timer = window.setInterval(() => { void loadApplication({ silent: true }); }, 15_000);
+    return () => window.clearInterval(timer);
+  }, [loading, journey.complete, interestUid, loadApplication]);
 
   const supportContext = useMemo(() => {
     const interest = application?.interest || {};
@@ -230,7 +247,7 @@ export default function ApplicationDetailsPage() {
         journey={journey}
         action={purchaseReady ? (
           <Button onClick={() => navigate(ROUTES.purchaseToken(interestUid))}>Invest Now</Button>
-        ) : journey.actionKey === 'verification' ? (
+        ) : journey.actionKey === 'verification' && isClaimSubmissionUnlocked(progress) ? (
           <Button onClick={() => navigate(ROUTES.applicationClaim(interestUid))}>Complete Verification</Button>
         ) : journey.actionKey === 'reupload' ? (
           <Button loading={documentTypesLoading} onClick={() => void openReupload()}>Upload Requested Documents</Button>
@@ -249,15 +266,19 @@ export default function ApplicationDetailsPage() {
             <h2>Updates & documents</h2>
             <p>See what happened at each step and review the documents connected to your application.</p>
           </div>
-          <span>{history.timeline?.length || 0} event{history.timeline?.length === 1 ? '' : 's'}</span>
+          <span>{historyUpdateCount} update{historyUpdateCount === 1 ? '' : 's'}</span>
         </div>
 
         <ApplicationHistory
           timeline={history.timeline}
           viewerRole="investor"
           currentStatus={currentStatus}
+          claimsConfirmed={progress.claimsConfirmed === true}
+          applicationComplete={applicationComplete}
+          issuerVerificationConfirmed={progress.issuerVerificationConfirmed === true}
+          registryRegistrationConfirmed={progress.registryRegistrationConfirmed === true}
           supportContext={supportContext}
-          onSubmitClaim={() => navigate(ROUTES.applicationClaim(interestUid))}
+          onSubmitClaim={isClaimSubmissionUnlocked(progress) ? () => navigate(ROUTES.applicationClaim(interestUid)) : undefined}
           onViewDocument={setSelectedDocument}
           reuploadEventId={reuploadEventId}
           onReupload={() => void openReupload()}

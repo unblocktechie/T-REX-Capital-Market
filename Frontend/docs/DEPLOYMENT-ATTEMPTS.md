@@ -152,7 +152,7 @@ without re-verifying or redeploying.
 
 ## Independent blockchain verification
 
-Verification uses the configured Arc Testnet RPC (`ARC_TESTNET_RPC_URL`, chain `5042002`) and the
+Verification uses the configured Network RPC (`SEPOLIA_RPC_URL`, chain `5042002`) and the
 existing `TokenDeploymentReceiptService`. The backend never trusts frontend-supplied
 success, contract address, block number, sender, chain, confirmation count, or event data.
 It confirms: the receipt exists with the required confirmations, `status === 1`, the

@@ -10,6 +10,9 @@ import {
 } from '@/api/investments/invitation.mapper';
 import { ROLES } from '@/config/permissions';
 import { ROUTES } from '@/config/routes';
+import { web3Config } from '@/config/web3';
+import { useAuthStore } from '@/store/auth.store';
+import { networkUserKey, useNetworkStore } from '@/store/network.store';
 import { issuerRedemptionStatus } from '@/utils/issuerRedemption';
 
 const compactStatus = (value) => String(value || '').trim().toLowerCase().replace(/[\s_-]+/g, '');
@@ -85,10 +88,19 @@ async function loadInvestorIndicators() {
 }
 
 export function useSidebarActionIndicators(role) {
+  const user = useAuthStore((state) => state.user);
+  const userKey = networkUserKey(user);
+  const selectedChainId = useNetworkStore((state) => state.activeChainByUser[userKey] || null);
+  const storedChainUid = useNetworkStore((state) => state.activeChainUidByUser[userKey] || '');
+  const selectedChainUid =
+    storedChainUid || web3Config.getChainRecordById(selectedChainId)?.chainUid || '';
+
+  const isChainScopedRole = role === ROLES.issuer || role === ROLES.investor;
+
   return useQuery({
-    queryKey: ['sidebar-action-indicators', role],
+    queryKey: ['sidebar-action-indicators', role, selectedChainUid || 'unselected'],
     queryFn: () => (role === ROLES.issuer ? loadIssuerIndicators() : loadInvestorIndicators()),
-    enabled: role === ROLES.issuer || role === ROLES.investor,
+    enabled: isChainScopedRole && Boolean(selectedChainUid),
     staleTime: 15_000,
     refetchInterval: 30_000,
     refetchOnWindowFocus: true,

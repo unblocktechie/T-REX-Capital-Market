@@ -357,6 +357,152 @@ b {
   }
 }
 
+/*
+ * Authenticated route loading
+ * --------------------------------------------------------------------------
+ * Keep the application shell visible while a lazy page bundle loads. The
+ * destination page replaces this neutral skeleton with its own data-specific
+ * skeleton as soon as the component is available, avoiding a logo-loader ->
+ * skeleton-loader sequence during ordinary menu navigation.
+ */
+.workspace-route-skeleton,
+.admin-route-skeleton {
+  min-width: 0;
+  width: 100%;
+  display: grid;
+  gap: clamp(16px, 2vw, 22px);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .workspace-route-skeleton,
+  .admin-route-skeleton {
+    animation: route-skeleton-reveal 140ms ease 70ms both;
+  }
+}
+
+@keyframes route-skeleton-reveal {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Preserve the existing admin dark-mode appearance. */
+.dark .admin-route-skeleton .skeleton {
+  background: linear-gradient(90deg, #1e293b, #334155, #1e293b);
+  background-size: 200% 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-route-skeleton .skeleton,
+  .admin-route-skeleton .skeleton {
+    animation: none;
+  }
+}
+
+.workspace-route-skeleton__header,
+.admin-route-skeleton__header {
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.workspace-route-skeleton__heading,
+.admin-route-skeleton__heading {
+  min-width: 0;
+  width: min(760px, 100%);
+  display: grid;
+  gap: 10px;
+}
+
+.workspace-route-skeleton__heading .skeleton,
+.admin-route-skeleton__heading .skeleton,
+.workspace-route-skeleton__action {
+  display: block;
+}
+
+.workspace-route-skeleton__action {
+  width: 132px;
+  flex: 0 0 auto;
+}
+
+.workspace-route-skeleton__metrics {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.workspace-route-skeleton__content {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(260px, 0.8fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.workspace-route-skeleton__primary,
+.workspace-route-skeleton__secondary {
+  min-width: 0;
+  display: grid;
+  gap: 16px;
+}
+
+.admin-route-skeleton__grid {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 1180px) {
+  .workspace-route-skeleton__metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workspace-route-skeleton__content {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workspace-route-skeleton__secondary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .workspace-route-skeleton,
+  .admin-route-skeleton {
+    gap: 14px;
+  }
+
+  .workspace-route-skeleton__header,
+  .admin-route-skeleton__header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .workspace-route-skeleton__action {
+    width: min(100%, 180px);
+  }
+
+  .admin-route-skeleton__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .workspace-route-skeleton__metrics,
+  .workspace-route-skeleton__secondary {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-route-skeleton__header .skeleton,
+  .admin-route-skeleton__header .skeleton {
+    max-width: 100%;
+  }
+}
+
 .boot-screen {
   min-height: 100vh;
   display: grid;
@@ -416,6 +562,15 @@ b {
   backdrop-filter: blur(2px);
   display: grid;
   place-items: center;
+}
+
+.global-loader--visible {
+  visibility: visible;
+  pointer-events: auto;
+  opacity: 1;
+  transition:
+    opacity 150ms ease,
+    visibility 0s linear 0s;
 }
 .global-loader__mark {
   display: flex;
@@ -1882,20 +2037,7 @@ b {
 }
 
 
-@media (min-width: 561px) and (max-width: 900px) {
-  .trex-loader__card,
-  .trex-loader--compact .trex-loader__card {
-    width: min(100%, 620px);
-    grid-template-columns: 150px minmax(0, 1fr);
-    padding: 32px 30px;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .global-loader {
-    transition: none;
-  }
-
   *,
   *::before,
   *::after {
@@ -4786,15 +4928,6 @@ body { color: var(--text); }
 }
 
 
-@media (min-width: 561px) and (max-width: 900px) {
-  .trex-loader__card,
-  .trex-loader--compact .trex-loader__card {
-    width: min(100%, 620px);
-    grid-template-columns: 150px minmax(0, 1fr);
-    padding: 32px 30px;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -4932,121 +5065,93 @@ body,
   animation: none;
 }
 
+/* Transparent black loading scrim.
+   Keep the current application visible underneath while the compact center
+   card gives the animated brand mark and progress track reliable contrast. */
 .trex-loader {
+  --trex-loader-color: #f4f8ff;
+  --trex-loader-accent: #a7d5ff;
+  --trex-loader-size: clamp(132px, 13vw, 156px);
+  --trex-loader-scrim: rgba(0, 0, 0, 0.34);
+  display: grid;
   width: 100%;
   min-width: 0;
-  display: grid;
   place-items: center;
-  padding: clamp(10px, 3vw, 28px);
+  padding: 24px;
 }
 
-.trex-loader--boot {
-  min-height: 100vh;
-  min-height: 100dvh;
-  background:
-    radial-gradient(circle at 10% 8%, color-mix(in srgb, var(--primary-500) 10%, transparent), transparent 30%),
-    radial-gradient(circle at 92% 88%, color-mix(in srgb, var(--secondary-500) 9%, transparent), transparent 28%),
-    #ffffff;
-}
-
+/* `page` is included intentionally. It is the component default and must never
+   fall back to a light/white loading surface when used by a new loading path. */
+.trex-loader--page,
+.trex-loader--boot,
 .trex-loader--route,
 .trex-loader--verification,
 .trex-loader--overlay {
   position: fixed;
   inset: 0;
   z-index: 9998;
+  width: 100%;
   min-height: 100vh;
   min-height: 100dvh;
-  padding: clamp(16px, 3vw, 24px);
-  background:
-    radial-gradient(circle at 14% 12%, color-mix(in srgb, var(--primary-500) 10%, transparent), transparent 34%),
-    radial-gradient(circle at 86% 80%, color-mix(in srgb, var(--secondary-500) 10%, transparent), transparent 34%),
-    linear-gradient(180deg, #eef3f8 0%, #f8fafc 24%, #ffffff 100%);
+  padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right))
+    max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+  background-color: var(--trex-loader-scrim);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
-.trex-loader--route {
-  min-height: 100vh;
-  min-height: 100dvh;
+.trex-loader--compact {
+  --trex-loader-size: clamp(120px, 12vw, 140px);
 }
 
-.trex-loader--verification {
-  max-width: none;
-  margin-inline: auto;
-  padding-inline: clamp(16px, 3vw, 24px);
-}
-
-.trex-loader--overlay {
-  padding: clamp(16px, 3vw, 24px);
-}
-
-.trex-loader__card {
+.trex-loader__body {
   position: relative;
-  isolation: isolate;
-  width: min(100%, 560px);
+  display: flex;
+  width: min(100%, 286px);
   min-width: 0;
-  overflow: hidden;
-  display: grid;
-  grid-template-columns: minmax(138px, 0.42fr) minmax(0, 1fr);
+  flex-direction: column;
   align-items: center;
-  gap: clamp(18px, 4vw, 34px);
-  border: 1px solid var(--brand-panel-border);
-  border-radius: clamp(22px, 4vw, 30px);
-  padding: clamp(22px, 5vw, 38px);
-  background: var(--hero-bg);
-  color: var(--brand-panel-text);
+  justify-content: center;
+  gap: 15px;
+  padding: 23px 26px 22px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 50% 22%, rgba(167, 213, 255, 0.08), transparent 43%),
+    linear-gradient(155deg, rgba(17, 23, 31, 0.94), rgba(6, 9, 14, 0.89));
   box-shadow:
-    0 32px 90px rgba(17, 21, 25, 0.26),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    0 26px 72px rgba(0, 0, 0, 0.36),
+    0 8px 24px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(12px) saturate(118%);
+  -webkit-backdrop-filter: blur(12px) saturate(118%);
 }
 
-.trex-loader__card::before {
+.trex-loader__body::before {
   content: '';
   position: absolute;
   inset: 0;
-  z-index: -2;
-  opacity: 0.55;
-  background-image: var(--brand-grid);
-  background-size: 28px 28px;
-  mask-image: linear-gradient(115deg, #000 0%, transparent 74%);
-}
-
-.trex-loader__card::after {
-  content: '';
-  position: absolute;
-  z-index: -1;
-  width: 220px;
-  height: 220px;
-  top: -125px;
-  right: -85px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--brand-panel-text) 10%, transparent);
-  filter: blur(4px);
-}
-
-.trex-loader--compact .trex-loader__card {
-  width: min(100%, 500px);
-  grid-template-columns: 116px minmax(0, 1fr);
-  padding: clamp(20px, 4vw, 30px);
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0.045), transparent 34%, transparent 70%, rgba(167, 213, 255, 0.035));
 }
 
 .trex-loader__visual {
   position: relative;
-  width: clamp(118px, 24vw, 150px);
-  aspect-ratio: 1;
   display: grid;
+  width: var(--trex-loader-size);
+  aspect-ratio: 1;
+  flex: 0 0 auto;
   place-items: center;
-  justify-self: center;
-}
-
-.trex-loader--compact .trex-loader__visual {
-  width: clamp(100px, 20vw, 122px);
+  isolation: isolate;
 }
 
 .trex-loader__ambient {
   position: absolute;
   border-radius: 50%;
-  filter: blur(14px);
-  opacity: 0.45;
+  filter: blur(16px);
+  opacity: 0.55;
 }
 
 .trex-loader__ambient--one {
@@ -5054,7 +5159,7 @@ body,
   height: 66%;
   top: 3%;
   right: -3%;
-  background: color-mix(in srgb, var(--brand-panel-text) 18%, transparent);
+  background: rgba(172, 211, 249, 0.29);
   animation: trex-ambient-float 2.8s ease-in-out infinite alternate;
 }
 
@@ -5063,36 +5168,42 @@ body,
   height: 54%;
   bottom: 2%;
   left: 0;
-  background: color-mix(in srgb, var(--secondary-500) 35%, transparent);
+  background: rgba(75, 209, 188, 0.22);
   animation: trex-ambient-float 2.4s 400ms ease-in-out infinite alternate-reverse;
 }
 
 .trex-loader__orbit {
   position: absolute;
-  border: 1px solid color-mix(in srgb, var(--brand-panel-text) 25%, transparent);
+  border: 1px solid rgba(242, 248, 255, 0.36);
   border-radius: 50%;
+  transform-origin: 50% 50%;
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 .trex-loader__orbit--outer {
   inset: 3%;
   border-style: dashed;
   animation: trex-orbit-spin 7s linear infinite;
+  animation-delay: var(--trex-orbit-outer-delay, 0s);
 }
 
 .trex-loader__orbit--inner {
   inset: 18%;
-  border-color: color-mix(in srgb, var(--brand-panel-text) 32%, transparent);
+  border-color: rgba(242, 248, 255, 0.43);
   animation: trex-orbit-spin-reverse 4.6s linear infinite;
+  animation-delay: var(--trex-orbit-inner-delay, 0s);
 }
 
 .trex-loader__node {
   position: absolute;
   width: 9px;
   height: 9px;
-  border: 2px solid color-mix(in srgb, var(--brand-panel-text) 86%, transparent);
+  border: 2px solid var(--trex-loader-color);
   border-radius: 3px;
-  background: var(--primary-500);
-  box-shadow: 0 0 14px color-mix(in srgb, var(--brand-panel-text) 34%, transparent);
+  background: var(--trex-loader-accent);
+  box-shadow: 0 0 14px rgba(242, 248, 255, 0.35);
 }
 
 .trex-loader__node--one {
@@ -5112,150 +5223,103 @@ body,
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--brand-panel-text);
+  background: var(--trex-loader-color);
 }
 
 .trex-loader__scan {
   position: absolute;
+  z-index: 2;
   width: 74%;
   height: 1px;
   top: 22%;
   left: 13%;
-  z-index: 4;
   opacity: 0;
-  background: linear-gradient(90deg, transparent, var(--brand-panel-text), transparent);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--brand-panel-text) 62%, transparent);
+  background: linear-gradient(90deg, transparent, var(--trex-loader-color), transparent);
+  box-shadow: 0 0 12px rgba(242, 248, 255, 0.6);
   animation: trex-scan 2.1s ease-in-out infinite;
 }
 
 .trex-loader__core {
   position: relative;
   z-index: 3;
-  width: 48%;
-  aspect-ratio: 1;
   display: grid;
+  width: 50%;
+  aspect-ratio: 1;
   place-items: center;
-  border: 1px solid color-mix(in srgb, var(--brand-panel-text) 32%, transparent);
+  border: 1px solid rgba(242, 248, 255, 0.34);
   border-radius: 22%;
-  background:
-    linear-gradient(145deg, color-mix(in srgb, var(--brand-panel-text) 14%, transparent), transparent),
-    color-mix(in srgb, var(--surface-inverse) 78%, transparent);
-  color: var(--brand-panel-text);
-  box-shadow:
-    0 15px 36px rgba(0, 0, 0, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(12px);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.13), rgba(16, 26, 38, 0.88));
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.19);
   animation: trex-core-breathe 1.8s ease-in-out infinite;
+}
+
+.trex-loader__core .trex-mark-image {
+  width: 62%;
+  height: 72%;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.23));
 }
 
 .trex-loader__pulse {
   position: absolute;
   z-index: 2;
-  width: 48%;
+  width: 50%;
   aspect-ratio: 1;
-  border: 1px solid color-mix(in srgb, var(--brand-panel-text) 38%, transparent);
+  border: 1px solid rgba(242, 248, 255, 0.4);
   border-radius: 22%;
   animation: trex-core-pulse 1.8s ease-out infinite;
 }
 
-.trex-loader__content {
-  min-width: 0;
-}
-
 .trex-loader__brand {
-  display: inline-flex;
-  max-width: 100%;
-  align-items: center;
-  margin-bottom: 14px;
-}
-
-.trex-loader__brand-logo {
+  position: relative;
+  z-index: 1;
+  display: flex;
   min-width: 0;
-  color: var(--brand-panel-text);
-}
-
-/* Use the same complete T-REX lockup and portrait-shield treatment as the
-   application sidebar so the route/onboarding loader never crops the logo. */
-.trex-loader__brand .trex-logo__mark {
-  width: 42px;
-  height: 42px;
-  flex-basis: 42px;
-  padding: 0;
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--text) 14%, var(--border));
-  border-radius: 12px;
-  background: linear-gradient(145deg, #ffffff, #e4e7ea);
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.12);
-}
-
-.trex-loader__brand .trex-mark-image {
-  display: block;
-  width: auto;
-  height: 33px;
-  max-width: 100%;
-  max-height: 100%;
-  margin-inline: auto;
-  object-fit: contain;
-  object-position: center;
-  filter: drop-shadow(0 2px 3px rgba(15, 23, 42, 0.16));
-}
-
-.trex-loader__brand .trex-logo__copy strong {
-  color: var(--brand-panel-text);
-  font-size: 15px;
-}
-
-.trex-loader__brand .trex-logo__copy small {
-  color: var(--brand-panel-muted);
-  opacity: 1;
-}
-
-.trex-loader__eyebrow {
-  display: inline-flex;
-  max-width: 100%;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  color: var(--brand-panel-muted);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
+  justify-content: center;
+  gap: 3px;
+  margin-top: -5px;
+  text-align: center;
+  color: #f7faff;
+  user-select: none;
 }
 
-.trex-loader__eyebrow > span {
-  width: 7px;
-  height: 7px;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: var(--success-500);
-  box-shadow: 0 0 0 5px color-mix(in srgb, var(--success-500) 13%, transparent);
-  animation: trex-status-pulse 1.4s ease-in-out infinite;
+.trex-loader__brand strong {
+  display: block;
+  font-family: var(--font-display, inherit);
+  font-size: clamp(14px, 1.15vw, 16px);
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: 0.055em;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
 }
 
-.trex-loader__content h2 {
-  margin: 9px 0 8px;
-  color: var(--brand-panel-text);
-  font-family: var(--font-display);
-  font-size: clamp(22px, 4vw, 31px);
-  line-height: 1.14;
-  letter-spacing: -0.035em;
-  overflow-wrap: anywhere;
+.trex-loader__brand span {
+  display: block;
+  max-width: 100%;
+  color: rgba(224, 234, 245, 0.72);
+  font-size: clamp(7px, 0.62vw, 8.5px);
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: 0.22em;
+  white-space: nowrap;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.32);
 }
 
-.trex-loader__content p {
-  margin: 0;
-  color: var(--brand-panel-soft);
-  font-size: clamp(12px, 2vw, 14px);
-  line-height: 1.65;
-  overflow-wrap: anywhere;
-}
-
+/* Indeterminate loading: this is not a fabricated percent-complete indicator. */
 .trex-loader__progress {
-  height: 4px;
+  position: relative;
+  z-index: 1;
+  width: min(100%, 206px);
+  height: 6px;
   overflow: hidden;
-  margin-top: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--brand-panel-text) 10%, transparent);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.28),
+    0 1px 10px rgba(0, 0, 0, 0.16);
 }
 
 .trex-loader__progress span {
@@ -5263,65 +5327,23 @@ body,
   width: 42%;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    color-mix(in srgb, var(--brand-panel-text) 84%, var(--primary-400)),
-    var(--brand-panel-text),
-    transparent
-  );
-  animation: trex-progress 1.45s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+  background: linear-gradient(90deg, rgba(167, 213, 255, 0.25), #f4f8ff, #a7d5ff);
+  box-shadow: 0 0 12px rgba(167, 213, 255, 0.65);
+  animation: trex-progress 2.8s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+  animation-delay: var(--trex-progress-delay, 0s);
 }
 
-.trex-loader__steps {
-  display: flex;
-  gap: 6px;
-  margin-top: 10px;
-}
-
-.trex-loader__steps span {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--brand-panel-text) 22%, transparent);
-  animation: trex-step 1.2s ease-in-out infinite;
-}
-
-.trex-loader__steps span:nth-child(2) {
-  animation-delay: 150ms;
-}
-
-.trex-loader__steps span:nth-child(3) {
-  animation-delay: 300ms;
-}
-
+/* The nested global-request overlay gets its backdrop from TrexLoader itself.
+   Avoid stacking two dark scrims on top of each other. */
 .global-loader {
   position: fixed;
   inset: 0;
   z-index: 9999;
   display: grid;
   place-items: center;
-  visibility: hidden;
-  pointer-events: none;
-  opacity: 0;
-  background:
-    radial-gradient(circle at 14% 12%, rgba(59,130,246,0.10), transparent 34%),
-    radial-gradient(circle at 86% 80%, rgba(15,23,42,0.10), transparent 34%),
-    linear-gradient(180deg, #eef3f8 0%, #f8fafc 24%, #ffffff 100%);
+  background: transparent;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  transition:
-    opacity 150ms ease,
-    visibility 0s linear 150ms;
-}
-
-.global-loader--visible {
-  visibility: visible;
-  pointer-events: auto;
-  opacity: 1;
-  transition:
-    opacity 150ms ease,
-    visibility 0s linear 0s;
 }
 
 .verification-result {
@@ -5464,11 +5486,13 @@ body,
 }
 
 @keyframes trex-orbit-spin {
-  to { transform: rotate(360deg); }
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 @keyframes trex-orbit-spin-reverse {
-  to { transform: rotate(-360deg); }
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(-360deg); }
 }
 
 @keyframes trex-core-breathe {
@@ -5493,16 +5517,6 @@ body,
   100% { transform: translateX(340%); }
 }
 
-@keyframes trex-step {
-  0%, 100% { opacity: 0.25; transform: scale(0.8); }
-  50% { opacity: 1; transform: scale(1.08); }
-}
-
-@keyframes trex-status-pulse {
-  0%, 100% { opacity: 0.55; }
-  50% { opacity: 1; }
-}
-
 @keyframes trex-ambient-float {
   from { transform: translate3d(-4px, 3px, 0) scale(0.96); }
   to { transform: translate3d(6px, -5px, 0) scale(1.06); }
@@ -5520,38 +5534,36 @@ body,
 
 @media (max-width: 560px) {
   .trex-loader {
-    padding: 8px 0;
+    --trex-loader-size: 126px;
   }
 
-  .trex-loader--boot,
-  .trex-loader--overlay {
-    padding: 16px;
+  .trex-loader--compact {
+    --trex-loader-size: 118px;
   }
 
-  .trex-loader__card,
-  .trex-loader--compact .trex-loader__card {
-    grid-template-columns: 1fr;
+  .trex-loader__body {
+    width: min(100%, 250px);
     gap: 13px;
-    border-radius: 24px;
-    padding: 24px 20px;
-    text-align: center;
+    padding: 19px 22px 18px;
+    border-radius: 21px;
   }
 
-  .trex-loader__visual,
-  .trex-loader--compact .trex-loader__visual {
-    width: 106px;
+  .trex-loader__brand {
+    gap: 2px;
+    margin-top: -4px;
   }
 
-  .trex-loader__brand,
-  .trex-loader__eyebrow,
-  .trex-loader__steps {
-    justify-content: center;
+  .trex-loader__brand strong {
+    font-size: 14px;
+  }
+
+  .trex-loader__brand span {
+    font-size: 7.5px;
+    letter-spacing: 0.19em;
   }
 
   .trex-loader__progress {
-    width: min(260px, 100%);
-    margin-inline: auto;
-    margin-top: 17px;
+    width: min(100%, 184px);
   }
 
   .verification-result__icon {
@@ -5566,28 +5578,31 @@ body,
 }
 
 @media (max-width: 360px) {
-  .trex-loader__card,
-  .trex-loader--compact .trex-loader__card {
-    padding: 21px 16px;
+  .trex-loader {
+    --trex-loader-size: 112px;
   }
 
-  .trex-loader__content h2 {
-    font-size: 21px;
+  .trex-loader--compact {
+    --trex-loader-size: 108px;
   }
 
-  .trex-loader__content p,
-  .verification-result > p {
-    font-size: 12.5px;
+  .trex-loader__body {
+    width: min(100%, 224px);
+    padding: 18px 18px 17px;
+    border-radius: 19px;
   }
-}
 
+  .trex-loader__brand strong {
+    font-size: 13px;
+  }
 
-@media (min-width: 561px) and (max-width: 900px) {
-  .trex-loader__card,
-  .trex-loader--compact .trex-loader__card {
-    width: min(100%, 620px);
-    grid-template-columns: 150px minmax(0, 1fr);
-    padding: 32px 30px;
+  .trex-loader__brand span {
+    font-size: 7px;
+    letter-spacing: 0.16em;
+  }
+
+  .trex-loader__progress {
+    width: min(100%, 166px);
   }
 }
 
@@ -5600,12 +5615,18 @@ body,
   .trex-loader__core,
   .trex-loader__pulse,
   .trex-loader__progress span,
-  .trex-loader__steps span,
-  .trex-loader__eyebrow > span,
   .verification-result__ring,
   .verification-result__redirect span {
     animation-duration: 1ms !important;
     animation-iteration-count: 1 !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trex-loader__progress span {
+    width: 42%;
+    animation: none !important;
+    transform: translateX(70%);
   }
 }
 
@@ -5972,6 +5993,17 @@ body,
   display: flex;
   min-width: 0;
   flex: 0 1 auto;
+}
+
+.app-network-switcher {
+  position: relative;
+  z-index: 95;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.app-network-switcher > button {
+  min-width: 0;
 }
 
 .account-menu {
@@ -6470,6 +6502,13 @@ body,
   }
 }
 
+@media (max-width: 900px) {
+  .app-network-switcher > button {
+    max-width: 154px;
+    min-height: 48px;
+  }
+}
+
 @media (max-width: 680px) {
   .app-shell:not(.app-shell--onboarding) {
     --responsive-header-height: calc(126px + env(safe-area-inset-top));
@@ -6479,10 +6518,10 @@ body,
     height: var(--responsive-header-height);
     min-height: var(--responsive-header-height);
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     grid-template-areas:
       'leading account'
-      'wallet wallet';
+      'network wallet';
     align-content: center;
     column-gap: 10px;
     row-gap: 9px;
@@ -6496,6 +6535,23 @@ body,
 
   .app-shell:not(.app-shell--onboarding) .app-header__actions {
     display: contents;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .app-network-switcher {
+    grid-area: network;
+    width: 100%;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .app-network-switcher > button {
+    width: 100%;
+    max-width: none;
+    min-height: 48px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .app-network-switcher > [role='menu'] {
+    left: 0;
+    right: auto;
+    max-width: calc(100vw - 24px);
   }
 
   .app-shell:not(.app-shell--onboarding) .header-wallet-control {
@@ -7740,6 +7796,195 @@ button.issuer-dashboard-live-metric:disabled {
   }
 }
 
+/* Issuer dashboard — compact, state-aware operational layout.
+   Scoped overrides retain the existing shared theme and all other dashboards. */
+.issuer-dashboard-live .issuer-dashboard-hero-live {
+  display: block;
+  min-width: 0;
+  overflow: visible;
+  padding: clamp(18px, 2vw, 24px);
+  border-color: var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+.issuer-dashboard-live .issuer-dashboard-hero-live::after {
+  display: none;
+}
+.issuer-dashboard-hero-live__content {
+  min-width: 0;
+}
+.issuer-dashboard-live .issuer-dashboard-hero-live h2 {
+  margin: 0 0 6px;
+  font-size: clamp(22px, 2.4vw, 30px);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.issuer-dashboard-live .issuer-dashboard-hero-live__eyebrow {
+  margin-bottom: 6px;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+.issuer-dashboard-live .issuer-dashboard-hero-live__intro {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.issuer-dashboard-live .issuer-dashboard-hero-live__badges {
+  margin: 10px 0;
+}
+.issuer-dashboard-asset-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 12px;
+  min-width: 0;
+}
+.issuer-dashboard-asset-line > strong,
+.issuer-dashboard-asset-line__name {
+  color: var(--text);
+  font-size: clamp(15px, 1.7vw, 19px);
+  font-weight: 750;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.issuer-dashboard-asset-line__name {
+  display: block;
+  margin-top: 9px;
+}
+.issuer-dashboard-asset-line__network {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  padding: 4px 9px;
+  color: var(--text-soft);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.issuer-dashboard-live .issuer-dashboard-hero-live__actions {
+  margin-top: 15px;
+  gap: 9px;
+}
+.issuer-dashboard-live .issuer-dashboard-live-metric {
+  min-height: 112px;
+  padding: 15px;
+  box-shadow: var(--shadow-sm);
+}
+.issuer-dashboard-live .issuer-dashboard-live-metric__copy strong {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: clamp(22px, 2vw, 29px);
+}
+.issuer-dashboard-live .issuer-dashboard-live-metric__copy > span {
+  line-height: 1.45;
+}
+.issuer-dashboard-live__actions-section,
+.issuer-dashboard-live__setup-section {
+  display: block;
+  min-width: 0;
+}
+.issuer-dashboard-live__actions-section > .issuer-dashboard-action-card,
+.issuer-dashboard-live__setup-section > .issuer-dashboard-workflow-card {
+  width: 100%;
+  height: auto;
+  min-height: 0;
+}
+.issuer-dashboard-live__actions-section .issuer-dashboard-action-list {
+  margin-top: 12px;
+}
+.issuer-dashboard-live__actions-section .issuer-dashboard-action-item {
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  gap: 10px;
+}
+.issuer-dashboard-live__actions-section .issuer-dashboard-action-item__cta {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  align-self: center;
+  white-space: nowrap;
+}
+.issuer-dashboard-action-empty {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface-muted);
+  color: var(--text-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.issuer-dashboard-action-empty svg {
+  flex: 0 0 auto;
+}
+.issuer-dashboard-live .issuer-dashboard-list-empty {
+  min-height: 0;
+  padding: 26px 12px;
+}
+.issuer-dashboard-live__activity-grid > * {
+  min-width: 0;
+}
+.issuer-dashboard-live button:focus-visible {
+  outline: 2px solid var(--primary-500);
+  outline-offset: 3px;
+}
+.issuer-dashboard-state-panel {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 20px;
+  min-width: 0;
+}
+.issuer-dashboard-state-panel > svg {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+.issuer-dashboard-state-panel h2 {
+  margin: 0 0 5px;
+  font-size: 18px;
+}
+.issuer-dashboard-state-panel p {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.issuer-dashboard-loading-card {
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+  min-width: 0;
+}
+@media (max-width: 680px) {
+  .issuer-dashboard-live .issuer-dashboard-hero-live h2 {
+    font-size: 24px;
+  }
+  .issuer-dashboard-live .issuer-dashboard-asset-line {
+    align-items: flex-start;
+  }
+  .issuer-dashboard-live__actions-section .issuer-dashboard-action-item {
+    grid-template-columns: 36px minmax(0, 1fr);
+  }
+  .issuer-dashboard-live__actions-section .issuer-dashboard-action-item__cta {
+    grid-column: 2;
+    grid-row: auto;
+    justify-self: start;
+    white-space: normal;
+  }
+  .issuer-dashboard-live .issuer-dashboard-compact-row__main strong,
+  .issuer-dashboard-live .issuer-dashboard-compact-row__main small {
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+}
+
 /* ========================================================================== 
    Sidebar action indicators
    Quiet, actionable notification cues for issuer/investor tasks that need the
@@ -7906,9 +8151,7 @@ button.issuer-dashboard-live-metric:disabled {
   }
 }
 
-/* ========================================================================== 
-   Workspace identity pill: keep name and network readable at every sidebar size
-   ========================================================================== */
+/* Workspace readability and shared currency presentation. */
 .workspace-pill {
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr) auto;
@@ -7961,11 +8204,6 @@ button.issuer-dashboard-live-metric:disabled {
   }
 }
 
-/* ========================================================================== 
-   Token symbols + Wallet Management
-   Gives USDC a recognizable visual mark and keeps token/balance information
-   readable from the header down to the dedicated wallet workspace.
-   ========================================================================== */
 .token-icon {
   display: inline-grid;
   flex: 0 0 auto;
@@ -8037,39 +8275,270 @@ button.issuer-dashboard-live-metric:disabled {
   height: 100%;
 }
 
+.token-icon--currency-fallback > svg {
+  width: 62%;
+  height: 62%;
+}
+
 .token-icon > img {
   object-fit: contain;
   background: #fff;
 }
 
-.arc-network-icon {
-  display: inline-grid;
-  flex: 0 0 auto;
-  place-items: center;
-  overflow: hidden;
-  border-radius: 50%;
-  background: transparent;
-  line-height: 1;
+
+@media (prefers-reduced-motion: reduce) { .global-loader { transition: none; } }
+
+/* Keep the delayed overlay non-interactive until a request needs it. */
+.global-loader {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transition: opacity 180ms ease, visibility 180ms ease;
 }
 
-.arc-network-icon--xs { width: 14px; height: 14px; }
-.arc-network-icon--sm { width: 22px; height: 22px; }
-.arc-network-icon--md { width: 30px; height: 30px; }
-
-.arc-network-icon > img,
-.arc-network-icon > svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
+.global-loader--visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
 }
 
-.arc-network-icon > svg {
-  width: 72%;
-  height: 72%;
-  color: var(--text-muted);
+/* ========================================================================== 
+   Compact mobile application header
+   - Keeps menu, active network, wallet and account actions on one usable row.
+   - Network menus become viewport anchored so they cannot clip off-screen.
+   ========================================================================== */
+@media (max-width: 680px) {
+  .app-shell:not(.app-shell--onboarding) {
+    --responsive-header-height: calc(68px + env(safe-area-inset-top));
+  }
+
+  .app-shell:not(.app-shell--onboarding) .app-header {
+    height: var(--responsive-header-height);
+    min-height: var(--responsive-header-height);
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 7px;
+    padding: calc(9px + env(safe-area-inset-top)) 10px 9px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .app-header__leading {
+    width: auto;
+    min-width: 42px;
+    flex: 0 0 42px;
+    display: flex;
+    align-items: center;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .header-page-title {
+    display: none;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .menu-button {
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+    min-height: 42px;
+    margin: 0;
+    border-radius: 12px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .app-header__actions {
+    min-width: 0;
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    margin-left: 0;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .app-network-switcher {
+    width: auto;
+    min-width: 0;
+    max-width: 94px;
+    flex: 1 1 86px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .app-network-switcher > button {
+    width: 100%;
+    max-width: none;
+    min-height: 44px;
+    gap: 6px;
+    padding: 5px 7px;
+    border-radius: 12px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .app-network-switcher > button > span:first-child {
+    width: 28px;
+    height: 28px;
+    flex-basis: 28px;
+    border-radius: 9px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .app-network-switcher > button strong {
+    font-size: 11px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .app-network-switcher > [role='menu'] {
+    position: fixed;
+    top: calc(var(--responsive-header-height) + 6px);
+    right: 10px;
+    left: 10px;
+    width: auto;
+    max-width: none;
+    margin-top: 0;
+    max-height: calc(100dvh - var(--responsive-header-height) - 18px);
+    overflow-y: auto;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control {
+    width: auto;
+    min-width: 0;
+    max-width: 126px;
+    flex: 1 1 108px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control > button {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    gap: 6px;
+    justify-content: flex-start;
+    padding: 5px 7px !important;
+    border-radius: 12px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control > button > span:first-child {
+    width: 30px;
+    height: 30px;
+    flex-basis: 30px;
+    border-radius: 9px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control > button > span:nth-child(2) {
+    display: block;
+    min-width: 0;
+    max-width: none;
+    flex: 1 1 auto;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control > button > span:nth-child(2) strong {
+    font-size: 10px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control > button > span:nth-child(2) small {
+    font-size: 9px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control > button > svg {
+    display: none;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .account-menu {
+    width: 44px;
+    min-width: 44px;
+    flex: 0 0 44px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .account-menu__trigger {
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+    gap: 0;
+    padding: 3px;
+    border-radius: 12px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .account-menu__avatar {
+    width: 34px;
+    height: 34px;
+    flex-basis: 34px;
+    border-radius: 10px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .account-menu__summary,
+  .app-shell:not(.app-shell--onboarding) .account-menu__chevron {
+    display: none;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .account-menu__panel {
+    position: fixed;
+    top: calc(var(--responsive-header-height) + 6px);
+    right: 10px;
+    width: min(286px, calc(100vw - 20px));
+  }
 }
 
+@media (max-width: 390px) {
+  .app-shell:not(.app-shell--onboarding) .app-header {
+    gap: 5px;
+    padding-inline: 8px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .app-header__leading {
+    min-width: 40px;
+    flex-basis: 40px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .menu-button {
+    width: 40px;
+    min-width: 40px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .app-network-switcher {
+    max-width: 86px;
+    flex-basis: 78px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control {
+    max-width: 116px;
+    flex-basis: 100px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .account-menu,
+  .app-shell:not(.app-shell--onboarding) .account-menu__trigger {
+    width: 42px;
+    min-width: 42px;
+    flex-basis: 42px;
+  }
+}
+
+/* Keep notifications readable without allowing provider/RPC text to take over the viewport. */
+[data-sonner-toaster] {
+  --width: min(360px, calc(100vw - 24px));
+}
+
+[data-sonner-toast] {
+  max-width: calc(100vw - 24px);
+}
+
+[data-sonner-toast] [data-title],
+[data-sonner-toast] [data-description] {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+@media (max-width: 640px) {
+  [data-sonner-toaster] {
+    right: 12px !important;
+    left: 12px !important;
+    width: auto !important;
+  }
+
+  [data-sonner-toast] {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
+
+/* ========================================================================== 
+   Wallet Management · multichain balances and Circle USDC bridge
+   ========================================================================== */
 .wallet-management-page {
   width: 100%;
   max-width: 1440px;
@@ -8209,6 +8678,11 @@ button.issuer-dashboard-live-metric:disabled {
   padding: 8px;
   box-shadow: 0 18px 42px rgb(15 23 42 / 16%), 0 4px 12px rgb(15 23 42 / 7%);
   transform-origin: top right;
+  max-height: min(420px, 65vh);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
   animation: wallet-chain-menu-in 140ms ease-out;
 }
 
@@ -8429,12 +8903,14 @@ button.issuer-dashboard-live-metric:disabled {
 
 .wallet-management-metrics {
   display: grid;
+  min-width: 0;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
 .wallet-management-metric {
   display: grid;
+  min-width: 0;
   grid-template-columns: 42px minmax(0, 1fr);
   align-items: center;
   gap: 12px;
@@ -8473,11 +8949,34 @@ button.issuer-dashboard-live-metric:disabled {
 }
 
 .wallet-management-metric strong {
-  overflow: hidden;
-  font-size: 22px;
+  min-width: 0;
+  font-size: clamp(18px, 2vw, 22px);
   line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.wallet-management-metric__value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 5px;
+  row-gap: 1px;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.wallet-management-metric__amount {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+.wallet-management-metric__unit {
+  flex: 0 0 auto;
+  font-size: 0.64em;
+  font-weight: 750;
+  letter-spacing: 0.01em;
 }
 
 .wallet-management-metric em,
@@ -8488,7 +8987,15 @@ button.issuer-dashboard-live-metric:disabled {
 }
 
 .wallet-assets-card {
-  overflow: hidden;
+  /* Keep the network menu visible even when the asset table is short.
+     The card previously clipped the absolutely-positioned dropdown at its
+     bottom edge, which made later network options inaccessible. */
+  position: relative;
+  overflow: visible;
+}
+
+.wallet-assets-card:has(.wallet-management-chain-selector__menu) {
+  z-index: 40;
 }
 
 .wallet-assets-card__header {
@@ -8834,6 +9341,7 @@ button.issuer-dashboard-live-metric:disabled {
   align-items: flex-start;
   gap: 9px;
   background: color-mix(in srgb, var(--surface-muted) 54%, white);
+  border-radius: 0 0 calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px);
   padding: 13px 20px;
   color: var(--text-muted);
 }
@@ -8855,12 +9363,15 @@ button.issuer-dashboard-live-metric:disabled {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  /* Keep the metric cards at a readable minimum width once the overview stacks.
+     Three columns here made the USDC amount truncate when the app sidebar was
+     still visible (for example around a 1024px viewport). */
   .wallet-management-metrics {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .wallet-management-metric--usdc {
-    grid-column: auto;
+    grid-column: 1 / -1;
   }
 
   .wallet-asset-row {
@@ -8975,7 +9486,18 @@ button.issuer-dashboard-live-metric:disabled {
   }
 
   .wallet-management-metric {
+    grid-template-columns: 38px minmax(0, 1fr);
+    gap: 10px;
     padding: 14px;
+  }
+
+  .wallet-management-metric__icon {
+    width: 38px;
+    height: 38px;
+  }
+
+  .wallet-management-metric__value {
+    column-gap: 4px;
   }
 
   .wallet-asset-row {
@@ -9050,7 +9572,7 @@ button.issuer-dashboard-live-metric:disabled {
 }
 
 /* ========================================================================== 
-   Wallet Management · Circle App Kit bridge
+   Wallet Management · Circle Bridge Kit
    ========================================================================== */
 .wallet-bridge-modal__body {
   display: grid;
@@ -9799,6 +10321,7 @@ button.issuer-dashboard-live-metric:disabled {
   .wallet-management-chain-selector--compact .wallet-management-chain-selector__menu {
     width: min(310px, calc(100vw - 54px));
     min-width: 0;
+    max-height: min(360px, 58vh);
   }
 
   .wallet-assets-card__updated {
@@ -9852,6 +10375,7 @@ button.issuer-dashboard-live-metric:disabled {
 
   .wallet-management-chain-selector--compact .wallet-management-chain-selector__menu {
     width: min(100%, calc(100vw - 42px));
+    max-height: min(320px, 55vh);
   }
 }
 
@@ -10216,5 +10740,846 @@ button.issuer-dashboard-live-metric:disabled {
   .wallet-bridge-fee-row strong {
     max-width: none;
     text-align: left;
+  }
+}
+
+/* ========================================================================== 
+   Wallet Management · backend-first network / token artwork
+   Network artwork comes from the chain API first; NetworkIcon falls back to
+   bundled Sepolia / Arbitrum / Arc marks when the API has no usable image.
+   ========================================================================== */
+.network-icon {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--primary-500) 14%, var(--border));
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--primary-50) 62%, white);
+  color: color-mix(in srgb, var(--primary-700) 84%, #59657a);
+  line-height: 1;
+  box-shadow: 0 2px 7px rgb(15 23 42 / 7%);
+}
+
+.network-icon--xs { width: 15px; height: 15px; border-width: 0; box-shadow: none; }
+.network-icon--sm { width: 30px; height: 30px; }
+.network-icon--md { width: 34px; height: 34px; }
+.network-icon--lg { width: 42px; height: 42px; }
+
+.network-icon > img,
+.network-icon > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.network-icon > img {
+  object-fit: contain;
+  background: #fff;
+}
+
+.network-icon > svg {
+  width: 58%;
+  height: 58%;
+}
+
+.token-icon--generic-fallback > svg {
+  width: 58%;
+  height: 58%;
+}
+
+.wallet-management-chain-selector--compact .network-icon--md {
+  width: 28px;
+  height: 28px;
+}
+
+.wallet-management-network .network-icon--xs,
+.wallet-management-network-label .network-icon--xs {
+  margin-inline-end: 1px;
+}
+
+/* ========================================================================== 
+   Wallet Management · compact, image-aware bridge route picker
+   ========================================================================== */
+.wallet-bridge-route-picker {
+  display: grid;
+  gap: 12px;
+  border: 1px solid color-mix(in srgb, var(--primary-500) 14%, var(--border));
+  border-radius: 18px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary-50) 48%, white), white 66%);
+  padding: 14px;
+  box-shadow: 0 4px 14px rgb(15 23 42 / 4%);
+}
+
+.wallet-bridge-route-picker__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.wallet-bridge-route-picker__heading > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.wallet-bridge-route-picker__heading small,
+.wallet-bridge-network-select__label {
+  color: var(--text-muted);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.wallet-bridge-route-picker__heading strong {
+  color: var(--text);
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.wallet-bridge-route-picker__controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px minmax(0, 1fr);
+  align-items: end;
+  gap: 9px;
+}
+
+.wallet-bridge-network-select {
+  position: relative;
+  z-index: 3;
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.wallet-bridge-network-select:has(.wallet-bridge-network-select__menu) {
+  z-index: 20;
+}
+
+.wallet-bridge-network-select__label {
+  padding-left: 2px;
+}
+
+.wallet-bridge-network-select__trigger {
+  display: grid;
+  width: 100%;
+  min-height: 58px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--surface);
+  padding: 8px 10px;
+  color: var(--text);
+  text-align: left;
+  box-shadow: 0 2px 8px rgb(15 23 42 / 4%);
+  cursor: pointer;
+  transition: border-color var(--transition), box-shadow var(--transition), background var(--transition);
+}
+
+.wallet-bridge-network-select__trigger:hover:not(:disabled),
+.wallet-bridge-network-select__trigger:focus-visible,
+.wallet-bridge-network-select:has(.wallet-bridge-network-select__menu) .wallet-bridge-network-select__trigger {
+  outline: 0;
+  border-color: color-mix(in srgb, var(--primary-500) 36%, var(--border));
+  background: color-mix(in srgb, var(--primary-50) 26%, white);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-500) 8%, transparent);
+}
+
+.wallet-bridge-network-select__trigger:disabled {
+  opacity: 0.78;
+  cursor: default;
+}
+
+.wallet-bridge-network-select__trigger > svg:last-child {
+  color: var(--text-muted);
+  transition: transform var(--transition);
+}
+
+.wallet-bridge-network-select__trigger > svg:last-child.is-open {
+  transform: rotate(180deg);
+}
+
+.wallet-bridge-network-select__copy,
+.wallet-bridge-network-select__option > span:nth-child(2) {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.wallet-bridge-network-select__copy strong,
+.wallet-bridge-network-select__option strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.76rem;
+  font-weight: 760;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wallet-bridge-network-select__copy small,
+.wallet-bridge-network-select__option small {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 0.64rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wallet-bridge-network-select__menu {
+  position: absolute;
+  top: calc(100% + 7px);
+  left: 0;
+  z-index: 30;
+  display: grid;
+  width: 100%;
+  min-width: 230px;
+  gap: 4px;
+  border: 1px solid color-mix(in srgb, var(--primary-500) 13%, var(--border));
+  border-radius: 14px;
+  background: var(--surface);
+  padding: 7px;
+  box-shadow: 0 16px 36px rgb(15 23 42 / 15%), 0 4px 10px rgb(15 23 42 / 7%);
+  animation: wallet-chain-menu-in 140ms ease-out;
+}
+
+.wallet-bridge-network-select__option {
+  display: grid;
+  width: 100%;
+  min-height: 52px;
+  grid-template-columns: auto minmax(0, 1fr) 22px;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  padding: 7px 8px;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition);
+}
+
+.wallet-bridge-network-select__option:hover,
+.wallet-bridge-network-select__option:focus-visible {
+  outline: 0;
+  border-color: color-mix(in srgb, var(--primary-500) 15%, var(--border));
+  background: color-mix(in srgb, var(--primary-50) 48%, white);
+}
+
+.wallet-bridge-network-select__option.is-selected {
+  border-color: color-mix(in srgb, var(--success-500) 23%, var(--border));
+  background: color-mix(in srgb, var(--success-500) 7%, white);
+}
+
+.wallet-bridge-network-select__check {
+  display: inline-grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  justify-self: end;
+  border-radius: 50%;
+  color: color-mix(in srgb, var(--success-500) 86%, var(--text));
+}
+
+.wallet-bridge-network-select__option.is-selected .wallet-bridge-network-select__check {
+  background: color-mix(in srgb, var(--success-500) 11%, white);
+}
+
+.wallet-bridge-route-picker__arrow {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  align-self: center;
+  margin-top: 20px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: white;
+  color: var(--text-muted);
+  box-shadow: 0 2px 8px rgb(15 23 42 / 5%);
+}
+
+.wallet-bridge-route-picker__note {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  border-top: 1px solid color-mix(in srgb, var(--primary-500) 9%, var(--border));
+  padding-top: 9px;
+  color: var(--text-muted);
+  font-size: 0.65rem;
+  line-height: 1.45;
+}
+
+.wallet-bridge-route-picker__note svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: color-mix(in srgb, var(--success-500) 78%, var(--text-muted));
+}
+
+@media (max-width: 560px) {
+  .wallet-bridge-route-picker {
+    gap: 11px;
+    border-radius: 15px;
+    padding: 12px;
+  }
+
+  .wallet-bridge-route-picker__controls {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .wallet-bridge-route-picker__arrow {
+    width: 30px;
+    height: 30px;
+    margin: -1px auto;
+    transform: rotate(90deg);
+  }
+
+  .wallet-bridge-network-select__trigger {
+    min-height: 54px;
+  }
+
+  .wallet-bridge-network-select__menu {
+    position: static;
+    width: 100%;
+    min-width: 0;
+    margin-top: 1px;
+    box-shadow: 0 8px 20px rgb(15 23 42 / 10%);
+  }
+
+  .wallet-bridge-route-picker__note {
+    font-size: 0.62rem;
+  }
+}
+
+@media (max-width: 380px) {
+  .wallet-bridge-route-picker__heading {
+    align-items: flex-start;
+  }
+
+  .wallet-bridge-network-select__copy strong,
+  .wallet-bridge-network-select__option strong {
+    font-size: 0.72rem;
+  }
+}
+
+/* Responsive precision tooltip: portal-based so compact cards/tables cannot clip it. */
+.responsive-tooltip-trigger {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  border-radius: 4px;
+  outline: none;
+}
+
+.responsive-tooltip-trigger:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-500) 24%, transparent);
+}
+
+.responsive-value-tooltip {
+  position: fixed;
+  z-index: 1000;
+  width: max-content;
+  max-width: min(360px, calc(100vw - 24px));
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  padding: 8px 10px;
+  box-shadow: 0 12px 30px rgba(22, 28, 45, 0.16);
+  color: var(--text-soft);
+  font-family: var(--font-body);
+  font-size: 0.73rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+
+/* ========================================================================== 
+   Mobile header: icon-only network trigger (<=680px).
+   Preserve the accessible network name, restrictions and full dropdown.
+   The wallet retains its existing responsive truncation and actions.
+   ========================================================================== */
+@media (max-width: 680px) {
+  /* Reserve an equal-size, non-shrinking hit target for the network logo. */
+  .app-shell:not(.app-shell--onboarding) .app-network-switcher {
+    width: 46px;
+    min-width: 46px;
+    max-width: 46px;
+    flex: 0 0 46px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .app-network-switcher > button {
+    width: 46px;
+    min-width: 46px;
+    max-width: 46px;
+    min-height: 44px;
+    padding: 5px;
+    gap: 0;
+    justify-content: center;
+    border-radius: 12px;
+  }
+
+  /* Enlarge the actual chain image, not the surrounding label or badges. */
+  .app-shell:not(.app-shell--onboarding) .app-network-switcher > button > .app-network-switcher__icon {
+    width: 32px;
+    height: 32px;
+    flex: 0 0 32px;
+    border-radius: 9px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .app-network-switcher__icon > img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .app-network-switcher__icon > svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  /* Keep all network state indicators, including the lock SVG, out of the
+     compact mobile trigger. The aria-label and full dropdown still expose
+     locked-network and switching information. */
+  .app-shell:not(.app-shell--onboarding) .app-network-switcher__label,
+  .app-shell:not(.app-shell--onboarding) .app-network-switcher__attention,
+  .app-shell:not(.app-shell--onboarding) .app-network-switcher__status-icon {
+    display: none;
+  }
+
+  /* The icon-only network selector frees space for a readable wallet address. */
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control {
+    width: auto;
+    min-width: 104px;
+    max-width: 154px;
+    flex: 1 1 154px;
+  }
+}
+
+@media (max-width: 520px) {
+  /* Retain the address and an accessible 44px touch target. */
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control {
+    width: auto;
+    min-width: 104px;
+    max-width: 154px;
+    flex: 1 1 154px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control > button {
+    width: 100%;
+    min-width: 0;
+    gap: 5px;
+    padding: 5px 6px !important;
+    overflow: hidden;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control > button > span:first-child {
+    width: 28px;
+    height: 28px;
+    flex: 0 0 28px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control > button > span:nth-child(2) {
+    display: block;
+    min-width: 0;
+    max-width: none;
+    flex: 1 1 0%;
+    overflow: hidden;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control > button > span:nth-child(2) strong {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control > button > span:nth-child(2) small {
+    display: none;
+  }
+}
+
+@media (max-width: 340px) {
+  /* Even on narrow phones retain a short, truncated wallet address: the
+     compact network trigger and avatar leave enough space for this. */
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control {
+    width: auto;
+    min-width: 104px;
+    max-width: 132px;
+    flex: 1 1 132px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control > button {
+    width: 100%;
+    min-width: 0;
+    justify-content: flex-start;
+    padding: 5px 6px !important;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control > button > span:nth-child(2) {
+    display: block;
+  }
+}
+
+/* Issuer dashboard — shared dark hero for issuers with and without a deployed asset.
+   Keep every setup action and state-aware rendering unchanged. */
+.issuer-dashboard-live .issuer-dashboard-hero-live[data-deployed] {
+  display: grid;
+  grid-template-columns: minmax(0, 1.16fr) minmax(175px, 0.75fr) minmax(225px, 0.76fr);
+  align-items: center;
+  gap: clamp(10px, 1.5vw, 24px);
+  min-width: 0;
+  overflow: hidden;
+  isolation: isolate;
+  min-height: 246px;
+  padding: clamp(18px, 2.15vw, 28px);
+  border: 1px solid #344957;
+  border-radius: 17px;
+  background: linear-gradient(112deg, #1a2934 0%, #253743 53%, #172630 100%);
+  box-shadow: 0 13px 28px rgba(17, 33, 43, 0.12);
+  color: #f6f9fa;
+}
+.issuer-dashboard-live .issuer-dashboard-hero-live[data-deployed]::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  width: 60%;
+  aspect-ratio: 1 / 1;
+  left: 28%;
+  top: -40%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(124, 165, 178, 0.17), transparent 65%);
+  pointer-events: none;
+}
+.issuer-dashboard-live .issuer-dashboard-hero-live[data-deployed] h2 {
+  margin-bottom: 7px;
+  color: #f9fbfc;
+  font-size: clamp(25px, 2.35vw, 34px);
+  line-height: 1.13;
+}
+.issuer-dashboard-live .issuer-dashboard-hero-live[data-deployed] .issuer-dashboard-hero-live__eyebrow {
+  margin-bottom: 7px;
+  color: #c0cdd5;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  overflow-wrap: anywhere;
+}
+.issuer-dashboard-live .issuer-dashboard-hero-live[data-deployed] .issuer-dashboard-hero-live__intro {
+  color: #b5c4cf;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.issuer-dashboard-live .issuer-dashboard-hero-live[data-deployed] .issuer-dashboard-asset-line {
+  gap: 8px 10px;
+  margin-top: 14px;
+}
+.issuer-dashboard-live .issuer-dashboard-hero-live[data-deployed] .issuer-dashboard-asset-line strong {
+  color: #f8fafb;
+  font-size: clamp(15px, 1.3vw, 17px);
+  line-height: 1.5;
+}
+.issuer-dashboard-live .issuer-dashboard-hero-live[data-deployed] .badge--success,
+.issuer-dashboard-hero-summary .badge--success {
+  border: 1px solid rgba(78, 207, 142, 0.35);
+  background: rgba(33, 117, 83, 0.24);
+  color: #a7f2c6;
+}
+.issuer-dashboard-live .issuer-dashboard-hero-live[data-deployed] .badge--warning,
+.issuer-dashboard-hero-summary .badge--warning {
+  border: 1px solid rgba(246, 185, 76, 0.35);
+  background: rgba(133, 93, 28, 0.28);
+  color: #ffe2a2;
+}
+.issuer-dashboard-live .issuer-dashboard-hero-live[data-deployed] .issuer-dashboard-hero-live__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 17px;
+}
+.issuer-dashboard-live .issuer-dashboard-hero-live[data-deployed] .issuer-dashboard-hero-live__actions .button {
+  min-height: 40px;
+  border-radius: 10px;
+  padding: 9px 14px;
+  box-shadow: none;
+  font-size: 12.5px;
+  font-weight: 750;
+}
+.issuer-dashboard-live .issuer-dashboard-hero-live[data-deployed] .issuer-dashboard-hero-live__actions .button--primary {
+  border-color: #f4f8fa;
+  background: #f4f8fa;
+  color: #23333d;
+}
+.issuer-dashboard-live .issuer-dashboard-hero-live[data-deployed] .issuer-dashboard-hero-live__actions .button--primary:hover:not(:disabled) {
+  background: #e4edf1;
+  border-color: #e4edf1;
+  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.16);
+}
+.issuer-dashboard-live .issuer-dashboard-hero-live[data-deployed] .issuer-dashboard-hero-live__actions .button--secondary {
+  border: 1px solid rgba(232, 242, 246, 0.58);
+  background: rgba(255, 255, 255, 0.03);
+  color: #f5f8fa;
+}
+.issuer-dashboard-live .issuer-dashboard-hero-live[data-deployed] .issuer-dashboard-hero-live__actions .button--secondary:hover:not(:disabled) {
+  border-color: #e9f1f4;
+  background: rgba(255, 255, 255, 0.12);
+}
+.issuer-dashboard-hero-art {
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  align-self: stretch;
+  position: relative;
+  pointer-events: none;
+}
+.issuer-dashboard-hero-art__chart {
+  display: block;
+  width: min(100%, 338px);
+  max-height: 240px;
+  overflow: visible;
+  filter: drop-shadow(0 12px 12px rgba(4, 18, 26, 0.26));
+}
+.issuer-dashboard-hero-summary {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 11px;
+  min-width: 0;
+  border: 1px solid rgba(220, 233, 240, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.065);
+  padding: 15px clamp(12px, 1.3vw, 19px);
+}
+.issuer-dashboard-hero-summary__row {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  color: #e8f0f3;
+}
+.issuer-dashboard-hero-summary__row--status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(216, 233, 238, 0.15);
+}
+.issuer-dashboard-hero-summary__row > span,
+.issuer-dashboard-hero-summary__row--status > span {
+  color: #b0c2cd;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+.issuer-dashboard-hero-summary__row strong {
+  min-width: 0;
+  color: #f2f7f9;
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.issuer-dashboard-hero-summary__network {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+.issuer-dashboard-hero-summary__network .network-icon {
+  flex: 0 0 auto;
+}
+.issuer-dashboard-hero-summary__address {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: #e8f0f3;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.issuer-dashboard-hero-summary__address > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.issuer-dashboard-hero-summary__copy {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin: -6px 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: #e5eff3;
+  cursor: pointer;
+}
+.issuer-dashboard-hero-summary__copy:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.12);
+}
+.issuer-dashboard-live .issuer-dashboard-hero-live[data-deployed] button:focus-visible {
+  outline: 2px solid #e6f4fb;
+  outline-offset: 3px;
+}
+/* The metric cards remain buttons with their existing actions, but no arrow icons. */
+.issuer-dashboard-live .issuer-dashboard-live-metric {
+  grid-template-columns: 40px minmax(0, 1fr);
+}
+/* The entire Action Center row is the interactive button; this is its CTA face. */
+.issuer-dashboard-live__actions-section .issuer-dashboard-action-item__cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 9px 15px;
+  border-radius: 9px;
+  background: #26333e;
+  color: #fff;
+  font-weight: 750;
+  box-shadow: 0 4px 11px rgba(28, 38, 48, 0.12);
+  transition: background 160ms ease, box-shadow 160ms ease;
+}
+.issuer-dashboard-live__actions-section .issuer-dashboard-action-item:hover .issuer-dashboard-action-item__cta,
+.issuer-dashboard-live__actions-section .issuer-dashboard-action-item:focus-visible .issuer-dashboard-action-item__cta {
+  background: #17242e;
+  box-shadow: 0 6px 16px rgba(28, 38, 48, 0.18);
+}
+@media (max-width: 1220px) {
+  .issuer-dashboard-live .issuer-dashboard-hero-live[data-deployed] {
+    grid-template-columns: minmax(0, 1fr) minmax(235px, 0.64fr);
+  }
+  .issuer-dashboard-hero-art {
+    display: none;
+  }
+}
+@media (max-width: 760px) {
+  .issuer-dashboard-live .issuer-dashboard-hero-live[data-deployed] {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+    gap: 18px;
+    padding: 20px;
+  }
+  .issuer-dashboard-hero-summary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 14px;
+  }
+  .issuer-dashboard-hero-summary__row--status {
+    align-items: flex-start;
+    justify-content: flex-start;
+    border: 0;
+    padding: 0;
+  }
+}
+@media (max-width: 480px) {
+  .issuer-dashboard-live .issuer-dashboard-hero-live[data-deployed] {
+    padding: 18px;
+  }
+  .issuer-dashboard-hero-summary {
+    grid-template-columns: 1fr;
+    gap: 11px;
+  }
+  .issuer-dashboard-hero-summary__row--status {
+    justify-content: space-between;
+  }
+  .issuer-dashboard-live .issuer-dashboard-hero-live[data-deployed] .issuer-dashboard-hero-live__actions .button {
+    width: 100%;
+  }
+  .issuer-dashboard-live__actions-section .issuer-dashboard-action-item__cta {
+    width: 100%;
+    max-width: 240px;
+  }
+  .issuer-dashboard-live .issuer-dashboard-live-metric {
+    grid-template-columns: 38px minmax(0, 1fr);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .issuer-dashboard-live__actions-section .issuer-dashboard-action-item__cta {
+    transition: none;
+  }
+}
+
+/* New issuer: keep the same dark hero, without an empty asset-summary panel. */
+.issuer-dashboard-live .issuer-dashboard-hero-live[data-deployed="false"] {
+  grid-template-columns: minmax(0, 1.35fr) minmax(185px, 0.65fr);
+  min-height: 220px;
+}
+.issuer-dashboard-live .issuer-dashboard-hero-live[data-deployed="false"] .issuer-dashboard-hero-live__badges {
+  margin: 12px 0;
+}
+.issuer-dashboard-live .issuer-dashboard-hero-live[data-deployed="false"] .badge:not(.badge--success):not(.badge--warning) {
+  border: 1px solid rgba(221, 232, 238, 0.28);
+  background: rgba(231, 239, 243, 0.12);
+  color: #edf5f9;
+}
+/* No placeholder Asset Status metric when a token has not been created. */
+.issuer-dashboard-live .issuer-dashboard-metric-grid[data-card-count="3"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+@media (max-width: 1220px) {
+  .issuer-dashboard-live .issuer-dashboard-hero-live[data-deployed="false"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 980px) {
+  .issuer-dashboard-live .issuer-dashboard-metric-grid[data-card-count="3"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 760px) {
+  .issuer-dashboard-live .issuer-dashboard-hero-live[data-deployed="false"] {
+    min-height: 0;
+    padding: 20px;
+  }
+}
+@media (max-width: 680px) {
+  .issuer-dashboard-live .issuer-dashboard-metric-grid[data-card-count="3"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 480px) {
+  .issuer-dashboard-live .issuer-dashboard-hero-live[data-deployed="false"] {
+    padding: 18px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Intermediate desktop header: respect the expanded/collapsed sidebar.
+   At a ~1024px viewport the expanded sidebar leaves too little room for a
+   readable page title beside network, wallet and account controls.
+   Keep the page title in the page body and restore it in the header as soon
+   as the sidebar is collapsed. Mobile has its own header layout below 900px.
+   -------------------------------------------------------------------------- */
+@media (min-width: 901px) and (max-width: 1180px) {
+  .app-shell:not(.app-shell--onboarding):not(.app-shell--sidebar-collapsed) .header-page-title {
+    display: none;
+  }
+
+  .app-shell:not(.app-shell--onboarding):not(.app-shell--sidebar-collapsed) .app-header__leading {
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+
+  .app-shell:not(.app-shell--onboarding):not(.app-shell--sidebar-collapsed) .app-header__actions {
+    min-width: 0;
+    margin-left: auto;
   }
 }

@@ -1,17 +1,20 @@
+import { paymentContextOf } from '@/config/payment-tokens';
 import {
   BadgeCheck,
   CircleDollarSign,
-  FileCheck2,
+  ChevronDown,
+  ChevronUp,
+  ExternalLink,
+  X,
   Fingerprint,
   Landmark,
   PencilLine,
   TrendingDown,
   TrendingUp,
   ShieldCheck,
-  UsersRound,
-  WalletCards,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -21,8 +24,9 @@ import {
   InfoCallout,
   StatusBadge,
 } from '@/components/token-issuance/IssuancePrimitives';
-import { ArcNetworkIcon } from '@/components/common/ArcNetworkIcon';
 import { TokenIcon } from '@/components/common/TokenIcon';
+import { NetworkIcon } from '@/components/common/NetworkIcon';
+import { TokenPriceValue } from '@/components/common/TokenPriceValue';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
@@ -33,8 +37,10 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useWalletConnection } from '@/hooks/useWalletConnection';
 import { useTokenDashboardData } from '@/hooks/useTokenDashboardData';
+import { usePaymentTokenMetadata } from '@/hooks/usePaymentTokenMetadata';
 import { myTokenQueryKey } from '@/hooks/useMyToken';
-import { formatMoney, formatNumber } from '@/utils/tokenIssuance';
+import { formatNumber } from '@/utils/tokenIssuance';
+import { blockedCountriesPopoverPosition } from '@/utils/blockedCountriesPopover';
 import { getErrorMessage } from '@/utils/error';
 import { tokenPriceChange, validateCurrentTokenPrice } from '@/utils/tokenPrice';
 import { getDeploymentTransactionHash } from '@/utils/transactionHash';
@@ -53,15 +59,6 @@ import { useTokenIssuanceStore } from '@/store/tokenIssuance.store';
 
 const firstText = (...values) =>
   String(values.find((value) => value !== undefined && value !== null) || '').trim();
-
-const formatTokenPrice = (value) => {
-  const normalized = String(value ?? '').trim();
-  const match = normalized.match(/^(\d+)(?:\.(\d+))?$/);
-  if (!match) return value ? formatMoney(value, 'USDC') : '—';
-  const whole = match[1].replace(/^0+(?=\d)/, '').replace(/\B(?=(\d{3})+(?!\d))/g, ',') || '0';
-  const fraction = (match[2] || '').replace(/0+$/, '');
-  return `${whole}${fraction ? `.${fraction}` : ''} USDC`;
-};
 
 const rawAddress = (raw, ...keys) => {
   for (const key of keys) {
@@ -82,24 +79,6 @@ const mergeCurrentPriceIntoToken = (currentToken, responseToken, currentTokenPri
   },
 });
 
-function DetailMetric({ icon: Icon, label, value, helper, mono = false, titleValue }) {
-  return (
-    <article className="token-dashboard-metric">
-      <span className="token-dashboard-metric__icon"><Icon size={20} /></span>
-      <div>
-        <small>{label}</small>
-        <strong
-          className={mono ? 'token-dashboard-metric__mono' : undefined}
-          title={String(titleValue || value)}
-        >
-          {value || '—'}
-        </strong>
-        {helper ? <p>{helper}</p> : null}
-      </div>
-    </article>
-  );
-}
-
 function SettingRow({ label, value, status }) {
   return (
     <div className="token-dashboard-setting-row">
@@ -109,6 +88,194 @@ function SettingRow({ label, value, status }) {
         {status ? <StatusBadge status="valid">{status}</StatusBadge> : null}
       </div>
     </div>
+  );
+}
+
+/** Collapse lengthy issuer descriptions without losing the saved backend text. */
+function TokenDescription({ description }) {
+  const [expanded, setExpanded] = useState(false);
+  const [canExpand, setCanExpand] = useState(false);
+  const textRef = useRef(null);
+  const textId = useId();
+
+  // Check actual rendered overflow instead of a word count: the same text may
+  // fit on desktop but need a toggle on narrower screens or at larger font sizes.
+  useLayoutEffect(() => {
+    if (expanded || !textRef.current) return undefined;
+    const text = textRef.current;
+    const measure = () => {
+      const overflowing = text.scrollHeight > text.clientHeight + 1;
+      setCanExpand((previous) => previous === overflowing ? previous : overflowing);
+    };
+    measure();
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    observer?.observe(text);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [description, expanded]);
+
+  return (
+    <div className="token-dashboard-description">
+      <p
+        id={textId}
+        ref={textRef}
+        className={`token-dashboard-header__description token-dashboard-description__text${expanded ? '' : ' token-dashboard-description__text--collapsed'}`}
+      >
+        {description}
+      </p>
+      {canExpand ? (
+        <button
+          type="button"
+          className="token-dashboard-description__toggle"
+          aria-controls={textId}
+          aria-expanded={expanded}
+          onClick={() => setExpanded((value) => !value)}
+        >
+          {expanded ? 'Show less' : 'Show more'}
+          {expanded ? <ChevronUp size={15} aria-hidden="true" /> : <ChevronDown size={15} aria-hidden="true" />}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function BlockedCountriesControl({ countries }) {
+  const [open, setOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 620px), (max-height: 480px)').matches,
+  );
+  const [position, setPosition] = useState({});
+  const triggerRef = useRef(null);
+  const popoverRef = useRef(null);
+  const closeRef = useRef(null);
+  const popoverId = useId();
+  const count = countries.length;
+  const countLabel = `${count} ${count === 1 ? 'country' : 'countries'}`;
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 620px), (max-height: 480px)');
+    const onChange = (event) => setIsMobile(event.matches);
+    media.addEventListener('change', onChange);
+    return () => media.removeEventListener('change', onChange);
+  }, []);
+
+  // Measure the actual header + country rows before paint. Using a fixed
+  // 360px height for a one-country list previously placed it far above the row.
+  useLayoutEffect(() => {
+    if (!open || isMobile) return undefined;
+    const updatePosition = () => {
+      if (!triggerRef.current || !popoverRef.current) return;
+      const popover = popoverRef.current;
+      const headerHeight = popover.querySelector('.token-dashboard-country-popover__header')?.offsetHeight || 0;
+      const listHeight = popover.querySelector('.token-dashboard-country-items')?.scrollHeight || 0;
+      setPosition(blockedCountriesPopoverPosition({
+        anchor: triggerRef.current.getBoundingClientRect(),
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        contentHeight: headerHeight + listHeight + 2, // includes the popover border
+      }));
+    };
+    const closeOnOutsideClick = (event) => {
+      if (!triggerRef.current?.contains(event.target) && !popoverRef.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+    const closeOnEscape = (event) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      setOpen(false);
+      triggerRef.current?.focus();
+    };
+    updatePosition();
+    closeRef.current?.focus({ preventScroll: true });
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    window.addEventListener('scroll', updatePosition, true);
+    window.addEventListener('resize', updatePosition);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
+    };
+  }, [open, isMobile, count]);
+
+  if (!count) return <span>No blocked countries</span>;
+
+  const list = (
+    <div className="token-dashboard-country-scroll" role="region" tabIndex={0} aria-label="Blocked country list">
+      <ul className="token-dashboard-country-items">
+        {countries.map((country, index) => (
+          <li key={`${country}-${index}`}>{country}</li>
+        ))}
+      </ul>
+    </div>
+  );
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        className="token-dashboard-country-trigger"
+        aria-label={`View ${countLabel} blocked from investing`}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-controls={open && !isMobile ? popoverId : undefined}
+        onClick={() => setOpen((current) => !current)}
+      >
+        {countLabel}
+        <ChevronDown size={15} aria-hidden="true" />
+      </button>
+      {open && !isMobile ? createPortal(
+        <section
+          id={popoverId}
+          ref={popoverRef}
+          className="token-dashboard-country-popover"
+          style={position}
+          role="dialog"
+          aria-modal="false"
+          aria-label="Blocked countries"
+        >
+          <header className="token-dashboard-country-popover__header">
+            <div>
+              <strong>Blocked countries</strong>
+              <span>{countLabel}</span>
+            </div>
+            <button
+              ref={closeRef}
+              type="button"
+              className="token-dashboard-country-popover__close"
+              aria-label="Close blocked countries"
+              onClick={() => {
+                setOpen(false);
+                triggerRef.current?.focus();
+              }}
+            >
+              <X size={18} aria-hidden="true" />
+            </button>
+          </header>
+          {list}
+        </section>,
+        document.body,
+      ) : null}
+      {isMobile ? (
+        <Modal
+          open={open}
+          onClose={() => setOpen(false)}
+          title="Blocked countries"
+          className="token-dashboard-country-modal"
+          bodyClassName="token-dashboard-country-modal__body"
+          trapFocus
+        >
+          <p className="token-dashboard-country-modal__count">{countLabel}</p>
+          {list}
+        </Modal>
+      ) : null}
+    </>
   );
 }
 
@@ -164,7 +331,16 @@ export default function TokenDetailsPage() {
   const token = useTokenDashboardData();
   const queryClient = useQueryClient();
   const { organization } = useOrganization();
-  const wallet = useWalletConnection();
+  const mapped = token.mapped || {};
+  const information = mapped.tokenInformation || {};
+  const identityClaims = mapped.identityClaims || { claimTopics: [], trustedIssuer: {} };
+  const compliance = mapped.compliance || { countries: [] };
+  const agents = mapped.agents || {};
+  const raw = token.token || {};
+  const tokenChainId = Number(raw.chainId || raw.deployment?.chainId || information.chainId || 0) || undefined;
+  const tokenChain = web3Config.getChainById(tokenChainId) || web3Config.requiredChain;
+  const tokenChainRecord = web3Config.getChainRecordById(tokenChainId);
+  const wallet = useWalletConnection(tokenChainId);
   const [priceEditorOpen, setPriceEditorOpen] = useState(false);
   const [newPrice, setNewPrice] = useState('');
   const [priceError, setPriceError] = useState('');
@@ -174,12 +350,17 @@ export default function TokenDetailsPage() {
   const [onchainPaused, setOnchainPaused] = useState(null);
   const [transferStateStatus, setTransferStateStatus] = useState('loading');
   const setDeployment = useTokenIssuanceStore((state) => state.setDeployment);
-  const mapped = token.mapped || {};
-  const information = mapped.tokenInformation || {};
-  const identityClaims = mapped.identityClaims || { claimTopics: [], trustedIssuer: {} };
-  const compliance = mapped.compliance || { countries: [] };
-  const agents = mapped.agents || {};
-  const raw = token.token || {};
+  const { paymentTokenAddress, controllerAddress, paymentTokenSymbol } = paymentContextOf(raw, mapped.supplyPricing);
+  const paymentSymbol = paymentTokenSymbol || mapped.supplyPricing?.currency || 'payment token';
+  // The asset's saved payment-token contract selects the icon from this chain's
+  // backend catalogue. USDG and other custom currencies have no bundled artwork.
+  const paymentTokenMetadata = usePaymentTokenMetadata({
+    paymentTokenAddress,
+    paymentTokenSymbol: paymentSymbol,
+    chainUid: information.chainUid || raw.chainUid || token.selectedChainUid,
+    chainId: tokenChainId,
+    enabled: Boolean(token.isDeployed && paymentTokenAddress),
+  });
   const tokenName = information.name || firstText(raw.tokenName, raw.name) || 'Security Token';
   const symbol = information.symbol || firstText(raw.tokenSymbol, raw.symbol).toUpperCase() || 'TOKEN';
   const candidateTokenContractAddress = rawAddress(
@@ -203,7 +384,7 @@ export default function TokenDetailsPage() {
 
     let active = true;
     setOnchainPriceStatus('loading');
-    getPlatformTokenPrice({ tokenAddress: candidateTokenContractAddress })
+    getPlatformTokenPrice({ tokenAddress: candidateTokenContractAddress, paymentTokenAddress, controllerAddress, chainId: tokenChain.id })
       .then((result) => {
         if (!active) return;
         const price = String(result?.currentTokenPrice || '').trim();
@@ -224,7 +405,7 @@ export default function TokenDetailsPage() {
     return () => {
       active = false;
     };
-  }, [candidateTokenContractAddress]);
+  }, [candidateTokenContractAddress, paymentTokenAddress, controllerAddress, tokenChain.id]);
 
   useEffect(() => {
     if (!candidateTokenContractAddress) {
@@ -235,7 +416,7 @@ export default function TokenDetailsPage() {
 
     let active = true;
     setTransferStateStatus('loading');
-    readTrexTokenPaused({ tokenAddress: candidateTokenContractAddress })
+    readTrexTokenPaused({ tokenAddress: candidateTokenContractAddress, chainId: tokenChain.id })
       .then((paused) => {
         if (!active) return;
         setOnchainPaused(paused);
@@ -250,7 +431,7 @@ export default function TokenDetailsPage() {
     return () => {
       active = false;
     };
-  }, [candidateTokenContractAddress]);
+  }, [candidateTokenContractAddress, paymentTokenAddress, controllerAddress, tokenChain.id]);
 
   useEffect(() => {
     if (!candidateTokenContractAddress) return undefined;
@@ -265,7 +446,7 @@ export default function TokenDetailsPage() {
           ? updatedToken.token
           : updatedToken;
         queryClient.setQueryData(
-          myTokenQueryKey(token.userKey),
+          myTokenQueryKey(token.userKey, token.selectedChainUid),
           (current) => mergeCurrentPriceIntoToken(current, responseToken, pending.currentTokenPrice),
         );
         clearTokenPriceSyncRecovery(candidateTokenContractAddress);
@@ -278,7 +459,7 @@ export default function TokenDetailsPage() {
     return () => {
       active = false;
     };
-  }, [candidateTokenContractAddress, queryClient, token.userKey]);
+  }, [candidateTokenContractAddress, queryClient, token.selectedChainUid, token.userKey]);
 
   if (token.isLoading) {
     return (
@@ -316,11 +497,11 @@ export default function TokenDetailsPage() {
   }
 
   const network =
-    firstText(raw.network, raw.networkName, information.network) ||
-    web3Config.requiredChain.name;
-  const explorerBase = web3Config.requiredChain.blockExplorers?.default?.url || '';
+    firstText(raw.chainName, raw.network, raw.networkName, information.network) ||
+    tokenChain.name;
+  const explorerBase = tokenChain.blockExplorers?.default?.url || '';
   const ownerAddress = information.treasuryWallet || organization.walletAddress || '';
-  const organizationOnchainId = organization.contractAddress || '';
+  const organizationOnchainId = organization.selectedChainIdentity?.identityAddress || '';
   const tokenContractAddress = candidateTokenContractAddress;
   const identityRegistryAddress = rawAddress(
     raw,
@@ -349,15 +530,14 @@ export default function TokenDetailsPage() {
   const tokenExplorer = tokenContractAddress && explorerBase
     ? `${explorerBase}/address/${tokenContractAddress}`
     : undefined;
-  const enabledClaims = (identityClaims.claimTopics || []).filter((topic) => topic.enabled);
+  // Keep the full mapped configuration: disabling a requirement must not make its
+  // existence disappear from the issuer's review screen.
+  const claimTopics = identityClaims.claimTopics || [];
   const countryNames = (compliance.countries || [])
     .map((country) => country?.countryName || country?.label || String(country || ''))
     .filter(Boolean);
   const investorAccessConfigured = Boolean(
     organizationOnchainId && identityRegistryAddress && identityRegistryStorageAddress,
-  );
-  const managementReady = Boolean(
-    agents.identityRegistryAgent?.address && agents.tokenAgent?.address,
   );
   const setupNeedsTransferActivation = transferStateStatus === 'ready' && onchainPaused === true;
   const assetReady = token.isDeployed && !setupNeedsTransferActivation && onchainPriceStatus === 'ready';
@@ -371,6 +551,7 @@ export default function TokenDetailsPage() {
           ? 'Created'
           : 'Ready to Create';
   const initialPrice = mapped.supplyPricing?.initialPrice;
+  const hasInitialPrice = initialPrice !== undefined && initialPrice !== null && String(initialPrice).trim() !== '';
   const databaseCurrentPrice = mapped.supplyPricing?.currentPrice || initialPrice;
   const currentPrice = onchainCurrentPrice || databaseCurrentPrice;
   const priceValidationError = newPrice ? validateCurrentTokenPrice(newPrice) : '';
@@ -446,13 +627,14 @@ export default function TokenDetailsPage() {
       }
       const approvedWallet = organization.walletAddress || information.treasuryWallet;
       if (!wallet.isConnected || !wallet.connector || !wallet.address) {
-        throw new Error('Open your Privy secure account from the header before updating the current price.');
+        throw new Error('Connect your Organization Wallet from the header before updating the current price.');
       }
       if (!wallet.isCorrectNetwork) {
         await wallet.switchChain(wallet.requiredChain.id);
       }
 
       const chainResult = await setPlatformTokenPrice({
+        paymentTokenAddress, controllerAddress,
         connector: wallet.connector,
         connectedAddress: wallet.address,
         issuerWalletAddress: approvedWallet,
@@ -469,7 +651,7 @@ export default function TokenDetailsPage() {
       });
 
       queryClient.setQueryData(
-        myTokenQueryKey(token.userKey),
+        myTokenQueryKey(token.userKey, token.selectedChainUid),
         (current) => mergeCurrentPriceIntoToken(current, null, confirmedPrice),
       );
 
@@ -479,13 +661,13 @@ export default function TokenDetailsPage() {
           ? updatedToken.token
           : updatedToken;
         queryClient.setQueryData(
-          myTokenQueryKey(token.userKey),
+          myTokenQueryKey(token.userKey, token.selectedChainUid),
           (current) => mergeCurrentPriceIntoToken(current, responseToken, confirmedPrice),
         );
         clearTokenPriceSyncRecovery(tokenContractAddress);
         setPriceEditorOpen(false);
         toast.success('Current price updated', {
-          description: `${tokenName} now uses ${formatTokenPrice(confirmedPrice)} for new purchases and redemptions.`,
+          description: <span>{tokenName} now uses <TokenPriceValue value={confirmedPrice} suffix={` ${paymentSymbol}`} /> for new purchases and redemptions.</span>,
         });
       } catch (syncError) {
         setPriceEditorOpen(false);
@@ -503,7 +685,7 @@ export default function TokenDetailsPage() {
 
   return (
     <div className="token-details-page token-dashboard-page">
-      <header className="token-dashboard-header">
+      <header className="token-dashboard-header token-dashboard-header--simplified">
         <div className="token-dashboard-header__identity">
           <span className="token-dashboard-logo">
             {information.logo?.dataUrl ? (
@@ -513,7 +695,7 @@ export default function TokenDetailsPage() {
             )}
           </span>
           <div>
-            <span className="eyebrow">Investment asset</span>
+            <span className="eyebrow">Token Management</span>
             <h1>{tokenName} <span>({symbol})</span></h1>
             <div className="token-dashboard-header__status">
               <StatusBadge status={setupNeedsTransferActivation || onchainPriceStatus === 'unset' ? 'warning' : 'valid'}>{displayStatus}</StatusBadge>
@@ -522,94 +704,47 @@ export default function TokenDetailsPage() {
                   {onchainPaused ? 'Transfers paused' : 'Transfers active'}
                 </StatusBadge>
               ) : null}
-            </div>
-            <div className="token-dashboard-header__asset-context" aria-label="Settlement currency and network">
-              <span className="asset-context-badge asset-context-badge--currency">
-                <TokenIcon symbol="USDC" size="xs" />
-                <span>USDC</span>
-              </span>
-              <span className="asset-context-badge asset-context-badge--network">
-                <ArcNetworkIcon size="xs" decorative />
-                <span>Arc Testnet</span>
+              <span className="token-dashboard-header__network-chip">
+                <NetworkIcon chain={tokenChainRecord} chainId={tokenChainId} name={network} size="xs" />
+                <span>{network}</span>
               </span>
             </div>
           </div>
         </div>
         {setupNeedsTransferActivation || onchainPriceStatus === 'unset' ? (
           <div className="token-dashboard-header__actions">
-            <Button onClick={resumeIncompleteSetup}>
-              Finish Setup
-            </Button>
+            <Button onClick={resumeIncompleteSetup}>Finish Setup</Button>
           </div>
         ) : null}
-        <p className="token-dashboard-header__description">
-          {information.description ||
-            'Review the price, investor requirements, investment limits, and management access for this asset.'}
-        </p>
-        <div className="token-dashboard-header__deployment-meta token-dashboard-header__deployment-meta--business">
+        {information.description ? (
+          <TokenDescription key={information.description} description={information.description} />
+        ) : null}
+        <div className="token-dashboard-pricing">
           <div className="token-dashboard-header__price token-dashboard-header__price--editable">
             <div className="token-dashboard-header__price-label">
               <small>Current investor price</small>
               <button type="button" onClick={openPriceEditor} aria-label="Edit current investor price">
-                <PencilLine size={15} /> Edit
+                <PencilLine size={15} /> Edit Price
               </button>
             </div>
             <strong className="token-dashboard-header__price-value">
-              <TokenIcon symbol="USDC" size="xs" />
-              <span>{formatTokenPrice(currentPrice)}</span>
+              <TokenIcon
+                symbol={paymentSymbol}
+                name={paymentTokenMetadata.name || paymentSymbol}
+                imageUrl={paymentTokenMetadata.imageUrl}
+                size="sm"
+              />
+              <TokenPriceValue value={currentPrice} suffix={` ${paymentSymbol}`} />
             </strong>
-            <span>Used for new purchases. Initial price: {formatTokenPrice(initialPrice)}</span>
             {onchainPriceStatus === 'unset' ? <em className="token-dashboard-header__price-note is-warning">Price activation required before trading</em> : null}
             {onchainPriceStatus === 'unavailable' ? <em className="token-dashboard-header__price-note">Live price check unavailable</em> : null}
           </div>
-          <div className="token-dashboard-header__readiness">
-            <small>Investor access</small>
-            <strong>
-              {setupNeedsTransferActivation
-                ? 'Not available yet'
-                : onchainPriceStatus === 'unset'
-                  ? 'Purchases not ready yet'
-                  : 'Available to approved investors'}
-            </strong>
-            <span>
-              {setupNeedsTransferActivation
-                ? 'Finish setup before investors can receive or transfer this asset.'
-                : onchainPriceStatus === 'unset'
-                  ? 'Set the current investor price before investors make purchases.'
-                  : 'Investor checks and limits are applied automatically before an investment or transfer is accepted.'}
-            </span>
-          </div>
-        </div>
-        <div className="token-dashboard-header__contract-summary">
-          <div className="token-dashboard-header__contract-copy">
-            <small>Technical asset information</small>
-            <strong>Asset references are available when you need them</strong>
-            <span>Most users do not need these details for day-to-day asset management.</span>
-          </div>
-        </div>
-        <div id="asset-technical-details">
-          <HelpDetails title="View technical details" className="token-dashboard-header__technical">
-            <p><strong>Network:</strong> {network}. These details are mainly useful for technical support or independent verification.</p>
-            <AddressDisplay
-              label="Asset contract address"
-              address={tokenContractAddress}
-              emptyLabel="Contract address not available yet"
-              explorerUrl={tokenExplorer}
-              compact
-              showCopyText
-              copyLabel="Copy asset contract address"
-              className="token-dashboard-header__contract-address"
-            />
-            <AddressDisplay
-              label="Organization payment account"
-              address={ownerAddress}
-              emptyLabel="Payment account not available"
-              showFullAddress
-            />
-            {transactionExplorer ? (
-              <a href={transactionExplorer} target="_blank" rel="noreferrer">View asset creation confirmation</a>
-            ) : null}
-          </HelpDetails>
+          {hasInitialPrice ? (
+            <div className="token-dashboard-pricing__initial">
+              <small>Initial price</small>
+              <strong><TokenPriceValue value={initialPrice} suffix={` ${paymentSymbol}`} /></strong>
+            </div>
+          ) : null}
         </div>
       </header>
 
@@ -619,19 +754,7 @@ export default function TokenDetailsPage() {
         </InfoCallout>
       ) : null}
 
-      <section className="token-dashboard-metrics" aria-label="Asset summary">
-        <DetailMetric icon={FileCheck2} label="Asset name" value={tokenName} helper="Shown to investors" />
-        <DetailMetric icon={BadgeCheck} label="Asset symbol" value={symbol} helper="Short code used for the asset" />
-        <DetailMetric icon={CircleDollarSign} label="Unit precision" value={`${information.decimals || '18'} decimal places`} helper="Controls how small a fractional unit can be" />
-        <DetailMetric
-          icon={WalletCards}
-          label="Payment account"
-          value="Organization secure account"
-          helper="Receives purchase funds"
-        />
-      </section>
-
-      <div className="token-dashboard-grid">
+      <div className="token-dashboard-grid token-dashboard-grid--simplified">
         <section className="token-dashboard-card">
           <header>
             <div><Fingerprint size={20} /><h2>Investor Access</h2></div>
@@ -639,155 +762,49 @@ export default function TokenDetailsPage() {
               {investorAccessConfigured ? 'Ready' : 'Needs attention'}
             </StatusBadge>
           </header>
-          <div className="token-dashboard-card__body token-dashboard-addresses">
-            <p className="token-dashboard-card__intro">
-              Only approved investors can hold this asset. The platform checks investor approval automatically.
-            </p>
-            <div className={`token-dashboard-simple-status ${investorAccessConfigured ? '' : 'is-warning'}`}>
-              <ShieldCheck size={18} />
-              <div>
-                <strong>
-                  {investorAccessConfigured
-                    ? 'Approved-investor checks are active'
-                    : 'Investor access setup needs attention'}
-                </strong>
-                <span>
-                  {investorAccessConfigured
-                    ? 'Investors must complete your required checks before they can receive the asset.'
-                    : 'One or more technical investor-access records are missing. Open the technical setup below for details.'}
-                </span>
-              </div>
-            </div>
-            <HelpDetails title="View technical setup">
-              <AddressDisplay
-                label="Organization verification record"
-                address={organizationOnchainId}
-                emptyLabel="Verification record pending"
-                explorerUrl={
-                  organizationOnchainId && explorerBase
-                    ? `${explorerBase}/address/${organizationOnchainId}`
-                    : undefined
-                }
-                showFullAddress
-              />
-              <AddressDisplay
-                label="Approved investor list"
-                address={identityRegistryAddress}
-                emptyLabel="Investor list address not recorded"
-                explorerUrl={
-                  identityRegistryAddress && explorerBase
-                    ? `${explorerBase}/address/${identityRegistryAddress}`
-                    : undefined
-                }
-                showFullAddress
-              />
-              <AddressDisplay
-                label="Platform registry storage"
-                address={identityRegistryStorageAddress}
-                emptyLabel="Registry storage address not recorded"
-                explorerUrl={
-                  identityRegistryStorageAddress && explorerBase
-                    ? `${explorerBase}/address/${identityRegistryStorageAddress}`
-                    : undefined
-                }
-                showFullAddress
-              />
-            </HelpDetails>
-          </div>
-        </section>
-
-        <section className="token-dashboard-card">
-          <header>
-            <div><UsersRound size={20} /><h2>Who Manages This Asset</h2></div>
-            <StatusBadge status={managementReady ? 'valid' : 'warning'}>
-              {managementReady ? 'Assigned' : 'Needs attention'}
-            </StatusBadge>
-          </header>
-          <div className="token-dashboard-card__body token-dashboard-addresses">
-            <p className="token-dashboard-card__intro">
-              These approved organization accounts can manage investor access and day-to-day asset operations.
-            </p>
-            <div className="token-dashboard-management-list">
-              <article>
-                <ShieldCheck size={18} />
-                <div>
-                  <strong>Investor approvals</strong>
-                  <span>Reviews and approves who can invest in this asset.</span>
-                </div>
-                <StatusBadge status={agents.identityRegistryAgent?.address ? 'valid' : 'warning'}>
-                  {agents.identityRegistryAgent?.address ? 'Assigned' : 'Not assigned'}
-                </StatusBadge>
-              </article>
-              <article>
-                <WalletCards size={18} />
-                <div>
-                  <strong>Asset operations</strong>
-                  <span>Handles asset units and important transfer controls.</span>
-                </div>
-                <StatusBadge status={agents.tokenAgent?.address ? 'valid' : 'warning'}>
-                  {agents.tokenAgent?.address ? 'Assigned' : 'Not assigned'}
-                </StatusBadge>
-              </article>
-            </div>
-            <div className="token-dashboard-permissions">
-              <span>Approve investors</span>
-              <span>Create asset units</span>
-              <span>Remove asset units</span>
-              <span>Pause or freeze when needed</span>
-            </div>
-            <HelpDetails title="View management account addresses">
-              <AddressDisplay
-                label="Investor approval account"
-                address={agents.identityRegistryAgent?.address}
-                emptyLabel="Not assigned"
-                showFullAddress
-              />
-              <AddressDisplay
-                label="Asset operations account"
-                address={agents.tokenAgent?.address}
-                emptyLabel="Not assigned"
-                showFullAddress
-              />
-            </HelpDetails>
-          </div>
-        </section>
-
-        <section className="token-dashboard-card">
-          <header>
-            <div><Fingerprint size={20} /><h2>Investor Checks</h2></div>
-            <StatusBadge status="valid">{enabledClaims.length} required</StatusBadge>
-          </header>
           <div className="token-dashboard-card__body">
-            <p className="token-dashboard-card__intro">
-              Every investor must pass these checks before they can receive or invest in this asset.
-            </p>
-            {enabledClaims.length ? (
-              <div className="token-dashboard-claim-grid">
-                {enabledClaims.map((topic) => {
+            <div className="token-dashboard-access-summary">
+              <strong>{setupNeedsTransferActivation
+                ? 'Not available yet'
+                : onchainPriceStatus === 'unset'
+                  ? 'Purchases not ready yet'
+                  : investorAccessConfigured
+                    ? 'Approved investors only'
+                    : 'Investor access setup needs attention'}</strong>
+              <span>{setupNeedsTransferActivation
+                ? 'Complete transfer activation before investors can receive this asset.'
+                : onchainPriceStatus === 'unset'
+                  ? 'Set the current investor price before new purchases.'
+                  : investorAccessConfigured
+                    ? 'Investors must pass the selected verification checks.'
+                    : 'One or more investor-access records are missing. See Technical Details.'}</span>
+            </div>
+            {claimTopics.length ? (
+              <div className="token-dashboard-check-list" aria-label="Investor verification requirements">
+                {claimTopics.map((topic) => {
                   const claim = friendlyClaim(topic);
+                  const enabled = Boolean(topic.enabled);
+                  const available = topic.available !== false;
+                  const claimStatus = !available ? 'Unavailable' : !enabled ? 'Not required' : topic.required === false ? 'Active' : 'Required';
                   return (
-                    <article key={topic.claimTopicUid || topic.id || claim.name}>
-                      <ShieldCheck size={18} />
+                    <div className="token-dashboard-check-row" key={topic.claimTopicUid || topic.id || claim.name}>
                       <div>
-                        <strong>{claim.name}</strong>
-                        <p>{claim.description}</p>
+                        <ShieldCheck size={17} aria-hidden="true" />
+                        <span className="token-dashboard-check-name" title={claim.description}>
+                          <span>{claim.name}</span>
+                          {claim.name !== 'Identity verification' && claim.name !== 'Investor eligibility check' ? (
+                            <small>{claim.description}</small>
+                          ) : null}
+                        </span>
                       </div>
-                    </article>
+                      <StatusBadge status={enabled && available ? 'valid' : 'pending'}>{claimStatus}</StatusBadge>
+                    </div>
                   );
                 })}
               </div>
             ) : (
               <p className="token-dashboard-empty">No investor checks are configured for this asset.</p>
             )}
-            <HelpDetails title="View verification provider">
-              <p>The verification provider is the approved account responsible for confirming investor checks.</p>
-              <AddressDisplay
-                label="Verification provider account"
-                address={identityClaims.trustedIssuer?.address || ownerAddress}
-                emptyLabel="Not configured"
-                showFullAddress
-              />
-            </HelpDetails>
           </div>
         </section>
 
@@ -797,38 +814,125 @@ export default function TokenDetailsPage() {
             <StatusBadge status="valid">Active</StatusBadge>
           </header>
           <div className="token-dashboard-card__body token-dashboard-settings">
-            <p className="token-dashboard-card__intro token-dashboard-card__intro--settings">
-              These limits are checked automatically before an investor receives asset units.
-            </p>
             <SettingRow
-              label="Maximum number of investors"
-              value={
-                compliance.maximumInvestors
-                  ? formatNumber(compliance.maximumInvestors)
-                  : 'Unlimited'
-              }
+              label="Maximum investors"
+              value={compliance.maximumInvestors ? formatNumber(compliance.maximumInvestors) : 'Unlimited'}
             />
             <SettingRow
-              label="Maximum amount per investor"
-              value={
-                compliance.maximumBalance
-                  ? formatNumber(compliance.maximumBalance)
-                  : 'Unlimited'
-              }
+              label="Maximum units per investor"
+              value={compliance.maximumBalance ? formatNumber(compliance.maximumBalance) : 'Unlimited'}
             />
             <SettingRow
               label="Blocked countries"
-              value={countryNames.length ? `${countryNames.length} blocked` : 'None'}
+              value={<BlockedCountriesControl countries={countryNames} />}
             />
-            {countryNames.length ? (
-              <div className="token-dashboard-country-list" aria-label="Blocked countries">
-                {countryNames.map((country) => <span key={country}>{country}</span>)}
-              </div>
-            ) : null}
           </div>
         </section>
       </div>
 
+      <section id="asset-technical-details" className="token-dashboard-technical-section" aria-label="Technical Details">
+        <HelpDetails title="Technical Details" className="token-dashboard-technical">
+          <div className="token-dashboard-technical__group">
+            <h3>Asset Information</h3>
+            <SettingRow label="Network" value={network} />
+            <SettingRow label="Unit precision" value={`${information.decimals ?? 18} decimal places`} />
+            <AddressDisplay
+              label="Asset contract address"
+              address={tokenContractAddress}
+              emptyLabel="Contract address not available yet"
+              explorerUrl={tokenExplorer}
+              compact
+              showCopyText
+              copyLabel="Copy asset contract address"
+            />
+            <AddressDisplay
+              label="Organization payment account"
+              address={ownerAddress}
+              emptyLabel="Payment account not available"
+              showFullAddress
+            />
+            {transactionExplorer ? (
+              <a className="token-dashboard-technical__transaction" href={transactionExplorer} target="_blank" rel="noopener noreferrer">
+                <span>View asset creation confirmation</span>
+                <ExternalLink size={15} aria-hidden="true" />
+              </a>
+            ) : (
+              <SettingRow label="Asset creation transaction" value="Not available" />
+            )}
+          </div>
+
+          <div className="token-dashboard-technical__group">
+            <h3>Investor Verification</h3>
+            <AddressDisplay
+              label="Organization verification record"
+              address={organizationOnchainId}
+              emptyLabel="Verification record pending"
+              explorerUrl={organizationOnchainId && explorerBase ? `${explorerBase}/address/${organizationOnchainId}` : undefined}
+              showFullAddress
+            />
+            <AddressDisplay
+              label="Approved investor list"
+              address={identityRegistryAddress}
+              emptyLabel="Investor list address not recorded"
+              explorerUrl={identityRegistryAddress && explorerBase ? `${explorerBase}/address/${identityRegistryAddress}` : undefined}
+              showFullAddress
+            />
+            <AddressDisplay
+              label="Platform registry storage"
+              address={identityRegistryStorageAddress}
+              emptyLabel="Registry storage address not recorded"
+              explorerUrl={identityRegistryStorageAddress && explorerBase ? `${explorerBase}/address/${identityRegistryStorageAddress}` : undefined}
+              showFullAddress
+            />
+            <AddressDisplay
+              label="Verification provider account"
+              address={identityClaims.trustedIssuer?.address || ownerAddress}
+              emptyLabel="Not configured"
+              showFullAddress
+            />
+          </div>
+
+          <div className="token-dashboard-technical__group">
+            <h3>Management Accounts</h3>
+            <div className="token-dashboard-role-grid">
+              <article className="token-dashboard-role">
+                <div className="token-dashboard-role__heading">
+                  <div>
+                    <strong>Investor Approvals</strong>
+                    <p>Reviews and approves who can invest in this asset.</p>
+                  </div>
+                  <StatusBadge status={agents.identityRegistryAgent?.address ? 'valid' : 'warning'}>
+                    {agents.identityRegistryAgent?.address ? 'Assigned' : 'Not assigned'}
+                  </StatusBadge>
+                </div>
+                <AddressDisplay
+                  label="Investor approval account"
+                  address={agents.identityRegistryAgent?.address}
+                  emptyLabel="Not assigned"
+                  showFullAddress
+                />
+              </article>
+              <article className="token-dashboard-role">
+                <div className="token-dashboard-role__heading">
+                  <div>
+                    <strong>Asset Operations</strong>
+                    <p>Handles asset units and important transfer controls.</p>
+                  </div>
+                  <StatusBadge status={agents.tokenAgent?.address ? 'valid' : 'warning'}>
+                    {agents.tokenAgent?.address ? 'Assigned' : 'Not assigned'}
+                  </StatusBadge>
+                </div>
+                <AddressDisplay
+                  label="Asset operations account"
+                  address={agents.tokenAgent?.address}
+                  emptyLabel="Not assigned"
+                  showFullAddress
+                />
+              </article>
+            </div>
+          </div>
+        </HelpDetails>
+      </section>
 
       <Modal
         open={priceEditorOpen}
@@ -850,11 +954,11 @@ export default function TokenDetailsPage() {
         )}
       >
         <div className="token-price-editor__intro">
-          <p>Set the price investors will use for new purchases and redemptions. Confirm the change securely with Privy. The starting price will not be changed.</p>
+          <p>Set the price investors will use for new purchases and redemptions. Your approved organization wallet will ask you to confirm the change. The starting price will not be changed.</p>
         </div>
         <div className="token-price-editor__snapshot" aria-label="Token price comparison">
-          <div><span>Starting price</span><strong>{formatTokenPrice(initialPrice)}</strong><small>Original price</small></div>
-          <div><span>Current investor price</span><strong>{formatTokenPrice(currentPrice)}</strong><small>Price used now</small></div>
+          <div><span>Starting price</span><strong><TokenPriceValue value={initialPrice} suffix={` ${paymentSymbol}`} /></strong><small>Original price</small></div>
+          <div><span>Current investor price</span><strong><TokenPriceValue value={currentPrice} suffix={` ${paymentSymbol}`} /></strong><small>Price used now</small></div>
         </div>
         <Input
           id="new-current-token-price"
@@ -870,9 +974,9 @@ export default function TokenDetailsPage() {
           inputMode="decimal"
           autoComplete="off"
           placeholder="Enter new price"
-          trailing={<span className="token-price-editor__currency">USDC</span>}
+          trailing={<span className="token-price-editor__currency">{paymentSymbol}</span>}
           error={priceError || priceValidationError}
-          hint="Enter the USDC price for one asset unit. Example: 704 or 704.50."
+          hint={`Enter the price in ${paymentSymbol}. The payment token cannot be changed.`}
           disabled={updatingPrice}
           required
         />
@@ -887,7 +991,10 @@ export default function TokenDetailsPage() {
                 ? 'Enter a new price to preview the change'
                 : priceChange.direction === 'unchanged'
                   ? 'No change'
-                  : `${priceChange.direction === 'increase' ? '+' : '−'}${formatTokenPrice(priceChange.amountExact)}`}
+                  : <>
+                    {priceChange.direction === 'increase' ? '+' : '−'}
+                    <TokenPriceValue value={priceChange.amountExact} suffix={` ${paymentSymbol}`} />
+                  </>}
             </strong>
             <small>
               {!priceChange

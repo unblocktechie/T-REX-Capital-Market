@@ -1,9 +1,9 @@
 /**
  * Legacy issuer-payment entry point retained as a defensive compatibility
  * guard. Redemption settlement must never be sent with an issuer-signed ERC-20
- * transfer. The issuer only grants USDC allowance to the Platform Controller;
+ * transfer. The issuer only grants USDT allowance to the Platform Controller;
  * the issuer executes controller.redeem(investor, token, tokenAmount), which
- * burns the investor's tokens and transfers USDC from the issuer to that same
+ * burns the investor's tokens and transfers USDT from the issuer to that same
  * investor atomically. No standalone ERC-20 payment transaction is permitted.
  *
  * Current issuer UI uses approvePlatformRedemptionFunding() and
@@ -18,7 +18,7 @@ export const isIssuerRedemptionWalletRejection = (error) => {
 
 export async function submitIssuerRedemptionPayment() {
   const error = new Error(
-    'This payment method is not available. Complete the redemption from the organization’s Privy secure account in T-REX.',
+    'Direct ERC-20 redemption payments are disabled. Execute the final redemption through the Platform Controller from the issuer organization wallet.',
   );
   error.code = 'ISSUER_DIRECT_REDEMPTION_PAYMENT_DISABLED';
   throw error;

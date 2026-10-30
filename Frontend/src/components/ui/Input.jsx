@@ -10,7 +10,7 @@ export const Input = forwardRef(function Input(
   const describedBy = error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined;
 
   return (
-    <div className={cn('grid min-w-0 max-w-full gap-1.5', className)}>
+    <div className={cn('app-form-field grid min-w-0 max-w-full content-start self-start gap-1.5', className)}>
       {label ? (
         <label className="text-[13px] font-bold text-[var(--text)]" htmlFor={inputId}>
           {label}
@@ -19,7 +19,7 @@ export const Input = forwardRef(function Input(
       ) : null}
       <div
         className={cn(
-          'flex min-h-[47px] min-w-0 items-center gap-2.5 rounded-xl border bg-[var(--surface)] px-3 transition-[border-color,box-shadow,background] duration-200 focus-within:border-[var(--primary-500)] focus-within:shadow-[0_0_0_4px_rgba(22,119,210,0.13)]',
+          'app-form-control flex min-h-[47px] min-w-0 items-center gap-2.5 rounded-xl border bg-[var(--surface)] px-3 transition-[border-color,box-shadow,background] duration-200 focus-within:border-[var(--primary-500)] focus-within:shadow-[0_0_0_4px_rgba(22,119,210,0.13)]',
           error ? 'border-[var(--danger-500)]' : 'border-[var(--border)]',
         )}
       >

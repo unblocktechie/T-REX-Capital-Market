@@ -1,9 +1,48 @@
+import { parseExactUnits } from '@/utils/paymentAmounts';
+import { multiplyDecimalStrings } from '@/utils/currency';
 import { isAddress } from 'viem';
 import { TOKEN_CREATION_AGENT_ROLES } from '@/config/tokenIssuance';
 import { getTokenLogoValidationError } from '@/utils/tokenLogo';
 
 const positiveNumber = (value) => Number(value) > 0;
+const positiveExactDecimal = (value) => {
+  const normalized = String(value ?? '').trim();
+  return /^\d+(?:\.\d+)?$/.test(normalized) && /[1-9]/.test(normalized);
+};
 const optionalPositiveNumber = (value) => value === '' || Number(value) >= 0;
+
+export const DEFAULT_PAYMENT_TOKEN_DECIMALS = 6;
+
+export const normalizePaymentTokenDecimals = (value, fallback = DEFAULT_PAYMENT_TOKEN_DECIMALS) => {
+  const numeric = Number(value);
+  if (value !== '' && value !== null && value !== undefined
+    && Number.isInteger(numeric) && numeric >= 0 && numeric <= 36) {
+    return numeric;
+  }
+  return fallback;
+};
+
+export const decimalStepFor = (decimals) => {
+  const precision = normalizePaymentTokenDecimals(decimals);
+  return precision === 0 ? '1' : `0.${'0'.repeat(precision - 1)}1`;
+};
+
+// Keep the controlled price input in ordinary decimal notation and reject a change
+// as soon as it would exceed the selected payment token's on-chain precision.
+// This covers keyboard entry and pasted values without rounding user input.
+export const isDecimalInputWithinPrecision = (value, decimals) => {
+  const input = String(value ?? '');
+  if (input === '') return true;
+  if (!/^\d*(?:\.\d*)?$/.test(input)) return false;
+  const fraction = input.split('.')[1] || '';
+  return fraction.length <= normalizePaymentTokenDecimals(decimals);
+};
+
+const decimalPrecisionMessage = (decimals, subject = 'price') => {
+  const precision = normalizePaymentTokenDecimals(decimals);
+  if (precision === 0) return `Enter a positive ${subject} using whole numbers only.`;
+  return `Enter a positive ${subject} with at most ${precision} decimal place${precision === 1 ? '' : 's'}.`;
+};
 
 export const formatNumber = (value, options = {}) => {
   const numeric = Number(value);
@@ -28,18 +67,18 @@ export const formatMoney = (value, currency = 'USD') => {
   }
 };
 
-export const getImpliedValuation = (supply, price) => {
-  const totalSupply = Number(supply);
-  const initialPrice = Number(price);
-  if (!Number.isFinite(totalSupply) || !Number.isFinite(initialPrice)) return null;
-  return totalSupply * initialPrice;
-};
+export const getImpliedValuation = (supply, price) =>
+  multiplyDecimalStrings(supply, price) || null;
 
 export const validateTokenInformation = (data, supplyPricing = {}, options = {}) => {
   const errors = {};
   const tokenName = String(data.name || '').trim();
-  const logoError = getTokenLogoValidationError(data.logo);
+  const hasPersistedLogo = Boolean(options.imageAvailable || options.hasPersistedLogo);
+  const logoError = hasPersistedLogo ? '' : getTokenLogoValidationError(data.logo);
 
+  // A previously saved token image is authoritative even when the browser cannot restore the
+  // image blob (for example after a refresh, signed URL expiry, or an image endpoint hiccup).
+  // Requiring data.logo in that case creates a false review blocker for otherwise complete drafts.
   if (logoError) errors.logo = logoError;
 
   if (!tokenName) {
@@ -61,7 +100,14 @@ export const validateTokenInformation = (data, supplyPricing = {}, options = {})
     errors.decimals = 'Select one of the supported decimal values: 2, 6, 8, or 18.';
   }
 
-  if (!positiveNumber(supplyPricing.initialPrice)) {
+  if (!supplyPricing.paymentTokenAddress) errors.paymentTokenAddress = 'Select a payment token.';
+  const paymentTokenDecimals = normalizePaymentTokenDecimals(
+    options.paymentTokenDecimals ?? supplyPricing.paymentTokenDecimals,
+  );
+  try { parseExactUnits(supplyPricing.initialPrice, paymentTokenDecimals); } catch {
+    errors.initialPrice = decimalPrecisionMessage(paymentTokenDecimals);
+  }
+  if (!positiveExactDecimal(supplyPricing.initialPrice)) {
     errors.initialPrice = 'Enter a starting price greater than zero.';
   }
   if (!data.treasuryWallet.trim()) errors.treasuryWallet = 'An approved organization account is required.';
@@ -79,12 +125,19 @@ export const validateTokenInformation = (data, supplyPricing = {}, options = {})
 
 // Retained for compatibility with the previously separated Supply & Pricing page. The active
 // simplified wizard validates only the initial price exposed on Token Information.
-export const validateSupplyPricing = (data) => {
+export const validateSupplyPricing = (data, options = {}) => {
   const errors = {};
+  const paymentTokenDecimals = normalizePaymentTokenDecimals(
+    options.paymentTokenDecimals ?? data.paymentTokenDecimals,
+  );
   if (!positiveNumber(data.totalSupply)) {
     errors.totalSupply = 'Total supply must be greater than zero.';
   }
-  if (!positiveNumber(data.initialPrice)) {
+  try { parseExactUnits(data.initialPrice, paymentTokenDecimals); } catch {
+    errors.initialPrice = decimalPrecisionMessage(paymentTokenDecimals);
+  }
+  if (!data.paymentTokenAddress) errors.currency = 'Select a payment token.';
+  if (!positiveExactDecimal(data.initialPrice)) {
     errors.initialPrice = 'Initial price must be greater than zero.';
   }
   if (!data.currency) errors.currency = 'Select a price currency.';
@@ -165,14 +218,14 @@ export const validateAgents = (agents, expectedWallet = '') => {
   TOKEN_CREATION_AGENT_ROLES.forEach((role) => {
     const agent = agents[role.key];
     if (!agent?.address?.trim()) {
-      errors[role.key] = `${role.name} account is required.`;
+      errors[role.key] = `${role.name} wallet is required.`;
     } else if (!isAddress(agent.address.trim())) {
-      errors[role.key] = 'Enter a valid account address.';
+      errors[role.key] = 'Enter a valid wallet address.';
     } else if (
       expectedWallet &&
       agent.address.trim().toLowerCase() !== expectedWallet.trim().toLowerCase()
     ) {
-      errors[role.key] = 'This role must use the approved organization secure account.';
+      errors[role.key] = 'This role must use the approved organization wallet.';
     }
   });
   return errors;
@@ -195,16 +248,24 @@ export const validateStep = (stepKey, state) => {
   }
 };
 
-export const buildReviewChecklist = (state, wallet, expectedWallet = '') => {
-  const tokenValid =
-    Object.keys(
-      validateTokenInformation(state.tokenInformation, state.supplyPricing, {
-        requiredTreasuryWallet: expectedWallet,
-      }),
-    ).length === 0;
-  const claimsValid = Object.keys(validateIdentityClaims(state.identityClaims)).length === 0;
-  const complianceValid = Object.keys(validateCompliance(state.compliance)).length === 0;
-  const agentsValid = Object.keys(validateAgents(state.agents, expectedWallet)).length === 0;
+export const buildReviewChecklist = (state, wallet, expectedWallet = '', options = {}) => {
+  const tokenErrors = validateTokenInformation(state.tokenInformation, state.supplyPricing, {
+    requiredTreasuryWallet: expectedWallet,
+    imageAvailable: options.imageAvailable,
+  });
+  const claimErrors = validateIdentityClaims(state.identityClaims);
+  const complianceErrors = validateCompliance(state.compliance);
+  // Before Management is saved, keep the strict organization-wallet check. Once the
+  // backend has advanced the draft to Review, persisted management-role addresses are
+  // authoritative and must not turn the completed step back into Action Needed after refresh.
+  const agentErrors = validateAgents(
+    state.agents,
+    options.managementStepCompleted ? '' : expectedWallet,
+  );
+  const tokenValid = Object.keys(tokenErrors).length === 0;
+  const claimsValid = Object.keys(claimErrors).length === 0;
+  const complianceValid = Object.keys(complianceErrors).length === 0;
+  const agentsValid = Object.keys(agentErrors).length === 0;
   const walletAuthorized = Boolean(
     wallet.isConnected &&
       expectedWallet &&
@@ -216,36 +277,55 @@ export const buildReviewChecklist = (state, wallet, expectedWallet = '') => {
       id: 'token-metadata',
       label: 'Asset details complete',
       status: tokenValid ? 'valid' : 'error',
+      reason: Object.values(tokenErrors)[0] || '',
+      stepKey: 'token-information',
     },
     {
       id: 'identity-claims',
       label: 'Investor checks complete',
       status: claimsValid ? 'valid' : 'error',
+      reason: Object.values(claimErrors)[0] || '',
+      stepKey: 'identity-claims',
     },
     {
       id: 'compliance-parameters',
       label: 'Investment rules complete',
       status: complianceValid ? 'valid' : 'error',
+      reason: Object.values(complianceErrors)[0] || '',
+      stepKey: 'compliance',
     },
     {
       id: 'agent-wallets',
       label: 'Management roles assigned',
       status: agentsValid ? 'valid' : 'error',
+      reason: Object.values(agentErrors)[0] || '',
+      stepKey: 'agents',
     },
     {
       id: 'wallet',
       label: 'Organization account connected',
       status: wallet.isConnected ? 'valid' : 'error',
+      reason: wallet.isConnected ? '' : 'Connect the approved organization account.',
     },
     {
       id: 'authorized-wallet',
       label: 'Correct organization account connected',
       status: !wallet.isConnected ? 'pending' : walletAuthorized ? 'valid' : 'error',
+      reason: !wallet.isConnected
+        ? 'Connect the approved organization account.'
+        : walletAuthorized
+          ? ''
+          : 'The connected account does not match the approved organization account.',
     },
     {
       id: 'network',
-      label: 'Secure account setup ready',
+      label: 'Required network connected',
       status: !wallet.isConnected ? 'pending' : wallet.isCorrectNetwork ? 'valid' : 'error',
+      reason: !wallet.isConnected
+        ? 'Connect the approved organization account first.'
+        : wallet.isCorrectNetwork
+          ? ''
+          : 'Switch the wallet to the required network.',
     },
     {
       id: 'contract-configuration',
@@ -254,6 +334,17 @@ export const buildReviewChecklist = (state, wallet, expectedWallet = '') => {
         tokenValid && claimsValid && complianceValid && agentsValid && walletAuthorized
           ? 'valid'
           : 'pending',
+      reason: !tokenValid
+        ? 'Asset details still need review.'
+        : !claimsValid
+          ? 'Investor checks still need review.'
+          : !complianceValid
+            ? 'Investment rules still need review.'
+            : !agentsValid
+              ? 'Management roles still need review.'
+              : !walletAuthorized
+                ? 'Connect the approved organization account.'
+                : '',
     },
   ];
 };

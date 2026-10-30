@@ -1,3 +1,4 @@
+import { paymentContextOf } from '@/config/payment-tokens';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Banknote,
@@ -18,8 +19,8 @@ import { formatUnits, parseUnits } from 'viem';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { investmentApi } from '@/api/investments';
-import { CurrencyAmount } from '@/components/common/CurrencyAmount';
-import { env } from '@/config/env';
+import { PaymentCurrencyAmount } from '@/components/common/PaymentCurrencyAmount';
+import { TokenPriceValue } from '@/components/common/TokenPriceValue';
 import {
   InvestorTokenActionHeader,
   InvestorTokenIdentityCard,
@@ -47,9 +48,10 @@ import {
 } from '@/services/investor/observedWalletTransactionStore';
 import { quotePlatformPurchase } from '@/services/blockchain/trexPlatformController.service';
 import {
-  approveInvestorUsdtSpending,
+  addInvestorPurchaseTokenToWallet,
+  approveInvestorPaymentSpending,
   getInvestorPurchaseTokenBalance,
-  getInvestorUsdtSpendingApproval,
+  getInvestorPaymentSpendingApproval,
   isInvestorPurchaseWalletRejection,
   submitInvestorPurchasePayment,
 } from '@/services/investor/investorTokenPurchaseTransaction.service';
@@ -58,9 +60,9 @@ import { getWalletErrorMessage } from '@/utils/wallet';
 import { getWalletFundingIssue } from '@/utils/walletFunding';
 import { getInvestmentActionContext } from '@/utils/investmentPurchase';
 import { getInvestmentJourney } from '@/utils/investmentJourney';
+import { formatDecimalForDisplay, multiplyDecimalStrings } from '@/utils/currency';
 import { resolveCurrentTokenPriceExact } from '@/utils/tokenPrice';
 
-const money = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
 
 const PURCHASE_STATUS = Object.freeze({
   PENDING_PAYMENT: 'PENDING_PAYMENT',
@@ -189,7 +191,7 @@ const canonicalTransactionAsPurchase = (row = {}) => {
     paymentTxHash: txHash,
     txHash,
     tokenAmount: clean(row?.tokenAmountFormatted || row?.tokenAmount || row?.amountFormatted),
-    usdtAmount: clean(row?.usdtAmountFormatted || row?.usdtAmount || row?.paymentAmountFormatted),
+    usdtAmount: clean(row?.paymentAmountFormatted || row?.paymentAmount || row?.usdtAmountFormatted || row?.usdtAmount),
     tokenPriceSnapshot: clean(row?.priceFormatted || row?.tokenPriceFormatted || row?.price),
     createdAt: row?.blockTimestamp || row?.createdAt || row?.timestamp,
     chainId: row?.chainId,
@@ -210,13 +212,13 @@ const purchaseHistoryStatusMeta = (status, canonicalStatus = '') => {
       return {
         label: 'Payment Received',
         tone: 'confirmed',
-        tooltip: 'Your USDC payment was received successfully. Your investment record is being updated.',
+        tooltip: 'Your payment token payment was received successfully. Your investment record is being updated.',
       };
     case PURCHASE_STATUS.MINT_SUBMITTED:
       return {
         label: 'Tokens Issued',
         tone: 'minting',
-        tooltip: 'Your investment units have been issued to your Privy secure account. Your balance will update shortly.',
+        tooltip: 'Your tokens have been issued to your wallet. You can check your wallet to see your token balance.',
       };
     case PURCHASE_STATUS.COMPLETED:
       return {
@@ -269,11 +271,12 @@ const historyHasActiveRows = (rows) => (
 export default function PurchaseTokenPage({
   interestUid: interestUidOverride,
   embedded = false,
+  initialApplication = null,
 }) {
   const { interestUid: routeInterestUid } = useParams();
   const interestUid = interestUidOverride || routeInterestUid;
   const navigate = useNavigate();
-  const { application, token, loading, error, ready } = useRegisteredInvestmentAction(interestUid);
+  const { application, token, loading, error, ready } = useRegisteredInvestmentAction(interestUid, { initialApplication });
   const [tokenAmountInput, setTokenAmountInput] = useState('');
   const [purchase, setPurchase] = useState(null);
   const [broadcastTxHash, setBroadcastTxHash] = useState('');
@@ -283,11 +286,16 @@ export default function PurchaseTokenPage({
   const [busyAction, setBusyAction] = useState('');
   const [, setPollingTimedOut] = useState(false);
   const [verificationBlocked, setVerificationBlocked] = useState(false);
+  const [wasFirstTokenPurchase, setWasFirstTokenPurchase] = useState(false);
+  const [addingWalletToken, setAddingWalletToken] = useState(false);
+  const [walletTokenAdded, setWalletTokenAdded] = useState(false);
   const [tokenWalletBalanceRaw, setTokenWalletBalanceRaw] = useState(null);
   const [tokenWalletBalanceLoading, setTokenWalletBalanceLoading] = useState(false);
-  const [usdtSpendingApproved, setUsdtSpendingApproved] = useState(false);
-  const [usdtApprovalLoading, setUsdtApprovalLoading] = useState(true);
-  const [usdtApprovalError, setUsdtApprovalError] = useState('');
+  const [paymentSpendingApproved, setPaymentSpendingApproved] = useState(false);
+  const [paymentAllowanceRaw, setPaymentAllowanceRaw] = useState(null);
+  const [paymentPersistentApprovalActive, setPaymentPersistentApprovalActive] = useState(false);
+  const [paymentApprovalLoading, setPaymentApprovalLoading] = useState(true);
+  const [paymentApprovalError, setPaymentApprovalError] = useState('');
   const [purchaseHistory, setPurchaseHistory] = useState([]);
   const [purchaseHistoryMeta, setPurchaseHistoryMeta] = useState({});
   const [purchaseHistoryPage, setPurchaseHistoryPage] = useState(1);
@@ -304,15 +312,17 @@ export default function PurchaseTokenPage({
   const [walletFundingIssue, setWalletFundingIssue] = useState(null);
   const operationLockRef = useRef(false);
   const completedToastRef = useRef('');
+  const walletTokenAutoPromptRef = useRef(false);
   const purchaseHistoryRequestRef = useRef({ controller: null, inFlight: false });
   const purchaseHistoryLoadedVersionRef = useRef(0);
-  const usdtApprovalRequestRef = useRef(0);
+  const paymentApprovalRequestRef = useRef(0);
 
   useDocumentTitle(
     embedded ? 'Manage Investments' : token ? `${token.name} · Purchase Token` : 'Purchase Token',
   );
 
   const applicationRoute = ROUTES.applicationDetail(interestUid);
+  const paymentContext = useMemo(() => paymentContextOf(token, application), [token, application]);
   const context = useMemo(() => getInvestmentActionContext(token || application), [application, token]);
   const historyTokenUid = clean(token?.id || token?.tokenUid);
   useEffect(() => {
@@ -382,16 +392,29 @@ export default function PurchaseTokenPage({
   const tokenPriceExact = activePurchasePrice
     || clean(platformQuote?.priceFormatted)
     || resolveCurrentTokenPriceExact(token || {});
-  const tokenPrice = Number(tokenPriceExact);
-  const preparedPayment = Number(clean(purchase?.usdtAmount || purchase?.paymentAmount || purchase?.totalUsdtAmount));
-  const quotedPayment = Number(clean(platformQuote?.paymentAmountFormatted));
-  const estimatedPayment = Number.isFinite(preparedPayment) && preparedPayment > 0
-    ? preparedPayment
-    : Number.isFinite(quotedPayment) && quotedPayment > 0
-      ? quotedPayment
-      : Number.isFinite(tokenPrice) && tokenPrice > 0 && Number(normalizedTokenAmount) > 0
-        ? Number(normalizedTokenAmount) * tokenPrice
-        : 0;
+  const preparedPaymentExact = canonicalDecimal(
+    clean(purchase?.paymentAmountFormatted || purchase?.usdtAmount || purchase?.paymentAmount),
+  );
+  const quotedPaymentExact = canonicalDecimal(clean(platformQuote?.paymentAmountFormatted));
+  const estimatedPaymentExact = isPositiveDecimal(preparedPaymentExact)
+    ? preparedPaymentExact
+    : isPositiveDecimal(quotedPaymentExact)
+      ? quotedPaymentExact
+      : isPositiveDecimal(normalizedTokenAmount) && isPositiveDecimal(canonicalDecimal(tokenPriceExact))
+        ? multiplyDecimalStrings(normalizedTokenAmount, tokenPriceExact)
+        : '';
+  const estimatedPaymentDisplay = formatDecimalForDisplay(estimatedPaymentExact);
+  const settlementSymbol = String(
+    platformQuote?.paymentTokenSymbol || paymentContext.paymentTokenSymbol || token?.currency || '',
+  ).trim().toUpperCase();
+  const settlementPaymentTokenAddress = clean(
+    platformQuote?.paymentToken
+    || platformQuote?.paymentTokenAddress
+    || purchase?.paymentTokenAddress
+    || paymentContext.paymentTokenAddress,
+  );
+  const settlementChainId = preparedChainId || context.chainId || token?.chainId || application?.chainId;
+  const settlementChainUid = token?.chainUid || application?.chainUid || '';
 
   const resolveWalletFundingIssue = useCallback((walletError) => getWalletFundingIssue(walletError, {
     walletAddress: walletGuard.wallet.address || preparedInvestorWallet,
@@ -414,8 +437,9 @@ export default function PurchaseTokenPage({
     walletGuard.wallet.requiredChain?.nativeCurrency?.symbol,
   ]);
   const requiredPaymentAmountRaw = clean(
-    purchase?.usdtAmountRaw
+    platformQuote?.paymentAmount?.toString?.()
     || purchase?.paymentAmountRaw
+    || purchase?.usdtAmountRaw
     || purchase?.totalUsdtAmountRaw
     || platformQuote?.paymentAmount?.toString?.(),
   );
@@ -462,47 +486,69 @@ export default function PurchaseTokenPage({
     void refreshTokenWalletBalance();
   }, [refreshTokenWalletBalance, purchase?.status, purchase?.mint?.txHash]);
 
-  const refreshUsdtSpendingApproval = useCallback(async ({ silent = false } = {}) => {
+  const refreshPaymentSpendingApproval = useCallback(async ({ silent = false } = {}) => {
     const investorWalletAddress = clean(preparedInvestorWallet);
     const chainId = preparedChainId || walletGuard.targetChainId;
-    const requestId = usdtApprovalRequestRef.current + 1;
-    usdtApprovalRequestRef.current = requestId;
+    const requestId = paymentApprovalRequestRef.current + 1;
+    paymentApprovalRequestRef.current = requestId;
 
     if (!investorWalletAddress || !chainId) {
-      setUsdtSpendingApproved(false);
-      setUsdtApprovalLoading(false);
-      setUsdtApprovalError('Your USDC payment permission cannot be checked until your Privy secure account is ready.');
+      setPaymentSpendingApproved(false);
+      setPaymentAllowanceRaw(null);
+      setPaymentPersistentApprovalActive(false);
+      setPaymentApprovalLoading(false);
+      setPaymentApprovalError('payment token spending approval cannot be checked until your verified wallet and network are available.');
       return false;
     }
 
-    if (!silent) setUsdtApprovalLoading(true);
-    setUsdtApprovalError('');
+    if (!silent) {
+      setPaymentApprovalLoading(true);
+      setPaymentAllowanceRaw(null);
+      setPaymentPersistentApprovalActive(false);
+      setPaymentSpendingApproved(false);
+    }
+    setPaymentApprovalError('');
     try {
-      const approval = await getInvestorUsdtSpendingApproval({
+      // Read the allowance once for this wallet/network. Amount changes below
+      // compare against this allowance locally, so typing no longer triggers a
+      // fresh RPC approval check after every quote.
+      const approval = await getInvestorPaymentSpendingApproval({
+        ...paymentContext,
         investorWalletAddress,
         chainId,
-        // If the purchase amount is known, any existing allowance that covers
-        // this exact purchase is sufficient. We only ask for a new approval
-        // when the current allowance is actually too small.
-        requiredPaymentAmountRaw: requiredPaymentAmountRaw || undefined,
       });
-      if (usdtApprovalRequestRef.current !== requestId) return Boolean(approval?.spendingApproved);
+      if (paymentApprovalRequestRef.current !== requestId) return Boolean(approval?.spendingApproved);
       const approved = Boolean(approval?.spendingApproved);
-      setUsdtSpendingApproved(approved);
+      setPaymentAllowanceRaw(typeof approval?.allowance === 'bigint' ? approval.allowance : null);
+      setPaymentPersistentApprovalActive(Boolean(approval?.persistentApprovalActive));
+      setPaymentSpendingApproved(approved);
       return approved;
     } catch (approvalError) {
-      if (usdtApprovalRequestRef.current !== requestId) return false;
-      setUsdtSpendingApproved(false);
-      setUsdtApprovalError(getErrorMessage(approvalError, 'We could not check your USDC payment permission. Please try again.'));
+      if (paymentApprovalRequestRef.current !== requestId) return false;
+      setPaymentSpendingApproved(false);
+      setPaymentAllowanceRaw(null);
+      setPaymentPersistentApprovalActive(false);
+      setPaymentApprovalError(getErrorMessage(approvalError, 'We could not check your payment permission. Please try again.'));
       return false;
     } finally {
-      if (usdtApprovalRequestRef.current === requestId) setUsdtApprovalLoading(false);
+      if (paymentApprovalRequestRef.current === requestId) setPaymentApprovalLoading(false);
     }
-  }, [preparedChainId, preparedInvestorWallet, requiredPaymentAmountRaw, walletGuard.targetChainId]);
+  }, [paymentContext, preparedChainId, preparedInvestorWallet, walletGuard.targetChainId]);
 
   useEffect(() => {
-    void refreshUsdtSpendingApproval();
-  }, [refreshUsdtSpendingApproval]);
+    void refreshPaymentSpendingApproval();
+  }, [refreshPaymentSpendingApproval]);
+
+  useEffect(() => {
+    if (paymentApprovalLoading || typeof paymentAllowanceRaw !== 'bigint') return;
+    const requiredText = clean(requiredPaymentAmountRaw);
+    if (!/^\d+$/.test(requiredText)) return;
+
+    // submitPlatformPurchase performs the final authoritative allowance check
+    // immediately before the wallet transaction. This local comparison is only
+    // a fast UI gate and avoids another RPC request whenever the amount changes.
+    setPaymentSpendingApproved(paymentAllowanceRaw >= BigInt(requiredText));
+  }, [paymentAllowanceRaw, paymentApprovalLoading, requiredPaymentAmountRaw]);
 
   const tokenAmountError = useMemo(() => {
     if (!clean(tokenAmountInput)) return '';
@@ -529,7 +575,23 @@ export default function PurchaseTokenPage({
   }, [maxTokenBalanceExact, token?.symbol, tokenAmountInput, tokenDecimals]);
 
   useEffect(() => {
-    if (!tokenContractAddress || !tokenBalanceChainId || !normalizedTokenAmount || tokenAmountError) {
+    // The app grants a persistent maximum allowance. Once that state is known,
+    // an amount edit does not need a live on-chain quote just to keep Invest
+    // enabled; submitPlatformPurchase obtains the authoritative quote once when
+    // the user actually chooses Invest. Only legacy/non-persistent allowances
+    // need an amount-specific quote to determine whether the remaining allowance
+    // is enough for the typed amount.
+    const needsAmountSpecificAllowanceCheck = !paymentPersistentApprovalActive
+      && typeof paymentAllowanceRaw === 'bigint'
+      && paymentAllowanceRaw > 0n;
+
+    if (
+      !needsAmountSpecificAllowanceCheck
+      || !tokenContractAddress
+      || !tokenBalanceChainId
+      || !normalizedTokenAmount
+      || tokenAmountError
+    ) {
       setPlatformQuote(null);
       setPlatformQuoteError('');
       setPlatformQuoteLoading(false);
@@ -537,9 +599,16 @@ export default function PurchaseTokenPage({
     }
 
     let cancelled = false;
+    // Enter the loading state immediately so a stale quote can never enable the
+    // action for a newly typed amount. The actual RPC is still debounced to avoid
+    // one request per keystroke.
+    setPlatformQuote(null);
+    setPlatformQuoteError('');
+    setPlatformQuoteLoading(true);
+
     const timer = window.setTimeout(() => {
-      setPlatformQuoteLoading(true);
       quotePlatformPurchase({
+        ...paymentContext,
         chainId: tokenBalanceChainId,
         tokenAddress: tokenContractAddress,
         tokenAmount: normalizedTokenAmount,
@@ -563,19 +632,29 @@ export default function PurchaseTokenPage({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [normalizedTokenAmount, purchase, tokenAmountError, tokenBalanceChainId, tokenContractAddress]);
+  }, [
+    paymentAllowanceRaw,
+    paymentContext,
+    paymentPersistentApprovalActive,
+    normalizedTokenAmount,
+    tokenAmountError,
+    tokenBalanceChainId,
+    tokenContractAddress,
+  ]);
 
   const purchaseUid = purchaseUidOf(purchase);
   const paymentTxHash = paymentHashOf(purchase) || broadcastTxHash;
   const purchaseStatus = normalizeStatus(purchase?.status);
   const isCompleted = purchaseStatus === PURCHASE_STATUS.COMPLETED;
-
-  useEffect(() => {
-    if (!isCompleted) return;
+  const [lastCompletedPurchase, setLastCompletedPurchase] = useState('');
+  const completedPurchaseKey = isCompleted ? purchaseUid || paymentTxHash || 'completed' : '';
+  // Reset once for each completed purchase, preserving the user's next entry.
+  if (completedPurchaseKey && completedPurchaseKey !== lastCompletedPurchase) {
+    setLastCompletedPurchase(completedPurchaseKey);
     setTokenAmountInput('');
     setPlatformQuote(null);
     setPlatformQuoteError('');
-  }, [isCompleted]);
+  }
 
   const explorerUrlFor = useCallback((txHash, chainIdOverride) => {
     if (!validTransactionHash(txHash)) return '';
@@ -792,36 +871,34 @@ export default function PurchaseTokenPage({
 
 
 
-  const handleApproveUsdtSpending = async () => {
+  const handleApprovePaymentSpending = async () => {
     if (operationLockRef.current) return;
     if (!walletGuard.ready) {
-      toast.error('Your Privy secure account needs attention. Open it from the header and follow the prompt to continue.');
+      toast.error('Connect the investor wallet linked to your profile on the required network to continue.');
       return;
     }
-    if (usdtApprovalLoading) {
-      toast.info('Checking your existing USDC payment permission. Please wait a moment.');
-      return;
-    }
-    if (usdtSpendingApproved) {
-      toast.success('Your USDC payment permission is already active. You can continue to review your investment.');
+    if (paymentApprovalLoading) return;
+    if (paymentSpendingApproved) {
+      toast.success('Your payment permission is already active. You can continue to review your investment.');
       return;
     }
 
     operationLockRef.current = true;
     setBusyAction('APPROVAL');
-    setUsdtApprovalError('');
+    setPaymentApprovalError('');
 
     try {
-      const approval = await approveInvestorUsdtSpending({
+      const approval = await approveInvestorPaymentSpending({
+        ...paymentContext,
         connector: walletGuard.wallet.connector,
         connectedAddress: walletGuard.wallet.address,
         investorWalletAddress: preparedInvestorWallet,
         chainId: preparedChainId || walletGuard.targetChainId,
         onStep: ({ stage }) => {
           if (stage === 'approval-signature') {
-            toast.info('Allow USDC payments', {
+            toast.info('Allow payments', {
               id: 'purchase-usdt-approval-step',
-              description: 'This one-time permission lets you make investments using USDC. It does not make an investment by itself.',
+              description: 'This one-time permission lets you make investments using payment token. It does not make an investment by itself.',
             });
           } else if (stage === 'approval-confirming') {
             toast.info('Payment permission submitted', {
@@ -832,18 +909,22 @@ export default function PurchaseTokenPage({
         },
       });
 
-      const approved = Boolean(approval?.spendingApproved) || await refreshUsdtSpendingApproval({ silent: true });
+      if (typeof approval?.allowance === 'bigint') setPaymentAllowanceRaw(approval.allowance);
+      if (approval?.persistentApprovalActive !== undefined) {
+        setPaymentPersistentApprovalActive(Boolean(approval.persistentApprovalActive));
+      }
+      const approved = Boolean(approval?.spendingApproved) || await refreshPaymentSpendingApproval({ silent: true });
       if (!approved) {
-        throw new Error('Your USDC payment permission was submitted but could not be confirmed. Refresh and try again.');
+        throw new Error('Your payment permission was submitted but could not be confirmed. Refresh and try again.');
       }
 
-      setUsdtSpendingApproved(true);
-      setUsdtApprovalError('');
-      toast.success('USDC payments allowed', {
+      setPaymentSpendingApproved(true);
+      setPaymentApprovalError('');
+      toast.success('payments allowed', {
         id: 'purchase-usdt-approval-step',
         description: approval?.alreadyApproved
-          ? 'Your USDC payment permission is already active. You can continue to review your investment.'
-          : 'Your payment permission is active. You can now review and confirm investments using USDC while this permission remains sufficient.',
+          ? 'Your payment permission is already active. You can continue to review your investment.'
+          : 'Your payment permission is active. You can now review and confirm investments using payment token while this permission remains sufficient.',
       });
     } catch (approvalError) {
       if (isInvestorPurchaseWalletRejection(approvalError)) {
@@ -852,7 +933,7 @@ export default function PurchaseTokenPage({
         const fundingIssue = resolveWalletFundingIssue(approvalError);
         if (fundingIssue) setWalletFundingIssue(fundingIssue);
         const message = getWalletErrorMessage(approvalError, 'Your wallet could not confirm the payment permission. Please try again.');
-        setUsdtApprovalError(message);
+        setPaymentApprovalError(message);
         toast.error('Unable to allow payments', { description: message });
       }
     } finally {
@@ -864,16 +945,13 @@ export default function PurchaseTokenPage({
   const handlePurchase = async () => {
     if (operationLockRef.current) return;
     if (!walletGuard.ready) {
-      toast.error('Your Privy secure account needs attention. Open it from the header and follow the prompt to continue.');
+      toast.error('Connect the investor wallet linked to your profile on the required network to continue.');
       return;
     }
-    if (usdtApprovalLoading) {
-      toast.info('Checking your USDC payment permission. Please wait a moment.');
-      return;
-    }
-    if (!usdtSpendingApproved) {
-      toast.info('USDC payment permission is required', {
-        description: 'Choose Allow payments first. This one-time permission lets you make investments using USDC. You will always review and confirm an investment before funds are used.',
+    if (paymentApprovalLoading) return;
+    if (!paymentSpendingApproved) {
+      toast.info('payment permission is required', {
+        description: 'Choose Allow payments first. This one-time permission lets you make investments using payment token. You will always review and confirm an investment before funds are used.',
       });
       return;
     }
@@ -881,12 +959,13 @@ export default function PurchaseTokenPage({
       toast.error(tokenAmountError || 'Enter a token amount greater than zero.');
       return;
     }
-    if (platformQuoteLoading) {
-      toast.info('Checking the latest investment price. Please wait a moment.');
+    if (platformQuoteLoading) return;
+    if (platformQuote && canonicalDecimal(platformQuote.tokenAmount) !== normalizedTokenAmount) {
+      toast.info('Wait for the updated quote before confirming this amount.');
       return;
     }
-    if (platformQuoteError || !platformQuote) {
-      toast.error('Investment temporarily unavailable', { description: platformQuoteError || 'The current investment price could not be confirmed.' });
+    if (platformQuoteError) {
+      toast.error('Investment temporarily unavailable', { description: platformQuoteError });
       return;
     }
 
@@ -904,7 +983,23 @@ export default function PurchaseTokenPage({
     setVerificationBlocked(false);
 
     try {
+      try {
+        // Reuse the balance already loaded for the summary. Only make another
+        // RPC read if that optional background read was unavailable.
+        const currentTokenBalance = typeof tokenWalletBalanceRaw === 'bigint'
+          ? tokenWalletBalanceRaw
+          : await getInvestorPurchaseTokenBalance({
+            tokenAddress: tokenContractAddress,
+            investorWalletAddress: preparedInvestorWallet,
+            chainId,
+          });
+        setWasFirstTokenPurchase(currentTokenBalance === 0n);
+      } catch {
+        // Wallet token tracking is optional and never blocks the investment.
+      }
+
       const result = await submitInvestorPurchasePayment({
+        ...paymentContext,
         connector: walletGuard.wallet.connector,
         connectedAddress: walletGuard.wallet.address,
         investorWalletAddress: preparedInvestorWallet,
@@ -917,18 +1012,19 @@ export default function PurchaseTokenPage({
           if (stage === 'purchase-signature') {
             toast.info('Review and confirm your investment', {
               id: 'purchase-platform-step',
-              description: 'Confirm securely with Privy to submit this investment. Review the amount before you confirm.',
+              description: 'This wallet transaction sends your investment directly to the smart contract.',
             });
           }
         },
       });
 
       const txHash = clean(result?.txHash);
-      if (!validTransactionHash(txHash)) throw new Error('We did not receive a valid confirmation ID. Check your Privy account details before trying again.');
+      if (!validTransactionHash(txHash)) throw new Error('Your wallet did not return a valid transaction ID. Check your wallet activity before trying again.');
 
       // Persist before contacting the backend. Backend availability must never be
       // a prerequisite for, or cause a retry of, this wallet transaction.
       saveObservedWalletTransaction({
+        ...paymentContext,
         chainId,
         txHash,
         tokenUid,
@@ -941,7 +1037,10 @@ export default function PurchaseTokenPage({
         transactionHash: txHash,
         status: 'SUBMITTED',
         tokenAmountFormatted: result?.quote?.tokenAmount || normalizedTokenAmount,
-        usdtAmountFormatted: result?.quote?.paymentAmountFormatted || platformQuote?.paymentAmountFormatted,
+        paymentTokenAddress: result?.quote?.paymentToken,
+        paymentTokenSymbol: result?.quote?.paymentTokenSymbol,
+        paymentTokenDecimals: result?.quote?.paymentTokenDecimals,
+        paymentAmountFormatted: result?.quote?.paymentAmountFormatted || platformQuote?.paymentAmountFormatted,
         priceFormatted: result?.quote?.priceFormatted || platformQuote?.priceFormatted,
         createdAt: new Date().toISOString(),
       }));
@@ -994,10 +1093,12 @@ export default function PurchaseTokenPage({
       if (isInvestorPurchaseWalletRejection(walletError)) {
         toast.info('Investment cancelled. No investment was submitted.');
       } else if (clean(walletError?.code) === 'PAYMENT_APPROVAL_REQUIRED') {
-        setUsdtSpendingApproved(false);
-        setUsdtApprovalError('Your current USDC allowance is no longer enough for this investment.');
-        toast.error('USDC payment permission required', {
-          description: 'Allow USDC payments, then review your investment again.',
+        setPaymentSpendingApproved(false);
+        setPaymentAllowanceRaw(0n);
+        setPaymentPersistentApprovalActive(false);
+        setPaymentApprovalError('Your current payment token allowance is no longer enough for this investment.');
+        toast.error('payment permission required', {
+          description: 'Allow payments, then review your investment again.',
         });
       } else {
         const fundingIssue = resolveWalletFundingIssue(walletError);
@@ -1029,6 +1130,74 @@ export default function PurchaseTokenPage({
 
     setTokenAmountInput(normalized);
   };
+
+  const handleAddTokenToWallet = useCallback(async ({ automatic = false } = {}) => {
+    if (!isCompleted || !wasFirstTokenPurchase || walletTokenAdded || addingWalletToken) return;
+    if (!walletGuard.ready) {
+      if (!automatic) {
+        toast.error('Connect the investor wallet linked to your profile on the required network to add this token.');
+      }
+      return;
+    }
+    if (!tokenContractAddress) {
+      if (!automatic) toast.error('The token details are temporarily unavailable. Refresh the page and try again.');
+      return;
+    }
+
+    setAddingWalletToken(true);
+    try {
+      const added = await addInvestorPurchaseTokenToWallet({
+        connector: walletGuard.wallet.connector,
+        connectedAddress: walletGuard.wallet.address,
+        chainId: purchase?.chainId || context.chainId,
+        investorWalletAddress: preparedInvestorWallet,
+        tokenAddress: tokenContractAddress,
+        tokenSymbol: token?.symbol,
+        tokenDecimals,
+      });
+
+      if (added) {
+        setWalletTokenAdded(true);
+        toast.success(`${token?.symbol || 'Token'} added to your wallet.`);
+      } else if (!automatic) {
+        toast.info('Token was not added. You can try again whenever you are ready.');
+      }
+    } catch (watchError) {
+      if (isInvestorPurchaseWalletRejection(watchError)) {
+        if (!automatic) toast.info('Add token request cancelled.');
+      } else {
+        const message = getErrorMessage(watchError, 'We could not add this token to your wallet right now.');
+        if (!automatic) toast.error('Unable to add token', { description: message });
+      }
+    } finally {
+      setAddingWalletToken(false);
+    }
+  }, [
+    addingWalletToken,
+    context.chainId,
+    isCompleted,
+    preparedInvestorWallet,
+    purchase?.chainId,
+    token?.symbol,
+    tokenContractAddress,
+    tokenDecimals,
+    walletGuard,
+    walletTokenAdded,
+    wasFirstTokenPurchase,
+  ]);
+
+  useEffect(() => {
+    if (
+      !isCompleted
+      || !wasFirstTokenPurchase
+      || walletTokenAdded
+      || !walletGuard.ready
+      || walletTokenAutoPromptRef.current
+    ) return;
+
+    walletTokenAutoPromptRef.current = true;
+    void handleAddTokenToWallet({ automatic: true });
+  }, [handleAddTokenToWallet, isCompleted, walletGuard.ready, walletTokenAdded, wasFirstTokenPurchase]);
 
   if (loading) {
     return (
@@ -1062,25 +1231,38 @@ export default function PurchaseTokenPage({
 
   const currentTokenAmount = normalizedTokenAmount;
   const exactTreasury = clean(purchase?.treasuryWalletAddress) || context.issuerTreasuryAddress;
-  const paymentContract = clean(purchase?.usdtContractAddress) || env.trex.paymentToken;
+  const paymentContract = paymentContext.paymentTokenAddress;
   const purchaseBlockedByPrevious = normalizeStatus(purchase?.canonicalStatus) === 'SUBMITTED';
   const purchaseAvailabilityUnverified = false;
-  const actionLabel = usdtSpendingApproved ? 'Invest' : 'Allow payments';
+  const amountSpecificApprovalCheckLoading = Boolean(
+    platformQuoteLoading
+    && !paymentPersistentApprovalActive
+    && typeof paymentAllowanceRaw === 'bigint'
+    && paymentAllowanceRaw > 0n,
+  );
+  const actionLabel = paymentApprovalLoading || amountSpecificApprovalCheckLoading
+    ? 'Preparing'
+    : paymentSpendingApproved
+      ? 'Invest'
+      : 'Allow payments';
+  const primaryActionLoading = Boolean(busyAction)
+    || paymentApprovalLoading
+    || amountSpecificApprovalCheckLoading;
   const approvalActionDisabled = Boolean(busyAction)
     || !walletGuard.ready
-    || usdtApprovalLoading
-    || usdtSpendingApproved;
+    || paymentApprovalLoading
+    || paymentSpendingApproved;
   const actionDisabled = Boolean(busyAction)
     || !walletGuard.ready
-    || usdtApprovalLoading
-    || !usdtSpendingApproved
+    || paymentApprovalLoading
+    || !paymentSpendingApproved
     || !normalizedTokenAmount
     || Boolean(tokenAmountError)
     || platformQuoteLoading
     || Boolean(platformQuoteError)
     || purchaseAvailabilityUnverified
     || purchaseBlockedByPrevious;
-  const primaryActionDisabled = usdtSpendingApproved ? actionDisabled : approvalActionDisabled;
+  const primaryActionDisabled = paymentSpendingApproved ? actionDisabled : approvalActionDisabled;
   const historyTotal = Number(
     purchaseHistoryMeta?.total
     ?? purchaseHistoryMeta?.totalCount
@@ -1116,7 +1298,7 @@ export default function PurchaseTokenPage({
           <InvestorTokenActionHeader
             eyebrow="Ready to invest"
             title="Invest"
-            description="Choose how many units you want to buy. We will show the estimated USDC cost before you confirm securely with Privy."
+            description="Choose how many units you want to buy. We will show the estimated payment token cost before your wallet asks you to confirm."
           />
           <InvestmentJourneyTracker journey={purchaseJourney} />
         </>
@@ -1130,19 +1312,19 @@ export default function PurchaseTokenPage({
             <div className="investor-token-action-card__heading">
               <div>
                 <span>Payment setup</span>
-                <h2>Your Privy secure account will be used</h2>
+                <h2>Your registered wallet will be used</h2>
               </div>
               <ShieldCheck size={19} />
             </div>
             <p className="investor-token-action-helper investor-token-action-helper--prominent">
-              You will pay with USDC from your Privy secure account. Funds are used only after you review and confirm the investment.
+              You will pay with payment token from your registered investment wallet. Payment goes to the issuer when you confirm the investment.
             </p>
             <details className="investor-technical-details investor-token-technical-details">
               <summary>View account &amp; payment details</summary>
               <div className="investor-token-action-address-grid">
-                <LockedAddressField label="Your Privy secure account" value={preparedInvestorWallet} />
-                <LockedAddressField label="Issuer payment account" value={exactTreasury} emptyLabel="Issuer payment account unavailable" />
-                {paymentContract ? <LockedAddressField label="USDC contract" value={paymentContract} /> : null}
+                <LockedAddressField label="Your registered investment wallet" value={preparedInvestorWallet} />
+                <LockedAddressField label="Issuer payment wallet" value={exactTreasury} emptyLabel="Issuer payment wallet unavailable" />
+                {paymentContract ? <LockedAddressField label="payment token contract" value={paymentContract} /> : null}
               </div>
               <p>These values come from your approved application and cannot be edited here.</p>
             </details>
@@ -1177,14 +1359,20 @@ export default function PurchaseTokenPage({
               </p>
             ) : null}
             <div className="investor-token-action-calculation">
-              <span>Estimated USDC cost</span>
+              <span>Estimated payment token cost</span>
               <strong>
-                <CurrencyAmount symbol={token.currency || 'USDC'}>
-                  {estimatedPayment > 0 ? money.format(estimatedPayment) : '0'}
-                </CurrencyAmount>
+                <PaymentCurrencyAmount
+                  paymentTokenAddress={settlementPaymentTokenAddress}
+                  paymentTokenSymbol={settlementSymbol}
+                  chainUid={settlementChainUid}
+                  chainId={settlementChainId}
+                  title={estimatedPaymentDisplay.isAbbreviated ? `${estimatedPaymentDisplay.exact} ${settlementSymbol}` : undefined}
+                  ariaLabel={estimatedPaymentDisplay.isAbbreviated ? `${estimatedPaymentDisplay.exact} ${settlementSymbol}` : undefined}
+                >
+                  {estimatedPaymentDisplay.display || '—'}
+                </PaymentCurrencyAmount>
               </strong>
             </div>
-            {platformQuoteLoading ? <p className="investor-token-action-field-hint">Checking the latest price…</p> : null}
             {platformQuoteError ? <p className="investor-token-action-field-error" role="alert">{platformQuoteError}</p> : null}
           </Card>
 
@@ -1230,7 +1418,14 @@ export default function PurchaseTokenPage({
               <span>Price per unit</span>
               <strong>
                 {tokenPriceExact ? (
-                  <CurrencyAmount symbol={token.currency || 'USDC'}>${displayServerAmount(tokenPriceExact)}</CurrencyAmount>
+                  <PaymentCurrencyAmount
+                    paymentTokenAddress={settlementPaymentTokenAddress}
+                    paymentTokenSymbol={settlementSymbol}
+                    chainUid={settlementChainUid}
+                    chainId={settlementChainId}
+                  >
+                    <TokenPriceValue value={tokenPriceExact} />
+                  </PaymentCurrencyAmount>
                 ) : '—'}
               </strong>
             </div>
@@ -1239,10 +1434,19 @@ export default function PurchaseTokenPage({
               <strong>{displayServerAmount(currentTokenAmount, '0')} <small>{token.symbol}</small></strong>
             </div>
             <div className="investor-token-order-row">
-              <span>Estimated USDC cost</span>
+              <span>Estimated payment token cost</span>
               <strong>
-                {estimatedPayment > 0 ? (
-                  <CurrencyAmount symbol={token.currency || 'USDC'}>${money.format(estimatedPayment)}</CurrencyAmount>
+                {isPositiveDecimal(estimatedPaymentExact) ? (
+                  <PaymentCurrencyAmount
+                    paymentTokenAddress={settlementPaymentTokenAddress}
+                    paymentTokenSymbol={settlementSymbol}
+                    chainUid={settlementChainUid}
+                    chainId={settlementChainId}
+                    title={estimatedPaymentDisplay.isAbbreviated ? `${estimatedPaymentDisplay.exact} ${settlementSymbol}` : undefined}
+                    ariaLabel={estimatedPaymentDisplay.isAbbreviated ? `${estimatedPaymentDisplay.exact} ${settlementSymbol}` : undefined}
+                  >
+                    {estimatedPaymentDisplay.display}
+                  </PaymentCurrencyAmount>
                 ) : '—'}
               </strong>
             </div>
@@ -1263,48 +1467,48 @@ export default function PurchaseTokenPage({
 
             <div className="investor-token-payment-flow investor-token-payment-flow--single" aria-label="Investment action">
               <div className="investor-token-payment-flow__intro">
-                <strong>{usdtSpendingApproved ? 'Ready to invest' : 'Allow USDC payments for investments'}</strong>
+                <strong>{paymentSpendingApproved ? 'Ready to invest' : 'Allow payments for investments'}</strong>
                 <span>
-                  {usdtSpendingApproved
-                    ? 'Your USDC payment permission is already active. Enter the amount you want to buy and review your investment.'
-                    : 'This one-time permission lets you make investments using USDC. You will always review and confirm an investment before funds are used.'}
+                  {paymentSpendingApproved
+                    ? 'Your payment permission is already active. Enter the amount you want to buy and review your investment.'
+                    : 'This one-time permission lets you make investments using payment token. You will always review and confirm an investment before funds are used.'}
                 </span>
               </div>
 
               <section className="investor-token-payment-step is-current">
                 <div className="investor-token-payment-step__top">
                   <span className="investor-token-payment-step__number" aria-hidden="true">
-                    {usdtSpendingApproved ? <ShoppingCart size={16} /> : <ShieldCheck size={16} />}
+                    {paymentSpendingApproved ? <ShoppingCart size={16} /> : <ShieldCheck size={16} />}
                   </span>
                   <div className="investor-token-payment-step__heading">
-                    <small>{usdtSpendingApproved ? 'Investment' : 'One-time setup'}</small>
-                    <strong>{usdtSpendingApproved ? 'Review investment' : 'Payment permission'}</strong>
+                    <small>{paymentSpendingApproved ? 'Investment' : 'One-time setup'}</small>
+                    <strong>{paymentSpendingApproved ? 'Review investment' : 'Payment permission'}</strong>
                   </div>
-                  <span className={`investor-token-payment-step__status ${usdtApprovalError && !usdtSpendingApproved ? 'is-attention' : ''}`}>
-                    {usdtApprovalLoading
-                      ? 'Checking…'
-                      : usdtSpendingApproved
+                  {!paymentApprovalLoading ? (
+                    <span className={`investor-token-payment-step__status ${paymentApprovalError && !paymentSpendingApproved ? 'is-attention' : ''}`}>
+                      {paymentSpendingApproved
                         ? purchaseBlockedByPrevious
                           ? 'Confirming current investment'
                           : 'Ready'
-                        : usdtApprovalError
+                        : paymentApprovalError
                           ? 'Needs attention'
                           : 'Approval required'}
-                  </span>
+                    </span>
+                  ) : null}
                   <details className="investor-token-payment-step__help">
-                    <summary aria-label={usdtSpendingApproved ? 'About investing' : 'About USDC payment permission'} title="About this action">
+                    <summary aria-label={paymentSpendingApproved ? 'About investing' : 'About payment permission'} title="About this action">
                       <Info size={15} />
                     </summary>
                     <div className="investor-token-payment-step__tooltip" role="note">
-                      <strong>{usdtSpendingApproved ? 'What happens when I invest?' : 'What does approval mean?'}</strong>
-                      {usdtSpendingApproved ? (
+                      <strong>{paymentSpendingApproved ? 'What happens when I invest?' : 'What does approval mean?'}</strong>
+                      {paymentSpendingApproved ? (
                         <>
-                          <p>Your Privy secure account lets you review and confirm the investment securely.</p>
-                          <p>After this investment is confirmed, you can use Invest again for another investment.</p>
+                          <p>Your registered investor wallet signs the investment and the smart contract processes it on-chain.</p>
+                          <p>After this investment is confirmed, this same Invest action becomes available immediately for another investment.</p>
                         </>
                       ) : (
                         <>
-                          <p>This permission does not make an investment or move USDC by itself. It only allows USDC to be used after you review and confirm an investment.</p>
+                          <p>This permission does not make an investment or move payment token by itself. It only allows payment token to be used after you review and confirm an investment.</p>
                           <p>The permission can be reused while it remains sufficient, so you do not need to allow payments again for every investment.</p>
                         </>
                       )}
@@ -1313,48 +1517,44 @@ export default function PurchaseTokenPage({
                 </div>
 
                 <p className="investor-token-payment-step__copy">
-                  {usdtSpendingApproved
+                  {paymentSpendingApproved
                     ? purchaseBlockedByPrevious
-                      ? 'Your current investment is being confirmed. As soon as it completes, Invest becomes available again automatically.'
-                      : 'Review the amount and estimated cost, then choose Invest. Confirm securely with Privy before the investment is submitted.'
-                    : 'Choose Allow payments and confirm the permission with Privy. After it is confirmed, this button automatically changes to Invest.'}
+                      ? 'Your current investment is confirming on-chain. As soon as it is confirmed, Invest becomes available again automatically.'
+                      : 'Review the amount and estimated cost, then choose Invest. Your wallet will ask you to confirm the investment.'
+                    : 'Choose Approve and confirm the permission in your wallet. After it is confirmed, this button automatically changes to Invest.'}
                 </p>
 
-                {usdtApprovalError && !usdtSpendingApproved ? (
-                  <p className="investor-token-payment-step__error" role="alert">{usdtApprovalError}</p>
+                {paymentApprovalError && !paymentSpendingApproved ? (
+                  <p className="investor-token-payment-step__error" role="alert">{paymentApprovalError}</p>
                 ) : null}
 
                 <Button
                   className="investor-token-order-card__cta investor-token-payment-flow__primary-cta"
-                  icon={usdtSpendingApproved ? ShoppingCart : ShieldCheck}
-                  onClick={usdtSpendingApproved ? handlePurchase : handleApproveUsdtSpending}
+                  icon={paymentSpendingApproved ? ShoppingCart : ShieldCheck}
+                  onClick={paymentSpendingApproved ? handlePurchase : handleApprovePaymentSpending}
                   disabled={primaryActionDisabled}
-                  loading={busyAction === (usdtSpendingApproved ? 'PAYMENT' : 'APPROVAL')}
+                  loading={primaryActionLoading}
                 >
                   {actionLabel}
                 </Button>
 
-                <small className="investor-token-order-card__footnote">
-                  {!walletGuard.ready
-                    ? 'Your Privy secure account needs attention. Open it from the header and follow the prompt to continue.'
-                    : usdtApprovalLoading
-                      ? 'Checking your current USDC payment permission…'
-                      : !usdtSpendingApproved
-                        ? usdtApprovalError || 'Allow USDC payments once to enable investments.'
+                {!paymentApprovalLoading && !platformQuoteLoading && !busyAction ? (
+                  <small className="investor-token-order-card__footnote">
+                    {!walletGuard.ready
+                      ? 'Connect the investor wallet linked to your profile on the required network to continue.'
+                      : !paymentSpendingApproved
+                        ? paymentApprovalError || 'Allow payments once to enable investments.'
                         : purchaseBlockedByPrevious
                           ? 'Your submitted investment is still being confirmed. No new action is needed until it completes.'
                           : tokenAmountError
                             ? tokenAmountError
                             : !normalizedTokenAmount
                               ? 'Enter the number of units you want to buy.'
-                              : platformQuoteLoading
-                                ? 'Checking the latest investment price…'
-                                : platformQuoteError
-                                  ? platformQuoteError
-                                  : busyAction
-                                    ? 'Your current secure confirmation is in progress.'
-                                    : 'Choose Invest, then confirm securely with Privy.'}
-                </small>
+                              : platformQuoteError
+                                ? platformQuoteError
+                                : 'Choose Invest to open your registered wallet and confirm this investment.'}
+                  </small>
+                ) : null}
               </section>
             </div>
           </Card>
@@ -1362,8 +1562,8 @@ export default function PurchaseTokenPage({
           <Card className="investor-token-action-side-note">
             <WalletCards size={17} />
             <div>
-              <strong>Your Privy secure account protects this action</strong>
-              <p>Only the Privy secure account linked to your approved profile can confirm this investment.</p>
+              <strong>Your registered wallet protects this action</strong>
+              <p>Only the investment wallet linked to your approved profile can make this investment.</p>
             </div>
           </Card>
           <Card className="investor-token-action-side-note">
@@ -1375,6 +1575,30 @@ export default function PurchaseTokenPage({
           </Card>
         </aside>
       </div>
+
+      {isCompleted && wasFirstTokenPurchase && !walletTokenAdded ? (
+        <Card className="investor-token-action-card investor-token-purchase-wallet-token">
+          <div className="investor-token-action-card__heading">
+            <div>
+              <span>Wallet display</span>
+              <h2>Add {token.symbol} to your wallet</h2>
+            </div>
+            <WalletCards size={19} />
+          </div>
+          <p className="investor-token-action-helper">
+            Your first purchase is complete. Add this token to your registered wallet if you want it to appear in your wallet's asset list.
+          </p>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => handleAddTokenToWallet()}
+            disabled={!walletGuard.ready || addingWalletToken}
+            loading={addingWalletToken}
+          >
+            Add Token to Wallet
+          </Button>
+        </Card>
+      ) : null}
 
       <Card className="investor-token-purchase-history investor-token-purchase-history--investments">
         <div className="investor-token-purchase-history__header">
@@ -1449,7 +1673,7 @@ export default function PurchaseTokenPage({
             <div className="investor-token-purchase-history__table-head" role="row">
               <span role="columnheader">Date</span>
               <span role="columnheader">Token amount</span>
-              <span role="columnheader">USDC amount</span>
+              <span role="columnheader">payment token amount</span>
               <span role="columnheader">Status</span>
               <span role="columnheader">Payment</span>
             </div>
@@ -1468,9 +1692,16 @@ export default function PurchaseTokenPage({
                   <span className="investor-token-purchase-history__cell" data-label="Token amount" role="cell">
                     <strong>{displayServerAmount(row?.tokenAmount)} {token.symbol}</strong>
                   </span>
-                  <span className="investor-token-purchase-history__cell" data-label="USDC amount" role="cell">
+                  <span className="investor-token-purchase-history__cell" data-label="payment token amount" role="cell">
                     <strong>
-                      <CurrencyAmount symbol="USDC">{displayServerAmount(row?.usdtAmount)}</CurrencyAmount>
+                      <PaymentCurrencyAmount
+                        paymentTokenAddress={paymentContextOf(row, token, application).paymentTokenAddress || settlementPaymentTokenAddress}
+                        paymentTokenSymbol={row?.paymentTokenSymbol || settlementSymbol}
+                        chainUid={settlementChainUid}
+                        chainId={row?.chainId || settlementChainId}
+                      >
+                        {displayServerAmount(row?.usdtAmount)}
+                      </PaymentCurrencyAmount>
                     </strong>
                   </span>
                   <span className="investor-token-purchase-history__cell" data-label="Status" role="cell">

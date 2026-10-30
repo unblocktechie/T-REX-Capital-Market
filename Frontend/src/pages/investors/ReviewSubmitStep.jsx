@@ -6,27 +6,42 @@ import {
   LockKeyhole,
   ShieldCheck,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { PrivyTrustBadge } from '@/components/branding/PrivyBrand';
 import { CreateInvestorProfileModal } from '@/components/investor/CreateInvestorProfileModal';
 import { InvestorDocumentList } from '@/components/investor/InvestorDocumentReview';
 import { InvestorLayout } from '@/components/investor/InvestorLayout';
 import { InvestorActionBar } from '@/components/investor/InvestorPrimitives';
+import { WalletCard } from '@/components/investor/WalletCard';
+import { ChainSelector } from '@/components/common/ChainSelector';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { NO_INVESTMENT_EXPERIENCE_VALUE } from '@/constants/investor';
 import { useInvestorOnboarding } from '@/hooks/useInvestorOnboarding';
+import { useAuth } from '@/hooks/useAuth';
+import { usePublicChains } from '@/hooks/useChains';
+import { web3Config } from '@/config/web3';
 import { useCityOptions, useCountryOptions, useStateOptions } from '@/hooks/useLocationOptions';
-import { useAuthStore } from '@/store/auth.store';
+import { useWalletConnection } from '@/hooks/useWalletConnection';
 import { getErrorMessage } from '@/utils/error';
 import { isInvestorOnboardingReady } from '@/validations/investor.schemas';
 import { formatDate } from '@/utils/date';
+import { networkUserKey, useNetworkStore } from '@/store/network.store';
+import { useUiStore } from '@/store/ui.store';
 
 const displayLabel = (options, value) =>
   options.find((option) => String(option.value) === String(value))?.label || value || 'Not provided';
 const displayDate = (value) =>
   value ? formatDate(value, 'MMM D, YYYY') : 'Not provided';
+
+const getBackendErrorMessage = (error) => {
+  const payload = error?.response?.data;
+  const message =
+    payload?.message ||
+    (typeof payload?.error === 'string' ? payload.error : payload?.error?.message);
+
+  return typeof message === 'string' ? message.trim() : '';
+};
 
 function ReviewSection({ title, actionLabel = 'Edit', onEdit, children }) {
   return (
@@ -59,10 +74,25 @@ export default function ReviewSubmitStep() {
     submitting,
     downloadDocument,
   } = useInvestorOnboarding();
-  const privyWalletAddress = useAuthStore((authState) => authState.user?.privyWalletAddress || '');
+  const { user } = useAuth();
+  const userKey = networkUserKey(user);
+  const persistedChainId = useNetworkStore((store) => store.activeChainByUser[userKey] || null);
+  const setActiveChainId = useNetworkStore((store) => store.setActiveChainId);
+  const setWalletRequiredChainId = useUiStore((store) => store.setWalletRequiredChainId);
+  const publicChains = usePublicChains();
+  const initialChainUid = web3Config.getChainRecordById(persistedChainId)?.chainUid || web3Config.defaultChainRecord?.chainUid || '';
+  const [selectedChainUid, setSelectedChainUid] = useState(initialChainUid);
+  const selectedChain = (publicChains.data || []).find((item) => item.chainUid === selectedChainUid) || publicChains.data?.[0] || null;
+  const connectedWallet = useWalletConnection(selectedChain?.chainId);
+
+  useEffect(() => {
+    setWalletRequiredChainId(selectedChain?.chainId);
+    if (selectedChain?.chainId) setActiveChainId(user, selectedChain.chainId, selectedChain.chainUid);
+  }, [selectedChain?.chainId, selectedChain?.chainUid, setActiveChainId, setWalletRequiredChainId, user]);
+
+  useEffect(() => () => setWalletRequiredChainId(null), [setWalletRequiredChainId]);
   const [modalOpen, setModalOpen] = useState(state.currentStep === 5);
   const [loadingMessage, setLoadingMessage] = useState('');
-  const [submissionError, setSubmissionError] = useState('');
   const ready = useMemo(() => isInvestorOnboardingReady(state), [state]);
   const identity = state.identity;
   const documents = state.documents;
@@ -82,16 +112,46 @@ export default function ReviewSubmitStep() {
     identity.stateProvince,
     identity.city ? [{ value: identity.city, label: identity.cityName || identity.city }] : [],
   );
+  const activeWallet = useMemo(
+    () => ({
+      isConnected: Boolean(connectedWallet.isConnected && connectedWallet.address),
+      isCorrectNetwork: connectedWallet.isCorrectNetwork,
+      address: connectedWallet.address || '',
+      displayAddress: connectedWallet.shortAddress || connectedWallet.address || 'Not connected',
+      network:
+        connectedWallet.chain?.name ||
+        (connectedWallet.isConnected ? 'Unsupported network' : 'Not connected'),
+      balance: connectedWallet.balanceLabel || 'Balance unavailable',
+      connectorName: connectedWallet.connector?.name || '',
+    }),
+    [
+      connectedWallet.address,
+      connectedWallet.balanceLabel,
+      connectedWallet.chain?.name,
+      connectedWallet.connector?.name,
+      connectedWallet.isConnected,
+      connectedWallet.isCorrectNetwork,
+      connectedWallet.shortAddress,
+    ],
+  );
+
   const openProfileModal = () => {
     if (!ready) {
       toast.error('Complete all required onboarding sections before creating the investor profile.');
       return;
     }
-    if (!privyWalletAddress) {
-      toast.error('Your secure wallet is not linked yet. Confirm your email before continuing.');
+    if (!selectedChain) {
+      toast.error('Select the network where your investor identity should be created.');
       return;
     }
-    setSubmissionError('');
+    if (!activeWallet.isConnected) {
+      toast.error('Connect the primary investor wallet before continuing.');
+      return;
+    }
+    if (!activeWallet.isCorrectNetwork) {
+      toast.error('Switch the connected wallet to the supported network before continuing.');
+      return;
+    }
     setModalOpen(true);
     setStep(5);
   };
@@ -104,16 +164,18 @@ export default function ReviewSubmitStep() {
 
   const createProfileAndSubmit = async () => {
     if (submitting) return;
-    setSubmissionError('');
     setLoadingMessage('Creating your investor profile…');
     try {
-      const { result } = await submitInvestor();
+      const { result } = await submitInvestor(activeWallet.address, selectedChain.chainUid);
       setModalOpen(false);
       const reference = result?.profileReference || '';
       toast.success(reference ? `Investor profile ${reference} created successfully.` : 'Investor profile created successfully.');
       window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
     } catch (error) {
-      setSubmissionError(getErrorMessage(error, 'Unable to submit the investor onboarding profile.'));
+      const backendMessage = getBackendErrorMessage(error);
+      toast.error(
+        backendMessage || getErrorMessage(error, 'Unable to submit the investor onboarding profile.'),
+      );
     } finally {
       setLoadingMessage('');
     }
@@ -139,24 +201,20 @@ export default function ReviewSubmitStep() {
       <Card className="investor-review-action-card">
         <span className="eyebrow">Final action</span>
         <h2>Create your investor profile</h2>
-        <p>Review your information, then create your investor profile. Your secure wallet is already linked to your account.</p>
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <PrivyTrustBadge compact tone="soft" label="Investor embedded wallet" className="mb-3" />
-          <small className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Secure wallet</small>
-          <strong className="mt-2 block text-sm leading-5 text-slate-950">
-            {privyWalletAddress ? 'Your wallet is securely managed and ready to use.' : 'Your secure wallet is not ready yet.'}
-          </strong>
-          {privyWalletAddress ? (
-            <details className="mt-3 text-xs text-slate-600">
-              <summary className="cursor-pointer font-semibold text-slate-800">View wallet details</summary>
-              <p className="mt-2 mb-0 break-all font-mono" title={privyWalletAddress}>
-                {privyWalletAddress}
-              </p>
-            </details>
-          ) : null}
-        </div>
-        <Button className="button--full" onClick={openProfileModal} disabled={!ready || !privyWalletAddress || submitting} icon={ShieldCheck}>
-          Create my profile
+        <p>Connect the primary wallet, review the entered information, and submit the completed onboarding record.</p>
+        <ChainSelector
+          id="investor-onboarding-chain"
+          chains={publicChains.data || []}
+          value={selectedChainUid}
+          onChange={(event) => setSelectedChainUid(event.target.value)}
+          disabled={submitting || publicChains.isPending}
+          label="First network"
+          description="Your investor ONCHAINID will be created on this network during submission."
+          error={publicChains.isError ? 'Unable to load supported networks.' : ''}
+        />
+        <WalletCard wallet={activeWallet} requiredChainId={selectedChain?.chainId} />
+        <Button className="button--full" onClick={openProfileModal} disabled={!ready || !selectedChain || !activeWallet.isConnected || !activeWallet.isCorrectNetwork || submitting} icon={ShieldCheck}>
+          Create Investor Profile
         </Button>
         <small>Last updated: {lastUpdated}</small>
       </Card>
@@ -175,7 +233,7 @@ export default function ReviewSubmitStep() {
       <InvestorLayout
         eyebrow="Identification → Questionnaire → Review and Submit"
         title="Review and Submit"
-        description="Confirm each section before creating your investor profile. Your Privy secure account is already linked."
+        description="Confirm each section before linking the primary wallet and creating the investor profile."
         side={actionPanel}
         wide
       >
@@ -230,7 +288,7 @@ export default function ReviewSubmitStep() {
 
         <div className="investor-review-confirmation">
           <CheckCircle2 size={20} />
-          <p><strong>Review complete?</strong><span>Your Privy secure account is already linked. Create your investor profile when the details are correct.</span></p>
+          <p><strong>Review complete?</strong><span>Connect the wallet in the action panel and create your investor profile.</span></p>
         </div>
 
         <InvestorActionBar>
@@ -244,9 +302,9 @@ export default function ReviewSubmitStep() {
         onConfirm={createProfileAndSubmit}
         loading={submitting}
         loadingMessage={loadingMessage}
-        error={submissionError}
-        walletAddress={privyWalletAddress}
+        wallet={activeWallet}
         ready={ready}
+        profileCreated={false}
       />
     </>
   );

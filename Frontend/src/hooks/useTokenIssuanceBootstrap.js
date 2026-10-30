@@ -7,12 +7,19 @@ import {
   mapTokenOptions,
 } from '@/api/tokens/token.mapper';
 import { organizationApi } from '@/api/organization';
+import { web3Config } from '@/config/web3';
 import { useAuthStore } from '@/store/auth.store';
+import { networkUserKey, useNetworkStore } from '@/store/network.store';
 import { useTokenIssuanceStore } from '@/store/tokenIssuance.store';
 import { getTokenApiErrorMessage } from '@/utils/tokenApiValidation';
 import { createTokenLogoFromBlob } from '@/utils/tokenLogo';
 
-const tokenBootstrapQueryKey = (userKey) => ['token-issuance', 'bootstrap', userKey || 'anonymous'];
+const tokenBootstrapQueryKey = (userKey, chainUid) => [
+  'token-issuance',
+  'bootstrap',
+  userKey || 'anonymous',
+  String(chainUid || 'unselected'),
+];
 
 const canAttemptImageLoad = (token) =>
   Boolean(
@@ -25,15 +32,26 @@ const canAttemptImageLoad = (token) =>
         token.tokenInformation?.tokenName),
   );
 
-export function useTokenIssuanceBootstrap() {
+export function useTokenIssuanceBootstrap({ enabled = true } = {}) {
   const user = useAuthStore((state) => state.user);
   const backend = useTokenIssuanceStore((state) => state.backend);
   const hydrateFromBackend = useTokenIssuanceStore((state) => state.hydrateFromBackend);
   const setBackendState = useTokenIssuanceStore((state) => state.setBackendState);
+  const tokenInformation = useTokenIssuanceStore((state) => state.tokenInformation);
   const userKey = user?.userUid || user?.uid || user?.email || 'current-user';
+  const networkKey = networkUserKey(user);
+  const selectedChainId = useNetworkStore((state) => state.activeChainByUser[networkKey] || null);
+  const storedChainUid = useNetworkStore((state) => state.activeChainUidByUser[networkKey] || '');
+  const selectedChainUid =
+    storedChainUid || web3Config.getChainRecordById(selectedChainId)?.chainUid || '';
+  const assetChainUid = String(tokenInformation.chainUid || '').trim();
+  const hasHydratedAsset = Boolean(backend.hydrated && assetChainUid);
+  const isChainMismatch = Boolean(
+    hasHydratedAsset && selectedChainUid && assetChainUid !== selectedChainUid,
+  );
 
   const query = useQuery({
-    queryKey: tokenBootstrapQueryKey(userKey),
+    queryKey: tokenBootstrapQueryKey(userKey, selectedChainUid),
     queryFn: async () => {
       const [rawOptions, rawCountries, token] = await Promise.all([
         tokenApi.getOptions(),
@@ -58,6 +76,7 @@ export function useTokenIssuanceBootstrap() {
 
       return mapTokenForm({ data: token, options, countries, logo });
     },
+    enabled: Boolean(enabled && selectedChainUid && !isChainMismatch),
     staleTime: 60_000,
     gcTime: 10 * 60_000,
     retry: (failureCount, error) => {
@@ -68,12 +87,12 @@ export function useTokenIssuanceBootstrap() {
   });
 
   useEffect(() => {
-    if (backend.hydrated || !query.data) return;
-    hydrateFromBackend(query.data);
-  }, [backend.hydrated, hydrateFromBackend, query.data]);
+    if (backend.hydrated || !query.data || !selectedChainUid || isChainMismatch) return;
+    hydrateFromBackend(query.data, selectedChainUid);
+  }, [backend.hydrated, hydrateFromBackend, isChainMismatch, query.data, selectedChainUid]);
 
   useEffect(() => {
-    if (backend.hydrated) return;
+    if (backend.hydrated || isChainMismatch || !enabled) return;
     if (query.isPending) {
       setBackendState({ loading: true, error: '' });
       return;
@@ -89,15 +108,18 @@ export function useTokenIssuanceBootstrap() {
       return;
     }
     if (query.isSuccess) setBackendState({ loading: false, error: '' });
-  }, [backend.hydrated, query.error, query.isError, query.isPending, query.isSuccess, setBackendState]);
+  }, [backend.hydrated, enabled, isChainMismatch, query.error, query.isError, query.isPending, query.isSuccess, setBackendState]);
 
   return useMemo(
     () => ({
-      isLoading: !backend.hydrated && query.isPending,
+      isLoading: enabled && !isChainMismatch && !backend.hydrated && query.isPending,
       isFetching: query.isFetching,
       error: backend.error,
       refresh: query.refetch,
+      isChainMismatch,
+      assetChainUid,
+      selectedChainUid,
     }),
-    [backend.error, backend.hydrated, query.isFetching, query.isPending, query.refetch],
+    [assetChainUid, backend.error, backend.hydrated, enabled, isChainMismatch, query.isFetching, query.isPending, query.refetch, selectedChainUid],
   );
 }

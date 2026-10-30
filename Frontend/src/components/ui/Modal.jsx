@@ -20,6 +20,7 @@ export function Modal({
   footer,
   className,
   bodyClassName,
+  dialogStyle,
   trapFocus = false,
 }) {
   const titleId = useId();
@@ -87,6 +88,7 @@ export function Modal({
           'flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-[24px] border border-slate-200 bg-white shadow-2xl sm:max-w-xl sm:rounded-[24px]',
           className,
         )}
+        style={dialogStyle}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

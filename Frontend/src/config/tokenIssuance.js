@@ -65,9 +65,9 @@ export const ASSET_CLASSES = Object.freeze([
   'Other security',
 ]);
 
-// Kept for compatibility with existing data and services. The simplified flow uses USDC only.
+// Kept for compatibility with existing data and services. The simplified flow uses USDT only.
 export const SUPPORTED_CURRENCIES = Object.freeze([
-  'USDC',
+  'USDT',
   'USD',
   'EUR',
   'GBP',
@@ -182,7 +182,7 @@ export const COUNTRY_OPTIONS = Object.freeze([
 ]);
 
 export const DEPLOYMENT_STAGES = Object.freeze([
-  'Checking your Arc identity and Privy secure account',
+  'Checking your organization wallet and selected network',
   'Preparing investor verification and transfer rules',
   'Preparing secure token creation',
   'Confirming token creation and transfer access',

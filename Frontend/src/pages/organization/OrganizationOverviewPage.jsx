@@ -1,24 +1,28 @@
 import {
   BadgeCheck,
   Building2,
+  CalendarDays,
   CheckCircle2,
+  ChevronDown,
   Copy,
   Download,
   ExternalLink,
   FileCheck2,
+  FileText,
   Fingerprint,
   FolderKanban,
   Globe2,
-  Rocket,
+  Hash,
   ShieldCheck,
-  UsersRound,
+  MapPin,
   Network,
   Wallet,
+  Link2,
+  Factory,
 } from 'lucide-react';
+import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { PrivyTrustBadge } from '@/components/branding/PrivyBrand';
-import { OrganizationSummaryHeader } from '@/components/organization/OrganizationSummaryHeader';
 import { Card } from '@/components/ui/Card';
 import { ROUTES } from '@/config/routes';
 import { web3Config } from '@/config/web3';
@@ -50,9 +54,35 @@ const initialsFor = (name) =>
     .map((part) => part[0]?.toUpperCase())
     .join('') || 'UB';
 
+// Presentation only: all values come from the existing organization response.
+function CompanyDetail({ icon: Icon, label, value, className = '', children }) {
+  return (
+    <div className={`org-company-field ${className}`}>
+      <span className="org-company-field__icon" aria-hidden="true"><Icon size={19} /></span>
+      <div className="org-company-field__content">
+        <dt>{label}</dt>
+        <dd>{children ?? (value || '—')}</dd>
+      </div>
+    </div>
+  );
+}
+
+const safeWebsite = (value) => {
+  if (!value?.trim()) return '';
+  try {
+    const url = new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`);
+    return ['http:', 'https:'].includes(url.protocol) ? url.href : '';
+  } catch {
+    return '';
+  }
+};
+
 export default function OrganizationOverviewPage() {
   useDocumentTitle('Verified Organization');
   const { organization } = useOrganization();
+  const [activityExpanded, setActivityExpanded] = useState(false);
+  const [ownersExpanded, setOwnersExpanded] = useState(false);
+  const [documentsExpanded, setDocumentsExpanded] = useState(false);
 
   if (organization.status === ORGANIZATION_STATUSES.VERIFIED_SUCCESS_PENDING && !organization.verifiedScreenViewed) {
     return <Navigate to={ROUTES.organizationVerified} replace />;
@@ -73,113 +103,85 @@ export default function OrganizationOverviewPage() {
   const jurisdiction = organization.jurisdiction;
   const owners = Array.isArray(organization.beneficialOwners) ? organization.beneficialOwners : [];
   const documents = Array.isArray(organization.documents) ? organization.documents : [];
-  const ownersPreview = owners.slice(0, 4);
-  const documentsPreview = documents.slice(0, 5);
+  const ownersPreview = ownersExpanded ? owners : owners.slice(0, 4);
+  const documentsPreview = documentsExpanded ? documents : documents.slice(0, 5);
   const totalOwnership = owners.reduce((sum, owner) => sum + (Number(owner.ownershipPercentage) || 0), 0);
-  const primaryJurisdiction =
-    jurisdiction.countryOfIncorporationName ||
-    company.address.countryName ||
-    jurisdiction.countryOfIncorporation ||
-    company.address.country ||
-    'Jurisdiction';
   const verifiedDate = organization.verifiedAt
     ? formatDate(organization.verifiedAt, { year: 'numeric', month: 'long', day: 'numeric' })
     : 'Verified';
   const incorporationDate = formatDate(jurisdiction.dateOfIncorporation);
+  const businessActivity = jurisdiction.businessActivity?.trim() || '';
+  const websiteUrl = safeWebsite(jurisdiction.website);
+  const registeredAddress = [
+    company.address.street,
+    company.address.cityName || company.address.city,
+    company.address.stateName || company.address.state,
+    company.postalCode,
+    company.address.countryName || company.address.country,
+  ].filter(Boolean).join(', ');
   const organizationWallet = organization.walletAddress || '';
+  const selectedChainIdentity = organization.selectedChainIdentity || {};
+  const identityAddress = selectedChainIdentity.identityAddress || '';
+  const identityChain =
+    web3Config.getChainById(selectedChainIdentity.chainId) ||
+    web3Config.getChainById(
+      web3Config.getChainRecordByUid(selectedChainIdentity.chainUid)?.chainId,
+    ) ||
+    null;
   const walletChain = organizationWallet
     ? web3Config.supportedChains.find(
-        (chain) => chain.id === Number(organization.walletChainId),
+        (chain) => chain.id === Number(organization.walletChainId || organization.chainId),
       ) ||
       web3Config.supportedChains.find(
         (chain) => chain.name.toLowerCase() === organization.walletNetwork?.toLowerCase(),
       ) ||
-      web3Config.requiredChain
+      web3Config.getChainById(
+        web3Config.getChainRecordByUid(organization.walletChainUid || organization.chainUid)?.chainId,
+      ) ||
+      null
     : null;
+  const selectedChain = identityChain || walletChain;
   const walletNetworkName =
-    organization.walletNetwork || walletChain?.name || web3Config.requiredChain.name;
+    selectedChainIdentity.chainName ||
+    selectedChainIdentity.networkName ||
+    selectedChain?.name ||
+    organization.walletNetwork ||
+    'Configured network';
   const walletExplorerUrl =
-    organizationWallet && walletChain?.blockExplorers?.default?.url
-      ? `${walletChain.blockExplorers.default.url}/address/${organizationWallet}`
+    organizationWallet && selectedChain?.blockExplorers?.default?.url
+      ? `${selectedChain.blockExplorers.default.url}/address/${organizationWallet}`
       : '';
-  const contractAddress = organization.contractAddress || '';
-  const contractExplorerUrl =
-    contractAddress && walletChain?.blockExplorers?.default?.url
-      ? `${walletChain.blockExplorers.default.url}/address/${contractAddress}`
+  const identityTransactionHash = selectedChainIdentity.identityTransactionHash || '';
+  const identityTransactionUrl = identityTransactionHash && selectedChain?.blockExplorers?.default?.url
+    ? `${selectedChain.blockExplorers.default.url}/tx/${identityTransactionHash}`
+    : '';
+  const identityExplorerUrl =
+    identityAddress && selectedChain?.blockExplorers?.default?.url
+      ? `${selectedChain.blockExplorers.default.url}/address/${identityAddress}`
       : '';
 
   const copyWalletAddress = async () => {
     if (!organizationWallet) return;
     try {
       await navigator.clipboard.writeText(organizationWallet);
-      toast.success('Privy wallet address copied');
+      toast.success('Organization wallet copied');
     } catch {
-      toast.error('Unable to copy the Privy wallet address');
+      toast.error('Unable to copy organization wallet');
     }
   };
 
-  const copyContractAddress = async () => {
-    if (!contractAddress) return;
+  const copyIdentityAddress = async () => {
+    if (!identityAddress) return;
     try {
-      await navigator.clipboard.writeText(contractAddress);
-      toast.success('Verification record copied');
+      await navigator.clipboard.writeText(identityAddress);
+      toast.success('Organization identity address copied');
     } catch {
-      toast.error('Unable to copy verification record');
+      toast.error('Unable to copy organization identity address');
     }
   };
 
   return (
-    <div className="org-overview-page org-overview-page--enhanced">
-      <OrganizationSummaryHeader organization={organization} />
-
-
-      <section className="org-overview-metrics org-overview-metrics--enhanced" aria-label="Organization verification summary">
-        {[
-          {
-            icon: Globe2,
-            label: 'Registered in',
-            value: primaryJurisdiction,
-            helper: 'Company registration country',
-            tone: 'blue',
-          },
-          {
-            icon: Building2,
-            label: 'Company type',
-            value: company.entityTypeName || company.entityType || 'Registered entity',
-            helper: 'Legal structure',
-            tone: 'purple',
-          },
-          {
-            icon: UsersRound,
-            label: 'Company owners',
-            value: owners.length,
-            helper: `${owners.length === 1 ? 'Owner on record' : 'Owners on record'}`,
-            tone: 'green',
-          },
-          {
-            icon: Rocket,
-            label: 'Issuer access',
-            value: 'Ready',
-            helper: 'Can create and manage assets',
-            tone: 'orange',
-          },
-          {
-            icon: FileCheck2,
-            label: 'Verification documents',
-            value: documents.length,
-            helper: 'Documents on file',
-            tone: 'sky',
-          },
-        ].map((metric) => (
-          <Card className={`org-overview-metric org-overview-metric--${metric.tone}`} key={metric.label}>
-            <span><metric.icon size={20} /></span>
-            <small>{metric.label}</small>
-            <strong>{metric.value || '—'}</strong>
-            <p>{metric.helper}</p>
-          </Card>
-        ))}
-      </section>
-
+    <div className="org-overview-page org-overview-page--enhanced org-overview-page--reference">
       <section className="org-overview-showcase" aria-label="Organization summary panels">
         <Card className="org-readonly-card org-overview-company-card">
           <header>
@@ -187,79 +189,97 @@ export default function OrganizationOverviewPage() {
               <h2>Company Details</h2>
               <p>Your verified company information used for your issuer account.</p>
             </div>
-            <span className="org-readonly-verified"><BadgeCheck size={15} /> Verified</span>
+            <div className="org-company-statuses">
+              <span className="org-readonly-verified"><BadgeCheck size={15} /> Verified</span>
+              <span className="org-company-access"><ShieldCheck size={15} /> Issuer access ready</span>
+            </div>
           </header>
-          <dl className="org-detail-grid org-detail-grid--comfortable">
-            <div>
-              <dt>Company name</dt>
-              <dd>{company.legalName || '—'}</dd>
+          <dl className="org-company-grid">
+            <CompanyDetail icon={Building2} label="Company name" value={company.legalName} />
+            <CompanyDetail icon={Building2} label="Entity type" value={company.entityTypeName || company.entityType} />
+            <CompanyDetail icon={Hash} label="Registration number" value={company.registrationNumber || 'Not provided'} />
+            <CompanyDetail icon={Factory} label="Industry" value={jurisdiction.industryName || jurisdiction.industry} />
+            <div className="org-company-field-group">
+              <CompanyDetail icon={MapPin} label="Company country" value={company.address.countryName || company.address.country} />
+              <CompanyDetail icon={Globe2} label="Country of incorporation" value={jurisdiction.countryOfIncorporationName || jurisdiction.countryOfIncorporation} />
+              <CompanyDetail icon={CalendarDays} label="Date of incorporation" value={incorporationDate} />
             </div>
-            <div>
-              <dt>Address</dt>
-              <dd>
-                {company.address.street || '—'}
-                {(company.address.cityName || company.address.city) ? `, ${company.address.cityName || company.address.city}` : ''}
-                {(company.address.stateName || company.address.state) ? `, ${company.address.stateName || company.address.state}` : ''}
-                {(company.address.countryName || company.address.country) ? `, ${company.address.countryName || company.address.country}` : ''}
-              </dd>
-            </div>
-            <div>
-              <dt>Company type</dt>
-              <dd>{company.entityTypeName || company.entityType || '—'}</dd>
-            </div>
-            <div>
-              <dt>Industry</dt>
-              <dd>{jurisdiction.industryName || jurisdiction.industry || '—'}</dd>
-            </div>
-            <div>
-              <dt>Registered in</dt>
-              <dd>{primaryJurisdiction}</dd>
-            </div>
-            <div>
-              <dt>Date incorporated</dt>
-              <dd>{incorporationDate}</dd>
-            </div>
-            <div>
-              <dt>Tax ID</dt>
-              <dd>{jurisdiction.taxIdentificationNumber || 'Not provided'}</dd>
-            </div>
+            <CompanyDetail className="org-company-field--full" icon={MapPin} label="Registered address" value={registeredAddress || 'Not provided'} />
+            <CompanyDetail icon={FileText} label="Tax identification number" value={jurisdiction.taxIdentificationNumber || 'Not provided'} />
+            <CompanyDetail icon={Link2} label="Website">
+              {websiteUrl ? (
+                <a className="org-company-website" href={websiteUrl} target="_blank" rel="noopener noreferrer">
+                  {jurisdiction.website} <ExternalLink size={15} aria-hidden="true" />
+                </a>
+              ) : jurisdiction.website || 'Not provided'}
+            </CompanyDetail>
+            <CompanyDetail className="org-company-field--full org-company-field--activity" icon={FileText} label="Business activity">
+              {businessActivity ? (
+                <>
+                  <p className={!activityExpanded && businessActivity.length > 150 ? 'org-company-activity--clamped' : ''}>{businessActivity}</p>
+                  {businessActivity.length > 150 ? (
+                    <button type="button" className="org-company-more" onClick={() => setActivityExpanded((value) => !value)} aria-expanded={activityExpanded}>
+                      {activityExpanded ? 'Show less' : 'Show more'} <ChevronDown size={15} className={activityExpanded ? 'is-expanded' : ''} />
+                    </button>
+                  ) : null}
+                </>
+              ) : 'Not provided'}
+            </CompanyDetail>
           </dl>
         </Card>
 
         <Card className="org-wallet-card">
           <header className="org-wallet-card__header">
             <div>
-              <span className="org-wallet-card__eyebrow">Secure management account</span>
-              <h2>Privy secure account</h2>
+              <h2>Approved Organization Wallet</h2>
             </div>
             <span
               className={`org-wallet-card__status ${
                 organizationWallet ? 'org-wallet-card__status--active' : 'org-wallet-card__status--inactive'
               }`}
             >
-              <ShieldCheck size={14} /> {organizationWallet ? 'Ready' : 'Unavailable'}
+              <ShieldCheck size={14} /> {organizationWallet ? 'Active' : 'Unavailable'}
             </span>
           </header>
 
           <div className="org-wallet-card__body">
-            <div className="flex">
-              <PrivyTrustBadge compact tone="dark" label="Issuer embedded wallet" />
-            </div>
-            <section className="org-wallet-card__address" aria-label="Privy secure account status">
+            <section className="org-wallet-card__address" aria-label="Primary issuer wallet">
               <span className="org-wallet-card__icon" aria-hidden="true">
                 <Wallet size={20} />
               </span>
               <div className="org-wallet-card__address-copy">
-                <small>Securely managed by Privy</small>
-                <strong>{organizationWallet ? 'Linked to your T-REX organization profile' : 'Secure account unavailable'}</strong>
+                <small>Approved wallet</small>
+                <strong title={organizationWallet || undefined}>
+                  {organizationWallet
+                    ? shortenWalletAddress(organizationWallet, 9, 9)
+                    : 'Wallet address unavailable'}
+                </strong>
                 <p>
-                  Your organization uses this Privy secure account to manage assets, approve investors,
-                  and confirm important issuer actions. You do not need to connect another account.
+                  This is the wallet your organization approved. It is used to create and manage assets,
+                  approve investors, and confirm important issuer actions.
                 </p>
               </div>
+              {organizationWallet ? (
+                <button
+                  type="button"
+                  className="org-wallet-card__copy-button"
+                  onClick={copyWalletAddress}
+                  aria-label="Copy organization wallet address"
+                  title="Copy organization wallet address"
+                >
+                  <Copy size={16} />
+                </button>
+              ) : null}
             </section>
 
             <div className="org-wallet-card__meta">
+              <article>
+                <span><Network size={17} /></span>
+                <div>
+                  <small>Blockchain network</small>
+                  <strong>{walletNetworkName}</strong>
+                </div>
+              </article>
               <article>
                 <span><ShieldCheck size={17} /></span>
                 <div>
@@ -270,91 +290,51 @@ export default function OrganizationOverviewPage() {
             </div>
 
             <details className="org-wallet-card__technical">
-              <summary>View account details</summary>
-              {organizationWallet ? (
-                <article className="org-wallet-card__contract">
-                  <div className="org-wallet-card__contract-copy">
-                    <span className="org-wallet-card__contract-label">
-                      <Wallet size={15} /> Privy wallet address
-                    </span>
-                    <strong title={organizationWallet}>
-                      {shortenWalletAddress(organizationWallet, 9, 9)}
-                    </strong>
-                    <p>This technical address identifies the secure account managed by Privy.</p>
-                  </div>
-                  <button
-                    type="button"
-                    className="org-wallet-card__copy-button org-wallet-card__copy-button--contract"
-                    onClick={copyWalletAddress}
-                    aria-label="Copy Privy wallet address"
-                    title="Copy Privy wallet address"
-                  >
-                    <Copy size={16} />
-                  </button>
-                </article>
-              ) : null}
-
+              <summary>View technical details</summary>
               <article className="org-wallet-card__contract">
                 <div className="org-wallet-card__contract-copy">
                   <span className="org-wallet-card__contract-label">
-                    <Network size={15} /> Network
+                    <Fingerprint size={15} /> Organization identity address
                   </span>
-                  <strong>{walletNetworkName}</strong>
-                  <p>This network detail is provided for technical support and verification.</p>
-                </div>
-              </article>
-
-              <article className="org-wallet-card__contract">
-                <div className="org-wallet-card__contract-copy">
-                  <span className="org-wallet-card__contract-label">
-                    <Fingerprint size={15} /> Organization verification record
-                  </span>
-                  <strong title={contractAddress || undefined}>
-                    {contractAddress || 'Not assigned yet'}
+                  <strong title={identityAddress || undefined}>
+                    {identityAddress || 'Not created on this network yet'}
                   </strong>
-                  <p>This technical record links the approved secure account to your verified organization.</p>
+                  <p>This ONCHAINID belongs to your verified organization on the selected network.</p>
                 </div>
-                {contractAddress ? (
+                {identityAddress ? (
                   <button
                     type="button"
                     className="org-wallet-card__copy-button org-wallet-card__copy-button--contract"
-                    onClick={copyContractAddress}
-                    aria-label="Copy organization verification record"
-                    title="Copy verification record"
+                    onClick={copyIdentityAddress}
+                    aria-label="Copy organization identity address"
+                    title="Copy organization identity address"
                   >
                     <Copy size={16} />
                   </button>
                 ) : null}
               </article>
-
-              {walletExplorerUrl || contractExplorerUrl ? (
-                <div className="org-wallet-card__actions">
-                  {walletExplorerUrl ? (
-                    <a href={walletExplorerUrl} target="_blank" rel="noreferrer">
-                      <ExternalLink size={15} /> View Privy wallet record
-                    </a>
-                  ) : null}
-                  {contractExplorerUrl ? (
-                    <a
-                      className="org-wallet-card__action--contract"
-                      href={contractExplorerUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      <ExternalLink size={15} /> View verification record
-                    </a>
-                  ) : null}
+              {identityTransactionHash ? (
+                <article className="org-wallet-card__contract org-wallet-card__transaction">
+                  <div className="org-wallet-card__contract-copy">
+                    <span className="org-wallet-card__contract-label">Organization identity transaction</span>
+                    <strong title={identityTransactionHash}>{identityTransactionHash}</strong>
+                    {identityTransactionUrl ? <a href={identityTransactionUrl} target="_blank" rel="noreferrer"><ExternalLink size={14} /> View transaction</a> : null}
+                  </div>
+                  <button type="button" className="org-wallet-card__copy-button org-wallet-card__copy-button--contract" aria-label="Copy organization identity transaction" title="Copy transaction hash" onClick={async () => {
+                    try { await navigator.clipboard.writeText(identityTransactionHash); toast.success('Transaction hash copied'); }
+                    catch { toast.error('Unable to copy transaction hash'); }
+                  }}><Copy size={16}/></button>
+                </article>
+              ) : null}
+              {walletExplorerUrl || identityExplorerUrl ? (
+                <div className="org-wallet-card__actions org-wallet-card__technical-links">
+                  {walletExplorerUrl ? <a href={walletExplorerUrl} target="_blank" rel="noreferrer"><ExternalLink size={15} /> View wallet on blockchain</a> : null}
+                  {identityExplorerUrl ? <a className="org-wallet-card__action--contract" href={identityExplorerUrl} target="_blank" rel="noreferrer"><ExternalLink size={15} /> View organization identity</a> : null}
                 </div>
               ) : null}
             </details>
           </div>
 
-          <footer className="org-wallet-card__footer">
-            <div className="org-wallet-card__jurisdiction">
-              <small>Registered in</small>
-              <b>{primaryJurisdiction}</b>
-            </div>
-          </footer>
         </Card>
       </section>
 
@@ -389,6 +369,11 @@ export default function OrganizationOverviewPage() {
               <div className="org-overview-empty-note">No company owners are available.</div>
             )}
           </div>
+          {owners.length > 4 ? (
+            <button type="button" className="org-overview-list-more" onClick={() => setOwnersExpanded((value) => !value)} aria-expanded={ownersExpanded}>
+              {ownersExpanded ? 'Show fewer owners' : `Show all ${owners.length} owners`} <ChevronDown size={16} className={ownersExpanded ? 'is-expanded' : ''} />
+            </button>
+          ) : null}
         </Card>
 
         <Card className="org-readonly-card org-overview-doc-card" id="organization-documents">
@@ -434,6 +419,11 @@ export default function OrganizationOverviewPage() {
               <div className="org-overview-empty-note">No documents uploaded.</div>
             )}
           </div>
+          {documents.length > 5 ? (
+            <button type="button" className="org-overview-list-more" onClick={() => setDocumentsExpanded((value) => !value)} aria-expanded={documentsExpanded}>
+              {documentsExpanded ? 'Show fewer documents' : `Show all ${documents.length} documents`} <ChevronDown size={16} className={documentsExpanded ? 'is-expanded' : ''} />
+            </button>
+          ) : null}
         </Card>
       </section>
     </div>

@@ -1,26 +1,55 @@
+import { isTokenCreationLocked } from '@/utils/tokenCreationLock';
+import { PaymentTokenSelect } from '@/components/token-issuance/PaymentTokenSelect';
+import { TokenPriceValue } from '@/components/common/TokenPriceValue';
 import { ArrowRight, Calculator, Coins, LockKeyhole } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FieldWrapper, InfoCallout, SectionCard, SelectInput, TextareaInput, TextInput } from '@/components/token-issuance/IssuancePrimitives';
+import { FieldWrapper, InfoCallout, SectionCard, TextareaInput, TextInput } from '@/components/token-issuance/IssuancePrimitives';
 import { IssuanceLayout } from '@/components/token-issuance/IssuanceLayout';
-import { SUPPORTED_CURRENCIES } from '@/config/tokenIssuance';
+import { usePaymentTokens } from '@/hooks/usePaymentTokens';
+import { supportsPaymentAction } from '@/config/payment-tokens';
+import { web3Config } from '@/config/web3';
 import { ROUTES } from '@/config/routes';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useWalletConnection } from '@/hooks/useWalletConnection';
 import { useTokenIssuanceStore } from '@/store/tokenIssuance.store';
-import { formatMoney, formatNumber, getImpliedValuation, validateSupplyPricing } from '@/utils/tokenIssuance';
+import {
+  decimalStepFor,
+  formatMoney,
+  formatNumber,
+  getImpliedValuation,
+  isDecimalInputWithinPrecision,
+  normalizePaymentTokenDecimals,
+  validateSupplyPricing,
+} from '@/utils/tokenIssuance';
 
 export default function SupplyPricingPage() {
   const navigate = useNavigate();
-  const wallet = useWalletConnection();
+  const tokenInformation = useTokenIssuanceStore((state) => state.tokenInformation);
+  const selectedChain = web3Config.getChainRecordByUid(tokenInformation.chainUid);
+  const catalogue = usePaymentTokens({ chainUid: tokenInformation.chainUid, action: 'purchase', enabled: Boolean(tokenInformation.chainUid) });
+  const options = (catalogue.data || []).filter((item) => supportsPaymentAction(item, 'create'));
+  const wallet = useWalletConnection(tokenInformation.chainId);
   const data = useTokenIssuanceStore((state) => state.supplyPricing);
+  const selectedPayment = (catalogue.data || []).find((item) =>
+    item.contractAddress.toLowerCase() === String(data.paymentTokenAddress || '').toLowerCase());
+  const paymentTokenDecimals = normalizePaymentTokenDecimals(
+    selectedPayment?.decimals ?? data.paymentTokenDecimals,
+  );
+  const priceStep = decimalStepFor(paymentTokenDecimals);
+  const pricePrecisionHint = paymentTokenDecimals === 0
+    ? 'Use whole numbers only.'
+    : `Use at most ${paymentTokenDecimals} decimal place${paymentTokenDecimals === 1 ? '' : 's'}.`;
+  const backend = useTokenIssuanceStore((state) => state.backend);
+  const deployment = useTokenIssuanceStore((state) => state.deployment);
+  const paymentLocked = Boolean(data.paymentTokenLocked || isTokenCreationLocked(backend, deployment));
   const updateSection = useTokenIssuanceStore((state) => state.updateSection);
   const hydrateWalletDefaults = useTokenIssuanceStore((state) => state.hydrateWalletDefaults);
   const markStepCompleted = useTokenIssuanceStore((state) => state.markStepCompleted);
   const markStepTouched = useTokenIssuanceStore((state) => state.markStepTouched);
   const [touched, setTouched] = useState({});
   const [submitted, setSubmitted] = useState(false);
-  const errors = validateSupplyPricing(data);
+  const errors = validateSupplyPricing(data, { paymentTokenDecimals });
   const valuation = getImpliedValuation(data.totalSupply, data.initialPrice);
   useDocumentTitle('Supply & Pricing');
 
@@ -45,7 +74,7 @@ export default function SupplyPricingPage() {
       <h3>Live issuance summary</h3>
       <dl className="issuance-summary-list">
         <div><dt>Total supply</dt><dd>{data.totalSupply ? formatNumber(data.totalSupply) : '—'}</dd></div>
-        <div><dt>Token price</dt><dd>{data.initialPrice ? formatMoney(data.initialPrice, data.currency) : '—'}</dd></div>
+        <div><dt>Token price</dt><dd>{data.initialPrice ? <TokenPriceValue value={data.initialPrice} suffix={data.currency ? ` ${data.currency}` : ''} /> : '—'}</dd></div>
         <div><dt>Implied initial valuation</dt><dd>{valuation !== null ? formatMoney(valuation, data.currency) : '—'}</dd></div>
         <div><dt>Minimum investment</dt><dd>{data.minimumInvestment ? formatMoney(data.minimumInvestment, data.currency) : '—'}</dd></div>
         <div><dt>Maximum investment</dt><dd>{data.maximumInvestment ? formatMoney(data.maximumInvestment, data.currency) : '—'}</dd></div>
@@ -83,14 +112,47 @@ export default function SupplyPricingPage() {
           <FieldWrapper label="Total token supply" required error={fieldError('totalSupply')} hint="Maximum initial number of tokens available." htmlFor="total-supply">
             <TextInput id="total-supply" type="number" min="0" step="any" inputMode="decimal" value={data.totalSupply} onChange={(event) => update('totalSupply', event.target.value)} onBlur={() => blur('totalSupply')} placeholder="1000000" error={fieldError('totalSupply')} />
           </FieldWrapper>
-          <FieldWrapper label="Initial token price" required error={fieldError('initialPrice')} hint="Price per token at the start of the offering." htmlFor="initial-price">
-            <TextInput id="initial-price" type="number" min="0" step="any" inputMode="decimal" value={data.initialPrice} onChange={(event) => update('initialPrice', event.target.value)} onBlur={() => blur('initialPrice')} placeholder="10.00" error={fieldError('initialPrice')} />
+          <FieldWrapper label="Initial token price" required error={fieldError('initialPrice')} hint={`Price per token at the start of the offering. ${pricePrecisionHint}`} htmlFor="initial-price">
+            <TextInput
+              id="initial-price"
+              type="number"
+              min={priceStep}
+              step={priceStep}
+              inputMode="decimal"
+              value={data.initialPrice}
+              onKeyDown={(event) => {
+                if (['-', '+', 'e', 'E'].includes(event.key)) event.preventDefault();
+              }}
+              onChange={(event) => {
+                const nextValue = event.target.value;
+                if (!isDecimalInputWithinPrecision(nextValue, paymentTokenDecimals)) return;
+                update('initialPrice', nextValue);
+              }}
+              onBlur={() => blur('initialPrice')}
+              placeholder="10.00"
+              error={fieldError('initialPrice')}
+            />
           </FieldWrapper>
-          <FieldWrapper label="Price currency" required error={fieldError('currency')} htmlFor="price-currency">
-            <SelectInput id="price-currency" value={data.currency} onChange={(event) => update('currency', event.target.value)} onBlur={() => blur('currency')} error={fieldError('currency')}>
-              {SUPPORTED_CURRENCIES.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
-            </SelectInput>
-          </FieldWrapper>
+          <PaymentTokenSelect id="price-currency" label="Payment token" required items={options}
+            value={data.paymentTokenAddress || ''} disabled={paymentLocked || catalogue.isPending}
+            placeholder={catalogue.isPending ? 'Loading payment tokens…' : 'Select payment token'}
+            hint={paymentLocked ? 'Payment token is fixed after creation.' : 'You can change this during setup. It becomes fixed when you create the token.'}
+            error={fieldError('currency') || (catalogue.isError ? 'Unable to load payment tokens. Refresh and try again.' : undefined)}
+            onChange={(event) => {
+              const selected = options.find((item) => item.contractAddress === event.target.value);
+              if (selected && data.initialPrice
+                && !isDecimalInputWithinPrecision(data.initialPrice, selected.decimals)) {
+                setTouched((current) => ({ ...current, initialPrice: true }));
+              }
+              updateSection('supplyPricing', {
+                paymentTokenAddress: selected?.contractAddress || '',
+                paymentTokenDecimals: selected?.decimals ?? null,
+                controllerAddress: selected
+                  ? selected.controllerAddress || selectedChain?.platformControllerAddress || ''
+                  : '',
+                currency: selected?.symbol || '',
+              });
+            }} />
           <FieldWrapper label="Lock-up period" error={fieldError('lockupDays')} hint="Optional number of calendar days." htmlFor="supply-lockup">
             <TextInput id="supply-lockup" type="number" min="0" inputMode="numeric" value={data.lockupDays} onChange={(event) => update('lockupDays', event.target.value)} onBlur={() => blur('lockupDays')} placeholder="0" error={fieldError('lockupDays')} />
           </FieldWrapper>

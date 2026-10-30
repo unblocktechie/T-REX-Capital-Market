@@ -54,6 +54,8 @@ export function GlobalLoader() {
     () => () => {
       if (showTimerRef.current) window.clearTimeout(showTimerRef.current);
       if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
+      showTimerRef.current = null;
+      hideTimerRef.current = null;
     },
     [],
   );
@@ -67,7 +69,6 @@ export function GlobalLoader() {
         variant="overlay"
         title="Securing your request"
         message="Synchronizing with the T-REX infrastructure…"
-        eyebrow="Encrypted connection"
         compact
       />
     </div>

@@ -1,3 +1,4 @@
+import { isApplicationCompleted, readApplicationProgress } from './applicationProgress.js';
 const normalize = (value) => String(value || '')
   .trim()
   .toLowerCase()
@@ -17,17 +18,17 @@ export const isRegistryRegistrationConfirmedEvent = (event) => {
 };
 
 export const isApplicationPurchaseReady = (history, application) => {
-  const applicationStatus = normalize(
-    application?.interest?.status
-    || application?.status
-    || history?.summary?.status
-    || history?.status,
-  );
-
-  if (['registered', 'readytoinvest', 'verifiedholder'].includes(applicationStatus)) return true;
-
-  return Array.isArray(history?.timeline)
-    && history.timeline.some(isRegistryRegistrationConfirmedEvent);
+  const interest = application?.interest || {};
+  const progress = readApplicationProgress(interest, application, history?.summary);
+  const applicationStatus = normalize(interest.status || application?.status || history?.summary?.status || history?.status);
+  if (isApplicationCompleted(progress, applicationStatus)) return true;
+  if (progress.canInvest === false || progress.claimsConfirmed === false || progress.registryRegistrationConfirmed === false
+    || progress.journeyStage === 'AWAITING_INVESTOR_CLAIMS') return false;
+  // Older claims-first applications have both events even if the stored status
+  // has not been refreshed. Registry membership ALONE must never enable investing.
+  const events = history?.timeline || [];
+  return progress.canInvest === null && events.some(isRegistryRegistrationConfirmedEvent)
+    && events.some((event) => normalize(event?.eventType) === 'claimsubmitted');
 };
 
 export const getInvestmentActionContext = (application = {}) => {

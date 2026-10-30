@@ -12,7 +12,7 @@ import { createTokenLogoFromBlob } from '@/utils/tokenLogo';
 
 export function useTokenDashboardData() {
   const tokenRecord = useMyToken();
-  const enabled = tokenRecord.hasToken;
+  const enabled = Boolean(tokenRecord.selectedChainUid && tokenRecord.hasToken);
 
   const optionsQuery = useQuery({
     queryKey: ['token-options', 'dashboard'],
@@ -31,7 +31,11 @@ export function useTokenDashboardData() {
   });
 
   const logoQuery = useQuery({
-    queryKey: ['token-image', tokenRecord.tokenUid || 'current'],
+    queryKey: [
+      'token-image',
+      tokenRecord.selectedChainUid || 'unselected',
+      tokenRecord.tokenUid || 'current',
+    ],
     queryFn: async () => {
       const imageBlob = await tokenApi.getImage();
       return createTokenLogoFromBlob(imageBlob, 'token-logo.webp');

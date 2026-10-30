@@ -1,3 +1,4 @@
+import { paymentContextOf } from '@/config/payment-tokens';
 const first = (...values) => values.find((value) => value !== undefined && value !== null && value !== '');
 const text = (...values) => String(first(...values, '') || '').trim();
 const numberOrNull = (...values) => {
@@ -183,6 +184,7 @@ export const mapMarketplaceToken = (raw = {}, { interest = null, eligibility = n
   const pricing = raw?.supplyPricing || raw?.pricing || {};
   const compliance = raw?.compliance || {};
   const organization = raw?.organization || raw?.issuer || raw?.company || {};
+  const paymentContext = paymentContextOf(raw);
   const companyName = typeof organization === 'string'
     ? organization
     : text(
@@ -232,16 +234,30 @@ export const mapMarketplaceToken = (raw = {}, { interest = null, eligibility = n
     tokenInformation?.price,
     initialTokenPriceExact,
   );
-  const initialTokenPrice = numberOrNull(initialTokenPriceExact);
-  const price = numberOrNull(currentTokenPriceExact, initialTokenPriceExact);
+  // Keep token prices as exact decimal strings. Converting them to Number here
+  // would irreversibly lose precision before any UI formatter can run.
+  const initialTokenPrice = initialTokenPriceExact || null;
+  const price = currentTokenPriceExact || initialTokenPriceExact || null;
   const requiredClaimTopics = array(raw?.requiredClaimTopics, raw?.claimTopics)
     .map((topic, index) => mapClaimTopic(topic, index));
 
   return {
     id: tokenUid,
     tokenUid,
-    name: text(raw?.name, raw?.tokenName, raw?.tokenDisplayName, tokenInformation?.name) || '—',
-    symbol: (text(raw?.symbol, raw?.tokenSymbol, raw?.ticker, tokenInformation?.symbol) || '—').toUpperCase(),
+    name: text(
+      raw?.name,
+      raw?.tokenName,
+      raw?.tokenDisplayName,
+      tokenInformation?.name,
+      tokenInformation?.tokenName,
+    ) || '—',
+    symbol: (text(
+      raw?.symbol,
+      raw?.tokenSymbol,
+      raw?.ticker,
+      tokenInformation?.symbol,
+      tokenInformation?.tokenSymbol,
+    ) || '—').toUpperCase(),
     decimals: numberOrNull(raw?.decimals, tokenInformation?.decimals),
     price,
     currentTokenPrice: price,
@@ -249,11 +265,24 @@ export const mapMarketplaceToken = (raw = {}, { interest = null, eligibility = n
     currentPrice: price,
     initialTokenPrice,
     initialTokenPriceExact,
-    nav: numberOrNull(raw?.nav, raw?.netAssetValue, price),
+    nav: numberOrNull(raw?.nav, raw?.netAssetValue),
     initialPrice: initialTokenPrice,
-    currency: text(raw?.currency, pricing?.currency, 'USDC').toUpperCase(),
-    description: splitDescription(first(raw?.description, tokenInformation?.description)),
-    shortDescription: text(raw?.shortDescription, raw?.description, tokenInformation?.description, tokenInformation?.assetClass),
+    ...paymentContext,
+    currency: paymentContext.paymentTokenSymbol || text(raw?.currency, pricing?.currency),
+    description: splitDescription(first(
+      raw?.tokenDescription,
+      raw?.description,
+      tokenInformation?.tokenDescription,
+      tokenInformation?.description,
+    )),
+    shortDescription: text(
+      raw?.shortDescription,
+      raw?.tokenDescription,
+      raw?.description,
+      tokenInformation?.tokenDescription,
+      tokenInformation?.description,
+      tokenInformation?.assetClass,
+    ),
     issuer: companyName || '—',
     company: companyName || '—',
     legalCompanyName: companyName || '',
@@ -336,7 +365,13 @@ export const mapMarketplaceToken = (raw = {}, { interest = null, eligibility = n
       compliance?.maximumInvestors,
     ),
     minInvestment: numberOrNull(raw?.minInvestment, raw?.minimumInvestment, pricing?.minimumInvestment, compliance?.minimumInvestment),
-    currentInvestors: numberOrNull(raw?.currentInvestors, raw?.investorCount),
+    // The token-detail endpoint returns the live on-chain holder count here.
+    // Zero is a real count and must not be treated as an unavailable value.
+    currentInvestors: numberOrNull(
+      raw?.holderSummary?.currentHolders,
+      raw?.currentInvestors,
+      raw?.investorCount,
+    ),
     maxBalance: numberOrNull(
       raw?.maxBalancePerInvestor,
       tokenInformation?.maxBalancePerInvestor,
@@ -372,6 +407,14 @@ export const mapMarketplaceToken = (raw = {}, { interest = null, eligibility = n
       tokenInformation?.treasuryAddress,
       pricing?.treasuryWalletAddress,
     ),
+    chainUid: text(
+      raw?.chainUid,
+      raw?.networkChainUid,
+      tokenInformation?.chainUid,
+      raw?.network?.chainUid,
+      raw?.chain?.chainUid,
+      raw?.chain?.uid,
+    ),
     chainId: numberOrNull(
       raw?.chainId,
       raw?.networkChainId,
@@ -385,12 +428,18 @@ export const mapMarketplaceToken = (raw = {}, { interest = null, eligibility = n
     registryAddress: text(raw?.registryAddress, raw?.identityRegistryAddress, raw?.contracts?.identityRegistry),
     tokenAddress: text(
       raw?.tokenAddress,
+      raw?.tokenContractAddress,
       raw?.contractAddress,
+      raw?.proxyAddress,
       raw?.address,
       tokenInformation?.tokenAddress,
+      tokenInformation?.tokenContractAddress,
       tokenInformation?.contractAddress,
       raw?.contracts?.token,
       raw?.contracts?.tokenAddress,
+      raw?.deployment?.contracts?.token,
+      raw?.deployment?.tokenAddress,
+      raw?.deployment?.contractAddress,
     ),
     onchainId: text(raw?.onchainId, raw?.onchainID, organization?.onchainId, organization?.onchainID),
     permittedCountries: array(raw?.permittedCountries, compliance?.permittedCountries)
@@ -435,9 +484,10 @@ export const mapInvestorPortfolioItem = (raw = {}) => {
         portfolio?.totalPurchasedAmount,
         portfolio?.purchasedTokenAmount,
       ),
-      totalInvestedUsdtAmount: text(
-        portfolio?.totalInvestedUsdtAmount,
+      totalInvestedPaymentAmount: text(
+        portfolio?.totalInvestedPaymentAmount,
         portfolio?.totalInvestedAmount,
+        portfolio?.totalInvestedUsdtAmount,
         portfolio?.investedUsdtAmount,
       ),
       totalRedeemedTokenAmount: text(
@@ -536,6 +586,30 @@ export const mapInterest = (raw = {}) => {
       raw?.initialTokenPrice,
     ),
     currency: first(tokenRaw?.currency, raw?.currency, raw?.priceCurrency),
+    paymentTokenAddress: first(
+      tokenRaw?.paymentTokenAddress,
+      tokenRaw?.paymentToken?.contractAddress,
+      tokenRaw?.paymentToken?.address,
+      raw?.paymentTokenAddress,
+      raw?.paymentToken?.contractAddress,
+      raw?.paymentToken?.address,
+    ),
+    paymentTokenSymbol: first(
+      tokenRaw?.paymentTokenSymbol,
+      tokenRaw?.paymentToken?.symbol,
+      raw?.paymentTokenSymbol,
+      raw?.paymentToken?.symbol,
+    ),
+    platformControllerAddress: first(
+      tokenRaw?.platformControllerAddress,
+      tokenRaw?.platformController,
+      tokenRaw?.controllerAddress,
+      tokenRaw?.controller?.contractAddress,
+      raw?.platformControllerAddress,
+      raw?.platformController,
+      raw?.controllerAddress,
+      raw?.controller?.contractAddress,
+    ),
     minInvestment: first(
       tokenRaw?.minInvestment,
       tokenRaw?.minimumInvestment,
@@ -621,6 +695,13 @@ export const mapInterest = (raw = {}) => {
     investorUserUid: text(raw?.investorUserUid, raw?.investor?.userUid),
     walletAddress: text(raw?.walletAddress, raw?.investor?.walletAddress),
     status: text(raw?.status, 'pending').toLowerCase(),
+    // Nullable flags distinguish legacy responses from explicit backend denials.
+    issuerVerificationConfirmed: typeof raw?.issuerVerificationConfirmed === 'boolean' ? raw.issuerVerificationConfirmed : null,
+    registryRegistrationConfirmed: typeof raw?.registryRegistrationConfirmed === 'boolean' ? raw.registryRegistrationConfirmed : null,
+    claimsConfirmed: typeof raw?.claimsConfirmed === 'boolean' ? raw.claimsConfirmed : null,
+    canSubmitClaims: typeof raw?.canSubmitClaims === 'boolean' ? raw.canSubmitClaims : null,
+    canInvest: typeof raw?.canInvest === 'boolean' ? raw.canInvest : null,
+    journeyStage: text(raw?.journeyStage).toUpperCase(),
     note: text(raw?.note),
     submittedAt: text(raw?.submittedAt, raw?.createdAt),
     decisionAt: text(raw?.decisionAt),

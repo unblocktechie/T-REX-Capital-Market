@@ -235,6 +235,20 @@ button.org-stepper__button {
   padding: clamp(18px, 2.2vw, 28px);
 }
 
+/* Cards use backdrop-filter globally, which creates separate stacking contexts.
+   Lift the active form card while a custom select/date menu is open so issuer
+   dropdowns are never painted behind adjacent cards. */
+.org-form-card:has(.org-select-trigger.is-open),
+.org-form-card:has(.org-date-trigger.is-open) {
+  position: relative;
+  z-index: 120;
+}
+
+.org-form-card .org-select-popover,
+.org-form-card .org-date-popover {
+  z-index: 130;
+}
+
 .org-form-card__header,
 .org-readonly-card > header,
 .org-uploaded-panel > header {
@@ -540,26 +554,6 @@ button.org-stepper__button {
 
 .org-ubo-toolbar strong.is-error {
   color: var(--danger-500);
-}
-
-.org-ubo-toolbar strong.is-valid {
-  color: var(--success-500);
-}
-
-.org-ubo-toolbar small {
-  max-width: 560px;
-  margin-top: 3px;
-  color: var(--text-muted);
-  font-size: 11px;
-  line-height: 1.45;
-}
-
-.org-ubo-toolbar small.is-error {
-  color: var(--danger-500);
-}
-
-.org-ubo-toolbar small.is-valid {
-  color: var(--success-500);
 }
 
 .org-ubo-list {
@@ -1895,8 +1889,11 @@ button.org-stepper__button {
   display: grid;
   width: max(100%, 118px);
   max-height: min(230px, 35vh);
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid var(--border);
   border-radius: 11px;
   background: var(--surface);
@@ -2425,6 +2422,8 @@ button.org-stepper__button {
     max-height: calc(100dvh - 24px);
     overflow-y: auto;
     overscroll-behavior: contain;
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
     padding: 10px;
     border-radius: 16px;
   }
@@ -2970,11 +2969,6 @@ button.org-stepper__button {
   content: '−';
 }
 
-.org-wallet-card__technical[open] > summary {
-  margin-bottom: 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
 .org-wallet-card__technical > summary:hover,
 .org-wallet-card__technical > summary:focus-visible {
   background: var(--brand-panel-glass-hover);
@@ -2983,10 +2977,6 @@ button.org-stepper__button {
 }
 
 .org-wallet-card__technical .org-wallet-card__contract {
-  margin: 0 12px 12px;
-}
-
-.org-wallet-card__technical .org-wallet-card__actions {
   margin: 0 12px 12px;
 }
 
@@ -3406,4 +3396,587 @@ button.org-stepper__button {
   border-color: color-mix(in srgb, var(--brand-accent) 45%, transparent);
   background: var(--brand-panel-glass-hover);
   color: var(--brand-panel-text);
+}
+
+/* Exact beneficial ownership feedback. */
+.org-ubo-toolbar strong.is-valid, .org-ubo-toolbar small.is-valid { color: var(--success-500); }
+.org-ubo-toolbar small { max-width: 560px; margin-top: 3px; color: var(--text-muted); font-size: 11px; line-height: 1.45; }
+.org-ubo-toolbar small.is-error { color: var(--danger-500); }
+
+/* Shared date + time picker used by admin and organization flows. */
+.org-datetime-popover {
+  overflow: visible;
+}
+
+.org-datetime__time {
+  display: grid;
+  grid-template-columns: 34px minmax(72px, 1fr) minmax(150px, 1.45fr);
+  align-items: center;
+  gap: 9px;
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 11px;
+}
+
+.org-datetime__time-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--surface-muted);
+  color: var(--primary-600);
+}
+
+.org-datetime__time-copy {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.org-datetime__time-copy strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.org-datetime__time-copy small {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.org-datetime__time-controls {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 5px;
+}
+
+.org-datetime__time-controls .org-calendar-select__trigger {
+  min-width: 0;
+  justify-content: center;
+  padding-inline: 8px;
+}
+
+.org-datetime__time-controls .org-calendar-select__trigger > span {
+  text-align: center;
+}
+
+.org-datetime__time-controls .org-calendar-select__menu {
+  width: 100%;
+  min-width: 74px;
+}
+
+.org-datetime__time-separator {
+  color: var(--text-soft);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.org-datetime__footer {
+  align-items: center;
+}
+
+.org-datetime__footer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.org-calendar__footer button.org-calendar__apply {
+  min-width: 68px;
+  background: var(--primary-500);
+  padding-inline: 14px;
+  color: #fff;
+}
+
+.org-calendar__footer button.org-calendar__apply:hover:not(:disabled),
+.org-calendar__footer button.org-calendar__apply:focus-visible {
+  background: var(--primary-600);
+  color: #fff;
+}
+
+@media (max-width: 520px) {
+  .org-datetime__time {
+    grid-template-columns: 34px minmax(0, 1fr);
+  }
+
+  .org-datetime__time-controls {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .org-datetime__time-controls .org-calendar-select__trigger {
+    height: 38px;
+  }
+}
+
+@media (max-width: 360px) {
+  .org-datetime__time {
+    gap: 7px;
+  }
+
+  .org-datetime__footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .org-datetime__footer > button,
+  .org-datetime__footer-actions,
+  .org-datetime__footer-actions button {
+    width: 100%;
+  }
+
+  .org-datetime__footer-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Keep date-time hour/minute menus fully visible inside the picker. */
+.org-calendar-select__menu.is-top {
+  top: auto;
+  bottom: calc(100% + 6px);
+  transform-origin: bottom center;
+}
+
+.org-datetime__time-controls .org-calendar-select__menu {
+  z-index: 32;
+  max-height: min(176px, 28vh);
+}
+
+@media (max-width: 520px) {
+  .org-datetime__time-controls .org-calendar-select__menu {
+    max-height: min(164px, 26vh);
+  }
+}
+
+@media (max-height: 620px) {
+  .org-datetime__time-controls .org-calendar-select__menu {
+    max-height: min(144px, 24vh);
+  }
+}
+
+/* Verified organization overview: focused detail-first layout.
+   Scoped to this page; onboarding/admin organization layouts are unchanged. */
+.org-overview-page--reference {
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+}
+
+.org-overview-page--reference .org-overview-showcase {
+  grid-template-columns: minmax(0, 1.13fr) minmax(0, 1fr);
+  align-items: stretch;
+  gap: 16px;
+}
+
+.org-overview-page--reference .org-overview-lower-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 16px;
+}
+
+.org-overview-page--reference .org-overview-company-card,
+.org-overview-page--reference .org-overview-ubo-card,
+.org-overview-page--reference .org-overview-doc-card {
+  padding: clamp(18px, 1.7vw, 26px);
+}
+
+.org-overview-page--reference .org-readonly-card > header {
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 12px;
+}
+
+.org-overview-page--reference .org-readonly-card > header h2 {
+  margin: 0 0 4px;
+  font-size: clamp(18px, 1.5vw, 22px);
+  line-height: 1.3;
+}
+
+.org-overview-page--reference .org-readonly-card > header p {
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.org-company-statuses {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.org-company-access {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--text-soft);
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.org-company-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  border-top: 1px solid var(--border);
+}
+
+.org-company-field {
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--border);
+  padding: 15px 10px;
+}
+
+.org-company-field:nth-child(2n + 1):not(.org-company-field--full) {
+  padding-left: 0;
+}
+
+.org-company-field--full,
+.org-company-field-group {
+  grid-column: 1 / -1;
+}
+
+.org-company-field--full {
+  padding-inline: 0;
+}
+
+.org-company-field-group {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-bottom: 1px solid var(--border);
+}
+
+.org-company-field-group .org-company-field {
+  border-bottom: 0;
+  padding: 15px 10px;
+}
+
+.org-company-field-group .org-company-field:first-child {
+  padding-left: 0;
+}
+
+.org-company-field-group .org-company-field + .org-company-field {
+  border-left: 1px solid var(--border);
+}
+
+.org-company-field__icon {
+  display: grid;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--surface-muted);
+  color: var(--text-soft);
+}
+
+.org-company-field__content {
+  min-width: 0;
+  padding-top: 1px;
+}
+
+.org-company-field dt {
+  margin: 0 0 5px;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .045em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.org-company-field dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.55;
+  font-weight: 600;
+}
+
+.org-company-field--activity {
+  border-bottom: 0;
+  padding-bottom: 3px;
+}
+
+.org-company-field--activity dd {
+  font-weight: 400;
+  color: var(--text-soft);
+}
+
+.org-company-field--activity p {
+  margin: 0;
+  white-space: pre-line;
+}
+
+.org-company-activity--clamped {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.org-company-more,
+.org-overview-list-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  margin-top: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.org-company-more {
+  padding: 4px 0;
+}
+
+.org-company-more svg,
+.org-overview-list-more svg {
+  transition: transform .2s ease;
+}
+
+.org-company-more svg.is-expanded,
+.org-overview-list-more svg.is-expanded {
+  transform: rotate(180deg);
+}
+
+.org-company-more:hover,
+.org-overview-list-more:hover,
+.org-company-website:hover {
+  text-decoration: underline;
+}
+
+.org-company-more:focus-visible,
+.org-overview-list-more:focus-visible,
+.org-company-website:focus-visible {
+  outline: 2px solid var(--text-soft);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.org-company-website {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Align the wallet card to the site's existing charcoal theme, not a new accent. */
+.org-overview-page--reference .card.org-wallet-card {
+  border-color: var(--brand-panel-border);
+  background: var(--sidebar-bg);
+  box-shadow: var(--shadow-sm);
+}
+
+.org-overview-page--reference .org-wallet-card__header {
+  align-items: center;
+  padding: clamp(19px, 1.7vw, 25px);
+}
+
+.org-overview-page--reference .org-wallet-card__header h2 {
+  font-size: clamp(19px, 1.6vw, 23px);
+}
+
+.org-overview-page--reference .org-wallet-card__body {
+  gap: 14px;
+  padding: clamp(16px, 1.7vw, 22px);
+}
+
+.org-overview-page--reference .org-wallet-card__address,
+.org-overview-page--reference .org-wallet-card__meta article {
+  border-radius: 13px;
+}
+
+.org-overview-page--reference .org-wallet-card__address {
+  padding: 15px;
+}
+
+.org-overview-page--reference .org-wallet-card__address-copy small,
+.org-overview-page--reference .org-wallet-card__meta small {
+  font-size: 10.5px;
+}
+
+.org-overview-page--reference .org-wallet-card__address strong {
+  font-size: 13px;
+}
+
+.org-overview-page--reference .org-wallet-card__address p {
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+
+.org-overview-page--reference .org-wallet-card__meta strong {
+  font-size: 13px;
+}
+
+.org-overview-page--reference .org-wallet-card__technical {
+  border-radius: 12px;
+}
+
+.org-overview-page--reference .org-wallet-card__technical > summary {
+  font-size: 12.5px;
+}
+
+.org-overview-page--reference .org-wallet-card__contract {
+  border-color: var(--brand-panel-border);
+  border-radius: 10px;
+  background: var(--brand-panel-glass);
+}
+
+.org-overview-page--reference .org-wallet-card__contract-label {
+  color: var(--brand-panel-soft);
+}
+
+.org-overview-page--reference .org-wallet-card__contract a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--brand-panel-text);
+  font-size: 12px;
+  text-underline-offset: 2px;
+}
+
+.org-overview-page--reference .org-wallet-card__technical-links {
+  justify-content: flex-start;
+  margin: 0 12px 12px;
+}
+
+.org-overview-page--reference .org-wallet-card__technical-links a {
+  min-height: 36px;
+}
+
+.org-overview-page--reference .org-wallet-card__footer {
+  padding: 12px clamp(16px, 1.7vw, 22px);
+}
+
+.org-overview-page--reference .org-overview-ubo-list article,
+.org-overview-page--reference .org-overview-doc-item {
+  padding: 12px;
+  border-radius: 11px;
+}
+
+.org-overview-page--reference .org-overview-ubo-list__copy strong,
+.org-overview-page--reference .org-overview-doc-item__copy strong {
+  font-size: 13px;
+}
+
+.org-overview-page--reference .org-overview-ubo-list__meta b {
+  font-size: 13px;
+}
+
+.org-overview-page--reference .org-overview-ubo-list__meta small,
+.org-overview-page--reference .org-overview-ubo-list__copy small,
+.org-overview-page--reference .org-overview-doc-item__copy small {
+  font-size: 11.5px;
+}
+
+.org-overview-page--reference .org-overview-list-more {
+  margin-top: 10px;
+  padding: 5px;
+}
+
+@media (max-width: 1199px) {
+  .org-overview-page--reference .org-overview-showcase,
+  .org-overview-page--reference .org-overview-lower-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 680px) {
+  .org-overview-page--reference .org-readonly-card > header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .org-company-statuses {
+    justify-content: flex-start;
+  }
+
+  .org-company-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .org-company-field,
+  .org-company-field:nth-child(2n + 1):not(.org-company-field--full) {
+    padding-inline: 0;
+  }
+
+  .org-company-field-group {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .org-company-field-group .org-company-field {
+    padding-inline: 0;
+  }
+
+  .org-company-field-group .org-company-field + .org-company-field {
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
+
+  .org-overview-page--reference .org-wallet-card__address {
+    grid-template-columns: 38px minmax(0, 1fr) 36px;
+    gap: 8px;
+  }
+
+  .org-overview-page--reference .org-wallet-card__address .org-wallet-card__copy-button {
+    grid-column: auto;
+  }
+
+  .org-overview-page--reference .org-wallet-card__header {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .org-overview-page--reference .org-wallet-card__meta {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 390px) {
+  .org-overview-page--reference .org-wallet-card__header {
+    flex-wrap: wrap;
+  }
+
+  .org-overview-page--reference .org-wallet-card__address {
+    grid-template-columns: 36px minmax(0, 1fr);
+  }
+
+  .org-overview-page--reference .org-wallet-card__address .org-wallet-card__copy-button {
+    grid-column: 2;
+  }
+}
+
+.org-overview-page--reference .org-overview-ubo-list__copy strong,
+.org-overview-page--reference .org-overview-doc-item__copy strong {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.org-overview-page--reference .org-overview-ubo-list__meta b {
+  overflow-wrap: anywhere;
 }

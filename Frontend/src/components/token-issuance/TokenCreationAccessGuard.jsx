@@ -1,21 +1,19 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { WorkspaceRouteLoader } from '@/components/loaders/DelayedTrexLoader';
+import { WorkspacePageSkeleton } from '@/components/loaders/WorkspacePageSkeleton';
 import { ROUTES } from '@/config/routes';
 import { useMyToken } from '@/hooks/useMyToken';
-import { useTokenIssuanceStore } from '@/store/tokenIssuance.store';
 
 export function TokenCreationAccessGuard() {
   const location = useLocation();
-  const deploymentStatus = useTokenIssuanceStore((state) => state.deployment.status);
-  const isActiveSubmission =
-    location.pathname === ROUTES.tokenDeploying &&
-    ['processing', 'success', 'error'].includes(deploymentStatus);
+  // A refresh resets the in-memory deployment status to idle. The processing
+  // route must still reconcile transfers and price before any details redirect.
+  const isActiveSubmission = location.pathname === ROUTES.tokenDeploying;
   // The processing page owns active-attempt recovery and bootstraps the complete issuance
   // state itself. Avoid a duplicate token-status request while that flow is running.
   const token = useMyToken({ enabled: !isActiveSubmission });
 
   if (token.isPending && !isActiveSubmission) {
-    return <WorkspaceRouteLoader />;
+    return <WorkspacePageSkeleton variant="compact" />;
   }
 
   if (token.isDeployed && !isActiveSubmission) {

@@ -81,7 +81,7 @@ const normalizeRecord = (value) => {
     if (
       !userKey ||
       !issuerWallet ||
-      chainId !== Number(web3Config.requiredChain.id) ||
+      !web3Config.getChainById(chainId) ||
       !Number.isFinite(createdAt) ||
       !Number.isFinite(expiresAt) ||
       expiresAt <= Date.now()
@@ -99,14 +99,14 @@ const normalizeRecord = (value) => {
       transactionHash,
       userKey,
       chainId,
-      network: text(value.network || web3Config.requiredChain.name),
+      network: text(value.network || web3Config.getChainById(chainId)?.name),
       issuerWallet,
       tokenUid: text(value.tokenUid || metadata.tokenUid),
       metadata: {
         tokenUid: text(metadata.tokenUid || value.tokenUid),
         tokenName: text(metadata.tokenName),
         symbol: text(metadata.symbol).toUpperCase(),
-        network: text(metadata.network || value.network || web3Config.requiredChain.name),
+        network: text(metadata.network || value.network || web3Config.getChainById(chainId)?.name),
         chainId,
         deploymentAttemptUid: text(metadata.deploymentAttemptUid),
         idempotencyKey: text(metadata.idempotencyKey),
@@ -168,8 +168,8 @@ const saveRecord = ({
     status,
     transactionHash: assertValidTransactionHash(transactionHash),
     userKey: normalizedUserKey,
-    chainId: Number(web3Config.requiredChain.id),
-    network: web3Config.requiredChain.name,
+    chainId: Number(metadata.chainId || existing?.chainId || web3Config.requiredChain.id),
+    network: text(metadata.network || existing?.network || web3Config.getChainById(metadata.chainId)?.name || web3Config.requiredChain.name),
     issuerWallet: normalizeAddress(issuerWallet),
     tokenUid: text(tokenUid || metadata.tokenUid),
     metadata: {
@@ -199,7 +199,7 @@ const saveRecord = ({
   });
 
   if (!saved) {
-    throw new Error('This browser could not securely store the asset creation confirmation.');
+    throw new Error('This browser could not securely store the deployment transaction hash.');
   }
 
   return record;

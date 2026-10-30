@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
-import { WorkspaceRouteLoader } from '@/components/loaders/DelayedTrexLoader';
+import { WorkspacePageSkeleton } from '@/components/loaders/WorkspacePageSkeleton';
 import { ROUTES } from '@/config/routes';
 import { InvestorOnboardingProvider } from '@/context/InvestorOnboardingProvider';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
@@ -28,7 +28,7 @@ function InvestorOnboardingFlow() {
   }, [hydration.corrupted, hydration.hasDraft, isLoading, state.currentStep]);
 
   if (isLoading) {
-    return <WorkspaceRouteLoader />;
+    return <WorkspacePageSkeleton variant="compact" />;
   }
 
   if (loadError?.response?.status === 403) return <Navigate to={ROUTES.forbidden} replace />;

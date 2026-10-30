@@ -1,10 +1,11 @@
 import { Card } from '@/components/ui/Card';
 import { formatDate } from '@/utils/date';
 import { getInvestmentJourney } from '@/utils/investmentJourney';
+import { readApplicationProgress } from '@/utils/applicationProgress';
 
 export function ApplicationSummary({ application, history, purchaseReady = false }) {
   const status = application?.interest?.status || history?.summary?.status || history?.status || application?.status || '';
-  const journey = getInvestmentJourney({ status, viewerRole: 'investor', purchaseReady });
+  const journey = getInvestmentJourney({ status, viewerRole: 'investor', purchaseReady, progress: readApplicationProgress(application?.interest, application, history?.summary) });
   const issuer = application?.issuer && application.issuer !== '—' ? application.issuer : '—';
   const asset = [application?.name, application?.symbol ? `(${application.symbol})` : ''].filter(Boolean).join(' ');
   const datedEvents = [...(history?.timeline || [])].filter((event) => event?.createdAt);

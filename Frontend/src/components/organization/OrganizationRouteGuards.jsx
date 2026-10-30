@@ -1,5 +1,5 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { WorkspaceRouteLoader } from '@/components/loaders/DelayedTrexLoader';
+import { WorkspacePageSkeleton } from '@/components/loaders/WorkspacePageSkeleton';
 import { ROUTES } from '@/config/routes';
 import { useOrganization } from '@/hooks/useOrganization';
 import { ORGANIZATION_STATUSES } from '@/services/organizationStorageService';
@@ -9,7 +9,7 @@ export function OrganizationDataGuard() {
   const location = useLocation();
 
   if (isLoading) {
-    return <WorkspaceRouteLoader />;
+    return <WorkspacePageSkeleton variant="compact" />;
   }
 
   if (error?.response?.status === 403) return <Navigate to={ROUTES.forbidden} replace />;

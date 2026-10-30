@@ -8,17 +8,17 @@ import {
   LoaderCircle,
   Info,
   ShieldCheck,
-  UserRound,
   Wallet,
   X,
   XCircle,
 } from 'lucide-react';
-import { PrivyTrustBadge } from '@/components/branding/PrivyBrand';
 import { MarketplaceDropdown } from '@/components/investor-marketplace/MarketplaceDropdown';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useWalletConnection } from '@/hooks/useWalletConnection';
+import { useAuthStore } from '@/store/auth.store';
+import { useNetworkStore } from '@/store/network.store';
 import {
   ISSUER_CLAIM_SIGNING_STATUS,
   addressesMatch,
@@ -29,6 +29,7 @@ import {
   isWalletSignatureRejected,
 } from '@/utils/issuerClaims';
 import { shortenWalletAddress } from '@/utils/wallet';
+import { getIssuerApprovalProgress } from '@/utils/issuerApprovalProgress';
 import { getErrorMessage, sanitizeUserFacingMessage } from '@/utils/error';
 import { issuerInvestorSubscriptionsService } from '@/services/issuer/issuerInvestorSubscriptionsService';
 
@@ -275,6 +276,56 @@ const signingErrorCopy = (error) => {
   };
 };
 
+/** Reuse the signature progress UI for registration instead of starting a new flow. */
+function IssuerApprovalProgress({ claims, collectedClaims, activeClaimIndex, status, registrationConfirmed, registrationPending }) {
+  const progress = getIssuerApprovalProgress({
+    claimCount: claims.length,
+    collectedCount: collectedClaims.length,
+    activeClaimIndex,
+    status,
+    registrationConfirmed,
+    registrationPending,
+  });
+  const registration = progress.registration;
+  return (
+    <>
+      <div
+        className="issuer-claim-progress-bar"
+        role="progressbar"
+        aria-label="Claim signatures and investor registration"
+        aria-valuemin={0}
+        aria-valuemax={progress.totalCount}
+        aria-valuenow={progress.completedCount}
+      >
+        <span style={{ width: `${Math.max(8, progress.percentage)}%` }} />
+      </div>
+      <div className="issuer-claim-progress-list" aria-label="Issuer approval progress">
+        {claims.map((claim, index) => {
+          const step = progress.signatures[index];
+          return (
+            <div key={`${claim.claimTopic ?? 'invalid'}-${claim.index}`} className={step.complete ? 'is-signed' : step.active ? 'is-active' : ''}>
+              {step.complete ? <CheckCircle2 size={16} /> : step.active ? <LoaderCircle className="issuer-claim-spin" size={16} /> : <Circle size={16} />}
+              <span>{claim.label}</span>
+              <small>{step.complete ? 'Confirmed' : step.active ? 'Confirm now' : 'Next'}</small>
+            </div>
+          );
+        })}
+        <div className={`issuer-claim-progress-registration is-${registration.state}`}>
+          {registration.state === 'complete'
+            ? <CheckCircle2 size={16} />
+            : registration.state === 'active' || registration.state === 'pending'
+              ? <LoaderCircle className="issuer-claim-spin" size={16} />
+              : registration.state === 'failed'
+                ? <AlertTriangle size={16} />
+                : <Circle size={16} />}
+          <span>Registration</span>
+          <small>{registration.label}</small>
+        </div>
+      </div>
+    </>
+  );
+}
+
 export function VerifyIdentityClaimsModal({
   open,
   onClose,
@@ -283,16 +334,20 @@ export function VerifyIdentityClaimsModal({
   requiredClaimTopics = [],
   investorName = 'this investor',
   assetName = 'this investment',
+  chainId,
   onVerified,
+  onRegister,
+  registrationConfirmed = false,
+  registrationPending = false,
 }) {
   const { organization, isLoading: organizationLoading } = useOrganization({ enabled: open });
-  const wallet = useWalletConnection();
+  const wallet = useWalletConnection(chainId);
   const [status, setStatus] = useState(ISSUER_CLAIM_SIGNING_STATUS.PENDING);
   const [collectedClaims, setCollectedClaims] = useState([]);
   const [activeClaimIndex, setActiveClaimIndex] = useState(-1);
   const [signingError, setSigningError] = useState(null);
-  const [verificationResult, setVerificationResult] = useState(null);
   const [verificationLoading, setVerificationLoading] = useState(false);
+  const [registrationIssue, setRegistrationIssue] = useState('');
 
   const registeredWallet = organization?.walletAddress || '';
   const connectedWallet = wallet.address || '';
@@ -314,7 +369,7 @@ export function VerifyIdentityClaimsModal({
 
   const invalidTopic = claims.find((topic) => topic.claimTopic === null);
   const walletMatches = addressesMatch(connectedWallet, registeredWallet);
-  const isBusy = status === ISSUER_CLAIM_SIGNING_STATUS.SIGNING || status === ISSUER_CLAIM_SIGNING_STATUS.VERIFYING;
+  const isBusy = status === ISSUER_CLAIM_SIGNING_STATUS.SIGNING || status === ISSUER_CLAIM_SIGNING_STATUS.VERIFYING || status === 'REGISTERING';
   const configurationError = !subscriptionId
     ? 'The investment request information is missing.'
     : !investorIdentityAddress || !isAddress(investorIdentityAddress)
@@ -335,7 +390,7 @@ export function VerifyIdentityClaimsModal({
     setCollectedClaims([]);
     setActiveClaimIndex(-1);
     setSigningError(null);
-    setVerificationResult(null);
+    setRegistrationIssue('');
 
     if (!subscriptionId) return () => { active = false; };
 
@@ -343,7 +398,6 @@ export function VerifyIdentityClaimsModal({
     issuerInvestorSubscriptionsService.getClaimVerification(subscriptionId)
       .then((result) => {
         if (!active) return;
-        setVerificationResult(result || null);
         if (String(result?.status || '').trim().toUpperCase() === 'SIGNED') {
           setStatus(ISSUER_CLAIM_SIGNING_STATUS.SIGNED);
         }
@@ -370,12 +424,44 @@ export function VerifyIdentityClaimsModal({
     setSigningError(error);
   };
 
+  const handleRegistration = async () => {
+    if (isBusy || registrationConfirmed) return;
+    setRegistrationIssue('');
+    setStatus('REGISTERING');
+    try {
+      // This reuses the existing idempotent prepare -> MetaMask transaction ->
+      // hash recovery -> backend receipt verification path on the issuer page.
+      const outcome = await onRegister?.();
+      if (outcome === 'CONFIRMED') setStatus('REGISTERED');
+      else if (outcome === 'PENDING') setStatus('REGISTRY_PENDING');
+      else {
+        setStatus('REGISTRY_FAILED');
+        setRegistrationIssue(outcome === 'CANCELLED'
+          ? 'You cancelled the registry transaction. Your claim signatures are saved; only registration needs to be retried.'
+          : 'Registration was not confirmed. Your claim signatures are saved; retry registration without signing again.');
+      }
+    } catch (error) {
+      setStatus('REGISTRY_FAILED');
+      setRegistrationIssue(getErrorMessage(error, 'Registration could not be completed. Retry without signing claims again.'));
+    }
+  };
+
+  const assertSelectedApplicationChain = () => {
+    const selectedChainId = useNetworkStore.getState().getActiveChainId(useAuthStore.getState().user);
+    if (Number(chainId) && selectedChainId !== Number(chainId)) {
+      throw new Error('The selected network changed. Refresh the application and try again on its original network.');
+    }
+  };
+
   const handleVerifyClick = async () => {
     if (isBusy) return;
+    if (status === ISSUER_CLAIM_SIGNING_STATUS.SIGNED || status === 'REGISTRY_FAILED' || status === 'REGISTRY_PENDING') {
+      await handleRegistration();
+      return;
+    }
 
     setCollectedClaims([]);
     setSigningError(null);
-    setVerificationResult(null);
     setActiveClaimIndex(-1);
 
     if (configurationError) {
@@ -416,9 +502,11 @@ export function VerifyIdentityClaimsModal({
         return;
       }
 
+      assertSelectedApplicationChain();
       const nextClaims = [];
 
       for (let index = 0; index < claims.length; index += 1) {
+        assertSelectedApplicationChain();
         const claim = claims[index];
         setActiveClaimIndex(index);
 
@@ -449,6 +537,7 @@ export function VerifyIdentityClaimsModal({
         setCollectedClaims([...nextClaims]);
       }
 
+      assertSelectedApplicationChain();
       setActiveClaimIndex(-1);
       signingStage = 'backend';
       setStatus(ISSUER_CLAIM_SIGNING_STATUS.VERIFYING);
@@ -460,12 +549,14 @@ export function VerifyIdentityClaimsModal({
         subscriptionId,
         nextClaims,
       );
-      setVerificationResult(result || null);
 
       const backendStatus = String(result?.status || '').trim().toUpperCase();
       if (backendStatus === 'SIGNED') {
         setStatus(ISSUER_CLAIM_SIGNING_STATUS.SIGNED);
         await onVerified?.(result);
+        // Immediately request the real issuer-wallet registry transaction after
+        // backend SIGNED status. Do not wait for the investor to submit claims.
+        await handleRegistration();
         return;
       }
 
@@ -506,34 +597,42 @@ export function VerifyIdentityClaimsModal({
 
   const currentClaim = activeClaimIndex >= 0 ? claims[activeClaimIndex] : null;
   const errorCopy = signingErrorCopy(signingError);
-
-  const footer = status === ISSUER_CLAIM_SIGNING_STATUS.SIGNED
+  // A chain confirmation can arrive from page polling before the local call resolves.
+  // Only show it as complete after signatures are verified (never from a hash alone).
+  const verifiedSignatures = [ISSUER_CLAIM_SIGNING_STATUS.SIGNED, 'REGISTERING', 'REGISTRY_PENDING', 'REGISTRY_FAILED', 'REGISTERED'].includes(status);
+  const registered = verifiedSignatures && (status === 'REGISTERED' || registrationConfirmed);
+  const footer = registered || status === 'REGISTRY_PENDING'
     ? <Button onClick={close}>Close</Button>
-    : status === ISSUER_CLAIM_SIGNING_STATUS.FAILED
+    : verifiedSignatures
       ? (
         <>
-          <Button variant="secondary" onClick={close}>Cancel</Button>
-          <Button onClick={handleVerifyClick}>Try Again</Button>
-        </>
-      )
-      : (
-        <>
-          <Button variant="secondary" onClick={close} disabled={isBusy}>Cancel</Button>
-          <Button
-            onClick={handleVerifyClick}
-            disabled={isBusy || verificationLoading || organizationLoading || Boolean(configurationError) || !wallet.isConnected || !walletMatches}
-          >
+          <Button variant="secondary" onClick={close} disabled={isBusy}>Close</Button>
+          <Button onClick={() => void handleRegistration()} disabled={isBusy || registrationPending || registrationConfirmed}>
             {isBusy ? <LoaderCircle className="issuer-claim-spin" size={15} /> : <ShieldCheck size={15} />}
-            {verificationLoading ? 'Checking status…' : status === ISSUER_CLAIM_SIGNING_STATUS.VERIFYING ? 'Finishing approval…' : isBusy ? 'Waiting for wallet…' : `Approve ${claims.length || ''} Check${claims.length === 1 ? '' : 's'}`}
+            {isBusy ? 'Opening registry transaction…' : 'Register Investor'}
           </Button>
         </>
-      );
+      )
+      : status === ISSUER_CLAIM_SIGNING_STATUS.FAILED
+        ? <><Button variant="secondary" onClick={close}>Cancel</Button><Button onClick={handleVerifyClick}>Try Again</Button></>
+        : (
+          <>
+            <Button variant="secondary" onClick={close} disabled={isBusy}>Cancel</Button>
+            <Button
+              onClick={handleVerifyClick}
+              disabled={isBusy || verificationLoading || organizationLoading || Boolean(configurationError) || !wallet.isConnected || !walletMatches}
+            >
+              {isBusy ? <LoaderCircle className="issuer-claim-spin" size={15} /> : <ShieldCheck size={15} />}
+              {verificationLoading ? 'Checking status…' : isBusy ? 'Waiting for wallet…' : `Approve ${claims.length || ''} Check${claims.length === 1 ? '' : 's'} & Register`}
+            </Button>
+          </>
+        );
 
   return (
     <Modal
       open={open}
       onClose={close}
-      title="Approve investor checks"
+      title="Step 2 · Verify claims & register investor"
       className="issuer-claim-signature-modal sm:max-w-lg"
       bodyClassName="issuer-claim-signature-modal__body"
       trapFocus
@@ -553,13 +652,9 @@ export function VerifyIdentityClaimsModal({
             <div className="issuer-claim-explainer" role="note">
               <Info size={18} aria-hidden="true" />
               <div>
-                <strong>What happens when you continue</strong>
-                <p>Your approved organization account will ask you to confirm each check separately. These confirmations do not move money. After all checks are confirmed, the investor can continue to the next step.</p>
+                <strong>{claims.length} approval signature{claims.length === 1 ? '' : 's'} + 1 registration transaction</strong>
+                <p>You will confirm {claims.length === 2 ? 'two approval signatures' : `${claims.length} approval signatures`} in MetaMask, then complete one Identity Registry registration transaction. The signatures do not move funds. Your issuer wallet only pays the gas fee for the registration transaction, and the investor submits their own claim afterward.</p>
               </div>
-            </div>
-
-            <div className="flex">
-              <PrivyTrustBadge compact tone="soft" label="Issuer embedded wallet" />
             </div>
 
             <div className={`issuer-claim-wallet-card ${walletMatches ? 'is-match' : 'is-mismatch'}`}>
@@ -605,7 +700,7 @@ export function VerifyIdentityClaimsModal({
             <div className="issuer-claim-list-section">
               <div className="issuer-claim-list-section__heading">
                 <span>Checks to approve ({claims.length})</span>
-                <small>One wallet confirmation for each check</small>
+                <small>Then one registry transaction</small>
               </div>
               <div className="issuer-claim-list">
                 {claims.map((claim) => (
@@ -614,10 +709,6 @@ export function VerifyIdentityClaimsModal({
                     <div>
                       <strong>{claim.label}</strong>
                       <small>{claim.description}</small>
-                      <details className="issuer-claim-technical-details">
-                        <summary>Technical details</summary>
-                        <span>{claim.technicalLabel && claim.technicalLabel !== claim.label ? `${claim.technicalLabel} · ` : ''}Requirement ID {claim.claimTopic ?? '—'}</span>
-                      </details>
                     </div>
                   </div>
                 ))}
@@ -634,22 +725,14 @@ export function VerifyIdentityClaimsModal({
               {currentClaim?.label || 'The current check'} is ready to confirm.
               {claims.length > 1 ? ` Check ${activeClaimIndex + 1} of ${claims.length}.` : ''}
             </p>
-            <div className="issuer-claim-progress-bar" aria-hidden="true">
-              <span style={{ width: `${Math.max(8, (collectedClaims.length / claims.length) * 100)}%` }} />
-            </div>
-            <div className="issuer-claim-progress-list">
-              {claims.map((claim, index) => {
-                const signed = index < collectedClaims.length;
-                const active = index === activeClaimIndex;
-                return (
-                  <div key={`${claim.claimTopic ?? 'invalid'}-${claim.index}`} className={signed ? 'is-signed' : active ? 'is-active' : ''}>
-                    {signed ? <CheckCircle2 size={16} /> : active ? <LoaderCircle className="issuer-claim-spin" size={16} /> : <Circle size={16} />}
-                    <span>{claim.label}</span>
-                    <small>{signed ? 'Confirmed' : active ? 'Confirm now' : 'Next'}</small>
-                  </div>
-                );
-              })}
-            </div>
+            <IssuerApprovalProgress
+              claims={claims}
+              collectedClaims={collectedClaims}
+              activeClaimIndex={activeClaimIndex}
+              status={status}
+              registrationConfirmed={registrationConfirmed}
+              registrationPending={registrationPending}
+            />
             <span className="issuer-claim-signing-state__note">Keep this window open until all checks are confirmed. No funds are transferred by these confirmations.</span>
           </div>
         ) : null}
@@ -658,7 +741,15 @@ export function VerifyIdentityClaimsModal({
           <div className="issuer-claim-signing-state" aria-live="polite">
             <span className="issuer-claim-signing-state__spinner"><LoaderCircle size={30} /></span>
             <strong>Finishing approval…</strong>
-            <p>Your wallet confirmations are complete. We are checking them now. Nothing else is needed from you.</p>
+            <p>Your wallet signatures are complete. We are verifying the approvals before registration.</p>
+            <IssuerApprovalProgress
+              claims={claims}
+              collectedClaims={collectedClaims}
+              activeClaimIndex={activeClaimIndex}
+              status={status}
+              registrationConfirmed={registrationConfirmed}
+              registrationPending={registrationPending}
+            />
             <span className="issuer-claim-signing-state__note">Keep this window open until the request updates.</span>
           </div>
         ) : null}
@@ -677,24 +768,24 @@ export function VerifyIdentityClaimsModal({
           </div>
         ) : null}
 
-        {status === ISSUER_CLAIM_SIGNING_STATUS.SIGNED ? (
+        {verifiedSignatures ? (
           <div className="issuer-claim-result-state issuer-claim-result-state--success" aria-live="polite">
             <span className="issuer-claim-result-state__icon"><CheckCircle2 size={26} /></span>
-            <strong>Investor checks approved</strong>
-            <p>All required checks were confirmed successfully. The investor can now continue to the next verification step.</p>
-            <span className="issuer-claim-status-pill">Status: Completed</span>
-            <div className="issuer-claim-success-list">
-              {claims.map((claim) => (
-                <div key={`${claim.claimTopic ?? 'invalid'}-${claim.index}`}>
-                  <span><UserRound size={15} /></span>
-                  <div><strong>{claim.label}</strong><small>Completed</small></div>
-                  <span className="issuer-claim-success-list__verified"><CheckCircle2 size={14} /> Approved</span>
-                </div>
-              ))}
-            </div>
-            {verificationResult?.verificationId ? (
-              <details className="issuer-claim-result-technical"><summary>Technical details</summary><span>Verification reference: {verificationResult.verificationId}</span></details>
-            ) : null}
+            <strong>{registered ? 'Issuer steps complete — awaiting investor claims' : 'Claim signatures verified'}</strong>
+            <p>{registered
+              ? 'The investor’s profile has been successfully verified.'
+              : status === 'REGISTERING' ? 'Opening the issuer-wallet registration transaction. Confirm it in MetaMask and pay the network gas.'
+                : status === 'REGISTRY_PENDING' || registrationPending ? 'Registration was submitted and is awaiting blockchain verification. Do not send a duplicate transaction.'
+                  : registrationIssue || 'Claim signatures are saved. Complete the one Identity Registry registration transaction to finish your issuer step.'}</p>
+            <span className="issuer-claim-status-pill">{registered ? 'Issuer step: Completed' : 'Issuer step: Pending registration'}</span>
+            <IssuerApprovalProgress
+              claims={claims}
+              collectedClaims={collectedClaims}
+              activeClaimIndex={activeClaimIndex}
+              status={status}
+              registrationConfirmed={registrationConfirmed}
+              registrationPending={registrationPending}
+            />
           </div>
         ) : null}
       </div>

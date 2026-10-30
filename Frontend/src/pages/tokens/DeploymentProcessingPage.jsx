@@ -1,3 +1,4 @@
+import { paymentContextOf } from '@/config/payment-tokens';
 import { AlertTriangle, ArrowLeft, RefreshCcw, ShieldCheck } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef } from 'react';
@@ -10,15 +11,16 @@ import {
   InfoCallout,
 } from '@/components/token-issuance/IssuancePrimitives';
 import { Button } from '@/components/ui/Button';
-import { env } from '@/config/env';
+import { web3Config } from '@/config/web3';
+import { resolveTrexDeploymentConfig } from '@/config/trex';
 import { ROUTES } from '@/config/routes';
+import { useChainConfig } from '@/hooks/useChains';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useMyToken, myTokenQueryKey } from '@/hooks/useMyToken';
 import { useTokenIssuanceBootstrap } from '@/hooks/useTokenIssuanceBootstrap';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useWalletConnection } from '@/hooks/useWalletConnection';
 import { pendingDeploymentService } from '@/services/pendingDeployment.service';
-import { requireOrganizationIdentityOnRequiredChain } from '@/services/organizationIdentity.service';
 import {
   activateTrexTransfers,
   deployTrexSuite,
@@ -31,7 +33,9 @@ import {
   waitForPlatformTransactionReceipt,
 } from '@/services/blockchain/trexPlatformController.service';
 import { useAuthStore } from '@/store/auth.store';
+import { useNetworkStore } from '@/store/network.store';
 import { useTokenIssuanceStore } from '@/store/tokenIssuance.store';
+import { useUiStore } from '@/store/ui.store';
 import { getTokenApiErrorMessage } from '@/utils/tokenApiValidation';
 import { isDuplicateTokenError } from '@/utils/tokenDuplicateProtection';
 import {
@@ -57,6 +61,46 @@ const canonicalDecimal = (value) => {
   const whole = wholeRaw.replace(/^0+(?=\d)/, '') || '0';
   const fraction = fractionRaw.replace(/0+$/, '');
   return fraction ? `${whole}.${fraction}` : whole;
+};
+
+// Creation/recovery is the one lifecycle where the frontend knows the controller
+// even before the backend has finalized the deployed asset record. Preserve an
+// asset/controller returned by the backend when available, otherwise use the
+// configured controller that was used for this platform's new deployments.
+const deploymentPaymentContextOf = (...records) => paymentContextOf(...records);
+
+const configuredTokenChainFor = (tokenInformation) => {
+  const chainUid = String(tokenInformation?.chainUid || '').trim();
+  const chainId = Number(tokenInformation?.chainId);
+
+  // chainUid is persisted by the token API and is the stable network key. Prefer
+  // it over a missing/stale numeric chainId after refresh. Only fall back to the
+  // numeric id for legacy records that genuinely do not contain chainUid.
+  if (chainUid) return web3Config.getChainRecordByUid(chainUid);
+  if (Number.isSafeInteger(chainId) && chainId > 0) {
+    return web3Config.getChainRecordById(chainId);
+  }
+  return null;
+};
+
+const deploymentConfigFor = (tokenInformation, chainConfig, controllerAddress = '') => {
+  const chain = configuredTokenChainFor(tokenInformation);
+  if (!chain || !chainConfig || chainConfig.chainUid !== chain.chainUid) {
+    const chainUid = String(tokenInformation?.chainUid || '').trim();
+    const chainId = Number(tokenInformation?.chainId);
+    const reference = chainUid || (Number.isSafeInteger(chainId) && chainId > 0 ? String(chainId) : 'missing');
+    const error = new Error(
+      `The token network configuration (${reference}) is unavailable. Refresh and try again.`,
+    );
+    error.code = 'TOKEN_NETWORK_CONFIGURATION_UNAVAILABLE';
+    throw error;
+  }
+  return {
+    ...resolveTrexDeploymentConfig({ chainConfig, controllerAddress }),
+    chainId: chainConfig.chainId,
+    chainUid: chainConfig.chainUid,
+    networkName: chainConfig.chainName,
+  };
 };
 
 const mandatoryStepError = ({
@@ -144,7 +188,7 @@ const createBackendSyncError = (cause, transactionHash, message) => {
     message ||
       getTokenApiErrorMessage(
         cause,
-        'The asset setup was submitted, but the final verification could not continue.',
+        'The blockchain transaction was submitted, but token verification could not continue.',
       ),
   );
   error.code = 'BACKEND_DEPLOYMENT_SYNC_FAILED';
@@ -192,15 +236,6 @@ const deploymentErrorPresentation = (error, transactionSubmitted) => {
     };
   }
 
-  if (/^(ORGANIZATION_IDENTITY_|IDENTITY_FACTORY_)/.test(error?.code || '')) {
-    return {
-      title: 'Arc organization identity setup required',
-      message: error.message,
-      canRetry: true,
-      retryMode: 'deployment',
-    };
-  }
-
   if (['TOKEN_PRICE_CONFIRMATION_REQUIRED', 'PRICE_CONFIRMATION_PENDING'].includes(error?.code)) {
     return {
       title: 'Token created — price confirmation needs attention',
@@ -243,18 +278,18 @@ const deploymentErrorPresentation = (error, transactionSubmitted) => {
 
   if (backendCode === 'RPC_UNAVAILABLE') {
     return {
-      title: 'Asset verification is temporarily unavailable',
+      title: 'Blockchain verification is temporarily unavailable',
       message:
-        'The Arc Testnet network is temporarily unavailable. Retry the status check only; do not send another wallet transaction.',
+        'The selected blockchain network is temporarily unavailable. Retry the status check only; do not send another wallet transaction.',
       canRetry: true,
       retryMode: 'backend-sync',
     };
   }
   if (isWalletTransportFailure(error)) {
     return {
-      title: 'Privy wallet did not respond',
+      title: 'MetaMask did not respond',
       message:
-        'Confirm that you are signed in with Privy and your organization secure account is ready, then try creating the asset again. No asset setup action was submitted.',
+        'Open and unlock MetaMask, confirm this site is connected to the approved organization wallet, then try creating the token again. No blockchain transaction was sent.',
       canRetry: true,
       retryMode: 'deployment',
     };
@@ -264,7 +299,7 @@ const deploymentErrorPresentation = (error, transactionSubmitted) => {
     return {
       title: 'Wallet connection expired',
       message:
-        'The organization’s Privy secure account is unavailable in this browser session. Sign in with Privy and try again.',
+        'The approved organization wallet is no longer connected to this browser tab. Return to review, reconnect MetaMask, and try again.',
       canRetry: true,
       retryMode: 'deployment',
     };
@@ -276,7 +311,7 @@ const deploymentErrorPresentation = (error, transactionSubmitted) => {
     )
   ) {
     return {
-      title: 'Arc Testnet confirmation is taking longer',
+      title: 'Network confirmation is taking longer',
       message:
         'The wallet transaction was submitted, but confirmation is still pending or temporarily unavailable. Retry the secure status check; do not send another wallet transaction.',
       canRetry: true,
@@ -298,7 +333,7 @@ const deploymentErrorPresentation = (error, transactionSubmitted) => {
       title: 'Transaction submitted — verification pending',
       message:
         error?.message ||
-        'Your asset creation has already been submitted. Retry only the status check; do not submit it again.',
+        'Your token-creation transaction has already been submitted. Retry only the status check; do not submit another blockchain transaction.',
       canRetry: true,
       retryMode: 'backend-sync',
     };
@@ -310,6 +345,24 @@ const deploymentErrorPresentation = (error, transactionSubmitted) => {
       message: EXISTING_DEPLOYMENT_SYNC_MESSAGE,
       canRetry: false,
       retryMode: EXISTING_DEPLOYMENT_SYNC_RETRY_MODE,
+    };
+  }
+
+  if (error?.code === 'TOKEN_NETWORK_CONFIGURATION_UNAVAILABLE') {
+    return {
+      title: 'Token network configuration unavailable',
+      message: error.message,
+      canRetry: true,
+      retryMode: 'bootstrap',
+    };
+  }
+
+  if (error?.code === 'WALLET_WRONG_NETWORK') {
+    return {
+      title: 'Wallet network needs attention',
+      message: error.message,
+      canRetry: true,
+      retryMode: 'deployment',
     };
   }
 
@@ -341,7 +394,7 @@ const deploymentErrorPresentation = (error, transactionSubmitted) => {
     return {
       title: transactionSubmitted ? 'Status check timed out' : 'Token verification timed out',
       message: transactionSubmitted
-        ? 'The asset creation was confirmed, but the final status check timed out. Retry the status check only.'
+        ? 'The blockchain transaction is confirmed, but the final status check timed out. Retry the status check only.'
         : 'Token validation timed out. Refresh the token status before trying again.',
       canRetry: true,
       retryMode: transactionSubmitted ? 'backend-sync' : 'deployment',
@@ -452,9 +505,17 @@ export default function DeploymentProcessingPage() {
   const tokenBootstrap = useTokenIssuanceBootstrap();
   const tokenRecord = useMyToken({ enabled: false });
   const { organization, isLoading: organizationLoading } = useOrganization();
-  const wallet = useWalletConnection();
   const authUser = useAuthStore((state) => state.user);
   const tokenInformation = useTokenIssuanceStore((state) => state.tokenInformation);
+  const configuredTokenChain = configuredTokenChainFor(tokenInformation);
+  const configuredTokenChainId = configuredTokenChain?.chainId || null;
+  const configuredTokenChainUid = configuredTokenChain?.chainUid || String(tokenInformation?.chainUid || '').trim();
+  const chainConfigQuery = useChainConfig(configuredTokenChainUid, {
+    enabled: Boolean(configuredTokenChainUid),
+    retry: 1,
+  });
+  const selectedChainConfig = chainConfigQuery.data || null;
+  const wallet = useWalletConnection(configuredTokenChainId || tokenInformation.chainId);
   const supplyPricing = useTokenIssuanceStore((state) => state.supplyPricing);
   const identityClaims = useTokenIssuanceStore((state) => state.identityClaims);
   const compliance = useTokenIssuanceStore((state) => state.compliance);
@@ -462,8 +523,10 @@ export default function DeploymentProcessingPage() {
   const backend = useTokenIssuanceStore((state) => state.backend);
   const deployment = useTokenIssuanceStore((state) => state.deployment);
   const setDeployment = useTokenIssuanceStore((state) => state.setDeployment);
+  const lockChainId = useNetworkStore((state) => state.lockChainId);
   const setBackendState = useTokenIssuanceStore((state) => state.setBackendState);
   const markStepCompleted = useTokenIssuanceStore((state) => state.markStepCompleted);
+  const setWalletRequiredChainId = useUiStore((state) => state.setWalletRequiredChainId);
   const startedRef = useRef(false);
   const attemptInFlightRef = useRef(false);
   const retryInFlightRef = useRef(false);
@@ -471,6 +534,15 @@ export default function DeploymentProcessingPage() {
     normalizeDeploymentIdempotencyKey(deployment.idempotencyKey),
   );
   useDocumentTitle('Creating Token');
+
+  // Token creation is a multi-transaction operation on one immutable asset network.
+  // Keep the header/wallet context pinned to that network while this page is mounted
+  // so a navbar or wallet context refresh cannot drift between transactions 1, 2 and 3.
+  useEffect(() => {
+    if (!configuredTokenChainId) return undefined;
+    setWalletRequiredChainId(configuredTokenChainId);
+    return () => setWalletRequiredChainId(null);
+  }, [configuredTokenChainId, setWalletRequiredChainId]);
 
   const completeBackendDeployment = useCallback(
     async ({ transactionHash, deploymentAttemptUid, metadata = {} }) => {
@@ -485,7 +557,7 @@ export default function DeploymentProcessingPage() {
       ) {
         throw mandatoryStepError({
           message:
-            'The asset record cannot be finalized until transfer access and the required price are confirmed.',
+            'The token record cannot be finalized until transfer activation and the required price confirmation are verified on-chain.',
           code: !priceConfirmed
             ? 'TOKEN_PRICE_CONFIRMATION_REQUIRED'
             : 'TOKEN_CONFIGURATION_FAILED',
@@ -537,7 +609,7 @@ export default function DeploymentProcessingPage() {
             status: 'syncing',
             title: 'Token verification is in progress',
             description:
-              'The transaction is already on Arc Testnet. We are checking its confirmation and token-creation result; no additional Privy approval will be requested.',
+              'The transaction is already on the selected network. We are checking its confirmation and token-creation result; MetaMask will not open again.',
           },
         });
 
@@ -610,14 +682,29 @@ export default function DeploymentProcessingPage() {
         walletAction: null,
       });
 
+      const finalizedChainId = [
+        deploymentResponse.chainId,
+        metadata.chainId,
+        configuredTokenChainId,
+      ]
+        .map(Number)
+        .find((chainId) => Number.isSafeInteger(chainId) && chainId > 0) || null;
+      if (finalizedChainId) {
+        // Frontend policy: once this issuer has a fully finalized token, keep the
+        // application network fixed to the exact chain used for deployment.
+        lockChainId(authUser, finalizedChainId, configuredTokenChain?.chainUid || selectedChainConfig?.chainUid || '');
+      }
+
       pendingDeploymentService.clear(confirmedHash);
 
-      queryClient.setQueryData(myTokenQueryKey(tokenRecord.userKey), (current) => ({
+      queryClient.setQueryData(myTokenQueryKey(tokenRecord.userKey, tokenRecord.selectedChainUid), (current) => ({
         ...(current || {}),
         ...deploymentResponse,
         tokenUid: tokenUid || current?.tokenUid || '',
         status: 'deployed',
         isDraft: false,
+        ...(finalizedChainId ? { chainId: finalizedChainId } : {}),
+        ...(configuredTokenChain?.chainUid ? { chainUid: configuredTokenChain.chainUid } : {}),
         deployTxHash: confirmedHash,
         contractTxnHash: confirmedHash,
         deployTx: confirmedHash,
@@ -636,19 +723,24 @@ export default function DeploymentProcessingPage() {
       toast.success('Asset setup completed', {
         id: 'token-deployment-recorded',
         description:
-          'All required setup steps were confirmed and the final asset status was verified.',
+          'All required blockchain steps were confirmed and the final live state was verified.',
       });
 
       navigate(ROUTES.tokenSuccess(tokenUid || confirmedHash), { replace: true });
     },
     [
+      authUser,
       backend.tokenUid,
+      lockChainId,
       markStepCompleted,
       navigate,
       queryClient,
       setBackendState,
       setDeployment,
-      supplyPricing?.initialPrice,
+      supplyPricing,
+      configuredTokenChain?.chainUid,
+      configuredTokenChainId,
+      selectedChainConfig,
       tokenRecord.tokenUid,
       tokenRecord.userKey,
     ],
@@ -659,7 +751,7 @@ export default function DeploymentProcessingPage() {
       const deployHash = assertValidTransactionHash(transactionHash);
       const approvedWallet = organization.walletAddress || tokenInformation.treasuryWallet;
       if (!approvedWallet) {
-        throw new Error('The approved organization secure account could not be loaded.');
+        throw new Error('The approved organization wallet could not be loaded.');
       }
 
       setDeployment({
@@ -672,19 +764,28 @@ export default function DeploymentProcessingPage() {
         walletAction: {
           key: 'configuration-reconcile',
           status: 'syncing',
-          title: 'Checking the confirmed asset status',
+          title: 'Checking the confirmed token state',
           description:
-            'We are checking the confirmed asset status before deciding whether another Privy confirmation is needed.',
+            'We are reading the token contract before deciding whether another wallet action is needed.',
         },
       });
 
+      const deploymentConfig = deploymentConfigFor(
+        tokenInformation,
+        selectedChainConfig,
+        deploymentPaymentContextOf(tokenRecord.token).controllerAddress,
+      );
       const recovered = await recoverTrexDeploymentState({
         transactionHash: deployHash,
-        deploymentConfig: env.trex,
+        deploymentConfig,
       });
       const tokenAddress = recovered.tokenAddress;
       let nextMetadata = {
         ...metadata,
+        platformController: deploymentPaymentContextOf(tokenRecord.token, metadata)
+          .controllerAddress,
+        paymentTokenAddress: deploymentPaymentContextOf(tokenRecord.token, supplyPricing)
+          .paymentTokenAddress,
         tokenAddress,
         contracts: recovered.contracts,
         blockNumber: recovered.blockNumber || metadata.blockNumber,
@@ -718,13 +819,44 @@ export default function DeploymentProcessingPage() {
           deploymentTransactionHash: deployHash,
           contracts: recovered.contracts,
           previousTransactionHash: previousUnpauseHash,
-          onWalletAction: (walletAction) => setDeployment({ walletAction }),
+          chainId: deploymentConfig.chainId,
+          onWalletAction: (walletAction) => {
+            // Persist transaction #2 as soon as MetaMask broadcasts it. If the RPC
+            // response is slow or the tab refreshes while confirmation is pending,
+            // recovery must check this exact hash instead of requesting a duplicate
+            // unpause transaction.
+            if (walletAction?.transactionHash && walletAction?.status === 'confirming') {
+              nextMetadata = {
+                ...nextMetadata,
+                configurationStatus: 'configuration_pending',
+                failedStep: 'activate-transfers',
+                failedTransactionHash: walletAction.transactionHash,
+                unpauseTransactionHash: walletAction.transactionHash,
+                configurationError: '',
+              };
+              saveRecoveryRecordSafely('confirmed', {
+                transactionHash: deployHash,
+                user: authUser,
+                issuerWallet: approvedWallet,
+                tokenUid: nextMetadata.tokenUid,
+                metadata: nextMetadata,
+              });
+              setDeployment({
+                pendingSync: {
+                  transactionHash: deployHash,
+                  deploymentAttemptUid,
+                  metadata: nextMetadata,
+                },
+              });
+            }
+            setDeployment({ walletAction });
+          },
         });
       } catch (error) {
         const paused =
           typeof error?.onChainPaused === 'boolean'
             ? error.onChainPaused
-            : await readTrexTokenPaused({ tokenAddress }).catch(() => null);
+            : await readTrexTokenPaused({ tokenAddress, chainId: deploymentConfig.chainId }).catch(() => null);
         nextMetadata = {
           ...nextMetadata,
           configurationStatus:
@@ -749,7 +881,13 @@ export default function DeploymentProcessingPage() {
         throw error;
       }
 
-      const pausedAfterActivation = await readTrexTokenPaused({ tokenAddress });
+      const pausedAfterActivation =
+        typeof transferResult?.paused === 'boolean'
+          ? transferResult.paused
+          : await readTrexTokenPaused({
+              tokenAddress,
+              chainId: deploymentConfig.chainId,
+            });
       if (pausedAfterActivation) {
         const error = mandatoryStepError({
           message:
@@ -820,22 +958,31 @@ export default function DeploymentProcessingPage() {
           },
         });
 
-        let livePrice;
-        try {
-          livePrice = await getPlatformTokenPrice({
-            tokenAddress,
-            chainId: wallet.requiredChain.id,
-          });
-        } catch (cause) {
+        let livePrice = null;
+        let livePriceReadError = null;
+        for (let attempt = 0; attempt < 4 && !livePrice; attempt += 1) {
+          try {
+            livePrice = await getPlatformTokenPrice({
+              ...deploymentPaymentContextOf(tokenRecord.token, supplyPricing, nextMetadata),
+              tokenAddress,
+              chainId: deploymentConfig.chainId,
+            });
+            livePriceReadError = null;
+          } catch (cause) {
+            livePriceReadError = cause;
+            if (attempt < 3) await wait(500 * (attempt + 1));
+          }
+        }
+        if (!livePrice) {
           const error = mandatoryStepError({
             message:
-              'The token was created and transfers are active, but the current price could not be verified. Retry the status check before sending another transaction.',
+              'The token was created and transfers are active, but the price service is still syncing. We retried the status check automatically; no price transaction was sent.',
             code: 'TOKEN_PRICE_CONFIRMATION_REQUIRED',
             failedStep: 'price-confirmation',
             deploymentTransactionHash: deployHash,
             tokenAddress,
             onChainPaused: false,
-            cause,
+            cause: livePriceReadError,
           });
           nextMetadata = {
             ...nextMetadata,
@@ -867,42 +1014,73 @@ export default function DeploymentProcessingPage() {
             : '');
 
         if (livePriceValue !== desiredPrice && /^0x[a-fA-F0-9]{64}$/.test(previousPriceHash)) {
+          let previousReceiptConfirmed = false;
+          let previousReceiptError = null;
           try {
             await waitForPlatformTransactionReceipt({
               txHash: previousPriceHash,
-              chainId: wallet.requiredChain.id,
+              chainId: deploymentConfig.chainId,
               timeout: 45_000,
             });
-            livePrice = await getPlatformTokenPrice({
-              tokenAddress,
-              chainId: wallet.requiredChain.id,
-            });
-            livePriceValue = canonicalDecimal(livePrice.currentTokenPrice);
-            if (livePriceValue !== desiredPrice) {
-              throw mandatoryStepError({
-                message:
-                  'The previous price transaction succeeded, but the live token price does not match the configured price. No new transaction was sent.',
-                code: 'TOKEN_PRICE_CONFIRMATION_REQUIRED',
-                failedStep: 'price-confirmation',
-                deploymentTransactionHash: deployHash,
-                failedTransactionHash: previousPriceHash,
-                tokenAddress,
-                onChainPaused: false,
-              });
-            }
+            previousReceiptConfirmed = true;
           } catch (cause) {
-            if (cause?.code === 'TOKEN_PRICE_CONFIRMATION_REQUIRED') throw cause;
-            if (!cause?.confirmedRevert) {
+            if (cause?.confirmedRevert) {
+              // A confirmed revert is the only case where submitting a fresh price
+              // transaction is safe. All uncertain outcomes are reconciled below.
+              previousReceiptError = cause;
+            } else {
+              previousReceiptError = cause;
+            }
+          }
+
+          if (!previousReceiptError?.confirmedRevert) {
+            setDeployment({
+              walletAction: {
+                key: 'activate-token-price',
+                step: 3,
+                total: 3,
+                status: 'syncing',
+                title: 'Verifying the submitted token price',
+                description:
+                  'The previous transaction is still syncing. We are checking the live price automatically; no new wallet transaction will be sent.',
+                transactionHash: previousPriceHash,
+                gasRequired: false,
+              },
+            });
+
+            let lastPriceReadError = null;
+            for (let attempt = 0; attempt < 7 && livePriceValue !== desiredPrice; attempt += 1) {
+              try {
+                livePrice = await getPlatformTokenPrice({
+                  ...deploymentPaymentContextOf(tokenRecord.token, supplyPricing, nextMetadata),
+                  tokenAddress,
+                  chainId: deploymentConfig.chainId,
+                });
+                livePriceValue = canonicalDecimal(livePrice.currentTokenPrice);
+                lastPriceReadError = null;
+              } catch (readError) {
+                lastPriceReadError = readError;
+              }
+
+              if (livePriceValue !== desiredPrice && attempt < 6) {
+                await wait(Math.min(1_500, 500 * (attempt + 1)));
+              }
+            }
+
+            if (livePriceValue !== desiredPrice) {
               const error = mandatoryStepError({
-                message:
-                  'The previous price transaction is still being confirmed. Wait for it before retrying; no new transaction was sent.',
-                code: 'PRICE_CONFIRMATION_PENDING',
+                message: previousReceiptConfirmed
+                  ? 'The previous price transaction was confirmed, but the live price has not updated after automatic verification. No new transaction was sent.'
+                  : 'The previous price transaction is still being confirmed. We checked the live price automatically; no new transaction was sent.',
+                code: previousReceiptConfirmed
+                  ? 'TOKEN_PRICE_CONFIRMATION_REQUIRED'
+                  : 'PRICE_CONFIRMATION_PENDING',
                 failedStep: 'price-confirmation',
                 deploymentTransactionHash: deployHash,
                 failedTransactionHash: previousPriceHash,
                 tokenAddress,
                 onChainPaused: false,
-                cause,
+                cause: lastPriceReadError || previousReceiptError,
               });
               nextMetadata = {
                 ...nextMetadata,
@@ -926,21 +1104,67 @@ export default function DeploymentProcessingPage() {
               });
               throw error;
             }
-            // A confirmed revert is safe to retry with a new wallet transaction below.
+
+            setDeployment({
+              walletAction: {
+                key: 'activate-token-price',
+                step: 3,
+                total: 3,
+                status: 'confirmed',
+                title: 'Token price confirmed',
+                description:
+                  'The live contract price is correct. Setup is continuing automatically.',
+                transactionHash: previousPriceHash,
+                gasRequired: false,
+              },
+            });
           }
+          // When the previous transaction is confirmed reverted, livePriceValue still
+          // differs and the normal flow below safely asks for a new price transaction.
         }
 
         if (livePriceValue !== desiredPrice) {
           let priceResult;
           try {
             priceResult = await setPlatformTokenPrice({
+              ...deploymentPaymentContextOf(tokenRecord.token, supplyPricing, nextMetadata),
               connector: wallet.connector,
               connectedAddress: wallet.address,
               issuerWalletAddress: approvedWallet,
               tokenAddress,
               currentTokenPrice: configuredTokenPrice,
-              chainId: wallet.requiredChain.id,
+              chainId: deploymentConfig.chainId,
               onStep: ({ stage, txHash }) => {
+                // Persist at broadcast, before receipt polling. A refresh or RPC
+                // failure must not lose transaction #3 and request it again.
+                if (['price-confirming', 'price-reconciling'].includes(stage) && txHash) {
+                  nextMetadata = {
+                    ...nextMetadata,
+                    configurationStatus: 'price_confirmation_required',
+                    failedStep: 'price-confirmation',
+                    failedTransactionHash: txHash,
+                    priceSetup: {
+                      status: 'pending',
+                      transactionHash: txHash,
+                      currentTokenPrice: configuredTokenPrice,
+                      error: '',
+                    },
+                  };
+                  saveRecoveryRecordSafely('confirmed', {
+                    transactionHash: deployHash,
+                    user: authUser,
+                    issuerWallet: approvedWallet,
+                    tokenUid: nextMetadata.tokenUid,
+                    metadata: nextMetadata,
+                  });
+                  setDeployment({
+                    pendingSync: {
+                      transactionHash: deployHash,
+                      deploymentAttemptUid,
+                      metadata: nextMetadata,
+                    },
+                  });
+                }
                 setDeployment({
                   walletAction: {
                     key: 'activate-token-price',
@@ -949,21 +1173,27 @@ export default function DeploymentProcessingPage() {
                     status:
                       stage === 'price-confirmed'
                         ? 'confirmed'
-                        : stage === 'price-confirming'
-                          ? 'confirming'
-                          : 'awaiting-signature',
+                        : stage === 'price-reconciling'
+                          ? 'syncing'
+                          : stage === 'price-confirming'
+                            ? 'confirming'
+                            : 'awaiting-signature',
                     title:
                       stage === 'price-confirmed'
                         ? 'Token price confirmed'
-                        : stage === 'price-confirming'
-                          ? 'Confirming token price'
-                          : 'Transaction 3 of 3: Confirm token price',
+                        : stage === 'price-reconciling'
+                          ? 'Verifying token price automatically'
+                          : stage === 'price-confirming'
+                            ? 'Confirming token price'
+                            : 'Transaction 3 of 3: Confirm token price',
                     description:
                       stage === 'price-confirmed'
-                        ? 'The configured price is confirmed.'
-                        : stage === 'price-confirming'
-                          ? 'Waiting for network confirmation.'
-                          : 'Approve this transaction to make the configured price active for purchases and redemptions.',
+                        ? 'The configured price is confirmed on-chain.'
+                        : stage === 'price-reconciling'
+                          ? 'The network response is taking longer than expected. We are checking the live price automatically; no new wallet transaction will be sent.'
+                          : stage === 'price-confirming'
+                            ? 'Waiting for network confirmation.'
+                            : 'Approve this transaction to make the configured price active for purchases and redemptions.',
                     transactionHash: txHash || '',
                     gasRequired: true,
                   },
@@ -971,7 +1201,8 @@ export default function DeploymentProcessingPage() {
               },
             });
           } catch (cause) {
-            const failedHash = cause?.transactionHash || '';
+            const failedHash =
+              cause?.transactionHash || nextMetadata.priceSetup?.transactionHash || '';
             const error = mandatoryStepError({
               message:
                 cause?.code === 'PRICE_CONFIRMATION_PENDING'
@@ -1085,13 +1316,14 @@ export default function DeploymentProcessingPage() {
       completeBackendDeployment,
       organization.walletAddress,
       setDeployment,
-      supplyPricing?.initialPrice,
+      supplyPricing,
       tokenInformation.treasuryWallet,
       tokenRecord.token,
       tokenRecord.tokenUid,
+      selectedChainConfig,
       wallet.address,
       wallet.connector,
-      wallet.requiredChain.id,
+      tokenInformation,
     ],
   );
 
@@ -1132,10 +1364,10 @@ export default function DeploymentProcessingPage() {
       attemptInFlightRef.current ||
       deployment.status !== 'processing' ||
       tokenBootstrap.isLoading ||
+      chainConfigQuery.isPending ||
       !backend.hydrated ||
       organizationLoading ||
-      !authUser ||
-      !wallet.isReady
+      !authUser
     ) {
       return;
     }
@@ -1172,7 +1404,7 @@ export default function DeploymentProcessingPage() {
           throw new Error('The approved organization record could not be loaded.');
         }
         if (!approvedWallet) {
-          throw new Error('The approved organization secure account could not be loaded.');
+          throw new Error('The approved organization wallet could not be loaded.');
         }
 
         setDeployment({
@@ -1182,9 +1414,25 @@ export default function DeploymentProcessingPage() {
             status: 'syncing',
             title: 'Preparing token creation',
             description:
-              'Checking your token settings, organization permissions, network and Privy wallet before requesting approval.',
+              'Checking your token settings, organization permissions, network and wallet before MetaMask opens.',
           },
         });
+
+        // Resolve the token's persisted network before creating/reusing any new
+        // deployment attempt. This prevents a sparse token response (chainUid but
+        // no chainId) from creating an attempt on the wallet/default network.
+        const deploymentConfig = deploymentConfigFor(
+          tokenInformation,
+          selectedChainConfig,
+          deploymentPaymentContextOf(tokenRecord.token).controllerAddress,
+        );
+        if (Number(wallet.requiredChain.id) !== Number(deploymentConfig.chainId)) {
+          const error = new Error(
+            `The token is configured for ${deploymentConfig.networkName}. Refresh before creating the token.`,
+          );
+          error.code = 'TOKEN_NETWORK_CONFIGURATION_UNAVAILABLE';
+          throw error;
+        }
 
         let activeState = null;
         try {
@@ -1266,7 +1514,7 @@ export default function DeploymentProcessingPage() {
           const latestToken = await tokenApi.getMyToken();
           const deployedTokenUid =
             latestToken?.tokenUid || latestToken?.uid || latestToken?.id || cachedTokenUid;
-          queryClient.setQueryData(myTokenQueryKey(tokenRecord.userKey), latestToken);
+          queryClient.setQueryData(myTokenQueryKey(tokenRecord.userKey, tokenRecord.selectedChainUid), latestToken);
           navigate(ROUTES.tokenDetails(deployedTokenUid || 'token'), { replace: true });
           return;
         }
@@ -1281,7 +1529,7 @@ export default function DeploymentProcessingPage() {
             throw new Error('The active token-creation attempt belongs to a different network.');
           }
           if (activeWallet && activeWallet !== approvedWallet.toLowerCase()) {
-            throw new Error('The active asset-creation attempt belongs to a different organization secure account.');
+            throw new Error('The active token-creation attempt belongs to a different organization wallet.');
           }
 
           setBackendState({
@@ -1342,7 +1590,7 @@ export default function DeploymentProcessingPage() {
                 status: 'syncing',
                 title: 'Resuming token creation',
                 description:
-                  'The transaction ID is already recorded. We will verify it without requesting another Privy approval.',
+                  'The transaction ID is already recorded. We will verify it without opening MetaMask again.',
               },
             });
 
@@ -1444,55 +1692,20 @@ export default function DeploymentProcessingPage() {
         }
 
         // Wallet validation is required only when a new transaction may be sent. Submitted
-        // attempts above resume through the backend without requesting another Privy approval.
-        // The outer effect waits for Privy wallet discovery; the live chain is then checked
-        // directly below before a backend deployment attempt or wallet transaction is created.
+        // attempts above resume through the backend without reopening MetaMask.
         if (!wallet.isConnected || !wallet.connector) {
-          throw new Error('Open the approved Privy secure account before creating the asset.');
+          throw new Error('Connect the approved organization wallet before creating the token.');
         }
-
-        // `useWalletConnection` mounts fresh state on this route, so the render-time
-        // `isCorrectNetwork` flag can briefly be false before its chain snapshot arrives.
-        // Read the provider now and validate that result directly. This is the same wallet
-        // that will sign the transaction and removes the first-attempt race without weakening
-        // the Arc Testnet guard.
-        let activeChainId;
-        try {
-          activeChainId = await wallet.getActiveChainId();
-        } catch (walletStateError) {
-          const readinessError = new Error(
-            'Your Privy secure account could not be checked before asset creation. Please try again once the wallet connection is available.',
-            { cause: walletStateError },
+        if (!wallet.isCorrectNetwork) {
+          const error = new Error(
+            `Switch the connected wallet to ${deploymentConfig.networkName} before creating the token. No blockchain transaction has been sent.`,
           );
-          readinessError.code = 'WALLET_STATE_CHECK_FAILED';
-          throw readinessError;
-        }
-        if (Number(activeChainId) !== Number(wallet.requiredChain.id)) {
-          throw new Error(`Your Privy secure account needs a quick setup check before asset creation can continue.`);
+          error.code = 'WALLET_WRONG_NETWORK';
+          throw error;
         }
         if (wallet.address?.toLowerCase() !== approvedWallet.toLowerCase()) {
-          throw new Error('Restore the approved Privy secure account before creating the asset.');
+          throw new Error('Reconnect the approved organization wallet before creating the token.');
         }
-
-        // Arc migration preflight: organization approval on Sepolia included an
-        // ONCHAINID deployment, so the Arc identity must be recreated/resolved
-        // and persisted before we create a backend deployment attempt. This keeps
-        // a missing migration from producing a misleading cancelled token attempt.
-        setDeployment({
-          activeStage: 0,
-          walletAction: {
-            key: 'organization-identity-preflight',
-            status: 'syncing',
-            title: 'Checking Arc organization identity',
-            description:
-              'Verifying that the approved organization account is linked to its ONCHAINID on Arc Testnet before any token transaction is prepared.',
-          },
-        });
-        const organizationIdentityReadiness =
-          await requireOrganizationIdentityOnRequiredChain({
-            walletAddress: approvedWallet,
-            recordedIdentityAddress: organization.contractAddress,
-          });
 
         if (!deploymentAttemptUid) {
           const idempotencyKey =
@@ -1503,10 +1716,10 @@ export default function DeploymentProcessingPage() {
           idempotencyKeyRef.current = idempotencyKey;
 
           const createdAttempt = await tokenApi.createDeploymentAttempt({
-            chainId: wallet.requiredChain.id,
+            chainId: deploymentConfig.chainId,
             walletAddress: approvedWallet,
             idempotencyKey,
-            networkName: wallet.requiredChain.name,
+            networkName: deploymentConfig.networkName,
             metadata: {
               tokenUid: cachedTokenUid,
               client: 'trex-capital-market-ui',
@@ -1539,7 +1752,7 @@ export default function DeploymentProcessingPage() {
             attemptStatus,
             idempotencyKey,
           });
-          queryClient.setQueryData(myTokenQueryKey(tokenRecord.userKey), (current) => ({
+          queryClient.setQueryData(myTokenQueryKey(tokenRecord.userKey, tokenRecord.selectedChainUid), (current) => ({
             ...(current || cachedToken || {}),
             status: 'deploymentPending',
             isDraft: false,
@@ -1554,8 +1767,7 @@ export default function DeploymentProcessingPage() {
           identityClaims,
           compliance,
           agents,
-          deploymentConfig: env.trex,
-          organizationIdentityReadiness,
+          deploymentConfig,
           onStageChange: (activeStage, values = {}) => {
             if (values.transactionHash) {
               transactionSubmitted = true;
@@ -1802,7 +2014,7 @@ export default function DeploymentProcessingPage() {
               isDraft: false,
               isLocked: true,
             });
-            queryClient.invalidateQueries({ queryKey: myTokenQueryKey(tokenRecord.userKey) });
+            queryClient.invalidateQueries({ queryKey: myTokenQueryKey(tokenRecord.userKey, tokenRecord.selectedChainUid) });
           } catch (closeError) {
             console.error('Unable to record the reverted deployment transaction', closeError);
           }
@@ -1826,7 +2038,7 @@ export default function DeploymentProcessingPage() {
               isDraft: true,
               isLocked: false,
             });
-            queryClient.invalidateQueries({ queryKey: myTokenQueryKey(tokenRecord.userKey) });
+            queryClient.invalidateQueries({ queryKey: myTokenQueryKey(tokenRecord.userKey, tokenRecord.selectedChainUid) });
             idempotencyKeyRef.current = '';
           } catch (closeError) {
             console.error('Unable to close the pre-broadcast deployment attempt', closeError);
@@ -1844,7 +2056,7 @@ export default function DeploymentProcessingPage() {
             isDraft: false,
             isLocked: true,
           });
-          queryClient.invalidateQueries({ queryKey: myTokenQueryKey(tokenRecord.userKey) });
+          queryClient.invalidateQueries({ queryKey: myTokenQueryKey(tokenRecord.userKey, tokenRecord.selectedChainUid) });
         }
 
         const presentation = deploymentErrorPresentation(error, submitted);
@@ -1937,6 +2149,8 @@ export default function DeploymentProcessingPage() {
     setBackendState,
     setDeployment,
     tokenBootstrap.isLoading,
+    chainConfigQuery.isPending,
+    selectedChainConfig,
     tokenInformation,
     supplyPricing,
     tokenRecord.token,
@@ -1944,9 +2158,8 @@ export default function DeploymentProcessingPage() {
     tokenRecord.userKey,
     wallet.address,
     wallet.connector,
-    wallet.getActiveChainId,
     wallet.isConnected,
-    wallet.isReady,
+    wallet.isCorrectNetwork,
     wallet.requiredChain.id,
     wallet.requiredChain.name,
   ]);
@@ -2028,7 +2241,7 @@ export default function DeploymentProcessingPage() {
 
         if (deploymentDetected && tokenUid) {
           throw new Error(
-            'An asset record was found, but its confirmed creation reference is unavailable. The asset will not be treated as complete until the final status can be verified.',
+            'A token record was found, but its confirmed creation transaction ID is unavailable. The token will not be treated as complete until the on-chain state can be reconciled.',
           );
         }
       } catch (error) {
@@ -2214,7 +2427,7 @@ export default function DeploymentProcessingPage() {
               status: 'syncing',
               title: 'Checking token status again',
               description:
-                'Verification will resume from the existing transaction ID. No additional Privy approval or network fee will be requested.',
+                'Verification will resume from the existing transaction ID. MetaMask will not open and no additional network fee will be charged.',
             },
           });
 
@@ -2262,7 +2475,7 @@ export default function DeploymentProcessingPage() {
               isDraft: false,
               isLocked: true,
             });
-            queryClient.invalidateQueries({ queryKey: myTokenQueryKey(tokenRecord.userKey) });
+            queryClient.invalidateQueries({ queryKey: myTokenQueryKey(tokenRecord.userKey, tokenRecord.selectedChainUid) });
           }
           const presentation = deploymentErrorPresentation(error, true);
           toast.error(presentation.title, {
@@ -2321,8 +2534,8 @@ export default function DeploymentProcessingPage() {
   };
 
   const walletActionStatus = {
-    'awaiting-signature': 'Approve in Privy',
-    confirming: 'Waiting for Arc Testnet',
+    'awaiting-signature': 'Open MetaMask',
+    confirming: `Waiting for ${wallet.requiredChain.name}`,
     confirmed: 'Confirmed',
     failed: 'Needs attention',
     syncing: 'No wallet action required',
@@ -2365,7 +2578,7 @@ export default function DeploymentProcessingPage() {
               <ShieldCheck size={28} />
             )}
           </span>
-          <span className="eyebrow">Creating on Arc Testnet</span>
+          <span className="eyebrow">Creating on {wallet.requiredChain.name}</span>
           <h1>
             {existingDeploymentSyncPending
               ? 'Syncing your existing token'
@@ -2386,7 +2599,7 @@ export default function DeploymentProcessingPage() {
               ? "We found an existing token-creation transaction and are linking it to your account. No additional wallet transaction is required."
               : deployment.status === 'error'
                 ? backendSyncPending
-                  ? 'The asset creation already exists. Retry only the status check; no new secure confirmation will be requested.'
+                  ? 'The blockchain transaction already exists. Retry only the status check; another wallet transaction will not be sent.'
                   : configurationRetryPending
                     ? 'The asset already exists. We will check the live transfer state first and retry only the missing activation step when needed.'
                     : priceRetryPending
@@ -2394,7 +2607,7 @@ export default function DeploymentProcessingPage() {
                       : 'Review the message below before retrying. Never send a duplicate transaction when a hash is already pending.'
                 : backendSyncPending
                   ? 'The submitted transaction and token-creation result are being checked before your token is marked ready.'
-                  : `Privy may request ${walletActionCount} approvals: create the asset, activate approved transfers${configuredInitialPrice ? ', and confirm the asset price' : ''}. Keep this page open until Arc Testnet confirms every required action.`}
+                  : `MetaMask may request ${walletActionCount} approvals: create the asset, activate approved transfers${configuredInitialPrice ? ', and confirm the asset price' : ''}. Keep this page open until ${wallet.requiredChain.name} confirms every required action.`}
           </p>
         </div>
 
@@ -2411,7 +2624,7 @@ export default function DeploymentProcessingPage() {
             </div>
             <p>{deployment.walletAction.description}</p>
             {deployment.walletAction.gasRequired ? (
-              <small>Privy will show the transaction details before you approve this transaction.</small>
+              <small>MetaMask will show the network fee before you approve this transaction.</small>
             ) : null}
           </div>
         ) : null}
@@ -2448,7 +2661,7 @@ export default function DeploymentProcessingPage() {
                 Check sync status
               </Button>
             ) : (
-              <span>No new Privy confirmation or asset creation action will be requested.</span>
+              <span>No new wallet approval or blockchain transaction will be requested.</span>
             )
           ) : deployment.status === 'error' ? (
             <>
@@ -2473,7 +2686,7 @@ export default function DeploymentProcessingPage() {
             </>
           ) : (
             <span>
-              Privy will show the transaction details before you approve a transaction.
+              MetaMask will show any required network fee before you approve a transaction.
             </span>
           )}
         </div>

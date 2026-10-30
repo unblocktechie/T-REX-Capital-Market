@@ -5,7 +5,7 @@ const normalizeAddress = (value) => String(value || '').trim().toLowerCase();
 const isAddress = (value) => /^0x[a-fA-F0-9]{40}$/.test(String(value || '').trim());
 
 export function useRegisteredInvestorWalletGuard(registeredWalletAddress, configuredChainId) {
-  const wallet = useWalletConnection();
+  const wallet = useWalletConnection(configuredChainId);
 
   const registeredAddress = String(registeredWalletAddress || '').trim();
   const requestedChainId = Number(configuredChainId);

@@ -11,6 +11,7 @@ import { createPortal } from 'react-dom';
 import {
   CalendarDays,
   Check,
+  Clock3,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -47,6 +48,8 @@ export const SelectField = forwardRef(function SelectField(
     disabled = false,
     searchable,
     showEmptyOption = true,
+    renderOption,
+    renderValue,
     required = false,
     ...props
   },
@@ -158,6 +161,7 @@ export const SelectField = forwardRef(function SelectField(
   };
 
   const emitValue = (nextValue) => {
+    if (disabled) return;
     const node = selectRef.current;
     if (node) node.value = String(nextValue);
     if (!controlled) setInternalValue(String(nextValue));
@@ -250,7 +254,7 @@ export const SelectField = forwardRef(function SelectField(
         }}
       >
         <span className={cn('org-select-trigger__value', !selectedOption && 'is-placeholder')}>
-          {selectedOption?.label || placeholder}
+          {selectedOption ? (renderValue ? renderValue(selectedOption) : selectedOption.label) : placeholder}
         </span>
         <ChevronDown size={18} aria-hidden="true" />
       </button>
@@ -306,7 +310,7 @@ export const SelectField = forwardRef(function SelectField(
                   onMouseEnter={() => setActiveIndex(index)}
                   onClick={() => emitValue(option.value)}
                 >
-                  <span>{option.label}</span>
+                  <span>{renderOption ? renderOption(option) : option.label}</span>
                   {selected ? <Check size={16} aria-hidden="true" /> : null}
                 </button>
               );
@@ -351,25 +355,101 @@ const formatDisplayDate = (value) => {
   }).format(date);
 };
 
+const parseIsoDateTime = (value) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(value || '');
+  if (!match) return null;
+  const [, yearText, monthText, dayText, hourText, minuteText] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  if (hour > 23 || minute > 59) return null;
+  const date = new Date(year, month - 1, day);
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) return null;
+  return { date, hour, minute };
+};
+
+const toIsoDateTime = (date, hour = 0, minute = 0) =>
+  `${toIsoDate(date)}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+
+const formatDisplayDateTime = (value) => {
+  const parsed = parseIsoDateTime(value);
+  if (!parsed) return '';
+  const dateTime = new Date(
+    parsed.date.getFullYear(),
+    parsed.date.getMonth(),
+    parsed.date.getDate(),
+    parsed.hour,
+    parsed.minute,
+  );
+  return new Intl.DateTimeFormat(undefined, {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(dateTime);
+};
+
 const MONTHS = Array.from({ length: 12 }, (_, index) =>
   new Intl.DateTimeFormat(undefined, { month: 'long' }).format(new Date(2024, index, 1)),
 );
 const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
-function CalendarSelect({ label, value, options, open, onOpenChange, onChange }) {
+function CalendarSelect({
+  label,
+  value,
+  options,
+  open,
+  onOpenChange,
+  onChange,
+  menuPlacement = 'bottom',
+}) {
   const rootRef = useRef(null);
+  const menuRef = useRef(null);
+  const selectedRef = useRef(null);
+  const onOpenChangeRef = useRef(onOpenChange);
   const selectedOption = options.find(
     (option) => String(option.value) === String(value),
   );
 
   useEffect(() => {
+    onOpenChangeRef.current = onOpenChange;
+  }, [onOpenChange]);
+
+  // Only center the selected option when the menu opens (or its selected value
+  // actually changes). Parent re-renders must not reset scrollTop while the user
+  // is scrolling a long list such as the DOB year selector.
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const frame = window.requestAnimationFrame(() => {
+      const menu = menuRef.current;
+      const selected = selectedRef.current;
+      if (!menu || !selected) return;
+
+      const selectedMiddle = selected.offsetTop + selected.offsetHeight / 2;
+      menu.scrollTop = Math.max(0, selectedMiddle - menu.clientHeight / 2);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [open, value]);
+
+  useEffect(() => {
     if (!open) return undefined;
 
     const closeOnOutsideClick = (event) => {
-      if (!rootRef.current?.contains(event.target)) onOpenChange(false);
+      if (!rootRef.current?.contains(event.target)) onOpenChangeRef.current?.(false);
     };
     const closeOnEscape = (event) => {
-      if (event.key === 'Escape') onOpenChange(false);
+      if (event.key === 'Escape') onOpenChangeRef.current?.(false);
     };
 
     document.addEventListener('pointerdown', closeOnOutsideClick);
@@ -378,7 +458,7 @@ function CalendarSelect({ label, value, options, open, onOpenChange, onChange })
       document.removeEventListener('pointerdown', closeOnOutsideClick);
       document.removeEventListener('keydown', closeOnEscape);
     };
-  }, [onOpenChange, open]);
+  }, [open]);
 
   return (
     <div className="org-calendar-select" ref={rootRef}>
@@ -394,12 +474,21 @@ function CalendarSelect({ label, value, options, open, onOpenChange, onChange })
         <ChevronDown size={15} aria-hidden="true" />
       </button>
       {open ? (
-        <div className="org-calendar-select__menu" role="listbox" aria-label={label}>
+        <div
+          ref={menuRef}
+          className={cn(
+            'org-calendar-select__menu',
+            menuPlacement === 'top' && 'is-top',
+          )}
+          role="listbox"
+          aria-label={label}
+        >
           {options.map((option) => {
             const selected = String(option.value) === String(value);
             return (
               <button
                 key={option.value}
+                ref={selected ? selectedRef : undefined}
                 type="button"
                 role="option"
                 aria-selected={selected}
@@ -557,7 +646,20 @@ export const DateField = forwardRef(function DateField(
         triggerRef.current?.focus();
       }
     };
-    const reposition = () => {
+    const reposition = (event) => {
+      // Scroll events from the calendar itself (year/month/time menus or the
+      // responsive popover) must not trigger a parent state update. Doing so
+      // used to re-render CalendarSelect and snap its scroll position back to
+      // the selected option, which made the list feel completely stuck.
+      const eventTarget = event?.target;
+      if (
+        typeof Node !== 'undefined'
+        && eventTarget instanceof Node
+        && popoverRef.current?.contains(eventTarget)
+      ) {
+        return;
+      }
+
       window.cancelAnimationFrame(frame);
       frame = window.requestAnimationFrame(updatePopoverPosition);
     };
@@ -838,6 +940,580 @@ export const DateField = forwardRef(function DateField(
                 >
                   Today
                 </button>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+
+      {error ? (
+        <p className="org-field__error" id={`${fieldId}-error`} role="alert">{error}</p>
+      ) : hint ? (
+        <p className="org-field__hint" id={`${fieldId}-hint`}>{hint}</p>
+      ) : null}
+    </div>
+  );
+});
+
+
+export const DateTimeField = forwardRef(function DateTimeField(
+  {
+    label,
+    error,
+    hint,
+    id,
+    className,
+    value,
+    defaultValue,
+    name,
+    onChange,
+    onBlur,
+    min,
+    max,
+    disabled = false,
+    placeholder = 'Select date and time',
+    required = false,
+    ...props
+  },
+  forwardedRef,
+) {
+  const generatedId = useId();
+  const fieldId = id || generatedId;
+  const describedBy = error ? `${fieldId}-error` : hint ? `${fieldId}-hint` : undefined;
+  const rootRef = useRef(null);
+  const inputRef = useRef(null);
+  const triggerRef = useRef(null);
+  const popoverRef = useRef(null);
+  const controlled = value !== undefined;
+  const [internalValue, setInternalValue] = useState(defaultValue ?? '');
+  const selectedValue = controlled ? String(value ?? '') : String(internalValue ?? '');
+  const selectedDateTime = parseIsoDateTime(selectedValue);
+  const minDateTime = parseIsoDateTime(min);
+  const maxDateTime = parseIsoDateTime(max);
+  const initialDate = selectedDateTime?.date || maxDateTime?.date || new Date();
+  const [viewDate, setViewDate] = useState(
+    new Date(initialDate.getFullYear(), initialDate.getMonth(), 1),
+  );
+  const [draftDate, setDraftDate] = useState(
+    selectedDateTime ? toIsoDate(selectedDateTime.date) : '',
+  );
+  const [draftHour, setDraftHour] = useState(
+    String(selectedDateTime?.hour ?? new Date().getHours()).padStart(2, '0'),
+  );
+  const [draftMinute, setDraftMinute] = useState(
+    String(selectedDateTime?.minute ?? new Date().getMinutes()).padStart(2, '0'),
+  );
+  const [open, setOpen] = useState(false);
+  const [popoverStyle, setPopoverStyle] = useState({});
+  const [selectorOpen, setSelectorOpen] = useState('');
+
+  const updatePopoverPosition = useCallback(() => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const visualViewport = window.visualViewport;
+    const viewportWidth =
+      visualViewport?.width || document.documentElement.clientWidth || window.innerWidth;
+    const viewportHeight = visualViewport?.height || window.innerHeight;
+    const viewportLeft = visualViewport?.offsetLeft || 0;
+    const viewportTop = visualViewport?.offsetTop || 0;
+    const mobile = viewportWidth <= 720;
+    const gutter = mobile ? 12 : 14;
+    const gap = 8;
+    const width = Math.min(
+      mobile ? 360 : 336,
+      Math.max(260, viewportWidth - gutter * 2),
+    );
+    const measuredHeight = popoverRef.current?.scrollHeight || 490;
+    const calendarHeight = Math.min(measuredHeight, viewportHeight - gutter * 2);
+    const minLeft = viewportLeft + gutter;
+    const maxLeft = viewportLeft + viewportWidth - width - gutter;
+    const left = mobile
+      ? viewportLeft + Math.max(gutter, (viewportWidth - width) / 2)
+      : Math.min(Math.max(rect.left, minLeft), Math.max(minLeft, maxLeft));
+    const viewportBottom = viewportTop + viewportHeight;
+    const availableBelow = viewportBottom - rect.bottom - gap - gutter;
+    const availableAbove = rect.top - viewportTop - gap - gutter;
+
+    let top;
+    if (availableBelow >= calendarHeight) {
+      top = rect.bottom + gap;
+    } else if (availableAbove >= calendarHeight) {
+      top = rect.top - gap - calendarHeight;
+    } else {
+      top = viewportTop + Math.max(gutter, (viewportHeight - calendarHeight) / 2);
+    }
+
+    const maxTop = viewportBottom - calendarHeight - gutter;
+    top = Math.min(Math.max(top, viewportTop + gutter), Math.max(viewportTop + gutter, maxTop));
+
+    setPopoverStyle({
+      position: 'fixed',
+      top,
+      right: 'auto',
+      bottom: 'auto',
+      left,
+      width,
+      maxWidth: viewportWidth - gutter * 2,
+      maxHeight: viewportHeight - gutter * 2,
+      overflowX: 'hidden',
+      overflowY: measuredHeight > viewportHeight - gutter * 2 ? 'auto' : 'visible',
+      boxSizing: 'border-box',
+    });
+  }, []);
+
+  const setCombinedRef = (node) => {
+    inputRef.current = node;
+    assignRef(forwardedRef, node);
+    if (!controlled && node) {
+      window.requestAnimationFrame(() => setInternalValue(node.value || ''));
+    }
+  };
+
+  useEffect(() => {
+    if (controlled) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      const nextValue = String(inputRef.current?.value || '');
+      setInternalValue((current) => (current === nextValue ? current : nextValue));
+    });
+    return () => window.cancelAnimationFrame(frame);
+  });
+
+  useEffect(() => {
+    if (!open) return undefined;
+    let frame = 0;
+
+    const handlePointerDown = (event) => {
+      const insideField = rootRef.current?.contains(event.target);
+      const insideCalendar = popoverRef.current?.contains(event.target);
+      if (!insideField && !insideCalendar) {
+        setOpen(false);
+        setSelectorOpen('');
+        onBlur?.({ target: inputRef.current, currentTarget: inputRef.current, type: 'blur' });
+      }
+    };
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+        setSelectorOpen('');
+        triggerRef.current?.focus();
+      }
+    };
+    const reposition = (event) => {
+      // Scroll events from the calendar itself (year/month/time menus or the
+      // responsive popover) must not trigger a parent state update. Doing so
+      // used to re-render CalendarSelect and snap its scroll position back to
+      // the selected option, which made the list feel completely stuck.
+      const eventTarget = event?.target;
+      if (
+        typeof Node !== 'undefined'
+        && eventTarget instanceof Node
+        && popoverRef.current?.contains(eventTarget)
+      ) {
+        return;
+      }
+
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(updatePopoverPosition);
+    };
+
+    updatePopoverPosition();
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleEscape);
+    window.addEventListener('resize', reposition);
+    window.addEventListener('scroll', reposition, true);
+    window.visualViewport?.addEventListener('resize', reposition);
+    window.visualViewport?.addEventListener('scroll', reposition);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleEscape);
+      window.removeEventListener('resize', reposition);
+      window.removeEventListener('scroll', reposition, true);
+      window.visualViewport?.removeEventListener('resize', reposition);
+      window.visualViewport?.removeEventListener('scroll', reposition);
+    };
+  }, [open, onBlur, updatePopoverPosition]);
+
+  useEffect(() => {
+    const parsed = parseIsoDateTime(selectedValue);
+    if (parsed) {
+      setViewDate(new Date(parsed.date.getFullYear(), parsed.date.getMonth(), 1));
+    }
+  }, [selectedValue]);
+
+  const minDate = minDateTime?.date || null;
+  const maxDate = maxDateTime?.date || null;
+  const minYear = minDate?.getFullYear() ?? 1900;
+  const maxYear = maxDate?.getFullYear() ?? new Date().getFullYear() + 10;
+  const years = useMemo(() => {
+    const result = [];
+    for (let year = maxYear; year >= minYear; year -= 1) result.push(year);
+    return result;
+  }, [maxYear, minYear]);
+
+  const monthOptions = useMemo(
+    () =>
+      MONTHS.map((month, index) => {
+        const monthStart = new Date(viewDate.getFullYear(), index, 1);
+        const monthEnd = new Date(viewDate.getFullYear(), index + 1, 0);
+        return {
+          label: month,
+          value: index,
+          disabled: Boolean(
+            (minDate && monthEnd < minDate) || (maxDate && monthStart > maxDate),
+          ),
+        };
+      }),
+    [maxDate, minDate, viewDate],
+  );
+
+  const yearOptions = useMemo(
+    () => years.map((year) => ({ label: String(year), value: year })),
+    [years],
+  );
+  const hourOptions = useMemo(
+    () => Array.from({ length: 24 }, (_, hour) => {
+      const valueText = String(hour).padStart(2, '0');
+      return { label: valueText, value: valueText };
+    }),
+    [],
+  );
+  const minuteOptions = useMemo(
+    () => Array.from({ length: 60 }, (_, minute) => {
+      const valueText = String(minute).padStart(2, '0');
+      return { label: valueText, value: valueText };
+    }),
+    [],
+  );
+
+  const days = useMemo(() => {
+    const year = viewDate.getFullYear();
+    const month = viewDate.getMonth();
+    const firstWeekday = new Date(year, month, 1).getDay();
+    const totalDays = new Date(year, month + 1, 0).getDate();
+    const result = Array(firstWeekday).fill(null);
+    for (let day = 1; day <= totalDays; day += 1) result.push(new Date(year, month, day));
+    while (result.length % 7 !== 0) result.push(null);
+    return result;
+  }, [viewDate]);
+
+  const isDisabledDate = (date) => {
+    const candidate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const minDay = minDate
+      ? new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate())
+      : null;
+    const maxDay = maxDate
+      ? new Date(maxDate.getFullYear(), maxDate.getMonth(), maxDate.getDate())
+      : null;
+    return Boolean((minDay && candidate < minDay) || (maxDay && candidate > maxDay));
+  };
+
+  const composeDraftValue = () =>
+    draftDate ? `${draftDate}T${draftHour}:${draftMinute}` : '';
+
+  const draftValue = composeDraftValue();
+  const draftDateTime = parseIsoDateTime(draftValue);
+  const draftTimestamp = draftDateTime
+    ? new Date(
+        draftDateTime.date.getFullYear(),
+        draftDateTime.date.getMonth(),
+        draftDateTime.date.getDate(),
+        draftDateTime.hour,
+        draftDateTime.minute,
+      ).getTime()
+    : Number.NaN;
+  const minTimestamp = minDateTime
+    ? new Date(
+        minDateTime.date.getFullYear(),
+        minDateTime.date.getMonth(),
+        minDateTime.date.getDate(),
+        minDateTime.hour,
+        minDateTime.minute,
+      ).getTime()
+    : null;
+  const maxTimestamp = maxDateTime
+    ? new Date(
+        maxDateTime.date.getFullYear(),
+        maxDateTime.date.getMonth(),
+        maxDateTime.date.getDate(),
+        maxDateTime.hour,
+        maxDateTime.minute,
+      ).getTime()
+    : null;
+  const draftOutOfRange = Boolean(
+    !Number.isFinite(draftTimestamp) ||
+    (minTimestamp !== null && draftTimestamp < minTimestamp) ||
+    (maxTimestamp !== null && draftTimestamp > maxTimestamp),
+  );
+
+  const emitValue = (nextValue, close = true) => {
+    const node = inputRef.current;
+    if (node) node.value = nextValue;
+    if (!controlled) setInternalValue(nextValue);
+    onChange?.({ target: node, currentTarget: node, type: 'change' });
+    if (close) {
+      setOpen(false);
+      setSelectorOpen('');
+      window.requestAnimationFrame(() => {
+        triggerRef.current?.focus();
+        onBlur?.({ target: node, currentTarget: node, type: 'blur' });
+      });
+    }
+  };
+
+  const openCalendar = () => {
+    if (disabled) return;
+    const now = new Date();
+    const parsed = parseIsoDateTime(selectedValue);
+    const base = parsed?.date || maxDate || now;
+    setViewDate(new Date(base.getFullYear(), base.getMonth(), 1));
+    setDraftDate(toIsoDate(parsed?.date || base));
+    setDraftHour(String(parsed?.hour ?? now.getHours()).padStart(2, '0'));
+    setDraftMinute(String(parsed?.minute ?? now.getMinutes()).padStart(2, '0'));
+    setSelectorOpen('');
+    updatePopoverPosition();
+    setOpen(true);
+  };
+
+  const changeMonth = (month) => {
+    setViewDate(new Date(viewDate.getFullYear(), Number(month), 1));
+  };
+
+  const changeYear = (year) => {
+    const nextYear = Number(year);
+    let nextMonth = viewDate.getMonth();
+    if (maxDate && nextYear === maxDate.getFullYear()) {
+      nextMonth = Math.min(nextMonth, maxDate.getMonth());
+    }
+    if (minDate && nextYear === minDate.getFullYear()) {
+      nextMonth = Math.max(nextMonth, minDate.getMonth());
+    }
+    setViewDate(new Date(nextYear, nextMonth, 1));
+  };
+
+  const useNow = () => {
+    const now = new Date();
+    const nextValue = toIsoDateTime(now, now.getHours(), now.getMinutes());
+    const parsed = parseIsoDateTime(nextValue);
+    if (!parsed) return;
+    const timestamp = new Date(
+      parsed.date.getFullYear(),
+      parsed.date.getMonth(),
+      parsed.date.getDate(),
+      parsed.hour,
+      parsed.minute,
+    ).getTime();
+    if (
+      (minTimestamp !== null && timestamp < minTimestamp) ||
+      (maxTimestamp !== null && timestamp > maxTimestamp)
+    ) return;
+    emitValue(nextValue);
+  };
+
+  const previousMonth = new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1);
+  const nextMonth = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1);
+  const previousDisabled = minDate && previousMonth < new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+  const nextDisabled = maxDate && nextMonth > new Date(maxDate.getFullYear(), maxDate.getMonth(), 1);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return (
+    <div className={cn('org-field', className)} ref={rootRef}>
+      <label id={`${fieldId}-label`} htmlFor={`${fieldId}-trigger`}>
+        {label}
+        {required ? <span className="org-required-mark" aria-hidden="true">*</span> : null}
+      </label>
+      <input
+        ref={setCombinedRef}
+        id={fieldId}
+        name={name}
+        type="datetime-local"
+        value={controlled ? selectedValue : undefined}
+        defaultValue={!controlled ? defaultValue : undefined}
+        min={min}
+        max={max}
+        onChange={(event) => {
+          if (!controlled) setInternalValue(event.target.value);
+          onChange?.(event);
+        }}
+        onBlur={onBlur}
+        disabled={disabled}
+        aria-hidden="true"
+        tabIndex={-1}
+        className="org-native-control"
+        {...props}
+        required={required}
+      />
+      <button
+        ref={triggerRef}
+        id={`${fieldId}-trigger`}
+        type="button"
+        className={cn('org-date-trigger', error && 'is-error', open && 'is-open')}
+        aria-labelledby={`${fieldId}-label`}
+        aria-describedby={describedBy}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-invalid={Boolean(error)}
+        aria-required={required || undefined}
+        disabled={disabled}
+        onClick={() => {
+          if (open) {
+            setOpen(false);
+            setSelectorOpen('');
+          } else {
+            openCalendar();
+          }
+        }}
+      >
+        <span className={cn(!selectedValue && 'is-placeholder')}>
+          {formatDisplayDateTime(selectedValue) || placeholder}
+        </span>
+        <CalendarDays size={18} aria-hidden="true" />
+      </button>
+
+      {open && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              ref={popoverRef}
+              className="org-date-popover org-datetime-popover"
+              style={popoverStyle}
+              role="dialog"
+              aria-modal="false"
+              aria-label={`Choose ${label || 'date and time'}`}
+            >
+              <div className="org-calendar__header">
+                <button
+                  type="button"
+                  className="org-calendar__nav"
+                  onClick={() => setViewDate(previousMonth)}
+                  disabled={previousDisabled}
+                  aria-label="Previous month"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <div className="org-calendar__selectors">
+                  <CalendarSelect
+                    label="month"
+                    value={viewDate.getMonth()}
+                    options={monthOptions}
+                    open={selectorOpen === 'month'}
+                    onOpenChange={(nextOpen) =>
+                      setSelectorOpen(nextOpen ? 'month' : '')
+                    }
+                    onChange={changeMonth}
+                  />
+                  <CalendarSelect
+                    label="year"
+                    value={viewDate.getFullYear()}
+                    options={yearOptions}
+                    open={selectorOpen === 'year'}
+                    onOpenChange={(nextOpen) =>
+                      setSelectorOpen(nextOpen ? 'year' : '')
+                    }
+                    onChange={changeYear}
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="org-calendar__nav"
+                  onClick={() => setViewDate(nextMonth)}
+                  disabled={nextDisabled}
+                  aria-label="Next month"
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </div>
+
+              <div className="org-calendar__weekdays" aria-hidden="true">
+                {WEEKDAYS.map((weekday) => (
+                  <span key={weekday}>{weekday}</span>
+                ))}
+              </div>
+              <div className="org-calendar__grid">
+                {days.map((date, index) => {
+                  if (!date) {
+                    return <span key={`blank-${index}`} className="org-calendar__blank" />;
+                  }
+                  const iso = toIsoDate(date);
+                  const selected = iso === draftDate;
+                  const isToday = iso === toIsoDate(today);
+                  return (
+                    <button
+                      key={iso}
+                      type="button"
+                      className={cn(
+                        'org-calendar__day',
+                        selected && 'is-selected',
+                        isToday && 'is-today',
+                      )}
+                      disabled={isDisabledDate(date)}
+                      aria-pressed={selected}
+                      aria-label={new Intl.DateTimeFormat(undefined, {
+                        dateStyle: 'full',
+                      }).format(date)}
+                      onClick={() => setDraftDate(iso)}
+                    >
+                      {date.getDate()}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="org-datetime__time">
+                <span className="org-datetime__time-icon" aria-hidden="true">
+                  <Clock3 size={17} />
+                </span>
+                <div className="org-datetime__time-copy">
+                  <strong>Time</strong>
+                  <small>Local time</small>
+                </div>
+                <div className="org-datetime__time-controls" aria-label="Choose time">
+                  <CalendarSelect
+                    label="hour"
+                    value={draftHour}
+                    options={hourOptions}
+                    menuPlacement="top"
+                    open={selectorOpen === 'hour'}
+                    onOpenChange={(nextOpen) =>
+                      setSelectorOpen(nextOpen ? 'hour' : '')
+                    }
+                    onChange={(nextHour) => setDraftHour(String(nextHour))}
+                  />
+                  <span className="org-datetime__time-separator" aria-hidden="true">:</span>
+                  <CalendarSelect
+                    label="minute"
+                    value={draftMinute}
+                    options={minuteOptions}
+                    menuPlacement="top"
+                    open={selectorOpen === 'minute'}
+                    onOpenChange={(nextOpen) =>
+                      setSelectorOpen(nextOpen ? 'minute' : '')
+                    }
+                    onChange={(nextMinute) => setDraftMinute(String(nextMinute))}
+                  />
+                </div>
+              </div>
+
+              <div className="org-calendar__footer org-datetime__footer">
+                <button
+                  type="button"
+                  onClick={() => emitValue('')}
+                  disabled={!selectedValue}
+                >
+                  Clear
+                </button>
+                <div className="org-datetime__footer-actions">
+                  <button type="button" onClick={useNow}>Now</button>
+                  <button
+                    type="button"
+                    className="org-calendar__apply"
+                    onClick={() => emitValue(draftValue)}
+                    disabled={draftOutOfRange}
+                  >
+                    Apply
+                  </button>
+                </div>
               </div>
             </div>,
             document.body,

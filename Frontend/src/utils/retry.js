@@ -114,13 +114,10 @@ export const getRetryDelayMs = (
 ) => {
   const retryAfterMs = getRetryAfterMs(error);
   const exponential = Math.min(maxDelayMs, baseDelayMs * 2 ** Math.max(0, attempt - 1));
-  const retryDelay = Number.isFinite(retryAfterMs)
-    ? Math.min(maxDelayMs, Math.max(retryAfterMs, baseDelayMs))
-    : exponential;
-
-  if (!jitter) return Math.round(retryDelay);
+  if (Number.isFinite(retryAfterMs)) return Math.ceil(Math.max(0, retryAfterMs));
+  if (!jitter) return Math.round(exponential);
   const factor = 0.85 + Math.random() * 0.3;
-  return Math.round(Math.min(maxDelayMs, retryDelay * factor));
+  return Math.round(Math.min(maxDelayMs, exponential * factor));
 };
 
 export const retryAsync = async (
