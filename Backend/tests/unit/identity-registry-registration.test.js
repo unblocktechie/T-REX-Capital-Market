@@ -7,7 +7,7 @@ const REGISTRY = '0x1111111111111111111111111111111111111111';
 const ISSUER = '0x2222222222222222222222222222222222222222';
 const INVESTOR = '0x3333333333333333333333333333333333333333';
 const IDENTITY = '0x4444444444444444444444444444444444444444';
-const PLATFORM_CONTROLLER = '0x40e81FAA4e6D54ae0632DF146939bB5858359271';
+const PLATFORM_CONTROLLER = '0x4052D80c222111234b89AFDfff597B5De8DA50cd';
 const TX = `0x${'ab'.repeat(32)}`;
 const issuer = { userUid: 'issuer-user', roleName: 'Issuer' };
 
@@ -16,6 +16,9 @@ const makeService = ({
   interestStatus = 'claimSubmitted',
   registryState = { contains: false, matches: false, issuerIsAgent: true },
   registrationEvent = null,
+  countryRestrictionCount = 1,
+  countryListed = true,
+  earlyJourney = false,
 } = {}) => {
   const state = {
     rows: [], verificationCalls: 0, interestStatus, history: [], pendingCreates: 0, confirmedCreates: 0,
@@ -24,7 +27,7 @@ const makeService = ({
     interestUid: 'interest-1', interestStatus, tokenUid: 'token-1', organizationUid: 'org-1', investorUid: 'investor-1',
     tokenStatus: 'deployed', identityRegistryAddress: REGISTRY,
     tokenAgentWalletAddress: PLATFORM_CONTROLLER, identityManagerWalletAddress: ISSUER,
-    countryRestrictionMode: 'allowlist', countryListed: true,
+    countryRestrictionMode: 'allowlist', countryRestrictionCount, countryListed,
     issuerUserUid: issuer.userUid, issuerWalletAddress: ISSUER, organizationStatus: 'approved', organizationActive: true,
     investorWalletAddress: INVESTOR, investorIdentityAddress: IDENTITY, investorStatus: 'submitted', investorActive: true,
     countryNumericCode: '356', countryActive: true, countryDeleted: false, deployedAtBlock: 50,
@@ -32,6 +35,7 @@ const makeService = ({
   const repository = {
     findContextByInterest: async () => context,
     getClaimCompletion: async () => ({ required: 2, confirmed: 2, missing: [] }),
+    getIssuerClaimCompletion: async () => ({ required: 2, missing: [] }),
     findByInterest: async () => state.rows[0] || null,
     findByUid: async (uid) => state.rows.find((row) => row.registryRegistrationUid === uid) || null,
     findByUidForUpdate: async (uid) => state.rows.find((row) => row.registryRegistrationUid === uid) || null,
@@ -97,6 +101,11 @@ const makeService = ({
     verifier, transactionRunner: (work) => work({}),
     config: { chainId: 11155111 },
   });
+  if (earlyJourney) {
+    repository.getClaimCompletion = async () => ({ required: 2, confirmed: 0, missing: [1, 2] });
+    const { ApplicationJourneyService } = require('../../src/services/application-journey.service');
+    service.journeyService = new ApplicationJourneyService({ registryRepository: repository, interestRepository: service.interestRepository });
+  }
   return { service, state };
 };
 
@@ -110,6 +119,13 @@ test('create records PENDING before MetaMask and returns only authoritative para
   assert.equal(result.operation.country, 356);
   assert.equal(state.rows.length, 1);
   assert.equal(state.rows[0].txHash, null);
+});
+
+test('registry registration remains eligible when the token has no geographic restrictions', async () => {
+  const { service } = makeService({ countryRestrictionCount: 0, countryListed: false });
+  const result = await service.create(issuer, 'interest-1');
+  assert.equal(result.operation.status, 'PENDING');
+  assert.equal(result.operation.country, 356);
 });
 
 test('create is idempotent and does not duplicate a pending operation', async () => {
@@ -200,7 +216,45 @@ test('a wrong on-chain call never confirms the pending operation', async () => {
   assert.equal(state.rows[0].status, 'PENDING');
 });
 
-test('registration cannot start before every claim is submitted', async () => {
+test('registration can start after issuer verification before investor claims are submitted', async () => {
   const { service } = makeService({ interestStatus: 'verifiedByIssuer' });
-  await assert.rejects(service.create(issuer, 'interest-1'), (error) => error.code === 'CLAIMS_NOT_COMPLETED');
+  assert.equal((await service.create(issuer, 'interest-1')).operation.status, 'PENDING');
+});
+
+test('registration cannot start before issuer claim verification', async () => {
+  const { service } = makeService({ interestStatus: 'submitIntrest' });
+  await assert.rejects(service.create(issuer, 'interest-1'), error => error.code === 'ISSUER_CLAIMS_NOT_VERIFIED');
+});
+
+test('early confirmed registration leaves application awaiting investor and is idempotent', async () => {
+  const { service, state } = makeService({ interestStatus: 'verifiedByIssuer', earlyJourney: true });
+  const created = await service.create(issuer, 'interest-1');
+  assert.equal(created.operation.canSubmitClaims, false);
+  const result = await service.confirm(issuer, 'interest-1', created.operation.registryOperationId, TX);
+  assert.equal(result.operation.status, 'CONFIRMED');
+  assert.equal(state.interestStatus, 'verifiedByIssuer');
+  assert.equal(result.operation.registryRegistrationConfirmed, true);
+  assert.equal(result.operation.claimsConfirmed, false);
+  assert.equal(result.operation.canSubmitClaims, true);
+  assert.equal(result.operation.canInvest, false);
+  assert.equal(result.operation.journeyStage, 'AWAITING_INVESTOR_CLAIMS');
+  await service.confirm(issuer, 'interest-1', created.operation.registryOperationId, TX);
+  assert.equal(state.history.length, 1);
+});
+
+test('signed status alone cannot register when required issuer signatures are missing', async () => {
+  const { service } = makeService({ interestStatus: 'verifiedByIssuer' });
+  service.repository.getIssuerClaimCompletion = async () => ({required: 2, missing: [2]});
+  await assert.rejects(service.create(issuer, 'interest-1'), error => error.code === 'ISSUER_CLAIMS_NOT_VERIFIED');
+});
+
+test('existing on-chain registry event can be recovered before investor claim submission', async () => {
+  const { service, state } = makeService({ interestStatus:'verifiedByIssuer', earlyJourney:true,
+    registryState:{contains:true,matches:true,issuerIsAgent:true},
+    registrationEvent:{registryEventUid:'e',txHash:TX,blockNumber:100,logIndex:7},
+  });
+  const result=await service.create(issuer,'interest-1');
+  assert.equal(result.operation.status,'CONFIRMED');
+  assert.equal(result.operation.canSubmitClaims,true); assert.equal(result.operation.canInvest,false);
+  assert.equal(state.interestStatus,'verifiedByIssuer'); assert.equal(state.pendingCreates,0);
 });

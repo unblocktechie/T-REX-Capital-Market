@@ -6,7 +6,7 @@ const { ACTIVE_DEPLOYMENT_ATTEMPT_STATUSES, DEPLOYMENT_ATTEMPT_STATUS } = requir
 // Columns the application is allowed to write. Kept explicit so the frontend can
 // never smuggle a field such as `status = confirmed` through mass assignment.
 const insertableFields = [
-  'tokenUid', 'organizationUid', 'userUid', 'walletAddress', 'chainId', 'networkName',
+  'tokenUid', 'organizationUid', 'userUid', 'chainUid', 'walletAddress', 'chainId', 'networkName',
   'status', 'idempotencyKey', 'transactionHash', 'contractAddress', 'blockNumber',
   'errorCode', 'errorMessage', 'metadata', 'expiresAt', 'submittedAt', 'confirmedAt', 'failedAt',
 ];
@@ -85,10 +85,11 @@ class TokenDeploymentAttemptRepository {
     return rows[0] || null;
   }
 
-  async findByTransactionHash(transactionHash, executor) {
+  async findByTransactionHash(transactionHash, executor, chainUid = null) {
     const rows = await execute(
-      'SELECT * FROM `tokenDeploymentAttempt` WHERE `transactionHash` = ? AND `isDeleted` = 0 LIMIT 1',
-      [transactionHash],
+      `SELECT * FROM \`tokenDeploymentAttempt\` WHERE \`transactionHash\` = ? AND \`isDeleted\` = 0
+       ${chainUid ? 'AND `chainUid` = ?' : ''} LIMIT 1`,
+      chainUid ? [transactionHash, chainUid] : [transactionHash],
       executor,
     );
     return rows[0] || null;

@@ -17,6 +17,7 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { investorMarketplaceService } from '@/services/investor/investorMarketplaceService';
 import { MARKETPLACE_STATUS } from '@/services/investor/investorMarketplaceLocalService';
 import { getErrorMessage } from '@/utils/error';
+import { compareTokenPrices } from '@/utils/tokenPrice';
 
 const PAGE_SIZE = 6;
 
@@ -47,8 +48,6 @@ function matchesApplicationStatus(token, filter) {
   return true;
 }
 
-const sortableNumber = (value, fallback = -Infinity) =>
-  Number.isFinite(Number(value)) ? Number(value) : fallback;
 
 export default function MarketplacePage() {
   useDocumentTitle('Marketplace');
@@ -88,8 +87,8 @@ export default function MarketplacePage() {
   const filteredTokens = useMemo(() => {
     const next = tokens.filter((token) => matchesApplicationStatus(token, applicationStatus));
     return [...next].sort((a, b) => {
-      if (sortBy === 'price-high') return sortableNumber(b.price) - sortableNumber(a.price);
-      if (sortBy === 'price-low') return sortableNumber(a.price, Infinity) - sortableNumber(b.price, Infinity);
+      if (sortBy === 'price-high') return compareTokenPrices(a.currentTokenPriceExact || a.price, b.currentTokenPriceExact || b.price, 'desc');
+      if (sortBy === 'price-low') return compareTokenPrices(a.currentTokenPriceExact || a.price, b.currentTokenPriceExact || b.price);
       if (sortBy === 'name') return a.name.localeCompare(b.name);
       const priority = {
         [MARKETPLACE_STATUS.READY_TO_INVEST]: 0,

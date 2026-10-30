@@ -3,6 +3,8 @@ const { ApiError } = require('../core/errors/api-error');
 const { env } = require('../core/config/env');
 const { withTransaction } = require('../database/connection');
 const { logger } = require('./common/log.service');
+const { TokenDeploymentReceiptService } = require('./blockchain/token-deployment-receipt.service');
+const { assertSelectedChain } = require('../utils/selected-chain');
 const {
   DEPLOYMENT_ATTEMPT_STATUS,
   ACTIVE_DEPLOYMENT_ATTEMPT_STATUSES,
@@ -25,6 +27,7 @@ class TokenDeploymentAttemptService {
     organizationRepository,
     tokenService,
     deploymentReceiptService,
+    chainRuntimeService = null,
     config = env.blockchain,
     transactionRunner = withTransaction,
   }) {
@@ -33,19 +36,20 @@ class TokenDeploymentAttemptService {
     this.organizationRepository = organizationRepository;
     this.tokenService = tokenService;
     this.deploymentReceiptService = deploymentReceiptService;
+    this.chainRuntimeService = chainRuntimeService;
     this.config = config;
     this.transactionRunner = transactionRunner;
   }
 
   // Can we independently check the chain for a matching deployment (salt reconcile)?
-  canReconcile() {
+  canReconcile(config = this.config, receiptService = this.deploymentReceiptService) {
     return Boolean(
-      this.deploymentReceiptService
-      && typeof this.deploymentReceiptService.reconcileBySalt === 'function'
-      && this.config
-      && this.config.sepoliaRpcUrl
-      && this.config.trexFactoryAddress
-      && ethers.isAddress(this.config.trexFactoryAddress),
+      receiptService
+      && typeof receiptService.reconcileBySalt === 'function'
+      && config
+      && config.sepoliaRpcUrl
+      && config.trexFactoryAddress
+      && ethers.isAddress(config.trexFactoryAddress),
     );
   }
 
@@ -56,7 +60,7 @@ class TokenDeploymentAttemptService {
       return this.tokenRepository.findByUserUid(user.userUid, connection);
     }
     if (this.tokenRepository.findByTokenAddressExcept) {
-      const other = await this.tokenRepository.findByTokenAddressExcept(reconcile.tokenAddress, token.tokenUid, connection);
+      const other = await this.tokenRepository.findByTokenAddressExcept(reconcile.tokenAddress, token.tokenUid, connection, token.chainUid);
       if (other) {
         throw new ApiError(409, 'The on-chain contract address is already assigned to another token.', {
           tokenAddress: reconcile.tokenAddress,
@@ -151,15 +155,21 @@ class TokenDeploymentAttemptService {
       && new Date(attempt.expiresAt).getTime() < Date.now();
   }
 
-  async createDeploymentAttempt({ user, chainId, walletAddress, idempotencyKey, networkName, metadata }) {
+  async createDeploymentAttempt({ user, chainId, walletAddress, idempotencyKey, networkName, metadata, selectedChain = null }) {
     const numericChainId = Number(chainId);
+    if (selectedChain && numericChainId !== Number(selectedChain.chainId)) {
+      throw new ApiError(422, 'Deployment chain does not match the selected network.', undefined, 'SELECTED_CHAIN_MISMATCH');
+    }
+    const chainConfig = this.chainRuntimeService
+      ? await this.chainRuntimeService.byChainId(numericChainId)
+      : this.config;
     const normalizedWallet = String(walletAddress).toLowerCase();
     if (!ethers.isAddress(walletAddress)) {
       throw ApiError.badRequest('walletAddress must be a valid EVM wallet address.');
     }
-    if (!this.config.supportedChainIds.includes(numericChainId)) {
+    if (!chainConfig.supportedChainIds.includes(numericChainId)) {
       throw new ApiError(400, `Chain ${numericChainId} is not supported for deployment.`, {
-        supportedChainIds: this.config.supportedChainIds,
+        supportedChainIds: chainConfig.supportedChainIds,
       }, 'UNSUPPORTED_CHAIN');
     }
 
@@ -167,9 +177,13 @@ class TokenDeploymentAttemptService {
       // Serialize concurrent create/finalize for this token by locking its row.
       const lockedToken = await this.tokenRepository.findForUpdateByUserUid(user.userUid, connection);
       if (!lockedToken) throw ApiError.badRequest('Create and configure a token before requesting deployment.');
+      assertSelectedChain(lockedToken, selectedChain, 'Token');
 
       const organization = await this.tokenService.approvedOrganization(user, connection);
       const token = await this.tokenRepository.findByUserUid(user.userUid, connection);
+      if (token.chainUid && chainConfig.chainUid && token.chainUid !== chainConfig.chainUid) {
+        throw new ApiError(400, 'chainId does not match the chain selected for this token.', undefined, 'UNSUPPORTED_CHAIN');
+      }
 
       if (token.status === 'deployed') {
         throw new ApiError(409, 'The token has already been deployed.', {
@@ -226,14 +240,15 @@ class TokenDeploymentAttemptService {
         this.conflictData(active), 'DEPLOYMENT_ALREADY_IN_PROGRESS');
       }
 
-      const expiresAt = new Date(Date.now() + this.config.deploymentAttemptTtlMinutes * 60 * 1000);
+      const expiresAt = new Date(Date.now() + chainConfig.deploymentAttemptTtlMinutes * 60 * 1000);
       const attempt = await this.attemptRepository.create({
         tokenUid: token.tokenUid,
         organizationUid: token.organizationUid,
         userUid: user.userUid,
+        chainUid: chainConfig.chainUid,
         walletAddress: normalizedWallet,
         chainId: numericChainId,
-        networkName: networkName || this.config.networkName,
+        networkName: networkName || chainConfig.networkName,
         status: S.PENDING,
         idempotencyKey,
         expiresAt,
@@ -253,15 +268,17 @@ class TokenDeploymentAttemptService {
     });
   }
 
-  async markDeploymentSubmitted({ user, deploymentAttemptUid, transactionHash, walletAddress, chainId }) {
+  async markDeploymentSubmitted({ user, deploymentAttemptUid, transactionHash, walletAddress, chainId, selectedChain = null }) {
     const normalizedHash = String(transactionHash).toLowerCase();
     const normalizedWallet = String(walletAddress).toLowerCase();
 
     return this.transactionRunner(async (connection) => {
       const lockedToken = await this.tokenRepository.findForUpdateByUserUid(user.userUid, connection);
       if (!lockedToken) throw ApiError.notFound('Token was not found.');
+      assertSelectedChain(lockedToken, selectedChain, 'Token');
       const attempt = await this.attemptRepository.findByUid(deploymentAttemptUid, connection);
       this.assertAttemptContext(attempt, user, lockedToken);
+      assertSelectedChain(attempt, selectedChain, 'Deployment attempt');
 
       if (this.isExpiredPending(attempt)) {
         await this.attemptRepository.update(attempt.deploymentAttemptUid, { status: S.EXPIRED }, connection);
@@ -285,12 +302,12 @@ class TokenDeploymentAttemptService {
         throw new ApiError(409, 'A different transaction hash is already recorded for this attempt.', this.conflictData(attempt), 'TRANSACTION_HASH_CONFLICT');
       }
 
-      const otherAttempt = await this.attemptRepository.findByTransactionHash(normalizedHash, connection);
+      const otherAttempt = await this.attemptRepository.findByTransactionHash(normalizedHash, connection, lockedToken.chainUid);
       if (otherAttempt && otherAttempt.deploymentAttemptUid !== attempt.deploymentAttemptUid) {
         throw new ApiError(409, 'This transaction hash is already recorded for another deployment.', undefined, 'TRANSACTION_HASH_CONFLICT');
       }
       if (this.tokenRepository.findByDeployTxHashExcept) {
-        const tokenOwner = await this.tokenRepository.findByDeployTxHashExcept(normalizedHash, lockedToken.tokenUid, connection);
+        const tokenOwner = await this.tokenRepository.findByDeployTxHashExcept(normalizedHash, lockedToken.tokenUid, connection, lockedToken.chainUid);
         if (tokenOwner) {
           throw new ApiError(409, 'This transaction hash is already linked to another token.', undefined, 'TRANSACTION_HASH_CONFLICT');
         }
@@ -308,12 +325,20 @@ class TokenDeploymentAttemptService {
     });
   }
 
-  async markDeploymentAttemptFailed({ user, deploymentAttemptUid, status, errorCode, errorMessage }) {
+  async markDeploymentAttemptFailed({ user, deploymentAttemptUid, status, errorCode, errorMessage, selectedChain = null }) {
     // Phase 1 (no lock): load + validate. RPC reconcile must not run while holding row locks.
     const token = await this.tokenRepository.findByUserUid(user.userUid);
     if (!token) throw ApiError.notFound('Token was not found.');
+    assertSelectedChain(token, selectedChain, 'Token');
     const attempt = await this.attemptRepository.findByUid(deploymentAttemptUid);
     this.assertAttemptContext(attempt, user, token);
+    assertSelectedChain(attempt, selectedChain, 'Deployment attempt');
+    const chainConfig = this.chainRuntimeService
+      ? await this.chainRuntimeService.byUid(token.chainUid || attempt.chainUid)
+      : this.config;
+    const receiptService = this.chainRuntimeService
+      ? new TokenDeploymentReceiptService(chainConfig)
+      : this.deploymentReceiptService;
 
     // Idempotent: already in the requested terminal state.
     if (attempt.status === status) return attempt;
@@ -333,12 +358,12 @@ class TokenDeploymentAttemptService {
     const tokenInProgress = token.status === 'deploymentPending';
     let reconcile = null;
     let reconcileErrored = false;
-    if (tokenInProgress && this.canReconcile()) {
+    if (tokenInProgress && this.canReconcile(chainConfig, receiptService)) {
       try {
-        reconcile = await this.deploymentReceiptService.reconcileBySalt({
+        reconcile = await receiptService.reconcileBySalt({
           owner: token.organizationWalletAddress,
           tokenName: token.tokenName,
-          fromBlock: Number(this.config.trexFactoryStartBlock || 0),
+          fromBlock: Number(chainConfig.trexFactoryStartBlock || 0),
         });
       } catch (error) {
         reconcileErrored = true;
@@ -401,9 +426,12 @@ class TokenDeploymentAttemptService {
     });
   }
 
-  async getActiveDeploymentAttempt({ user }) {
+  async getActiveDeploymentAttempt({ user, selectedChain = null }) {
     const token = await this.tokenRepository.findByUserUid(user.userUid);
     if (!token) {
+      return { tokenUid: null, tokenStatus: null, tokenDeployed: false, canCreateNew: false, attempt: null };
+    }
+    if (selectedChain && token.chainUid !== selectedChain.chainUid) {
       return { tokenUid: null, tokenStatus: null, tokenDeployed: false, canCreateNew: false, attempt: null };
     }
     await this.attemptRepository.expireStalePending(token.tokenUid);

@@ -337,10 +337,6 @@
   background: var(--primary-50);
 }
 
-.investor-choice-card--full {
-  grid-column: 1 / -1;
-}
-
 .investor-choice-card:has(input:focus-visible) {
   outline: 3px solid color-mix(in srgb, var(--primary-500) 32%, transparent);
   outline-offset: 2px;
@@ -714,15 +710,6 @@
 
 .investor-compliance-stack > .grid {
   max-width: 360px;
-}
-
-.investor-readonly-field > div {
-  background: color-mix(in srgb, var(--surface-muted) 72%, var(--surface));
-}
-
-.investor-readonly-field input[readonly] {
-  cursor: default;
-  color: var(--text-soft);
 }
 
 .investor-info-banner {
@@ -1978,6 +1965,7 @@
 }
 
 .investor-wallet-card__heading em,
+.investor-wallet-card__heading button,
 .investor-profile-wallet__title em {
   display: inline-flex;
   align-items: center;
@@ -1990,12 +1978,23 @@
   white-space: nowrap;
 }
 
+.investor-wallet-card__heading button {
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.investor-wallet-card__heading button:hover {
+  filter: brightness(0.98);
+}
+
 .investor-wallet-card__heading em.is-ready {
   background: color-mix(in srgb, var(--success-500) 11%, var(--surface));
   color: color-mix(in srgb, var(--success-500) 82%, #0c5137);
 }
 
-.investor-wallet-card__heading em.is-warning {
+.investor-wallet-card__heading em.is-warning,
+.investor-wallet-card__heading button.is-warning {
   background: color-mix(in srgb, var(--warning-500) 12%, var(--surface));
   color: #95610e;
 }
@@ -2105,6 +2104,7 @@
   }
 
   .investor-wallet-card__heading em,
+  .investor-wallet-card__heading button,
   .investor-profile-wallet__title em {
     grid-column: 2;
     justify-self: start;
@@ -3816,7 +3816,7 @@
 }
 
 .marketplace-token-card__facts span,
-.marketplace-snapshot-card span,
+.marketplace-snapshot-card > span,
 .marketplace-registry-grid > div > span,
 .marketplace-asset-meta span,
 .marketplace-holding-summary span,
@@ -4200,7 +4200,7 @@
   box-shadow: var(--shadow-sm);
 }
 
-.marketplace-snapshot-card span {
+.marketplace-snapshot-card > span {
   min-height: 22px;
   line-height: 1.3;
   text-transform: none;
@@ -4224,10 +4224,14 @@
 }
 
 .marketplace-about-card > p {
+  min-width: 0;
   margin: 13px 0 0;
   color: var(--text-soft);
   font-size: 11px;
   line-height: 1.75;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+  word-break: break-word;
 }
 
 .marketplace-asset-meta {
@@ -4291,6 +4295,64 @@
 .marketplace-registry-grid button:hover {
   background: var(--surface);
   color: var(--primary-600);
+}
+
+/* Marketplace: full-width contract reference with compact, accessible actions. */
+.marketplace-registry-grid > .marketplace-contract-address {
+  grid-column: 1 / -1;
+  padding-right: 12px;
+}
+
+.marketplace-contract-address__line {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 5px;
+}
+
+.marketplace-contract-address__line > strong {
+  margin: 0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.marketplace-contract-address__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.marketplace-registry-grid .marketplace-contract-address__actions > button,
+.marketplace-registry-grid .marketplace-contract-address__actions > a {
+  position: static;
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+  transform: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-soft);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.marketplace-registry-grid .marketplace-contract-address__actions > button:hover,
+.marketplace-registry-grid .marketplace-contract-address__actions > a:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.marketplace-registry-grid .marketplace-contract-address__actions > button:focus-visible,
+.marketplace-registry-grid .marketplace-contract-address__actions > a:focus-visible {
+  outline: 2px solid var(--primary-500);
+  outline-offset: 2px;
 }
 
 .marketplace-compliance-rules {
@@ -5882,7 +5944,7 @@
 
 .marketplace-token-card__title div,
 .marketplace-token-card__facts span,
-.marketplace-snapshot-card span,
+.marketplace-snapshot-card > span,
 .marketplace-registry-grid > div > span,
 .marketplace-asset-meta span,
 .marketplace-holding-summary span,
@@ -6323,7 +6385,7 @@
   font-size: 0.94rem;
 }
 
-.marketplace-snapshot-card span,
+.marketplace-snapshot-card > span,
 .marketplace-asset-meta span,
 .marketplace-registry-grid > div > span,
 .marketplace-status-callout span,
@@ -6624,7 +6686,7 @@
   font-weight: 600;
 }
 
-.marketplace-snapshot-card span,
+.marketplace-snapshot-card > span,
 .marketplace-asset-meta span,
 .marketplace-registry-grid > div > span {
   font-size: 11px;
@@ -8375,32 +8437,10 @@
 .token-application-card__badges {
   display: flex;
   flex: 0 0 auto;
-  flex-direction: column;
-  align-items: flex-end;
-  justify-content: flex-start;
-  gap: 6px;
-}
-
-.token-application-card__network {
-  display: inline-flex;
-  min-height: 24px;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
-  gap: 5px;
-  border: 1px solid color-mix(in srgb, var(--text) 14%, var(--border));
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--surface-muted) 68%, var(--surface));
-  padding: 4px 8px 4px 5px;
-  color: var(--text-soft);
-  font-size: 0.66rem;
-  font-weight: 750;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.token-application-card__network .arc-network-icon--xs {
-  width: 13px;
-  height: 13px;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .token-application-card__standard {
@@ -8487,6 +8527,14 @@
 .token-application-card__metric > strong > svg {
   flex: 0 0 auto;
   color: var(--token-accent);
+}
+
+/* Use the settlement-token mark (USDC/USDT/etc.) for marketplace pricing.
+   Keep it aligned to the previous 19px metric icon so card sizing does not shift. */
+.token-application-card__payment-token-icon {
+  width: 19px;
+  height: 19px;
+  flex: 0 0 19px;
 }
 
 .token-application-card__metric--primary > strong {
@@ -8652,7 +8700,6 @@
   }
 
   .token-application-card__badges {
-    align-items: flex-start;
     justify-content: flex-start;
   }
 
@@ -8762,12 +8809,6 @@
   color: var(--text-muted);
   font-size: 0.68rem;
   font-weight: 500;
-}
-
-.issuer-decision-field > small {
-  color: var(--text-muted);
-  font-size: 0.69rem;
-  line-height: 1.45;
 }
 
 .issuer-decision-field > span b {
@@ -9972,6 +10013,56 @@
   margin-left: auto;
 }
 
+/* Issuer verification and registry confirmation are one journey step.
+   Keep both independently confirmed operations visible inside one history card. */
+.application-history-issuer-step-events {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.application-history-issuer-step-events > div {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  padding: 10px;
+}
+
+.application-history-issuer-step-events svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--success-600, var(--success-500));
+}
+
+.application-history-issuer-step-events span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.application-history-issuer-step-events strong {
+  color: var(--text);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.application-history-issuer-step-events small {
+  color: var(--text-muted);
+  font-size: 0.67rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 680px) {
+  .application-history-issuer-step-events {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .application-history-waiting-action {
   display: flex;
   min-width: 0;
@@ -10941,6 +11032,30 @@
 
 .issuer-claim-progress-list > div.is-signed {
   color: var(--success-500);
+}
+
+/* The third row follows the existing signature list, with identical spacing.
+   A submitted registration remains pending until the chain confirms it. */
+.issuer-claim-progress-list > div.issuer-claim-progress-registration.is-complete {
+  color: var(--success-500);
+}
+
+.issuer-claim-progress-list > div.issuer-claim-progress-registration.is-pending {
+  color: var(--primary-600);
+  background: color-mix(in srgb, var(--primary-500) 4%, var(--surface));
+}
+
+.issuer-claim-progress-list > div.issuer-claim-progress-registration.is-failed {
+  color: var(--danger-500);
+}
+
+.issuer-claim-progress-bar[role="progressbar"] {
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .issuer-claim-progress-bar span { transition: none; }
+  .issuer-claim-progress-registration .issuer-claim-spin { animation: none; }
 }
 
 .issuer-claim-progress-list span {
@@ -12343,6 +12458,15 @@
 }
 
 @media (max-width: 1100px) {
+  .issuer-application-overview-card__actions--registry .issuer-registry-action {
+    width: min(320px, 100%);
+  }
+
+  .issuer-application-overview-card__actions--registry .issuer-registry-processing {
+    justify-content: flex-start;
+    padding-inline: 4px;
+  }
+
   .submit-claim-explorer-link {
     text-align: left;
   }
@@ -12355,6 +12479,42 @@
   min-width: 0;
   gap: 7px;
   justify-self: end;
+}
+
+.issuer-registry-processing {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 9px;
+  padding: 10px 8px;
+  color: var(--text-soft);
+  text-align: left;
+}
+
+.issuer-registry-processing > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--primary-600, var(--primary-500));
+}
+
+.issuer-registry-processing > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.issuer-registry-processing strong {
+  color: var(--text);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.issuer-registry-processing span {
+  font-size: 0.65rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .issuer-registry-confirmation-progress {
@@ -12910,20 +13070,6 @@
 
 .investor-token-action-identity-card__main > div {
   min-width: 0;
-}
-
-.investor-token-action-identity-card__copy {
-  min-width: 0;
-}
-
-.investor-token-action-identity-card__badges {
-  margin-top: 8px;
-}
-
-.investor-token-action-identity-card__badges .asset-context-badge {
-  min-height: 24px;
-  padding: 4px 8px 4px 5px;
-  font-size: 0.66rem;
 }
 
 .investor-token-action-identity-card h2 {
@@ -13551,10 +13697,6 @@
     align-self: flex-start;
   }
 
-  .investor-token-action-identity-card__badges {
-    gap: 6px;
-  }
-
   .investor-token-action-card {
     padding: 16px;
   }
@@ -14034,10 +14176,13 @@
   color: color-mix(in srgb, var(--warning-500) 82%, var(--text));
 }
 
-.investor-token-purchase-history__badge.is-confirmed {
-  border-color: color-mix(in srgb, var(--primary-500) 24%, var(--border));
-  background: color-mix(in srgb, var(--primary-500) 6%, var(--surface));
-  color: var(--text);
+/* Canonical CONFIRMED purchase rows and confirmed transfers share the same
+   success treatment; submitted/pending/failed states keep their own colors. */
+.investor-token-purchase-history__badge.is-confirmed,
+.investor-token-purchase-history__badge.is-success {
+  border-color: color-mix(in srgb, var(--success-500) 32%, var(--border));
+  background: color-mix(in srgb, var(--success-500) 10%, var(--surface));
+  color: var(--success-700, #216447);
 }
 
 .investor-token-purchase-history__badge.is-completed {
@@ -14748,11 +14893,13 @@
   box-shadow: var(--shadow-sm);
 }
 
+/* Give the selected investment control the remaining row width, rather than
+   reserving a large fractional column for its short two-line label. */
 .asset-management-token-selector {
   display: grid;
-  grid-template-columns: minmax(180px, 0.42fr) minmax(300px, 1fr);
+  grid-template-columns: minmax(150px, 190px) minmax(0, 1fr);
   align-items: center;
-  gap: 18px;
+  gap: 12px;
 }
 
 .asset-management-token-selector__label {
@@ -14785,6 +14932,32 @@
   border-radius: 12px;
   background: var(--surface);
   padding-inline: 14px;
+}
+
+/* Make the selected investment unmistakably interactive, without changing
+   the shared marketplace filter-dropdown design. */
+.asset-management-token-dropdown .marketplace-dropdown__trigger {
+  border: 1px solid color-mix(in srgb, var(--border) 70%, var(--text) 30%);
+  background: var(--surface);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--text) 7%, transparent);
+  transition: border-color var(--transition), background var(--transition), box-shadow var(--transition);
+}
+
+.asset-management-token-dropdown .marketplace-dropdown__trigger:hover:not(:disabled),
+.asset-management-token-dropdown .marketplace-dropdown__trigger.is-open {
+  border-color: color-mix(in srgb, var(--text) 42%, var(--border));
+  background: var(--surface-muted);
+}
+
+.asset-management-token-dropdown .marketplace-dropdown__trigger:focus-visible {
+  border-color: var(--text-soft);
+  outline: 2px solid color-mix(in srgb, var(--text) 24%, transparent);
+  outline-offset: 2px;
+}
+
+.asset-management-token-dropdown .marketplace-dropdown__trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
 }
 
 .asset-management-token-dropdown .marketplace-dropdown__value {
@@ -16338,6 +16511,14 @@
   .investor-history-pagination__ellipsis {
     width: 14px;
   }
+}
+
+/* A single full-width recipient field replaces the former check button.
+   Keep the address input inside its card at phone and desktop widths. */
+.investor-token-send-page .investor-token-action-text-field {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
 }
 
 /* Investor-to-investor token transfer states */
@@ -17908,47 +18089,6 @@ button.investor-dashboard-live__metric:focus-visible,
   }
 }
 
-/* Settlement currency and network context badges */
-.asset-context-badges {
-  display: inline-flex;
-  min-width: 0;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 7px;
-}
-
-.asset-context-badge {
-  display: inline-flex;
-  min-height: 26px;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface);
-  padding: 5px 9px 5px 6px;
-  color: var(--text-soft);
-  font-size: 0.7rem;
-  font-weight: 750;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.asset-context-badge--currency {
-  border-color: color-mix(in srgb, #2775ca 24%, var(--border));
-  background: color-mix(in srgb, #2775ca 5%, var(--surface));
-  color: color-mix(in srgb, #2775ca 88%, var(--text));
-}
-
-.asset-context-badge--network {
-  background: color-mix(in srgb, var(--surface-muted) 64%, var(--surface));
-}
-
-.asset-context-badge > .token-icon,
-.asset-context-badge > .arc-network-icon {
-  flex: 0 0 auto;
-}
-
 /* Investor portfolio: completed investment holdings */
 .investor-portfolio-page {
   width: 100%;
@@ -17967,22 +18107,6 @@ button.investor-dashboard-live__metric:focus-visible,
   min-width: 0;
 }
 
-.investor-portfolio-title-row {
-  display: flex;
-  min-width: 0;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 14px;
-}
-
-.investor-portfolio-title-row h1 {
-  flex: 0 0 auto;
-}
-
-.investor-portfolio-context-badges {
-  padding-top: 2px;
-}
-
 .investor-portfolio-header h1 {
   margin: 4px 0 7px;
   font-family: var(--font-display);
@@ -17997,16 +18121,6 @@ button.investor-dashboard-live__metric:focus-visible,
   color: var(--text-soft);
   font-size: 0.92rem;
   line-height: 1.58;
-}
-
-.investor-portfolio-refresh {
-  flex: 0 0 auto;
-  min-width: 108px;
-  white-space: nowrap;
-}
-
-.investor-portfolio-refresh svg {
-  flex: 0 0 auto;
 }
 
 .investor-portfolio-summary {
@@ -18163,6 +18277,10 @@ button.investor-dashboard-live__metric:focus-visible,
   font-size: 0.67rem;
 }
 
+.investor-portfolio-results {
+  min-width: 0;
+}
+
 .investor-portfolio-list {
   overflow: hidden;
   padding: 0;
@@ -18231,21 +18349,14 @@ button.investor-dashboard-live__metric:focus-visible,
 }
 
 .investor-portfolio-asset span,
-.investor-portfolio-asset small {
+.investor-portfolio-asset small,
+.investor-portfolio-cell small {
   overflow: hidden;
   color: var(--text-muted);
   font-size: 0.68rem;
   line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.investor-portfolio-cell small {
-  color: var(--text-muted);
-  font-size: 0.68rem;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-  white-space: normal;
 }
 
 .investor-portfolio-asset__network {
@@ -18426,47 +18537,29 @@ button.investor-dashboard-live__metric:focus-visible,
 }
 
 @media (max-width: 1180px) {
-  .investor-portfolio-summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .investor-portfolio-summary__card:last-child {
-    grid-column: 1 / -1;
-  }
-
   .investor-portfolio-list__head {
     display: none;
   }
 
   .investor-portfolio-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(240px, 1.25fr) repeat(3, minmax(140px, 0.75fr));
     align-items: start;
-    gap: 16px 22px;
-    min-height: 0;
-    padding: 18px;
-  }
-
-  .investor-portfolio-row.is-loading {
-    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 16px 20px;
   }
 
   .investor-portfolio-cell__label {
     display: block;
   }
 
-  .investor-portfolio-asset {
-    grid-column: 1 / -1;
-    grid-row: auto;
-    padding-bottom: 4px;
-  }
-
   .investor-portfolio-actions {
-    grid-column: 1 / -1;
+    grid-column: 3 / -1;
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    border-top: 1px solid var(--border);
-    padding-top: 12px;
+  }
+
+  .investor-portfolio-asset {
+    grid-row: 1 / span 2;
   }
 }
 
@@ -18513,16 +18606,6 @@ button.investor-dashboard-live__metric:focus-visible,
 }
 
 @media (max-width: 560px) {
-  .investor-portfolio-title-row {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .investor-portfolio-context-badges {
-    padding-top: 0;
-  }
-
   .investor-portfolio-header .button {
     width: 100%;
   }
@@ -18539,16 +18622,11 @@ button.investor-dashboard-live__metric:focus-visible,
     grid-template-columns: 1fr;
   }
 
-  .investor-portfolio-summary__card:last-child {
-    grid-column: auto;
-  }
-
   .investor-portfolio-summary__card {
     min-height: 84px;
   }
 
-  .investor-portfolio-row,
-  .investor-portfolio-row.is-loading {
+  .investor-portfolio-row {
     grid-template-columns: 1fr;
     gap: 13px;
   }
@@ -18863,13 +18941,22 @@ button.investor-dashboard-live__metric:focus-visible,
 .investment-journey__current-copy {
   display: grid;
   min-width: 0;
-  gap: 6px;
+  gap: 8px;
+}
+
+.investment-journey__current-headline {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .investment-journey__current-meta {
   display: flex;
   min-width: 0;
   align-items: center;
+  justify-content: flex-end;
   flex-wrap: wrap;
   gap: 8px;
 }
@@ -18939,10 +19026,25 @@ button.investor-dashboard-live__metric:focus-visible,
   color: var(--text);
 }
 
+.investment-journey__actions-panel {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 9px;
+}
+
+.investment-journey__actions-panel .investment-journey__current-meta {
+  justify-content: flex-end;
+}
+
 .investment-journey__actions {
   display: flex;
-  flex: 0 0 auto;
+  min-width: 0;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -18972,8 +19074,8 @@ button.investor-dashboard-live__metric:focus-visible,
 .investment-journey__steps {
   display: grid;
   min-width: 0;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -19253,7 +19355,7 @@ button.investor-dashboard-live__metric:focus-visible,
 
 @media (max-width: 1050px) {
   .investment-journey__steps {
-    grid-template-columns: repeat(5, minmax(145px, 1fr));
+    grid-template-columns: repeat(4, minmax(175px, 1fr));
     overflow-x: auto;
     padding-bottom: 4px;
     scrollbar-width: thin;
@@ -19283,9 +19385,19 @@ button.investor-dashboard-live__metric:focus-visible,
     grid-template-columns: auto minmax(0, 1fr);
   }
 
-  .investment-journey__actions {
+  .investment-journey__current-headline {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .investment-journey__current-meta {
+    justify-content: flex-start;
+  }
+
+  .investment-journey__actions-panel {
     grid-column: 1 / -1;
     width: 100%;
+    align-items: stretch;
     padding-left: 52px;
   }
 
@@ -19347,11 +19459,15 @@ button.investor-dashboard-live__metric:focus-visible,
     height: 34px;
   }
 
-  .investment-journey__actions {
+  .investment-journey__actions-panel {
     grid-column: auto;
-    display: grid;
-    grid-template-columns: 1fr;
     padding-left: 0;
+  }
+
+  .investment-journey__actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
   }
 
   .investment-journey__actions .button {
@@ -19397,7 +19513,7 @@ button.investor-dashboard-live__metric:focus-visible,
   }
 }
 
-/* Investor purchase: separate one-time USDC approval from each purchase */
+/* Investor purchase: separate one-time USDT approval from each purchase */
 .investor-token-payment-flow {
   display: grid;
   gap: 10px;
@@ -19768,23 +19884,6 @@ button.investor-dashboard-live__metric:focus-visible,
 }
 .investor-profile-technical-grid span { color: var(--text-muted); }
 .investor-profile-technical-grid strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.investor-profile-account-value {
-  display: inline-flex;
-  min-width: 0;
-  align-items: center;
-  gap: 7px;
-}
-.investor-profile-account-value > span:last-child {
-  min-width: 0;
-  overflow: hidden;
-  color: inherit;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.investor-profile-account-value > .token-icon,
-.investor-profile-account-value > .arc-network-icon {
-  flex: 0 0 auto;
-}
 .investor-profile-purpose-card {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.8fr);
@@ -19859,7 +19958,6 @@ button.investor-dashboard-live__metric:focus-visible,
   .investor-profile-reference-grid--friendly > .investor-profile-technical-details { grid-column: auto; }
   .investor-profile-technical-grid { grid-template-columns: 1fr; gap: 4px; }
   .investor-profile-technical-grid strong { margin-bottom: 7px; overflow-wrap: anywhere; }
-  .investor-profile-account-value > span:last-child { white-space: normal; overflow-wrap: anywhere; }
   .asset-management-action-guide { flex-direction: column; gap: 3px; }
   .investor-technical-details > summary { min-height: 46px; }
 }
@@ -20499,7 +20597,7 @@ button.investor-dashboard-live__metric:focus-visible,
   }
 }
 
-/* The USDC approval and Invest action share one stable CTA location. */
+/* The USDT approval and Invest action share one stable CTA location. */
 .investor-token-payment-flow--single .investor-token-payment-step {
   gap: 10px;
 }
@@ -20877,15 +20975,30 @@ button.investor-dashboard-live__metric:focus-visible,
   }
 }
 
-/* ========================================================================== */
-/* Issuer investment request: registry action alignment                       */
-/* ========================================================================== */
-
-/*
- * Keep the final-approval / invite area visually balanced inside the summary
- * card.  This is intentionally presentation-only: no request, registry, or
- * wallet behavior is changed.
- */
+/* Optional investment experience and responsive portfolio updates. */
+.investor-choice-card--full { grid-column: 1 / -1; }
+.investor-readonly-field > div { background: color-mix(in srgb, var(--surface-muted) 72%, var(--surface)); }
+.investor-readonly-field input[readonly] { cursor: default; color: var(--text-soft); }
+.issuer-decision-field > small { color: var(--text-muted); font-size: 0.69rem; line-height: 1.45; }
+.investor-portfolio-refresh { flex: 0 0 auto; min-width: 108px; white-space: nowrap; }
+.investor-portfolio-refresh svg { flex: 0 0 auto; }
+.investor-portfolio-summary__card small { overflow-wrap: anywhere; white-space: normal; }
+.investor-portfolio-cell small { color: var(--text-muted); font-size: 0.68rem; line-height: 1.4; overflow-wrap: anywhere; white-space: normal; }
+.marketplace-snapshot-card strong > .currency-amount { display: inline-flex; width: max-content; max-width: 100%; min-height: 0; align-items: center; flex-wrap: nowrap; gap: 5px; overflow: visible; white-space: nowrap; }
+.marketplace-snapshot-card--price strong { overflow: visible; text-overflow: clip; white-space: normal; }
+@media (max-width: 1100px) {
+ .investor-portfolio-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+ .investor-portfolio-summary__card:last-child { grid-column: 1 / -1; }
+ .investor-portfolio-row { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 22px; min-height: 0; padding: 18px; }
+ .investor-portfolio-row.is-loading { grid-template-columns: 44px minmax(0, 1fr); }
+ .investor-portfolio-asset { grid-column: 1 / -1; grid-row: auto; padding-bottom: 4px; }
+ .investor-portfolio-actions { grid-column: 1 / -1; border-top: 1px solid var(--border); padding-top: 12px; }
+}
+@media (max-width: 640px) {
+ .investor-portfolio-summary { grid-template-columns: minmax(0, 1fr); }
+ .investor-portfolio-summary__card:last-child { grid-column: auto; }
+ .investor-portfolio-row, .investor-portfolio-row.is-loading { grid-template-columns: minmax(0, 1fr); }
+}
 .issuer-application-overview-card > .issuer-application-overview-card__actions--registry {
   width: 100%;
   max-width: none;
@@ -20901,6 +21014,12 @@ button.investor-dashboard-live__metric:focus-visible,
   width: min(220px, 100%);
   align-self: center;
   justify-self: center;
+}
+
+.issuer-application-overview-card__actions--registry .issuer-registry-processing {
+  width: 100%;
+  max-width: 260px;
+  margin-inline: auto;
 }
 
 .issuer-application-overview-card__actions--registry .issuer-registry-action__message,
@@ -20941,7 +21060,8 @@ button.investor-dashboard-live__metric:focus-visible,
  * full-width tap targets and avoid any horizontal overflow. */
 @media (max-width: 860px) {
   .issuer-application-overview-card__actions--registry .issuer-registry-action,
-  .issuer-application-overview-card__actions--registry .issuer-registry-success {
+  .issuer-application-overview-card__actions--registry .issuer-registry-success,
+  .issuer-application-overview-card__actions--registry .issuer-registry-processing {
     width: 100%;
     max-width: none;
     justify-self: stretch;
@@ -20952,91 +21072,1014 @@ button.investor-dashboard-live__metric:focus-visible,
   }
 }
 
-/* Round 5: Arc context + stable, responsive monetary rows */
-.investor-dashboard-live__offering-actions {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
+
+/* Marketplace settlement currency comes from the selected-chain payment-token
+   catalogue. Keep the icon/value/symbol row stable on narrow cards and phones. */
+.token-application-card__price.currency-amount {
+  width: 100%;
+  min-width: 0;
 }
 
-.investor-dashboard-live__offering-network {
-  display: inline-grid;
-  width: 26px;
-  height: 26px;
-  flex: 0 0 26px;
-  place-items: center;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface);
+.token-application-card__price .currency-amount__value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.marketplace-token-detail-network {
-  display: inline-flex;
-  min-height: 26px;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--surface-muted) 64%, var(--surface));
-  padding: 5px 9px 5px 6px;
-  color: var(--text-soft);
-  font-size: 0.72rem;
-  font-weight: 750;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-/* The generic snapshot selector also targets the nested spans in CurrencyAmount.
-   Reset those descendants so the icon, amount, and currency stay on one line. */
-.marketplace-snapshot-card strong > .currency-amount {
-  display: inline-flex;
-  width: max-content;
-  max-width: 100%;
-  min-height: 0;
-  align-items: center;
-  flex-wrap: nowrap;
-  gap: 5px;
-  overflow: visible;
-  white-space: nowrap;
-}
-
-.marketplace-snapshot-card strong > .currency-amount > span {
-  display: inline;
-  min-height: 0;
-  margin: 0;
-  line-height: inherit;
-  white-space: nowrap;
-}
-
-.marketplace-snapshot-card--price strong {
-  overflow: visible;
-  text-overflow: clip;
-  white-space: normal;
-}
-
-@media (max-width: 720px) {
-  .investor-dashboard-live__offering {
-    grid-template-columns: auto minmax(0, 1fr) auto;
-  }
-
-  .investor-dashboard-live__offering-actions {
-    gap: 6px;
-  }
+.token-application-card__price .currency-amount__symbol {
+  min-width: 0;
+  max-width: 7ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 @media (max-width: 420px) {
-  .investor-dashboard-live__offering-network {
-    width: 24px;
-    height: 24px;
-    flex-basis: 24px;
+  .token-application-card__price.currency-amount {
+    gap: 4px;
   }
 
-  .marketplace-token-detail-network {
-    min-height: 24px;
-    padding: 4px 8px 4px 5px;
-    font-size: 0.68rem;
+  .token-application-card__price > .token-icon--sm {
+    width: 20px;
+    height: 20px;
+    flex-basis: 20px;
+  }
+}
+
+/* Portfolio six-decimal precision display. The exact-value tooltip is portaled,
+ * so these compact values can stay clipped to their card/cell without clipping
+ * the tooltip itself. */
+.investor-portfolio-precision-trigger {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.investor-portfolio-precision-trigger > .currency-amount {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.investor-portfolio-precision-trigger .currency-amount__value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Investor token actions live beside the persistent navigation. Respond to the
+ * actual app-main width (not only the browser viewport) so Invest/Send/Redeem
+ * remain stable on laptop and docked-devtools layouts. */
+.investor-token-action-page .investor-token-order-row > span,
+.investor-token-action-page .investor-token-action-calculation > span {
+  min-width: 0;
+  flex: 1 1 52%;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.investor-token-action-page .investor-token-order-row > strong,
+.investor-token-action-page .investor-token-action-calculation > strong {
+  min-width: 0;
+  max-width: 48%;
+  flex: 0 1 48%;
+  overflow-wrap: anywhere;
+}
+
+.investor-token-action-page .investor-token-order-row > strong > .currency-amount,
+.investor-token-action-page .investor-token-action-calculation > strong > .currency-amount {
+  max-width: 100%;
+}
+
+@container app-main (max-width: 720px) {
+  .investor-token-action-page .investor-token-action-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .investor-token-action-page .investor-token-action-aside {
+    position: static;
+    top: auto;
+  }
+}
+
+@container app-main (max-width: 440px) {
+  .investor-token-action-page .investor-token-order-row,
+  .investor-token-action-page .investor-token-action-calculation {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .investor-token-action-page .investor-token-order-row > span,
+  .investor-token-action-page .investor-token-order-row > strong,
+  .investor-token-action-page .investor-token-action-calculation > span,
+  .investor-token-action-page .investor-token-action-calculation > strong {
+    width: 100%;
+    max-width: 100%;
+    flex-basis: auto;
+    text-align: left;
+  }
+}
+
+/* Issuer Investor Management: navigation-only wrapper; original screens keep their styles. */
+.issuer-investor-management {
+  width: min(100%, 1180px);
+  min-width: 0;
+  margin: 0 auto;
+  gap: 16px;
+}
+
+.issuer-investor-management__heading {
+  margin: 0;
+  font-size: clamp(24px, 3vw, 32px);
+  line-height: 1.2;
+  color: var(--text);
+}
+
+.issuer-investor-management__tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  overflow-x: auto;
+  max-width: 100%;
+  padding: 0;
+  border-bottom: 1px solid var(--border);
+  scrollbar-width: thin;
+}
+
+.issuer-investor-management__tab {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex: 0 0 auto;
+  min-height: 54px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 10px 10px 0 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 12px 16px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.issuer-investor-management__tab-icon {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  stroke-width: 2;
+}
+
+/* Notification colors belong to the count only, not the tab label or icon.
+   The sidebar's translucent blue badge is designed for dark backgrounds;
+   this light-surface counterpart keeps the number readable in either tab state. */
+.issuer-investor-management__attention-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 7px;
+  border: 1px solid #93c5fd;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1e40af;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.issuer-investor-management__tab:hover {
+  background: var(--surface-muted, #f8fafc);
+  color: var(--text);
+}
+
+.issuer-investor-management__tab.is-active {
+  background: var(--surface-muted, #f8fafc);
+  border-bottom-color: #334155;
+  color: var(--text);
+}
+
+.issuer-investor-management__tab:focus-visible {
+  outline: 2px solid #334155;
+  outline-offset: -2px;
+}
+
+.issuer-investor-management__panel,
+.issuer-investor-management__panel > .page-stack {
+  width: 100%;
+  min-width: 0;
+}
+
+.issuer-investor-management__panel[hidden] {
+  display: none !important;
+}
+
+/* A single, consistent page title appears above the tabs; preserve the
+   existing per-screen toolbar, descriptions, buttons, tables and controls. */
+.issuer-investor-management__panel .issuer-page-header h1 {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .issuer-investor-management {
+    gap: 12px;
+  }
+  .issuer-investor-management__tabs {
+    gap: 4px;
+  }
+  .issuer-investor-management__tab {
+    min-height: 44px;
+    gap: 8px;
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+  .issuer-investor-management__tab-icon {
+    width: 18px;
+    height: 18px;
+  }
+  .issuer-investor-management__attention-count {
+    min-width: 22px;
+    height: 22px;
+  }
+}
+
+
+/* Investor My Investment: issuer-style navigation around unchanged investor screens. */
+.investor-my-investment .marketplace-page-header h1,
+.investor-my-investment .investor-portfolio-header h1 {
+  display: none;
+}
+
+.investor-my-investment__applications-pagination {
+  border-top: 1px solid var(--border);
+  padding: 12px 16px;
+}
+
+.investor-my-investment__applications-pagination .investor-history-pagination {
+  padding-top: 0;
+}
+
+
+/* Investor Marketplace Details — compact reference-inspired left panel.
+   Scoped to this page only; existing transaction side panel stays unchanged. */
+.marketplace-token-detail-page .marketplace-investment-overview {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: none;
+}
+.marketplace-investment-overview__header {
+  min-height: 62px;
+  align-items: flex-start;
+  padding: 0 0 17px;
+  border-bottom: 1px solid var(--border);
+}
+.marketplace-investment-overview__header .marketplace-token-detail-header__identity {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.marketplace-investment-overview__header > .app-status-badge {
+  flex: 0 0 auto;
+  margin-left: auto;
+  align-self: flex-start;
+}
+.marketplace-investment-overview__header .marketplace-token-detail-header__name-line h1 {
+  font-size: clamp(20px, 1.8vw, 25px);
+  line-height: 1.2;
+}
+.marketplace-investment-overview__header .marketplace-token-detail-header__identity p {
+  margin-top: 6px;
+  font-size: 13px;
+}
+.marketplace-investment-overview__details { padding: 17px 0 12px; }
+.marketplace-investment-overview__details .marketplace-detail-section-label {
+  display: block;
+  margin: 0 0 11px;
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.035em;
+}
+.marketplace-investment-overview__details .marketplace-snapshot-grid--friendly {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  margin: 0;
+}
+.marketplace-investment-overview__details .marketplace-snapshot-card {
+  display: flex;
+  min-height: 78px;
+  flex-direction: column;
+  justify-content: center;
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  box-shadow: none;
+}
+.marketplace-investment-overview__details .marketplace-snapshot-card > span {
+  min-height: 0;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.marketplace-investment-overview__details .marketplace-snapshot-card strong {
+  margin-top: 5px;
+  font-size: 15px;
+  font-weight: 650;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.marketplace-investment-overview__details .marketplace-snapshot-card--price strong .currency-amount {
+  max-width: 100%;
+}
+.marketplace-investment-section {
+  min-width: 0;
+  margin-top: 0;
+  padding: 17px 14px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface);
+}
+.marketplace-investment-section + .marketplace-investment-section { margin-top: 12px; }
+.marketplace-investment-section h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+.marketplace-investment-section__intro {
+  margin: 7px 0 3px;
+  color: var(--text-soft);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.marketplace-investment-description__text {
+  margin: 12px 0 0;
+  color: var(--text-soft);
+  font-size: 13.5px;
+  line-height: 1.65;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.marketplace-investment-description__text.is-clamped {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+.marketplace-investment-description__toggle {
+  display: inline-flex;
+  min-height: 33px;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  padding: 5px 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.marketplace-investment-description__toggle:hover { background: var(--surface-muted); color: var(--text); }
+.marketplace-investment-description__toggle:focus-visible {
+  outline: 2px solid var(--text-soft);
+  outline-offset: 2px;
+}
+.marketplace-investment-section .marketplace-asset-meta {
+  margin-top: 13px;
+  padding-top: 12px;
+}
+.marketplace-investment-overview__requirements .marketplace-compliance-rules {
+  gap: 0;
+  margin-top: 3px;
+}
+.marketplace-investment-overview__requirements .marketplace-compliance-rule {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 11px;
+  padding: 15px 1px;
+  border-radius: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+}
+.marketplace-investment-overview__requirements .marketplace-compliance-rule:last-child { border-bottom: 0; padding-bottom: 1px; }
+.marketplace-investment-overview__requirements .marketplace-compliance-rule__icon {
+  width: 25px;
+  height: 25px;
+  background: transparent;
+  color: var(--text-soft);
+  box-shadow: none;
+}
+.marketplace-investment-overview__requirements .marketplace-compliance-rule strong {
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 650;
+}
+.marketplace-investment-overview__requirements .marketplace-compliance-rule p {
+  margin-top: 4px;
+  color: var(--text-soft);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+.marketplace-investment-overview > .marketplace-technical-details {
+  margin-top: 15px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.marketplace-investment-overview > .marketplace-technical-details > summary {
+  min-height: 46px;
+  padding: 10px 0 0;
+  font-size: 13px;
+}
+.marketplace-investment-overview > .marketplace-technical-details > p { padding: 9px 0; }
+.marketplace-investment-overview > .marketplace-technical-details .marketplace-registry-grid { padding: 0 0 12px; }
+@media (max-width: 1100px) {
+  .marketplace-token-detail-page .marketplace-investment-overview { padding: 14px; }
+}
+@media (max-width: 560px) {
+  .marketplace-investment-overview__header {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .marketplace-investment-overview__header .marketplace-token-detail-header__identity p { font-size: 12px; }
+  .marketplace-investment-overview__details .marketplace-snapshot-grid--friendly { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .marketplace-investment-overview__details .marketplace-snapshot-card { padding: 12px 10px; }
+  .marketplace-investment-overview__details .marketplace-snapshot-card > span { font-size: 12px; }
+  .marketplace-investment-overview__details .marketplace-snapshot-card strong { font-size: 13px; }
+  .marketplace-investment-section { padding: 14px 12px; }
+  .marketplace-investment-overview__requirements .marketplace-compliance-rule { grid-template-columns: 24px minmax(0, 1fr); }
+  .marketplace-investment-overview__requirements .marketplace-topic-state { grid-column: 2; justify-self: start; }
+}
+@media (max-width: 350px) {
+  .marketplace-investment-overview__details .marketplace-snapshot-grid--friendly { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Step 2: signed issuer claims are not a finished review until the Identity
+ * Registry is confirmed. Keep the small summary card usable on narrow screens
+ * and when a browser wallet sidebar reduces the available viewport width. */
+.issuer-application-overview-card__actions--registry .issuer-registry-action {
+  width: min(300px, 100%);
+  max-width: 100%;
+  min-width: 0;
+  justify-items: stretch;
+}
+
+.issuer-registry-action__pending {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  padding: 10px 11px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-muted);
+  text-align: left;
+}
+
+.issuer-registry-action__pending strong {
+  color: var(--text);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.issuer-registry-action__pending span {
+  color: var(--text-soft);
+  font-size: 0.68rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.issuer-application-overview-card__actions--registry .issuer-registry-action > .button {
+  display: inline-flex;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 9px 12px;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.3;
+}
+
+.issuer-application-overview-card__actions--registry .issuer-registry-action > .button > span {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.3;
+}
+
+@container app-main (max-width: 920px) {
+  .issuer-application-overview-card__actions--registry .issuer-registry-action {
+    width: 100%;
+    justify-self: stretch;
+  }
+}
+
+/* Investor dashboard: reuse the issuer dashboard's compact, balanced layout.
+   Presentation-only overrides: retain all existing cards, data and actions. */
+.investor-portal-dashboard.investor-dashboard-live {
+  width: min(100%, 1440px);
+  gap: 14px;
+}
+
+.investor-dashboard-live .investor-dashboard-live__header {
+  align-items: center;
+  gap: 14px 20px;
+  padding-bottom: 3px;
+  border-bottom: 0;
+}
+
+.investor-dashboard-live__header h1 {
+  margin: 3px 0 4px;
+  font-size: clamp(27px, 2.8vw, 36px);
+}
+
+.investor-dashboard-live__header p {
+  max-width: 660px;
+  line-height: 1.5;
+}
+
+.investor-dashboard-live__header-actions .button {
+  min-height: 40px;
+}
+
+/* The same charcoal/slate welcome treatment used by the issuer dashboard. */
+.investor-dashboard-live .investor-dashboard-live__hero {
+  position: relative;
+  isolation: isolate;
+  grid-template-columns: minmax(0, 1.22fr) minmax(270px, 0.78fr);
+  align-items: center;
+  gap: clamp(16px, 2.5vw, 30px);
+  min-height: 0;
+  padding: clamp(18px, 2.3vw, 26px);
+  border: 1px solid #344957;
+  border-radius: 17px;
+  background: linear-gradient(112deg, #1a2934 0%, #253743 53%, #172630 100%);
+  box-shadow: 0 13px 28px rgba(17, 33, 43, 0.12);
+  color: #f6f9fa;
+}
+
+.investor-dashboard-live .investor-dashboard-live__hero::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  left: 27%;
+  top: -72%;
+  width: 58%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(124, 165, 178, 0.16), transparent 66%);
+  pointer-events: none;
+}
+
+.investor-dashboard-live__hero .investor-dashboard-live__eyebrow {
+  margin-top: 12px;
+  color: #bdcbd4;
+}
+
+.investor-dashboard-live__hero .investor-dashboard-live__hero-copy h2 {
+  margin: 5px 0 8px;
+  color: #f9fbfc;
+  font-size: clamp(25px, 2.5vw, 34px);
+  line-height: 1.16;
+}
+
+.investor-dashboard-live__hero .investor-dashboard-live__hero-copy > p {
+  color: #b9c8d1;
+  line-height: 1.55;
+}
+
+.investor-dashboard-live__hero .investor-dashboard-live__badges {
+  gap: 7px;
+}
+
+.investor-dashboard-live__hero .badge {
+  border: 1px solid rgba(221, 232, 238, 0.24);
+  background: rgba(231, 239, 243, 0.1);
+  color: #e6f0f5;
+  font-size: 11px;
+}
+
+.investor-dashboard-live__hero .badge--success {
+  border-color: rgba(78, 207, 142, 0.35);
+  background: rgba(33, 117, 83, 0.24);
+  color: #a7f2c6;
+}
+
+.investor-dashboard-live__hero .badge--warning {
+  border-color: rgba(246, 185, 76, 0.34);
+  background: rgba(133, 93, 28, 0.26);
+  color: #ffe2a2;
+}
+
+.investor-dashboard-live__hero .investor-dashboard-live__hero-actions {
+  margin-top: 16px;
+  gap: 9px;
+}
+
+.investor-dashboard-live__hero .investor-dashboard-live__hero-actions .button {
+  min-height: 40px;
+  padding: 9px 14px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  box-shadow: none;
+}
+
+.investor-dashboard-live__hero .investor-dashboard-live__hero-actions .button--primary {
+  border-color: #f4f8fa;
+  background: #f4f8fa;
+  color: #23333d;
+}
+
+.investor-dashboard-live__hero .investor-dashboard-live__hero-actions .button--primary:hover:not(:disabled) {
+  border-color: #e4edf1;
+  background: #e4edf1;
+}
+
+.investor-dashboard-live__hero .investor-dashboard-live__hero-actions .button--secondary {
+  border-color: rgba(232, 242, 246, 0.58);
+  background: rgba(255, 255, 255, 0.035);
+  color: #f5f8fa;
+}
+
+.investor-dashboard-live__hero .investor-dashboard-live__hero-actions .button--secondary:hover:not(:disabled) {
+  border-color: #e9f1f4;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.investor-dashboard-live__hero button:focus-visible {
+  outline: 2px solid #e6f4fb;
+  outline-offset: 3px;
+}
+
+.investor-dashboard-live__hero .investor-dashboard-live__identity-snapshot {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px clamp(14px, 1.5vw, 19px);
+  border-color: rgba(220, 233, 240, 0.16);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.065);
+}
+
+.investor-dashboard-live__hero .investor-dashboard-card-icon {
+  border-color: rgba(220, 233, 240, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  color: #eaf1f5;
+}
+
+.investor-dashboard-live__hero .investor-dashboard-live__identity-top strong,
+.investor-dashboard-live__hero .investor-dashboard-live__identity-snapshot dd {
+  color: #f5f9fb;
+}
+
+.investor-dashboard-live__hero .investor-dashboard-live__identity-top small,
+.investor-dashboard-live__hero .investor-dashboard-live__identity-snapshot dt,
+.investor-dashboard-live__hero .investor-dashboard-live__identity-top span:not(.investor-dashboard-card-icon) {
+  color: #b5c7d1;
+}
+
+.investor-dashboard-live__hero .investor-dashboard-live__identity-snapshot dl {
+  margin-top: 3px;
+}
+
+.investor-dashboard-live__hero .investor-dashboard-live__identity-snapshot dl > div {
+  padding: 8px 0;
+  border-top-color: rgba(216, 233, 238, 0.15);
+}
+
+.investor-dashboard-live__hero .investor-dashboard-live__copy,
+.investor-dashboard-live__hero .investor-technical-details summary {
+  color: #e5eff3;
+}
+
+.investor-dashboard-live__hero .investor-dashboard-live__copy:hover,
+.investor-dashboard-live__hero .investor-technical-details summary:hover {
+  color: #fff;
+}
+
+/* Keep expanded technical information readable inside the charcoal dashboard hero.
+   This is intentionally scoped to the dashboard: disclosure panels on light
+   surfaces retain their existing colors and behavior. */
+.investor-dashboard-live__hero .investor-technical-details--compact {
+  border-top-color: rgba(216, 233, 238, 0.19);
+  color: #c4d4dd;
+}
+
+.investor-dashboard-live__hero .investor-technical-details--compact > summary::after {
+  color: #d7e5ec;
+}
+
+.investor-dashboard-live__hero .investor-technical-details--compact[open] > summary {
+  border-bottom-color: rgba(216, 233, 238, 0.19);
+}
+
+.investor-dashboard-live__hero .investor-technical-details--compact > div > span {
+  color: #c4d4dd;
+}
+
+.investor-dashboard-live__hero .investor-technical-details--compact > div > strong {
+  color: #f5f9fb;
+}
+
+.investor-dashboard-live__hero .investor-technical-details--compact > div > button {
+  color: #e5eff3;
+  border-radius: 6px;
+}
+
+/* Keep the copy action beside the shortened identity value rather than on a separate row.
+   Scope this to the dashboard hero so other technical-detail disclosures are unchanged. */
+.investor-dashboard-live__hero .investor-technical-details--compact > div {
+  align-items: center;
+}
+
+.investor-dashboard-live__hero .investor-dashboard-live__identity-reference-value {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  justify-self: end;
+  gap: 6px;
+}
+
+.investor-dashboard-live__hero .investor-dashboard-live__identity-reference-value > strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #f5f9fb;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.investor-dashboard-live__hero .investor-dashboard-live__identity-reference-value > button {
+  display: inline-grid;
+  grid-column: auto;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  place-items: center;
+  border: 1px solid rgba(216, 233, 238, 0.2);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0;
+  color: #e5eff3;
+  cursor: pointer;
+}
+
+.investor-dashboard-live__hero .investor-dashboard-live__identity-reference-value > button:hover {
+  border-color: rgba(216, 233, 238, 0.4);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.investor-dashboard-live__hero .investor-dashboard-live__identity-reference-value > button:focus-visible {
+  outline: 2px solid #d7e5ec;
+  outline-offset: 2px;
+}
+
+/* Same compact four-card scorecard as the issuer, with no placeholder slots. */
+.investor-dashboard-live .investor-dashboard-live__metrics {
+  gap: 12px;
+}
+
+.investor-dashboard-live button.investor-dashboard-live__metric,
+.investor-dashboard-live .investor-dashboard-live__metric {
+  min-height: 108px;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 11px;
+  padding: 15px;
+}
+
+.investor-dashboard-live__metric-icon {
+  background: color-mix(in srgb, var(--primary-500) 9%, var(--surface));
+  color: var(--primary-500);
+}
+
+.investor-dashboard-live__metric-copy small {
+  font-size: 12px;
+}
+
+.investor-dashboard-live__metric-copy strong {
+  font-size: clamp(24px, 2.2vw, 30px);
+}
+
+.investor-dashboard-live__metric-copy > span {
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.investor-dashboard-live__metric-arrow {
+  display: none;
+}
+
+/* Balance the existing action/profile and activity pairs without tall blanks. */
+.investor-dashboard-live .investor-dashboard-live__main-grid {
+  grid-template-columns: minmax(0, 1.34fr) minmax(290px, 0.66fr);
+  gap: 14px;
+}
+
+.investor-dashboard-live .investor-dashboard-live__activity-grid {
+  gap: 14px;
+}
+
+.investor-dashboard-live .investor-dashboard-live__action-card,
+.investor-dashboard-live .investor-dashboard-live__account-card,
+.investor-dashboard-live .investor-dashboard-live__list-card,
+.investor-dashboard-live .investor-dashboard-live__marketplace-card {
+  padding: clamp(16px, 1.8vw, 21px);
+}
+
+.investor-dashboard-live .investor-dashboard-live__action-list,
+.investor-dashboard-live .investor-dashboard-live__list {
+  margin-top: 12px;
+}
+
+.investor-dashboard-live .investor-dashboard-live__action-item {
+  gap: 10px;
+  padding: 11px 0;
+}
+
+.investor-dashboard-live .investor-dashboard-live__all-clear,
+.investor-dashboard-live .investor-dashboard-live__empty-list {
+  min-height: 130px;
+  padding: 18px 12px;
+}
+
+.investor-dashboard-live .investor-dashboard-live__account-block {
+  padding: 11px 0;
+}
+
+.investor-dashboard-live .investor-dashboard-live__account-block:first-of-type {
+  margin-top: 12px;
+}
+
+.investor-dashboard-live .investor-dashboard-live__account-card > .button {
+  margin-top: 12px;
+}
+
+.investor-dashboard-live .investor-dashboard-live__row {
+  padding: 10px 0;
+}
+
+.investor-dashboard-live .investor-dashboard-live__offering-grid {
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.investor-dashboard-live .investor-dashboard-live__offering {
+  padding: 12px;
+}
+
+/* React to the content area, not just viewport width when the sidebar is open. */
+@container app-main (max-width: 1060px) {
+  .investor-dashboard-live .investor-dashboard-live__metrics,
+  .investor-dashboard-live .investor-dashboard-live__offering-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container app-main (max-width: 880px) {
+  .investor-dashboard-live .investor-dashboard-live__hero,
+  .investor-dashboard-live .investor-dashboard-live__main-grid,
+  .investor-dashboard-live .investor-dashboard-live__activity-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .investor-dashboard-live__header {
+    align-items: flex-start;
+  }
+}
+
+@container app-main (max-width: 550px) {
+  .investor-dashboard-live .investor-dashboard-live__metrics,
+  .investor-dashboard-live .investor-dashboard-live__offering-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .investor-dashboard-live .investor-dashboard-live__hero {
+    padding: 18px;
+  }
+  .investor-dashboard-live .investor-dashboard-live__hero-actions .button {
+    width: 100%;
+  }
+  .investor-dashboard-live .investor-dashboard-live__identity-snapshot {
+    padding: 14px;
+  }
+  .investor-dashboard-live .investor-dashboard-live__action-card,
+  .investor-dashboard-live .investor-dashboard-live__account-card,
+  .investor-dashboard-live .investor-dashboard-live__list-card,
+  .investor-dashboard-live .investor-dashboard-live__marketplace-card {
+    padding: 15px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .investor-dashboard-live button.investor-dashboard-live__metric {
+    transition: none;
+  }
+}
+
+/* Use the issuer Action Center's restrained emphasis and clear CTA affordance. */
+.investor-dashboard-live .investor-dashboard-live__action-card {
+  border-left: 3px solid color-mix(in srgb, var(--primary-500) 34%, var(--border));
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--primary-500) 3%, var(--surface)),
+    var(--surface) 55%);
+}
+
+.investor-dashboard-live .investor-dashboard-live__action-cta {
+  display: inline-flex;
+  justify-content: center;
+  min-height: 36px;
+  padding: 8px 11px;
+  border-radius: 9px;
+  background: #26333e;
+  color: #fff;
+  white-space: nowrap;
+  transition: background 160ms ease;
+}
+
+.investor-dashboard-live .investor-dashboard-live__action-item:hover .investor-dashboard-live__action-cta,
+.investor-dashboard-live .investor-dashboard-live__action-item:focus-visible .investor-dashboard-live__action-cta {
+  background: #17242e;
+  color: #fff;
+}
+
+.investor-dashboard-live .investor-dashboard-live__action-card .investor-dashboard-live__all-clear {
+  min-height: 0;
+  height: 100%;
+}
+
+@container app-main (max-width: 550px) {
+  .investor-dashboard-live .investor-dashboard-live__action-cta {
+    max-width: 100%;
+    white-space: normal;
+  }
+}
+
+/* A compact account summary reduces the height of the paired Action Center row. */
+.investor-dashboard-live .investor-dashboard-live__account-card {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: 10px;
+}
+
+.investor-dashboard-live .investor-dashboard-live__account-card > .investor-dashboard-card-heading,
+.investor-dashboard-live .investor-dashboard-live__account-card > .button {
+  grid-column: 1 / -1;
+}
+
+.investor-dashboard-live .investor-dashboard-live__account-block,
+.investor-dashboard-live .investor-dashboard-live__account-block:first-of-type {
+  min-width: 0;
+  align-content: center;
+  margin-top: 0;
+  padding: 11px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface-muted);
+}
+
+.investor-dashboard-live .investor-dashboard-live__account-card > .button {
+  margin-top: 0;
+}
+
+.investor-dashboard-live .investor-dashboard-live__action-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.investor-dashboard-live .investor-dashboard-live__action-list {
+  flex: 1 1 auto;
+  align-content: center;
+}
+
+@container app-main (max-width: 550px) {
+  .investor-dashboard-live .investor-dashboard-live__account-card {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

@@ -4,9 +4,9 @@ pragma solidity 0.8.17;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 interface IReentrancyTarget {
-    function buy(address token, uint256 amount) external;
+    function buy(address token, address paymentToken, uint256 amount) external;
 
-    function redeem(address token, uint256 amount) external;
+    function redeem(address investor, address token, address paymentToken, uint256 amount) external;
 }
 
 /**
@@ -18,6 +18,8 @@ interface IReentrancyTarget {
 contract ReentrantERC20 is ERC20 {
     address public attackTarget;
     address public attackToken;
+    address public attackPaymentToken;
+    address public attackInvestor;
     uint256 public attackAmount;
     bool public reenterOnBuy;
     bool public reenterOnRedeem;
@@ -31,13 +33,16 @@ contract ReentrantERC20 is ERC20 {
     function configureBuyReentrancy(address target, address token, uint256 amount) external {
         attackTarget = target;
         attackToken = token;
+        attackPaymentToken = address(this);
         attackAmount = amount;
         reenterOnBuy = true;
     }
 
-    function configureRedeemReentrancy(address target, address token, uint256 amount) external {
+    function configureRedeemReentrancy(address target, address investor, address token, uint256 amount) external {
         attackTarget = target;
+        attackInvestor = investor;
         attackToken = token;
+        attackPaymentToken = address(this);
         attackAmount = amount;
         reenterOnRedeem = true;
     }
@@ -45,11 +50,11 @@ contract ReentrantERC20 is ERC20 {
     function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
         if (reenterOnBuy) {
             reenterOnBuy = false;
-            IReentrancyTarget(attackTarget).buy(attackToken, attackAmount);
+            IReentrancyTarget(attackTarget).buy(attackToken, attackPaymentToken, attackAmount);
         }
         if (reenterOnRedeem) {
             reenterOnRedeem = false;
-            IReentrancyTarget(attackTarget).redeem(attackToken, attackAmount);
+            IReentrancyTarget(attackTarget).redeem(attackInvestor, attackToken, attackPaymentToken, attackAmount);
         }
         return super.transferFrom(from, to, amount);
     }

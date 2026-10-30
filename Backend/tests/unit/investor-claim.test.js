@@ -171,6 +171,44 @@ const makeService = (over = {}) => {
   return { service, state };
 };
 
+const enableJourney = ({ service, state }, registered = true) => {
+  const { ApplicationJourneyService } = require('../../src/services/application-journey.service');
+  service.journeyService = new ApplicationJourneyService({
+    interestRepository: service.interestRepository,
+    registryRepository: {
+      getIssuerClaimCompletion: async () => ({ required: 2, missing: [] }),
+      getClaimCompletion: async () => {
+        const confirmed = await service.repository.listConfirmedTopics(state.interest.interestUid);
+        return { required: 2, missing: [1, 2].filter(t => !confirmed.includes(t)) };
+      },
+      findByInterest: async () => registered ? { status: 'CONFIRMED' } : { status: 'PENDING' },
+    },
+  });
+  return { service, state };
+};
+
+test('new flow blocks claim preparation until issuer registry confirmation', async () => {
+  const { service, state } = enableJourney(makeService(), false);
+  await assert.rejects(service.prepareClaim(investor, 'clm-1', {interestId:'int-1'}), e => e.code === 'ISSUER_REGISTRATION_REQUIRED');
+  assert.equal(state.submissions.length, 0);
+});
+
+test('new flow final investor claim completes application without another issuer call', async () => {
+  const { service, state } = enableJourney(makeService());
+  await service.prepareClaim(investor, 'clm-1', {interestId:'int-1'});
+  const first = await service.submitClaim(investor, 'clm-1', {interestId:'int-1', txHash:TX});
+  assert.equal(first.application.status, 'verifiedByIssuer');
+  assert.equal(first.application.canInvest, false);
+  await service.prepareClaim(investor, 'clm-2', {interestId:'int-1'});
+  const final = await service.submitClaim(investor, 'clm-2', {interestId:'int-1', txHash:TX});
+  assert.equal(final.application.status, 'registered');
+  assert.equal(final.application.canInvest, true);
+  assert.equal(final.application.journeyStage, 'COMPLETED');
+  const again = await service.submitClaim(investor, 'clm-2', {interestId:'int-1', txHash:TX});
+  assert.equal(again.application.canInvest, true);
+  assert.equal(state.history.length, 1);
+});
+
 test('retry uses Identity state + stored indexed event to confirm without historical scanning', async () => {
   const { service, state } = makeService();
   await service.prepareClaim(investor, 'clm-1', { interestId: 'int-1' });

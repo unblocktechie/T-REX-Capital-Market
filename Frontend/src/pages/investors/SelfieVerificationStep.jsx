@@ -7,6 +7,7 @@ import { InvestorActionBar, InvestorFormCard, StatusNotice } from '@/components/
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { useInvestorOnboarding } from '@/hooks/useInvestorOnboarding';
+import { getErrorMessage } from '@/utils/error';
 import { simulateCameraCapture, simulateSelfieVerification } from '@/services/investor';
 
 export default function SelfieVerificationStep() {
@@ -27,7 +28,7 @@ export default function SelfieVerificationStep() {
       toast.success('Selfie verification completed.');
     } catch (error) {
       updateSection('documents', { selfieVerificationStatus: 'failed' });
-      setVerificationError(error.message || 'Selfie verification failed.');
+      setVerificationError(getErrorMessage(error, 'Selfie verification failed.'));
     }
   };
 
@@ -39,7 +40,7 @@ export default function SelfieVerificationStep() {
       const capture = await simulateCameraCapture();
       await verifySelfie(capture);
     } catch (error) {
-      setVerificationError(error.message || 'Unable to open the simulated camera.');
+      setVerificationError(getErrorMessage(error, 'Unable to open the simulated camera.'));
     } finally {
       setCameraLoading(false);
     }

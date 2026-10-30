@@ -10,7 +10,7 @@ const createInvestorController = (service, optionRepository) => ({
   }),
   getMine: async (req, res) => sendSuccess(req, res, {
     message: 'Investor onboarding form fetched successfully.',
-    data: await service.getFullForm(req.user),
+    data: await service.getFullForm(req.user, req.selectedChain),
   }),
   saveIdentity: async (req, res) => sendSuccess(req, res, {
     message: req.body.isDraft ? 'Identity details draft saved.' : 'Identity details saved.',
@@ -48,7 +48,7 @@ const createInvestorController = (service, optionRepository) => ({
   },
   submit: async (req, res) => sendSuccess(req, res, {
     message: 'Investor onboarding submitted successfully.',
-    data: await service.submit(req.user, req.body),
+    data: await service.submit(req.user, req.body, req.selectedChain),
   }),
 });
 

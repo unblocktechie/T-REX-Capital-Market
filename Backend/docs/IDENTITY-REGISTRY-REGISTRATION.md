@@ -34,7 +34,7 @@ MetaMask; registry state alone is never treated as confirmation proof.
 The synchronous recovery scan is bounded by `REGISTRY_RECOVERY_LOOKBACK_BLOCKS`, split into
 `REGISTRY_RECOVERY_BLOCK_OFFSET` ranges, and retries inconsistent public-RPC evidence reads up to
 `REGISTRY_RPC_EVIDENCE_ATTEMPTS` times before handing recovery back to the worker.
-`BLOCKCHAIN_FALLBACK_RPC_URLS` accepts a comma-separated list of independent RPC endpoints. Historical
+`SEPOLIA_FALLBACK_RPC_URLS` accepts a comma-separated list of independent RPC endpoints. Historical
 event lookup and transaction verification fail over when the primary endpoint errors, returns
 incomplete transaction evidence, or returns no matching log for a state-confirmed registration.
 
@@ -144,7 +144,7 @@ rewinds atomically, marks orphaned events non-canonical, moves affected confirma
 Operator settings use the `RegistryIndexer*` and `RegistryRecovery*` keys seeded by migration
 `20260909_add_identity_registry_registration.sql`. In production set `REGISTRY_INDEXER_START_BLOCK`
 to the earliest relevant deployed registry block, keep `REGISTRY_CONFIRMATIONS` at the configured
-one-block deterministic-finality threshold, and monitor checkpoint lag, lease expiry, errors,
+two-block threshold, and monitor checkpoint lag, lease expiry, errors,
 pending age, and reconciliation counts.
 
 ## Database records

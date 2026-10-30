@@ -359,10 +359,10 @@ export function InvestorOnboardingProvider({ children }) {
 
   const downloadDocument = useCallback((documentUid) => investorApi.downloadDocument(documentUid), []);
 
-  const submitInvestor = useCallback(async () => {
+  const submitInvestor = useCallback(async (walletAddress, chainUid) => {
     setSubmitting(true);
     try {
-      const result = await investorApi.submit();
+      const result = await investorApi.submit({ walletAddress, chainUid });
       // Set the one-time success flag before applying the submitted server state so the
       // onboarding route cannot briefly redirect to the dashboard between state updates.
       setShowSubmissionSuccess(true);

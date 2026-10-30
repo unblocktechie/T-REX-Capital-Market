@@ -1,37 +1,31 @@
 # Organization Wallet Integration
 
-The organization and investor flows use Privy embedded wallets and are restricted to Arc Testnet. The authenticated Privy wallet is the secure account used for on-chain actions.
+The organization review step now requires a connected issuer wallet before the final application can be submitted.
 
 ## Frontend flow
 
-1. Privy email authentication creates or restores the user's embedded EVM wallet.
-2. The application configures Privy with Arc Testnet as both the default and supported chain.
-3. If an embedded wallet reports another chain, the UI requests a switch to Arc Testnet before any on-chain write.
-4. The navbar shows the shortened Privy wallet address and the Arc native USDC balance.
-5. Issuer and investor actions continue to validate the expected registered wallet before signing.
-6. Public reads, simulations, and receipt polling use the configured Arc Testnet RPC; signed writes use the Privy wallet provider.
-7. Explorer links use ArcScan and are generated only for the configured chain.
+1. The final review page shows **Connect Wallet** instead of **Submit Application**.
+2. The wallet modal supports MetaMask and WalletConnect.
+3. The user selects an active backend-provided network. The frontend loads its runtime configuration and requires the wallet to match the returned `chainId` before submission.
+4. After connection, the navbar shows the shortened address (`0x123...abcde`) and native-token balance.
+5. The final submit modal explains that this address becomes the primary organization wallet for token creation, smart-contract deployment, and issuer operations.
+6. The user must explicitly acknowledge that message before submission.
+7. The approved organization overview displays the persisted wallet address and network with a block-explorer link.
 
-## Arc Testnet configuration
+## Environment configuration
+
+Only generic wallet configuration remains in the frontend environment:
 
 ```env
-VITE_WEB3_DEFAULT_CHAIN=arc-testnet
-VITE_WEB3_ENABLED_CHAINS=arc-testnet
-VITE_ARC_TESTNET_RPC_URL=https://rpc.testnet.arc.network
+# Required for WalletConnect QR/mobile support.
+VITE_WALLETCONNECT_PROJECT_ID=
 ```
 
-The frontend chain definition uses:
-
-- Chain ID: `5042002`
-- Explorer: `https://testnet.arcscan.app`
-- Native gas asset: USDC
-- Required receipt confirmations: `1`
-
-The configured payment-token address is Arc's USDC ERC-20 interface (`0x3600000000000000000000000000000000000000`). Payment-token decimals are still read from the contract at runtime instead of being hardcoded.
+Supported networks are loaded from `GET /api/v1/chains`. The selected network's RPC, explorer, native currency, confirmations, contract suite, and payment-token catalogue are loaded from `GET /api/v1/chains/{chainUid}/config`. Do not add chain-specific RPC or contract-address `VITE_*` variables.
 
 ## Backend submit contract
 
-The existing organization submission API contract is unchanged. Where the backend persists wallet/network metadata or verifies transaction receipts, its supported chain and RPC configuration must also be migrated to Arc Testnet.
+The frontend sends the wallet in the existing final submission request:
 
 ```http
 POST /api/v1/organizations/me/submit
@@ -41,16 +35,25 @@ Content-Type: application/json
 
 ```json
 {
-  "walletAddress": "0x..."
+  "walletAddress": "0x...",
+  "chainUid": "60000000-0000-4000-8000-000000000001"
 }
 ```
 
-The backend should continue to validate and persist the approved EVM wallet and reject malformed or conflicting addresses according to product rules.
+The backend submit DTO and organization entity must:
+
+- accept a valid EVM `walletAddress`;
+- normalize and persist it as the organization wallet;
+- reject an empty, malformed, or already-conflicting address according to product rules;
+- return it from `POST /organizations/me/submit` and `GET /organizations/me`;
+- prevent changing it after submission unless an explicit administrative wallet-rotation workflow is implemented.
+
+The frontend accepts these response aliases while the backend contract is finalized: `walletAddress`, `organizationWalletAddress`, `organizationWallet.address`, or `wallet.address`.
 
 ## Security note
 
-Never request or store a seed phrase or private key. The browser receives signing capability through the authenticated Privy embedded wallet, while public RPC access is used only for non-secret reads, simulation, and confirmation.
+A connected address proves that the browser wallet exposed the account, but a backend that needs stronger proof of control should add a nonce-based signed-message challenge before accepting the organization wallet. Never request or store a seed phrase or private key.
 
 ## Styling scope
 
-The Arc migration changes network configuration, chain-aware links, payment labels, and transaction-confirmation behavior only. Existing responsive layouts and interaction patterns are preserved.
+The wallet modal, organization submission panel, confirmation modal, action bar, and organization wallet overview card use Tailwind utilities directly. Existing shared organization styles remain for unchanged forms and common components so the current layout and behavior are not destabilized during this wallet-focused update.

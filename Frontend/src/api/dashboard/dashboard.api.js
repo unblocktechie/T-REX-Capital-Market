@@ -76,6 +76,7 @@ export const dashboardApi = Object.freeze({
     return {
       requests,
       redemptions,
+      redemptionMeta: redemptionsResponse.meta || {},
       investors,
       investorMeta,
       errors: [

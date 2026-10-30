@@ -367,7 +367,21 @@ Publicly returns:
 
 - `decimals`: `[2, 6, 8, 18]`
 - `countryRestrictionModes`: `allowlist`, `blocklist`
+- `paymentTokens`: the same active payment-token catalogue returned by `GET /payment-tokens`
 - Active claim topics from `claimTopicMaster`, including their numeric on-chain `value`. Seeded KYC has value `1`; Accredited Investor has value `2`.
+
+### `GET /payment-tokens`
+
+Publicly returns every payment currency supported for purchase and redemption. Each item contains
+`paymentTokenUid`, `paymentTokenCode`, `name`, `symbol`, `contractAddress`, `decimals`, `chainId`,
+`networkName`, `explorerUrl`, `supportedActions`, `isDefault`, `displayOrder`, and `isActive`.
+The response is loaded from active `paymentTokenMaster` rows. Sepolia currently supports USDT at
+`0x86B14D29A59b745bF08c42661322d13142d5eb49` and USDC at
+`0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`.
+
+The server also calls `paymentTokens()` on the configured Platform Controller and returns only
+database addresses present in that on-chain list. If the on-chain list cannot be verified, the API
+returns HTTP `503` with `PAYMENT_TOKEN_REGISTRY_UNAVAILABLE`.
 
 Country choices come from `GET /locations/countries`. Each result includes `countryCode` (alpha-2) and `numericCode` (three-character ISO 3166-1 numeric code, such as `840` for the United States). Token restrictions persist the server-resolved numeric code.
 
@@ -385,6 +399,7 @@ tokenSymbol=trex
 decimals=18
 initialTokenPrice=1.00
 treasuryWalletAddress=0x1111111111111111111111111111111111111111
+paymentTokenAddress=0x86B14D29A59b745bF08c42661322d13142d5eb49
 tokenDescription=Institutional security token
 isDraft=false
 tokenImage=<PNG, JPEG, WebP, or SVG file>
@@ -405,8 +420,8 @@ Only the authenticated issuer who owns the active deployed token may change its 
 ```
 
 The value must be greater than zero with no more than 18 decimal places. The update changes only
-`currentTokenPrice`; it never changes `initialTokenPrice`. New purchase and redemption intents use
-this value to calculate USDT, while transfer intents snapshot it as the transfer-time valuation.
+`currentTokenPrice`; it never changes `initialTokenPrice`. New purchase and redemption operations use
+this value with the token's selected payment currency, while transfer intents snapshot it as the transfer-time valuation.
 Existing pending and completed transaction records retain their original price snapshot.
 
 ### `GET /tokens/me/image`
@@ -443,7 +458,7 @@ A completed step requires at least one active claim topic and `organizationActsA
 }
 ```
 
-`maxInvestors` must be an integer from 1 through 1,000,000,000. `maxBalancePerInvestor` is the absolute maximum token amount that one investor may hold; it must be greater than 0 and supports up to 18 decimal places. It is not a percentage. A completed step requires at least one unique country; every UID is resolved against active `countryMaster` rows, and `iso3166NumericCode` is persisted from the master.
+`maxInvestors` must be an integer from 1 through 1,000,000,000. `maxBalancePerInvestor` is the absolute maximum token amount that one investor may hold; it must be greater than 0 and supports up to 18 decimal places. It is not a percentage. `countryUids` may be empty; an empty array means the token has no geographic restriction, regardless of the supplied mode. For a non-empty array, every UID is resolved against active `countryMaster` rows and `iso3166NumericCode` is persisted from the master.
 
 ### `PUT /tokens/me/governance`
 
@@ -457,7 +472,7 @@ A completed step requires at least one active claim topic and `organizationActsA
 `identityManagerWalletAddress` must be a valid EVM address matching the approved organization's
 `walletAddress` case-insensitively. The backend automatically stores
 For a newly created token, `tokenAgentWalletAddress = PLATFORM_CONTROLLER_ADDRESS` (default
-`0x972E9CEf9eA9d3A9d7f3261bb8e16bA59E76a0FB`). The frontend must treat this field as read-only
+`0x4052D80c222111234b89AFDfff597B5De8DA50cd`). The frontend must treat this field as read-only
 and should omit it from the request. A client-supplied Token Agent value is ignored. Existing token
 rows keep the Token Agent assigned when they were created.
 
@@ -533,7 +548,7 @@ Approve:
 }
 ```
 
-Approval first checks the configured Arc Testnet OnchainID factory for the organization's submitted `walletAddress`. If no identity exists, the API creates one with the deterministic salt `org-{organizationUid}` and waits for the configured confirmations. A successful response includes:
+Approval first checks the configured Network OnchainID factory for the organization's submitted `walletAddress`. If no identity exists, the API creates one with the deterministic salt `org-{organizationUid}` and waits for the configured confirmations. A successful response includes:
 
 ```json
 {
@@ -624,10 +639,10 @@ not prepare, sign, relay, mint, burn, transfer USDT, or continue these transacti
 - `POST /investments/transactions/confirm` accepts `{ chainId, txHash, tokenUid, expectedAction }`,
   where `expectedAction` is `INVEST`, `TRANSFER`, or `REDEMPTION`. It independently verifies the
   current canonical transaction, role/ownership, sender, target, calldata, deployed token, receipt, events,
-  controller configuration, exact on-chain quote/USDT settlement, and confirmations. It returns
+  controller configuration, issuer-selected payment token, exact on-chain quote/settlement, and confirmations. It returns
   HTTP 200 with `SUBMITTED`, `CONFIRMED`, or `FAILED`; authoritative mismatches remain 4xx.
   Investors may submit `INVEST` and `TRANSFER` hashes. The token-owning Issuer may submit the new
-  `redeem(investor, token, tokenAmount)` `REDEMPTION` hash.
+  `redeem(investor, token, paymentToken, tokenAmount)` `REDEMPTION` hash.
 - `GET /investments/transactions?page=1&limit=20&tokenUid=&type=ALL&status=ALL&walletAddress=&txHash=&fromDate=&toDate=&search=`
   returns role-scoped canonical history. Investor access is wallet-scoped; issuer access is
   organization-scoped; Super Administrator access is global.
@@ -642,11 +657,12 @@ for execution or recovery. See `docs/BLOCKCHAIN-TRANSACTION-INDEXER.md` and
 ## Investor token purchase (USDT)
 
 - `GET /investments/me/portfolio?page=1&limit=20&search=` returns one row per token for which the
-  authenticated investor has canonical confirmed investment, transfer, or redemption activity. Search covers token name, symbol,
-  token address, and issuer company. Each row includes full marketplace token metadata, image URL,
-  chain ID, issuer information, country restrictions, required claim topics, and portfolio totals.
-  Totals are aggregated from canonical `blockchainTransaction` rows and include confirmed investments,
-  redemptions, incoming/outgoing transfers, remaining net token amount, average purchase price, and activity dates.
+  authenticated investor has a canonical `CONFIRMED` investment or received transfer. Canonical
+  `INVEST`, `TRANSFER`, and `REDEMPTION` activity is authoritative; legacy completed rows remain a
+  compatibility fallback and are excluded when the same transaction hash is already canonical.
+  Search covers token name, symbol, token address, and issuer company. Each row includes full
+  marketplace token metadata, chain and issuer information, restrictions, required claim topics,
+  investment totals, transfers, redemptions, net token amount, average price, and activity dates.
 
 - `GET /investments/tokens/{tokenUid}/purchases?page=1&limit=20&search=&status=all` returns the
   authenticated investor's legacy purchase history. It is retained read-only for production-data
@@ -654,8 +670,8 @@ for execution or recovery. See `docs/BLOCKCHAIN-TRANSACTION-INDEXER.md` and
 - `GET /investments/purchases/{purchaseUid}` returns payment, mint, synchronization, errors, and
   append-only legacy transaction history.
 
-The investor reads live USDT allowance, approves the Platform Controller when necessary, and calls
-`PlatformController.buy()` directly. The controller atomically collects USDT and issues the token.
+The investor reads live allowance on the token-selected payment contract, approves the Platform Controller when necessary, and calls
+`PlatformController.buy(token, paymentToken, tokenAmount)` directly. The controller atomically collects payment and issues the token.
 The old purchase create/confirm/retry POST endpoints and backend mint workers are retired.
 
 ## Token redemption
@@ -665,9 +681,9 @@ The old purchase create/confirm/retry POST endpoints and backend mint workers ar
 - Investor list/detail/cancel APIs and issuer list/detail/approve/reject APIs retain the off-chain
   request and review workflow. Issuer detail includes `investorName`.
 - Issuer approval no longer queues a token lock. The issuer grants the Platform Controller reusable
-  USDT allowance from the issuer wallet.
-- After approval/funding, the investor calls `PlatformController.redeem()` directly. The controller
-  atomically burns tokens and transfers issuer USDT to the investor.
+  selected-payment-token allowance from the issuer wallet.
+- After approval/funding, the issuer calls `PlatformController.redeem(investor, token, paymentToken, tokenAmount)` directly. The controller
+  atomically burns tokens and transfers issuer payment tokens to the investor.
 - The matching legacy request becomes `COMPLETED` only after canonical verification/indexing.
 
 The legacy redemption retry and issuer payment-confirm endpoints, platform lock/burn/unlock worker,
@@ -725,3 +741,33 @@ The viewed endpoint idempotently changes `SENT` to `VIEWED`. The email button po
 - `404` route/resource absent; `409` duplicate unique value
 - `422` request validation; `429` rate limit; `500` database/unexpected failure
 - `502` on-chain identity creation failed; the organization was not approved
+
+## Multichain configuration and ONCHAINID access
+
+Public and authenticated-user endpoints:
+
+- `GET /chains` returns active wallet-safe chain metadata. It never returns the internal RPC or signer.
+- `GET /chains/{chainUid}/config` returns the selected chain's complete browser-safe deployment configuration: public RPC, explorer, native currency, confirmation policy, platform contracts, implementation contracts, compliance modules, and payment tokens independently verified against the Platform Controller.
+- `GET /chains/me` returns active chains plus the caller's `LOCKED`, `CREATING`, `FAILED`, or `CREATED` ONCHAINID state.
+- `POST /chains/{chainUid}/unlock` idempotently creates/reuses the Issuer or Investor ONCHAINID on that chain. Completed onboarding is required.
+- ONCHAINID creation is submitted by the backend signer to the chain-specific `IDFactoryAccessManager`; the manager delegates the authorized call to Identity Factory. The factory remains the authoritative source for `getIdentity(wallet)` reads.
+- Every authenticated Investor or Issuer request under `/investors`, `/organizations`, `/tokens`, `/investments`, `/investor/claims`, and `/issuer/claims` must include `X-Chain-Uid`. Marketplace, token management/deployment, subscriptions, claims, invitations, registry operations, redemptions, transfers, purchases, and canonical transaction history are scoped to that selected chain. Administrator routes are unchanged.
+- `POST /investments/transactions/confirm` additionally requires the submitted `chainId` to match the selected chain header.
+- `GET /payment-tokens?chainUid={chainUid}&action=PURCHASE|REDEMPTION` returns active database tokens that are also enabled by that chain's Platform Controller.
+- `GET /token-options?chainUid={chainUid}` returns token-wizard masters with the chain-filtered payment-token list.
+
+`chainUid` is accepted by `POST /organizations/me/submit`, `POST /investors/me/submit`, and `PUT /tokens/me/information`. For Issuer and Investor sessions, the `X-Chain-Uid` header is authoritative; when a body `chainUid` is present it must match the header. A token's chain may be changed while its status is `draft`; after it leaves `draft`, the chain is immutable. Changing a draft's chain revalidates the Issuer's per-chain identity, the selected payment token, and the target chain's Platform Controller. The Issuer must have a `CREATED` and unlocked per-chain identity for the selected chain.
+
+Super Admin management endpoints:
+
+- `GET|POST /admin/chains`
+- `GET|PATCH /admin/chains/{chainUid}`
+- `PUT /admin/chains/{chainUid}/image` uploads or replaces the network image (`multipart/form-data`, field `image`).
+- `GET /admin/chains/{chainUid}/audits` returns the append-only change history.
+- `GET|POST /admin/payment-tokens`
+- `GET|PATCH|DELETE /admin/payment-tokens/{paymentTokenUid}`
+- `PUT /admin/payment-tokens/{paymentTokenUid}/image` uploads or replaces the payment-token image.
+
+Chain creation requires the complete deployment suite plus every address returned by the Platform Controller's `paymentTokens()` function. It validates the RPC chain ID, deployed bytecode, exact payment-token registry membership, ERC-20 metadata, EVM addresses, and private-key/address consistency. Payment-token master rows are created in the same database transaction as the chain. After creation, only `publicRpcUrl`, `explorerUrl`, `fallbackRpcUrls`, `isActive`, and the image may be changed. Network deletion is intentionally unsupported. Every API-created network change is written to `chainMasterAudit` with before/after values and the authenticated administrator. `deployerPrivateKey` remains write-only and encrypted. Internal `rpcUrl`, `fallbackRpcUrls`, and signer data are never returned by the public selected-chain endpoint.
+
+`supportsPurchase` and `supportsRedemption` are accepted during payment-token creation and are immutable afterward. Public image endpoints are `GET /chains/{chainUid}/image` and `GET /payment-tokens/{paymentTokenUid}/image`.

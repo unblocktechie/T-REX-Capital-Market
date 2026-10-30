@@ -1,143 +1,267 @@
+import { createConfig, createStorage, http } from 'wagmi';
+import { injected, walletConnect } from 'wagmi/connectors';
 import { defineChain } from 'viem';
-import { sepolia } from 'viem/chains';
 import { env } from '@/config/env';
+import { bridgeOnlyChainRecords as configuredBridgeOnlyChainRecords } from '@/config/bridgeNetworks';
 
-// Arc Testnet uses USDC as the native gas asset. eth_getBalance and native value
-// accounting use 18 internal decimals, while the USDC ERC-20 interface uses 6.
-export const arcTestnet = defineChain({
-  id: 5_042_002,
-  name: 'Arc Testnet',
+const text = (value) => (typeof value === 'string' ? value.trim() : '');
+const firstText = (...values) => {
+  for (const value of values) {
+    if (Array.isArray(value)) {
+      const item = value.find((entry) => text(entry));
+      if (item) return text(item);
+      continue;
+    }
+    const normalized = text(value);
+    if (normalized) return normalized;
+  }
+  return '';
+};
+const positiveInteger = (value) => {
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number > 0 ? number : 0;
+};
+
+let chainRecords = [];
+let supportedChains = [];
+let bridgeChainRecords = [];
+let bridgeChains = [];
+let walletChains = [];
+let requiredChain = null;
+
+const unwrapRows = (payload) => {
+  const body = payload?.data ?? payload;
+  if (Array.isArray(body)) return body;
+  return body?.chains || body?.items || [];
+};
+
+export const normalizeChainRecord = (row = {}) => {
+  const chainId = positiveInteger(row.chainId);
+  const chainUid = text(row.chainUid || row.uid);
+  const chainName = text(row.chainName || row.name);
+  const publicRpcUrl = firstText(
+    row.publicRpcUrl,
+    row.rpcUrls?.public,
+    row.rpcUrls?.default,
+  );
+  if (!chainId || !chainUid || !chainName || !publicRpcUrl) return null;
+
+  const nativeCurrency = row.nativeCurrency && typeof row.nativeCurrency === 'object'
+    ? row.nativeCurrency
+    : {};
+  const nativeCurrencyDecimals = positiveInteger(
+    row.nativeCurrencyDecimals ?? nativeCurrency.decimals,
+  ) || 18;
+  const platformContracts = row.contracts?.platform || {};
+  return {
+    ...row,
+    chainUid,
+    chainCode: text(row.chainCode),
+    chainName,
+    chainId,
+    networkName: text(row.networkName) || chainName,
+    nativeCurrencyName:
+      text(row.nativeCurrencyName || nativeCurrency.name) ||
+      text(row.nativeCurrencySymbol || nativeCurrency.symbol) ||
+      'Native token',
+    nativeCurrencySymbol: text(row.nativeCurrencySymbol || nativeCurrency.symbol) || 'ETH',
+    nativeCurrencyDecimals,
+    publicRpcUrl,
+    explorerUrl: text(row.explorerUrl),
+    identityFactoryAddress: text(row.identityFactoryAddress || platformContracts.identityFactory),
+    platformControllerAddress: text(
+      row.platformControllerAddress || platformContracts.platformController,
+    ),
+    trexFactoryAddress: text(row.trexFactoryAddress || platformContracts.trexFactory),
+    requiredConfirmations:
+      positiveInteger(row.requiredConfirmations ?? row.confirmations?.transactions ?? row.confirmations) || 1,
+    registryConfirmations:
+      positiveInteger(row.registryConfirmations ?? row.confirmations?.registry) || 1,
+    imageUrl: firstText(
+      row.imageUrl,
+      row.chainImageUrl,
+      row.chainLogoUrl,
+      row.networkImageUrl,
+      row.networkLogoUrl,
+      row.logoUrl,
+      row.iconUrl,
+      typeof row.logo === 'string' ? row.logo : '',
+      typeof row.icon === 'string' ? row.icon : '',
+      row.logo?.url,
+      row.logo?.imageUrl,
+      row.icon?.url,
+      row.icon?.imageUrl,
+      row.branding?.logoUrl,
+      row.branding?.imageUrl,
+      row.branding?.iconUrl,
+      row.metadata?.logoUrl,
+      row.metadata?.imageUrl,
+      row.metadata?.iconUrl,
+      row.metadata?.logo?.url,
+      row.metadata?.icon?.url,
+    ),
+    nativeCurrencyImageUrl: firstText(
+      row.nativeCurrencyImageUrl,
+      row.nativeCurrencyLogoUrl,
+      row.nativeCurrencyIconUrl,
+      row.nativeTokenImageUrl,
+      row.nativeTokenLogoUrl,
+      row.nativeTokenIconUrl,
+      nativeCurrency.imageUrl,
+      nativeCurrency.logoUrl,
+      nativeCurrency.iconUrl,
+      nativeCurrency.logo?.url,
+      nativeCurrency.icon?.url,
+    ),
+    isTestnet: Boolean(row.isTestnet),
+    isDefault: Boolean(row.isDefault),
+    isActive: row.isActive !== false,
+  };
+};
+
+export const toWagmiChain = (record) => defineChain({
+  id: record.chainId,
+  name: record.chainName,
   nativeCurrency: {
-    name: 'USD Coin',
-    symbol: 'USDC',
-    decimals: 18,
+    name: record.nativeCurrencyName,
+    symbol: record.nativeCurrencySymbol,
+    decimals: record.nativeCurrencyDecimals,
   },
   rpcUrls: {
-    default: {
-      http: [env.web3.rpcUrl],
-      webSocket: ['wss://rpc.testnet.arc.network'],
-    },
+    default: { http: [record.publicRpcUrl] },
+    public: { http: [record.publicRpcUrl] },
   },
-  blockExplorers: {
-    default: {
-      name: 'ArcScan',
-      url: 'https://testnet.arcscan.app',
-    },
+  ...(record.explorerUrl
+    ? { blockExplorers: { default: { name: `${record.chainName} Explorer`, url: record.explorerUrl } } }
+    : {}),
+  testnet: record.isTestnet,
+});
+
+export const initializeWeb3Chains = (payload) => {
+  const normalized = unwrapRows(payload)
+    .map(normalizeChainRecord)
+    .filter((item) => item?.isActive !== false);
+  if (!normalized.length) {
+    throw new Error('No active blockchain networks were returned by the platform.');
+  }
+
+  const seen = new Set();
+  chainRecords = normalized.filter((item) => {
+    if (seen.has(item.chainId)) return false;
+    seen.add(item.chainId);
+    return true;
+  });
+  supportedChains = chainRecords.map(toWagmiChain);
+
+  // Wallet-management bridge networks are deliberately not added to the
+  // platform-supported chain catalogue. They are only registered with Wagmi
+  // so balance reads and wallet switching can work for the independent bridge
+  // feature (for example Ethereum when the backend does not expose Ethereum).
+  const platformChainIds = new Set(chainRecords.map((item) => item.chainId));
+  bridgeChainRecords = configuredBridgeOnlyChainRecords.filter(
+    (item) => item?.isActive !== false && !platformChainIds.has(item.chainId),
+  );
+  bridgeChains = bridgeChainRecords.map(toWagmiChain);
+  walletChains = [...supportedChains, ...bridgeChains];
+
+  const defaultRecord = chainRecords.find((item) => item.isDefault) || chainRecords[0];
+  requiredChain = supportedChains.find((item) => item.id === defaultRecord.chainId) || supportedChains[0];
+  return chainRecords;
+};
+
+export const loadWeb3Bootstrap = async () => {
+  const controller = new AbortController();
+  const timer = globalThis.setTimeout(() => controller.abort(), 20_000);
+  try {
+    const response = await fetch(`${env.apiBaseUrl}/${env.apiVersion}/chains`, {
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`Network catalogue request failed (${response.status}).`);
+    const payload = await response.json();
+    return initializeWeb3Chains(payload);
+  } finally {
+    globalThis.clearTimeout(timer);
+  }
+};
+
+export const getChainRecordById = (chainId) =>
+  chainRecords.find((item) => item.chainId === Number(chainId)) || null;
+
+export const getChainRecordByUid = (chainUid) =>
+  chainRecords.find((item) => item.chainUid === String(chainUid || '')) || null;
+
+export const getBridgeChainRecordById = (chainId) =>
+  bridgeChainRecords.find((item) => item.chainId === Number(chainId)) || null;
+
+export const getWalletChainRecordById = (chainId) =>
+  getChainRecordById(chainId) || getBridgeChainRecordById(chainId);
+
+export const createWagmiConfig = () => {
+  if (!supportedChains.length || !walletChains.length || !requiredChain) {
+    throw new Error('Blockchain networks must be loaded before the wallet provider is created.');
+  }
+
+  const connectors = [
+    injected({
+      target: 'metaMask',
+      shimDisconnect: true,
+      unstable_shimAsyncInject: 2_000,
+    }),
+  ];
+
+  if (env.walletConnectProjectId) {
+    connectors.push(walletConnect({
+      projectId: env.walletConnectProjectId,
+      showQrModal: true,
+      metadata: {
+        name: env.appName,
+        description: 'Connect your registered wallet for compliant token activity.',
+        url: typeof window !== 'undefined' ? window.location.origin : 'https://localhost',
+        icons: typeof window !== 'undefined' ? [`${window.location.origin}/favicon-192.png`] : [],
+      },
+      qrModalOptions: { themeMode: 'light' },
+    }));
+  }
+
+  const transports = Object.fromEntries(
+    walletChains.map((chain) => [chain.id, http(getWalletChainRecordById(chain.id)?.publicRpcUrl)]),
+  );
+
+  return createConfig({
+    chains: walletChains,
+    connectors,
+    multiInjectedProviderDiscovery: false,
+    storage: createStorage({
+      storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+      key: 'trex-wallet-v3',
+    }),
+    transports,
+  });
+};
+
+export const web3Config = {
+  get walletConnectConfigured() { return Boolean(env.walletConnectProjectId); },
+  get requiredChain() { return requiredChain; },
+  get supportedChains() { return supportedChains; },
+  get bridgeChains() { return bridgeChains; },
+  get walletChains() { return walletChains; },
+  get chainRecords() { return chainRecords; },
+  get bridgeChainRecords() { return bridgeChainRecords; },
+  get defaultChainRecord() {
+    return requiredChain ? getChainRecordById(requiredChain.id) : null;
   },
-  testnet: true,
-});
-
-// Wallet Management can read balances from Ethereum Sepolia without changing
-// the transaction network used by the rest of the T-REX application.
-export const ethereumSepolia = defineChain({
-  ...sepolia,
-  name: 'Ethereum Sepolia',
-});
-
-// Transaction-critical application flows remain Arc Testnet only.
-export const supportedChains = [arcTestnet];
-export const requiredChain = arcTestnet;
-
-// Read-only balance networks exposed by Wallet Management. Keeping this list
-// separate from supportedChains prevents a balance-view selection from changing
-// token creation, investment, transfer, or redemption network requirements.
-export const walletViewChains = [arcTestnet, ethereumSepolia];
-
-// Privy must know both EVM chains used by the bridge so its embedded wallet can
-// approve the Sepolia burn and the Arc mint. Transaction-critical T-REX flows
-// still use `supportedChains` above (Arc only).
-export const privySupportedChains = [arcTestnet, ethereumSepolia];
-
-// ERC-20 assets that Wallet Management knows how to read on each optional
-// balance-view network. Standard EVM RPCs cannot enumerate every token held by a
-// wallet, so this registry intentionally contains trusted/known assets. Circle's
-// official Ethereum Sepolia USDC contract is included so a Privy wallet's test
-// USDC is visible alongside native Sepolia ETH.
-export const walletViewTokenAssets = Object.freeze({
-  [ethereumSepolia.id]: Object.freeze([
-    Object.freeze({
-      id: 'ethereum-sepolia-usdc',
-      kind: 'network-token',
-      name: 'USD Coin',
-      symbol: 'USDC',
-      tokenAddress: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
-      chainId: ethereumSepolia.id,
-      decimals: 6,
-    }),
-  ]),
-});
-
-// Circle App Kit USDC bridge configuration. Both testnet directions are
-// modeled explicitly so Wallet Management can bridge the same Privy wallet
-// between Ethereum Sepolia and Arc Testnet. For mainnet, the UI and bridge
-// service can stay unchanged while these route definitions are replaced with
-// their production chain identifiers and token metadata.
-export const usdcBridge = Object.freeze({
-  environment: 'testnet',
-  token: 'USDC',
-  transferSpeed: 'FAST',
-  maxFee: '0.10',
-  routes: Object.freeze({
-    toArc: Object.freeze({
-      id: 'toArc',
-      label: 'Bridge to Arc',
-      source: Object.freeze({
-        chainId: ethereumSepolia.id,
-        appKitChain: 'Ethereum_Sepolia',
-        networkName: ethereumSepolia.name,
-        nativeSymbol: ethereumSepolia.nativeCurrency.symbol,
-        usdcAddress: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
-        usdcIsNative: false,
-      }),
-      destination: Object.freeze({
-        chainId: arcTestnet.id,
-        appKitChain: 'Arc_Testnet',
-        networkName: arcTestnet.name,
-        nativeSymbol: arcTestnet.nativeCurrency.symbol,
-        usdcIsNative: true,
-      }),
-    }),
-    toSepolia: Object.freeze({
-      id: 'toSepolia',
-      label: 'Bridge to Sepolia',
-      source: Object.freeze({
-        chainId: arcTestnet.id,
-        appKitChain: 'Arc_Testnet',
-        networkName: arcTestnet.name,
-        nativeSymbol: arcTestnet.nativeCurrency.symbol,
-        usdcIsNative: true,
-      }),
-      destination: Object.freeze({
-        chainId: ethereumSepolia.id,
-        appKitChain: 'Ethereum_Sepolia',
-        networkName: ethereumSepolia.name,
-        nativeSymbol: ethereumSepolia.nativeCurrency.symbol,
-        usdcAddress: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
-        usdcIsNative: false,
-      }),
-    }),
-  }),
-});
-
-// Privy's add-funds flow uses Ethereum Mainnet as its funding destination.
-// The asset below is Circle's official USDC contract on Ethereum Mainnet.
-// This funding destination is intentionally independent from the app's Arc
-// Testnet execution chain; changing it must not change token/deployment logic.
-export const walletFunding = Object.freeze({
-  chain: 'eip155:1',
-  chainId: 1,
-  networkName: 'Ethereum Mainnet',
-  symbol: 'USDC',
-  asset: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-});
-
-export const web3Config = Object.freeze({
-  requiredChain,
-  supportedChains,
-  walletViewChains,
-  walletViewTokenAssets,
-  privySupportedChains,
-  usdcBridge,
-  requiredConfirmations: 1,
-  walletFunding,
-});
+  getChainById(chainId) {
+    return supportedChains.find((item) => item.id === Number(chainId)) || null;
+  },
+  getBridgeChainById(chainId) {
+    return bridgeChains.find((item) => item.id === Number(chainId)) || null;
+  },
+  getWalletChainById(chainId) {
+    return walletChains.find((item) => item.id === Number(chainId)) || null;
+  },
+  getChainRecordById,
+  getBridgeChainRecordById,
+  getWalletChainRecordById,
+  getChainRecordByUid,
+};

@@ -11,14 +11,20 @@ import {
   toJurisdictionPayload,
 } from '@/api/organization';
 import { ROLES } from '@/config/permissions';
+import { web3Config } from '@/config/web3';
 import {
   ORGANIZATION_STATUSES,
   createInitialOrganization,
 } from '@/services/organizationStorageService';
 import { organizationUiStateService } from '@/services/organizationUiStateService';
 import { useAuthStore } from '@/store/auth.store';
+import { networkUserKey, useNetworkStore } from '@/store/network.store';
 
 export const organizationQueryKey = Object.freeze(['organization', 'me']);
+export const organizationChainQueryKey = (chainUid = 'unselected') => [
+  ...organizationQueryKey,
+  String(chainUid || 'unselected'),
+];
 const organizationOptionsQueryKey = Object.freeze(['organization', 'options']);
 
 const withOwnerRelationships = (organization, sourceOwners = []) => ({
@@ -33,8 +39,19 @@ const withOwnerRelationships = (organization, sourceOwners = []) => ({
 export function useOrganization({ enabled: queryEnabled = true } = {}) {
   const queryClient = useQueryClient();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const role = useAuthStore((state) => state.user?.role);
-  const enabled = queryEnabled && isAuthenticated && role === ROLES.issuer;
+  const user = useAuthStore((state) => state.user);
+  const role = user?.role;
+  const userKey = networkUserKey(user);
+  const selectedChainId = useNetworkStore((state) => state.activeChainByUser[userKey] || null);
+  const storedChainUid = useNetworkStore((state) => state.activeChainUidByUser[userKey] || '');
+  const selectedChainUid =
+    storedChainUid || web3Config.getChainRecordById(selectedChainId)?.chainUid || '';
+  const selectedOrganizationQueryKey = useMemo(
+    () => organizationChainQueryKey(selectedChainUid),
+    [selectedChainUid],
+  );
+  const enabled =
+    queryEnabled && isAuthenticated && role === ROLES.issuer && Boolean(selectedChainUid);
 
   const getOptions = useCallback(
     () =>
@@ -43,7 +60,7 @@ export function useOrganization({ enabled: queryEnabled = true } = {}) {
         queryFn: async () => mapOrganizationOptions(await organizationApi.getOptions()),
         staleTime: 30 * 60_000,
       }),
-    [queryClient],
+    [queryClient, selectedOrganizationQueryKey],
   );
 
   const mapWithLabels = useCallback(
@@ -52,7 +69,7 @@ export function useOrganization({ enabled: queryEnabled = true } = {}) {
         mapOrganization(serverOrganization),
         queryClient.getQueryData(organizationOptionsQueryKey),
       ),
-    [queryClient],
+    [queryClient, selectedOrganizationQueryKey],
   );
 
   const loadOrganization = useCallback(async () => {
@@ -64,7 +81,7 @@ export function useOrganization({ enabled: queryEnabled = true } = {}) {
   }, [getOptions]);
 
   const query = useQuery({
-    queryKey: organizationQueryKey,
+    queryKey: selectedOrganizationQueryKey,
     queryFn: loadOrganization,
     enabled,
     staleTime: 15_000,
@@ -78,17 +95,20 @@ export function useOrganization({ enabled: queryEnabled = true } = {}) {
   const setOrganization = useCallback(
     (serverOrganization) => {
       const mapped = mapWithLabels(serverOrganization);
-      queryClient.setQueryData(organizationQueryKey, mapped);
+      queryClient.setQueryData(selectedOrganizationQueryKey, mapped);
       return mapped;
     },
-    [mapWithLabels, queryClient],
+    [mapWithLabels, queryClient, selectedOrganizationQueryKey],
   );
 
   const refresh = useCallback(async () => {
+    if (!selectedChainUid) {
+      return queryClient.getQueryData(selectedOrganizationQueryKey) || createInitialOrganization();
+    }
     const mapped = await loadOrganization();
-    queryClient.setQueryData(organizationQueryKey, mapped);
+    queryClient.setQueryData(selectedOrganizationQueryKey, mapped);
     return mapped;
-  }, [loadOrganization, queryClient]);
+  }, [loadOrganization, queryClient, selectedChainUid, selectedOrganizationQueryKey]);
 
   const synchronizeAfterMutation = useCallback(
     async (serverOrganization, createFallback, transformFresh) => {
@@ -96,7 +116,7 @@ export function useOrganization({ enabled: queryEnabled = true } = {}) {
       let fallbackResult = mappedResponse;
 
       queryClient.setQueryData(
-        organizationQueryKey,
+        selectedOrganizationQueryKey,
         (current = createInitialOrganization()) => {
           fallbackResult = createFallback(current, mappedResponse);
           return fallbackResult;
@@ -108,7 +128,7 @@ export function useOrganization({ enabled: queryEnabled = true } = {}) {
         if (freshServerOrganization) {
           let fresh = mapWithLabels(freshServerOrganization);
           if (transformFresh) fresh = transformFresh(fresh, fallbackResult);
-          queryClient.setQueryData(organizationQueryKey, fresh);
+          queryClient.setQueryData(selectedOrganizationQueryKey, fresh);
           return fresh;
         }
       } catch {
@@ -118,12 +138,12 @@ export function useOrganization({ enabled: queryEnabled = true } = {}) {
 
       return fallbackResult;
     },
-    [mapWithLabels, queryClient],
+    [mapWithLabels, queryClient, selectedOrganizationQueryKey],
   );
 
   const saveCompany = useCallback(
     async (company, isDraft) => {
-      await queryClient.cancelQueries({ queryKey: organizationQueryKey });
+      await queryClient.cancelQueries({ queryKey: selectedOrganizationQueryKey });
       const response = await organizationApi.saveCompanyInformation(
         toCompanyPayload(company, isDraft),
       );
@@ -175,12 +195,12 @@ export function useOrganization({ enabled: queryEnabled = true } = {}) {
             : fallback.documents,
       }));
     },
-    [queryClient, synchronizeAfterMutation],
+    [queryClient, selectedOrganizationQueryKey, synchronizeAfterMutation],
   );
 
   const saveJurisdiction = useCallback(
     async (jurisdiction, isDraft) => {
-      await queryClient.cancelQueries({ queryKey: organizationQueryKey });
+      await queryClient.cancelQueries({ queryKey: selectedOrganizationQueryKey });
       const response = await organizationApi.saveJurisdiction(
         toJurisdictionPayload(jurisdiction, isDraft),
       );
@@ -221,12 +241,12 @@ export function useOrganization({ enabled: queryEnabled = true } = {}) {
             : fallback.documents,
       }));
     },
-    [queryClient, synchronizeAfterMutation],
+    [queryClient, selectedOrganizationQueryKey, synchronizeAfterMutation],
   );
 
   const saveBeneficialOwners = useCallback(
     async (owners, isDraft) => {
-      await queryClient.cancelQueries({ queryKey: organizationQueryKey });
+      await queryClient.cancelQueries({ queryKey: selectedOrganizationQueryKey });
       const response = await organizationApi.saveBeneficialOwners(
         toBeneficialOwnersPayload(owners, isDraft),
       );
@@ -281,7 +301,7 @@ export function useOrganization({ enabled: queryEnabled = true } = {}) {
           ),
       );
     },
-    [queryClient, synchronizeAfterMutation],
+    [queryClient, selectedOrganizationQueryKey, synchronizeAfterMutation],
   );
 
   const uploadDocuments = useCallback(
@@ -299,7 +319,7 @@ export function useOrganization({ enabled: queryEnabled = true } = {}) {
         },
         optionData,
       ).documents;
-      queryClient.setQueryData(organizationQueryKey, (current = createInitialOrganization()) => ({
+      queryClient.setQueryData(selectedOrganizationQueryKey, (current = createInitialOrganization()) => ({
         ...current,
         status:
           current.status === ORGANIZATION_STATUSES.NOT_STARTED
@@ -319,20 +339,20 @@ export function useOrganization({ enabled: queryEnabled = true } = {}) {
       }));
       return mappedDocuments;
     },
-    [queryClient],
+    [queryClient, selectedOrganizationQueryKey],
   );
 
   const deleteDocument = useCallback(
     async (documentUid) => {
       await organizationApi.deleteDocument(documentUid);
-      queryClient.setQueryData(organizationQueryKey, (current = createInitialOrganization()) => ({
+      queryClient.setQueryData(selectedOrganizationQueryKey, (current = createInitialOrganization()) => ({
         ...current,
         documents: current.documents.filter(
           (document) => (document.documentUid || document.id) !== documentUid,
         ),
       }));
     },
-    [queryClient],
+    [queryClient, selectedOrganizationQueryKey],
   );
 
   const refreshDocuments = useCallback(async () => {
@@ -346,12 +366,12 @@ export function useOrganization({ enabled: queryEnabled = true } = {}) {
       },
       queryClient.getQueryData(organizationOptionsQueryKey),
     ).documents;
-    queryClient.setQueryData(organizationQueryKey, (current = createInitialOrganization()) => ({
+    queryClient.setQueryData(selectedOrganizationQueryKey, (current = createInitialOrganization()) => ({
       ...current,
       documents,
     }));
     return documents;
-  }, [queryClient]);
+  }, [queryClient, selectedOrganizationQueryKey]);
 
   const saveConfirmations = useCallback(
     (confirmations) => {
@@ -359,25 +379,25 @@ export function useOrganization({ enabled: queryEnabled = true } = {}) {
         organization.organizationUid,
         confirmations,
       );
-      queryClient.setQueryData(organizationQueryKey, (current = createInitialOrganization()) => ({
+      queryClient.setQueryData(selectedOrganizationQueryKey, (current = createInitialOrganization()) => ({
         ...current,
         confirmations,
       }));
       return confirmations;
     },
-    [organization.organizationUid, queryClient],
+    [organization.organizationUid, queryClient, selectedOrganizationQueryKey],
   );
 
   const setCurrentStep = useCallback(
     (currentStep) => {
       const cachedOrganization =
-        queryClient.getQueryData(organizationQueryKey) || organization;
+        queryClient.getQueryData(selectedOrganizationQueryKey) || organization;
       const rememberedHighestStep = organizationUiStateService.setHighestStepReached(
         cachedOrganization.organizationUid,
         currentStep,
       );
 
-      queryClient.setQueryData(organizationQueryKey, (current = createInitialOrganization()) => ({
+      queryClient.setQueryData(selectedOrganizationQueryKey, (current = createInitialOrganization()) => ({
         ...current,
         currentStep,
         highestStepReached: Math.max(
@@ -387,22 +407,35 @@ export function useOrganization({ enabled: queryEnabled = true } = {}) {
         ),
       }));
     },
-    [organization, queryClient],
+    [organization, queryClient, selectedOrganizationQueryKey],
   );
 
   const submit = useCallback(
-    async () => {
-      const mapped = setOrganization(await organizationApi.submit());
-      queryClient.setQueryData(organizationQueryKey, mapped);
-      return mapped;
+    async ({ walletAddress, chainUid, walletChainId, walletNetwork }) => {
+      const mapped = setOrganization(
+        await organizationApi.submit({ walletAddress, chainUid }),
+      );
+
+      const organizationWithWallet = {
+        ...mapped,
+        walletAddress: mapped.walletAddress || walletAddress,
+        chainUid: mapped.chainUid || chainUid || '',
+        chainId: mapped.chainId || walletChainId || null,
+        walletChainUid: mapped.walletChainUid || chainUid || '',
+        walletChainId: mapped.walletChainId || mapped.chainId || walletChainId || null,
+        walletNetwork: mapped.walletNetwork || walletNetwork || '',
+      };
+
+      queryClient.setQueryData(selectedOrganizationQueryKey, organizationWithWallet);
+      return organizationWithWallet;
     },
-    [queryClient, setOrganization],
+    [queryClient, selectedOrganizationQueryKey, setOrganization],
   );
 
   const markUserNotified = useCallback(async () => {
     const response = await organizationApi.markUserNotified();
 
-    queryClient.setQueryData(organizationQueryKey, (current = createInitialOrganization()) => ({
+    queryClient.setQueryData(selectedOrganizationQueryKey, (current = createInitialOrganization()) => ({
       ...current,
       status: ORGANIZATION_STATUSES.VERIFIED,
       isNotified: true,
@@ -410,7 +443,7 @@ export function useOrganization({ enabled: queryEnabled = true } = {}) {
     }));
 
     return response;
-  }, [queryClient]);
+  }, [queryClient, selectedOrganizationQueryKey]);
 
   return {
     organization,

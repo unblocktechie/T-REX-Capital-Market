@@ -17,6 +17,11 @@ const _abi = [
         type: "address",
       },
       {
+        internalType: "address",
+        name: "paymentToken",
+        type: "address",
+      },
+      {
         internalType: "uint256",
         name: "amount",
         type: "uint256",
@@ -31,7 +36,17 @@ const _abi = [
     inputs: [
       {
         internalType: "address",
+        name: "investor",
+        type: "address",
+      },
+      {
+        internalType: "address",
         name: "token",
+        type: "address",
+      },
+      {
+        internalType: "address",
+        name: "paymentToken",
         type: "address",
       },
       {

@@ -1,16 +1,16 @@
 import { CheckCircle2, Network, WalletCards } from 'lucide-react';
 import { WalletControl } from '@/components/wallet/WalletControl';
 
-export function WalletCard({ wallet }) {
+export function WalletCard({ wallet, requiredChainId }) {
   if (!wallet.isConnected) {
     return (
       <div className="investor-wallet-card investor-wallet-card--empty">
         <span><WalletCards size={23} /></span>
         <div>
-          <strong>Prepare your Privy secure account</strong>
-          <p>Privy securely manages this account and links it to your investor profile.</p>
+          <strong>Connect your primary investor wallet</strong>
+          <p>The connected wallet will be verified and linked to the investor profile.</p>
         </div>
-        <WalletControl context="investor" prominent expanded />
+        <WalletControl context="investor" prominent expanded requiredChainId={requiredChainId} />
       </div>
     );
   }
@@ -20,16 +20,30 @@ export function WalletCard({ wallet }) {
       <div className="investor-wallet-card__heading">
         <span><WalletCards size={21} /></span>
         <div>
-          <small>Privy secure account</small>
-          <strong>Securely managed by Privy</strong>
+          <small>Primary investor wallet</small>
+          <strong title={wallet.address}>{wallet.displayAddress}</strong>
         </div>
-        <em className={wallet.isCorrectNetwork ? 'is-ready' : 'is-warning'}>
-          <CheckCircle2 size={14} />
-          {wallet.isCorrectNetwork ? 'Ready' : 'Needs attention'}
-        </em>
+        {wallet.isCorrectNetwork ? (
+          <em className="is-ready">
+            <CheckCircle2 size={14} /> Ready
+          </em>
+        ) : (
+          <button
+            type="button"
+            className="is-warning"
+            onClick={() => window.dispatchEvent(new CustomEvent('trex:open-wallet-control', { detail: { context: 'investor' } }))}
+            aria-label="Switch investor wallet network"
+          >
+            <Network size={14} /> Switch network
+          </button>
+        )}
       </div>
 
       <dl>
+        <div>
+          <dt><Network size={14} /> Network</dt>
+          <dd>{wallet.network}</dd>
+        </div>
         <div>
           <dt>Available balance</dt>
           <dd>{wallet.balance}</dd>
@@ -38,23 +52,9 @@ export function WalletCard({ wallet }) {
 
       <p className="investor-wallet-card__note">
         {wallet.isCorrectNetwork
-          ? 'Your Privy secure account is ready for investor profile creation.'
-          : 'Open your Privy secure account in the header and follow the prompt before continuing.'}
+          ? 'Wallet ownership is confirmed and ready for investor profile creation.'
+          : 'Open the wallet control in the header and switch to the required network before continuing.'}
       </p>
-
-      <details className="investor-technical-details">
-        <summary>View account details</summary>
-        <dl>
-          <div>
-            <dt>Privy wallet address</dt>
-            <dd title={wallet.address}>{wallet.displayAddress}</dd>
-          </div>
-          <div>
-            <dt><Network size={14} /> Network</dt>
-            <dd>{wallet.network}</dd>
-          </div>
-        </dl>
-      </details>
     </div>
   );
 }

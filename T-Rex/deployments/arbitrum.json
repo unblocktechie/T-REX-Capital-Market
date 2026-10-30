@@ -1,0 +1,39 @@
+{
+  "network": "arbitrum",
+  "chainId": "42161",
+  "deployer": "0x14c2B244f7d861813EE60FcFA8E20467629D5dD6",
+  "platform": {
+    "identityImplementationAuthority": "0x5c01E6DBFaB1fec3Dbe55987641849A471c8FFE0",
+    "identityFactory": "0xC075F6F82be42CfCc29e8A98A04E9D14Ab214b99",
+    "trexImplementationAuthority": "0xaa3cF6087b19Dd4a269E9EcaB774D7B7e403419B",
+    "trexFactory": "0x14DDE3B8520663Dd89462f4D5d3348c3ae8E4B96",
+    "trexGateway": "0x846b8B1a2c111902B4F0a45e7efB1261aF3cA194",
+    "complianceModules": {
+      "countryRestrict": "0xE97Bfb2F7fE9a07A37cA62A31d2F9bc315847D3E",
+      "maxBalance": "0x63d336febda546CaF57543bd398bB061F3eA6005",
+      "maxInvestors": "0x761d84A334df6ab610863c5b46d67f060536eB7d"
+    },
+    "platformController": "0xd976E509D213191C3E425f12b875d9E101DB5EE7",
+    "paymentTokens": [
+      "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+      "0x004B506865409877C9fA29bfb1ebA929984B9bbC"
+    ],
+    "platformControllerOwner": "0x14c2B244f7d861813EE60FcFA8E20467629D5dD6",
+    "idFactoryAccessManager": "0xAe342Dbd381f0f1D63a638b3AD385BBb49316628",
+    "idFactoryAccessManagerAdmin": "0x14c2B244f7d861813EE60FcFA8E20467629D5dD6"
+  },
+  "implementations": {
+    "claimTopicsRegistry": "0xE15f7B89802232F8FD5f7635A1964151987a0Dc8",
+    "trustedIssuersRegistry": "0x4f8E2dfea629E236Bc21AD349AB41676948E775d",
+    "identityRegistryStorage": "0x8944bbD24d970E73941D15831114530b0Bd05871",
+    "identityRegistry": "0xB6EEDb080D1C0C123e39525d87f0f05802440aFb",
+    "modularCompliance": "0xCa176C3C16065F773b4E980e97474A99c80FE66b",
+    "token": "0x6386A3F2A84FEdd435040630C56520CC045f49e5",
+    "identity": "0x124a3e645f554171bf004574be90E101448A10fb"
+  },
+  "deployedAt": "2026-09-29T04:37:13.188Z",
+  "versionRegistered": true,
+  "trexFactoryAllowedOnIdentityFactory": true,
+  "trexFactoryOwnershipTransferred": true,
+  "deployerApprovedOnGateway": true
+}

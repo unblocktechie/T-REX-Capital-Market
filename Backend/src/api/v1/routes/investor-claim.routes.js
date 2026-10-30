@@ -8,6 +8,7 @@ const schemas = require('../../../schemas/investor-claim.schema');
 const createInvestorClaimRouter = ({ controller, authenticate, authorize }) => {
   const router = express.Router();
   router.use(authenticate);
+  router.use(requireInvestorChain);
   router.get('/', validate({ query: schemas.claimsQuery }), authorize, asyncHandler(controller.list));
   router.post(
     '/:claimId/prepare',

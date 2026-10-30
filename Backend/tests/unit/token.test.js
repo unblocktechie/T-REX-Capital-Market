@@ -6,7 +6,7 @@ const path = require('node:path');
 const sharp = require('sharp');
 const ethers = require('ethers');
 const schemas = require('../../src/schemas/token.schema');
-const { TokenService } = require('../../src/services/token.service');
+const { TokenService: BaseTokenService } = require('../../src/services/token.service');
 const { TokenImageService } = require('../../src/services/common/token-image.service');
 const {
   TokenDeploymentReceiptService,
@@ -19,8 +19,18 @@ const organization = {
   walletAddress: '0x1111111111111111111111111111111111111111',
 };
 const issuer = { userUid: 'user-1', roleName: 'Issuer' };
-const PLATFORM_CONTROLLER = '0x972E9CEf9eA9d3A9d7f3261bb8e16bA59E76a0FB';
-const LEGACY_PLATFORM_CONTROLLER = '0x9BEFDF75Dc94bbB36532c5d7A74daab28714f579';
+const PLATFORM_CONTROLLER = '0xdf290bA0D8E84632A85FAc0CAE7bEa1Cf9c50556';
+const LEGACY_PLATFORM_CONTROLLER = '0x40e81FAA4e6D54ae0632DF146939bB5858359271';
+const DEFAULT_PAYMENT_TOKEN = '0x86B14D29A59b745bF08c42661322d13142d5eb49';
+const paymentTokenRepository = {
+  findDefault: async () => ({ contractAddress: DEFAULT_PAYMENT_TOKEN }),
+  findActiveByAddress: async (contractAddress) => ({
+    contractAddress: ethers.getAddress(contractAddress), name: 'USDT', symbol: 'USDT', decimals: 6,
+  }),
+};
+class TokenService extends BaseTokenService {
+  constructor(options) { super({ paymentTokenRepository, ...options }); }
+}
 
 test('token information trims names, uppercases symbols, and accepts only supported decimals', () => {
   const valid = schemas.tokenInformation.validate({
@@ -57,15 +67,16 @@ test('maximum balance per investor accepts an absolute token amount above 100', 
   assert.equal(result.value.maxBalancePerInvestor, 10000);
 });
 
-test('compliance schema defaults omitted restriction fields to an empty blocklist', () => {
+test('token compliance schema accepts an empty country list as no geographic restriction', () => {
   const result = schemas.tokenCompliance.validate({
-    maxInvestors: 2000,
-    maxBalancePerInvestor: 10000,
+    maxInvestors: 100,
+    maxBalancePerInvestor: 500,
+    countryRestrictionMode: 'blocklist',
+    countryUids: [],
     isDraft: false,
   });
 
   assert.equal(result.error, undefined);
-  assert.equal(result.value.countryRestrictionMode, 'blocklist');
   assert.deepEqual(result.value.countryUids, []);
 });
 
@@ -222,6 +233,118 @@ test('editing an existing token preserves the Platform Controller assigned at cr
   assert.equal(result.tokenAgentWalletAddress, LEGACY_PLATFORM_CONTROLLER);
 });
 
+test('a draft token can move to another unlocked chain and receives chain-specific defaults', async () => {
+  const oldChainUid = '60000000-0000-4000-8000-000000000001';
+  const newChainUid = '60000000-0000-4000-8000-000000000002';
+  const newController = '0x2222222222222222222222222222222222222222';
+  const newPaymentToken = '0x3333333333333333333333333333333333333333';
+  const existing = {
+    tokenUid: 'draft-token', chainUid: oldChainUid, status: 'draft', currentStep: 'tokenInformation',
+    tokenAgentWalletAddress: LEGACY_PLATFORM_CONTROLLER, paymentTokenAddress: DEFAULT_PAYMENT_TOKEN,
+  };
+  let savedFields;
+  let unlockedChainUid;
+  const service = new TokenService({
+    repository: {
+      findByUserUid: async () => existing,
+      updateByUserUid: async (_userUid, fields) => {
+        savedFields = fields;
+        return { ...existing, ...fields };
+      },
+    },
+    organizationRepository: { findByUserUid: async () => organization },
+    chainRuntimeService: {
+      byUid: async (chainUid) => ({
+        chainUid, chainId: 84532, platformControllerAddress: newController,
+      }),
+    },
+    userChainIdentityRepository: {
+      find: async (_userUid, chainUid) => {
+        unlockedChainUid = chainUid;
+        return { status: 'CREATED', isUnlocked: true };
+      },
+    },
+    paymentTokenRepository: {
+      findDefault: async (chainId) => {
+        assert.equal(chainId, 84532);
+        return { contractAddress: newPaymentToken };
+      },
+      findActiveByAddress: async () => null,
+    },
+  });
+
+  const result = await service.saveInformation(issuer, { chainUid: newChainUid, isDraft: true });
+
+  assert.equal(unlockedChainUid, newChainUid);
+  assert.equal(savedFields.chainUid, newChainUid);
+  assert.equal(savedFields.paymentTokenAddress, newPaymentToken);
+  assert.equal(savedFields.tokenAgentWalletAddress, ethers.getAddress(newController));
+  assert.equal(result.status, 'draft');
+});
+
+test('a token chain cannot change after the token leaves draft status', async () => {
+  const service = new TokenService({
+    repository: {
+      findByUserUid: async () => ({
+        tokenUid: 'failed-token', chainUid: '60000000-0000-4000-8000-000000000001',
+        status: 'deploymentFailed', tokenAgentWalletAddress: PLATFORM_CONTROLLER,
+      }),
+    },
+    organizationRepository: { findByUserUid: async () => organization },
+    chainRuntimeService: {
+      byUid: async (chainUid) => ({ chainUid, chainId: 84532, platformControllerAddress: PLATFORM_CONTROLLER }),
+    },
+    userChainIdentityRepository: {
+      find: async () => ({ status: 'CREATED', isUnlocked: true }),
+    },
+  });
+
+  await assert.rejects(
+    service.saveInformation(issuer, {
+      chainUid: '60000000-0000-4000-8000-000000000002', isDraft: true,
+    }),
+    (error) => error.statusCode === 409 && /leaves draft status/i.test(error.message),
+  );
+});
+
+test('a later draft save without chainUid retains the token selected chain', async () => {
+  const selectedChainUid = '60000000-0000-4000-8000-000000000002';
+  let loadedChainUid;
+  let savedFields;
+  const service = new TokenService({
+    repository: {
+      findByUserUid: async () => ({
+        tokenUid: 'draft-token', chainUid: selectedChainUid, status: 'draft',
+        tokenAgentWalletAddress: PLATFORM_CONTROLLER, paymentTokenAddress: DEFAULT_PAYMENT_TOKEN,
+      }),
+      updateByUserUid: async (_userUid, fields) => {
+        savedFields = fields;
+        return fields;
+      },
+    },
+    organizationRepository: {
+      findByUserUid: async () => ({
+        ...organization, onboardingChainUid: '60000000-0000-4000-8000-000000000001',
+      }),
+    },
+    chainRuntimeService: {
+      byUid: async (chainUid) => {
+        loadedChainUid = chainUid;
+        return { chainUid, chainId: 11155111, platformControllerAddress: PLATFORM_CONTROLLER };
+      },
+    },
+    userChainIdentityRepository: {
+      find: async () => ({ status: 'CREATED', isUnlocked: true }),
+    },
+  });
+
+  await service.saveInformation(issuer, { tokenName: 'Updated Draft', isDraft: true });
+
+  assert.equal(loadedChainUid, selectedChainUid);
+  assert.equal(savedFields.chainUid, selectedChainUid);
+  assert.equal(savedFields.paymentTokenAddress, undefined);
+});
+
 test('deployed or ready-to-deploy token cannot be edited into another token', () => {
   const service = new TokenService({});
   assert.throws(() => service.assertEditable({ status: 'deployed' }), /cannot be edited/i);
@@ -268,17 +391,18 @@ test('compliance restrictions persist ISO 3166-1 numeric codes from country mast
   assert.equal(result.token.currentStep, 'governance');
 });
 
-test('completed compliance treats omitted restriction fields as no restricted countries', async () => {
+test('completed compliance accepts an empty country list as no geographic restriction', async () => {
   let persistedCountries;
-  const service = new TokenService({
-    repository: {
-      findByUserUid: async () => ({ tokenUid: 'token-1', status: 'draft', currentStep: 'compliance' }),
-      replaceCountryRestrictions: async (_tokenUid, countries) => {
-        persistedCountries = countries;
-        return [];
-      },
-      updateByUserUid: async (userUid, fields) => ({ userUid, ...fields }),
+  const repository = {
+    findByUserUid: async () => ({ tokenUid: 'token-1', status: 'draft', currentStep: 'compliance' }),
+    replaceCountryRestrictions: async (tokenUid, countries) => {
+      persistedCountries = countries;
+      return [];
     },
+    updateByUserUid: async (userUid, fields) => ({ userUid, ...fields }),
+  };
+  const service = new TokenService({
+    repository,
     organizationRepository: { findByUserUid: async () => organization },
     locationRepository: { findCountries: async () => [] },
     transactionRunner: (callback) => callback({ transaction: true }),
@@ -287,36 +411,24 @@ test('completed compliance treats omitted restriction fields as no restricted co
   const result = await service.saveCompliance(issuer, {
     maxInvestors: 2000,
     maxBalancePerInvestor: 10000,
+    countryRestrictionMode: 'allowlist',
+    countryUids: [],
     isDraft: false,
   });
 
   assert.deepEqual(persistedCountries, []);
   assert.deepEqual(result.countryRestrictions, []);
-  assert.equal(result.token.countryRestrictionMode, 'blocklist');
   assert.equal(result.token.currentStep, 'governance');
 });
 
-test('completed compliance rejects an empty allowlist because it would exclude every country', async () => {
-  const service = new TokenService({
-    repository: {
-      findByUserUid: async () => ({ tokenUid: 'token-1', status: 'draft', currentStep: 'compliance' }),
-    },
-    organizationRepository: { findByUserUid: async () => organization },
-  });
-
-  await assert.rejects(
-    service.saveCompliance(issuer, {
-      maxInvestors: 2000,
-      maxBalancePerInvestor: 10000,
-      countryRestrictionMode: 'allowlist',
-      countryUids: [],
-      isDraft: false,
-    }),
-    /at least one country is required when using an allowlist/i,
-  );
-});
-
-test('deployment readiness accepts no country rows for blocklist mode but not allowlist mode', async () => {
+test('deployment readiness accepts no active country restrictions', async () => {
+  const token = {
+    tokenUid: 'token-1', tokenName: 'Acme Security Token', tokenSymbol: 'ACME', decimals: 18,
+    initialTokenPrice: 1, treasuryWalletAddress: organization.walletAddress,
+    imageStorageKey: 'token.webp', trustedClaimIssuerWalletAddress: organization.walletAddress,
+    maxInvestors: 2000, maxBalancePerInvestor: 10000, countryRestrictionMode: 'allowlist',
+    tokenAgentWalletAddress: PLATFORM_CONTROLLER, identityManagerWalletAddress: organization.walletAddress,
+  };
   const service = new TokenService({
     repository: {
       listClaimTopics: async () => [{ claimTopicUid: 'claim-1', value: 1 }],
@@ -324,28 +436,9 @@ test('deployment readiness accepts no country rows for blocklist mode but not al
     },
     imageService: { resolve: () => __filename },
   });
-  const token = {
-    tokenName: 'Acme Security Token',
-    tokenSymbol: 'ACME',
-    decimals: 18,
-    initialTokenPrice: 1,
-    treasuryWalletAddress: organization.walletAddress,
-    imageStorageKey: 'token.webp',
-    trustedClaimIssuerWalletAddress: organization.walletAddress,
-    maxInvestors: 2000,
-    maxBalancePerInvestor: 10000,
-    countryRestrictionMode: 'blocklist',
-    tokenAgentWalletAddress: PLATFORM_CONTROLLER,
-    identityManagerWalletAddress: organization.walletAddress,
-  };
 
-  const result = await service.assertTokenReadyForDeployment(token, organization);
-  assert.deepEqual(result.countryRestrictions, []);
-
-  await assert.rejects(
-    service.assertTokenReadyForDeployment({ ...token, countryRestrictionMode: 'allowlist' }, organization),
-    /at least one active country is required when using an allowlist/i,
-  );
+  const ready = await service.assertTokenReadyForDeployment(token, organization);
+  assert.deepEqual(ready.countryRestrictions, []);
 });
 
 test('final token submission verifies the frontend transaction and marks the only token deployed', async () => {

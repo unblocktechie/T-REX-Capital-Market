@@ -17,6 +17,7 @@ import { Card } from '@/components/ui/Card';
 import { featureFlags } from '@/config/featureFlags';
 import { formatDate } from '@/utils/date';
 import { isRegistryRegistrationConfirmedEvent } from '@/utils/investmentPurchase';
+import { isIssuerApprovalEvent, visibleApplicationHistoryEntries } from '@/utils/applicationHistoryEntries';
 import { ContactSupportDialog } from './ContactSupportDialog';
 
 const normalizeStatus = (status) => String(status || '')
@@ -36,21 +37,35 @@ const isClaimVerificationEvent = (event, currentStatus) => {
   return note.includes('claim') && (note.includes('verified') || note.includes('verification'));
 };
 
-const eventMeta = (event, { viewerRole = '', currentStatus = '' } = {}) => {
-  const claimVerificationEvent = isClaimVerificationEvent(event, currentStatus);
+const eventMeta = (event, { viewerRole = '', currentStatus = '', registryRegistrationConfirmed = false, issuerVerificationConfirmed = false } = {}) => {
+  const claimVerificationEvent = isClaimVerificationEvent(event, currentStatus)
+    || (issuerVerificationConfirmed && isIssuerApprovalEvent(event));
+
+  if (event.issuerStepEvents) {
+    return {
+      title: viewerRole === 'investor' ? 'Profile Verified & Registered' : 'Investor Verified & Registered',
+      tone: 'success', Icon: CheckCircle2, badge: 'Complete',
+    };
+  }
 
   if (isRegistryRegistrationConfirmedEvent(event)) {
     return viewerRole === 'investor'
-      ? { title: 'Investment Access Enabled', tone: 'success', Icon: CheckCircle2, badge: 'Ready to Invest' }
-      : { title: 'Investor Access Enabled', tone: 'success', Icon: CheckCircle2, badge: 'Completed' };
+      ? { title: 'Registry Registration Confirmed', tone: 'success', Icon: CheckCircle2, badge: 'Registered' }
+      : { title: 'Identity Registry Registration Confirmed', tone: 'success', Icon: CheckCircle2, badge: 'Registered' };
   }
 
   if (claimVerificationEvent && viewerRole === 'investor') {
-    return { title: 'Issuer Review Completed', tone: 'success', Icon: CheckCircle2, badge: 'Your Action' };
+    // When progress is confirmed before the registry event reaches history,
+    // show a single completed Step 2 rather than two separate operations.
+    return registryRegistrationConfirmed
+      ? { title: 'Profile Verified & Registered', tone: 'success', Icon: CheckCircle2, badge: 'Complete' }
+      : { title: 'Issuer Review Pending', tone: 'neutral', Icon: Clock3, badge: 'Pending' };
   }
 
   if (claimVerificationEvent && viewerRole === 'issuer') {
-    return { title: 'Issuer Review Completed', tone: 'success', Icon: CheckCircle2, badge: 'Review Complete' };
+    return registryRegistrationConfirmed
+      ? { title: 'Issuer Review & Registration Confirmed', tone: 'success', Icon: CheckCircle2, badge: 'Complete' }
+      : { title: 'Registration Pending', tone: 'warning', Icon: Clock3, badge: 'Pending' };
   }
 
   switch (String(event?.eventType || '').toLowerCase()) {
@@ -87,17 +102,26 @@ const formatBytes = (value) => {
   return `${(bytes / (1024 * 1024)).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1)} MB`;
 };
 
-const defaultEventCopy = (event, viewerRole = '') => {
+const claimSubmittedCopy = (viewerRole, applicationComplete) => {
+  if (applicationComplete) {
+    return viewerRole === 'investor'
+      ? 'Your required claims were submitted And You can proceed with investing.'
+      : 'The investor submitted their required claims and the investor can invest subject to contract eligibility.';
+  }
+  return viewerRole === 'investor'
+    ? 'Your required claims have been submitted. Your application will complete once the required confirmations are finished.'
+    : 'The investor submitted their required claims. The application is awaiting final confirmation.';
+};
+
+const defaultEventCopy = (event, viewerRole = '', applicationComplete = false) => {
   if (isRegistryRegistrationConfirmedEvent(event)) {
     return viewerRole === 'investor'
-      ? 'Your investment access is enabled. You can now invest in this asset.'
-      : 'This investor now has access to invest in this asset.';
+      ? 'Your Identity Registry registration is confirmed. Complete any remaining required claims before investing.'
+      : 'The investor is registered. Await their required claim submissions; no further issuer approval is needed.';
   }
 
   switch (String(event?.eventType || '').toLowerCase()) {
-    case 'claimsubmitted': return viewerRole === 'investor'
-      ? 'Your required verification was submitted successfully. The issuer will now complete final approval.'
-      : 'The investor completed the required verification. Final approval can now be completed.';
+    case 'claimsubmitted': return claimSubmittedCopy(viewerRole, applicationComplete);
     case 'approved': return 'This application has been approved.';
     case 'rejected': return event?.rejectReason || 'The issuer rejected this application submission.';
     case 'resubmitted': return viewerRole === 'investor' ? 'You submitted the requested updates for another review.' : 'The investor submitted the requested updates for another review.';
@@ -153,19 +177,28 @@ export function ApplicationHistoryItem({
   actorNames = {},
   viewerRole = '',
   currentStatus = '',
+  claimsConfirmed = false,
+  applicationComplete = false,
+  issuerVerificationConfirmed = false,
+  registryRegistrationConfirmed = false,
   supportContext = {},
 }) {
-  const claimVerificationEvent = isClaimVerificationEvent(event, currentStatus);
-  const isInvestorClaimAction = claimVerificationEvent && viewerRole === 'investor';
-  const isIssuerWaitingForInvestor = claimVerificationEvent && viewerRole === 'issuer';
+  const combinedIssuerStep = event.issuerStepEvents;
+  const claimVerificationEvent = !combinedIssuerStep && (isClaimVerificationEvent(event, currentStatus)
+    || (issuerVerificationConfirmed && isIssuerApprovalEvent(event)));
+  const isInvestorClaimAction = claimVerificationEvent && viewerRole === 'investor' && registryRegistrationConfirmed;
+  const isIssuerReviewPending = claimVerificationEvent && viewerRole === 'issuer' && !registryRegistrationConfirmed;
+  const isIssuerWaitingForInvestor = claimVerificationEvent && viewerRole === 'issuer' && registryRegistrationConfirmed;
   const isInvestorClaimsSubmitted = viewerRole === 'investor' && normalizeStatus(event?.eventType) === 'claimsubmitted';
   const [contactSupportOpen, setContactSupportOpen] = useState(false);
-  const meta = eventMeta(event, { viewerRole, currentStatus });
+  const meta = eventMeta(event, { viewerRole, currentStatus, issuerVerificationConfirmed, registryRegistrationConfirmed });
   const Icon = meta.Icon;
   const hasDocuments = Array.isArray(event.documents) && event.documents.length > 0;
   const hasDetails = Boolean(
-    isInvestorClaimAction
+    combinedIssuerStep
+    || isInvestorClaimAction
     || isIssuerWaitingForInvestor
+    || isIssuerReviewPending
     || hasDocuments
     || event.rejectReason
     || event.note
@@ -223,25 +256,67 @@ export function ApplicationHistoryItem({
                   ) : null}
                 </div>
               </div>
+            ) : combinedIssuerStep ? (
+              <>
+                <div className="application-history-message application-history-message--claim-action is-success">
+                  <FileCheck2 size={16} />
+                  <span>{viewerRole === 'investor'
+                    ? applicationComplete
+                      ? 'Your profile and required claims are confirmed. Your application is complete and you can proceed to Invest Now, subject to eligibility.'
+                      : claimsConfirmed
+                        ? 'Your profile and required claims are confirmed. Your application is being finalized automatically.'
+                        : 'Your profile has been successfully verified! Submit your claims to complete the process and start investing.'
+                    : applicationComplete
+                      ? 'The investor’s profile and required claims are confirmed. The application is complete. No further issuer action is needed.'
+                      : claimsConfirmed
+                        ? 'The investor’s profile and required claims are confirmed. The application is being finalized automatically.'
+                        : 'The investor’s profile has been successfully verified and registered. They can now submit their claims. No further issuer action is needed.'}</span>
+                  {viewerRole === 'investor' && onSubmitClaim && !claimsConfirmed && !applicationComplete ? (
+                    <Button size="sm" onClick={onSubmitClaim}>Submit Claim</Button>
+                  ) : null}
+                </div>
+                <div className="application-history-issuer-step-events" aria-label="Step 2 confirmations">
+                  <div>
+                    <CheckCircle2 size={16} aria-hidden="true" />
+                    <span><strong>Required Claims Verified</strong>
+                      <small>{formatDate(combinedIssuerStep.verification.createdAt, 'MMM DD, YYYY hh:mm A')}</small>
+                    </span>
+                  </div>
+                  <div>
+                    <CheckCircle2 size={16} aria-hidden="true" />
+                    <span><strong>Identity Registry Registration Confirmed</strong>
+                      <small>{formatDate(combinedIssuerStep.registration.createdAt, 'MMM DD, YYYY hh:mm A')}</small>
+                    </span>
+                  </div>
+                </div>
+              </>
             ) : isInvestorClaimAction ? (
               <div className="application-history-message application-history-message--claim-action is-success">
                 <FileCheck2 size={16} />
-                <span>Your application passed the issuer review. Complete the required verification so the issuer can give you investment access.</span>
-                {onSubmitClaim ? <Button size="sm" onClick={onSubmitClaim}>Complete Verification</Button> : null}
+                <span>Your profile has been successfully verified! Submit your claims to complete the process and start investing.</span>
+                {onSubmitClaim ? <Button size="sm" onClick={onSubmitClaim}>Submit Claim</Button> : null}
+              </div>
+            ) : isIssuerReviewPending ? (
+              <div className="application-history-waiting-action" role="status">
+                <Clock3 size={17} />
+                <div>
+                  <strong>Registration Pending</strong>
+                  <span>Your verification signature is complete, but the investor has not yet been registered. Please complete the registration to finish this step.</span>
+                </div>
               </div>
             ) : isIssuerWaitingForInvestor ? (
               <div className="application-history-waiting-action">
                 <Clock3 size={17} />
                 <div>
                   <strong>Waiting for investor</strong>
-                  <span>Your review is complete. The investor still needs to finish verification before you can complete final approval.</span>
+                  <span>Your verification and registration step is complete. The investor must submit their claims; you do not need to approve them again.</span>
                 </div>
               </div>
             ) : isInvestorClaimsSubmitted ? (
               <div className="application-history-investor-claim-submitted">
                 <div className={`application-history-message application-history-message--notify-issuer is-${meta.tone}`}>
                   <Clock3 size={16} />
-                  <span>Nothing needed from you right now. Your verification is complete and the issuer is handling final approval.</span>
+                  <span>{claimSubmittedCopy('investor', applicationComplete)}</span>
                   {/*
                     Temporarily hidden via feature flag. The click handler and Contact Us
                     dialog remain intact so this action can be restored without rebuilding
@@ -262,8 +337,8 @@ export function ApplicationHistoryItem({
               <div className={`application-history-message is-${meta.tone}`}>
                 <FileCheck2 size={16} />
                 <span>{['submitted', 'resubmitted', 'approved', 'claimsubmitted'].includes(String(event.eventType || '').toLowerCase()) || isRegistryRegistrationConfirmedEvent(event)
-                  ? defaultEventCopy(event, viewerRole)
-                  : (event.note || defaultEventCopy(event, viewerRole))}</span>
+                  ? defaultEventCopy(event, viewerRole, applicationComplete)
+                  : (event.note || defaultEventCopy(event, viewerRole, applicationComplete))}</span>
               </div>
             )}
 
@@ -315,18 +390,17 @@ export function ApplicationHistory({
   actorNames = {},
   viewerRole = '',
   currentStatus = '',
+  claimsConfirmed = false,
+  applicationComplete = false,
+  issuerVerificationConfirmed = false,
+  registryRegistrationConfirmed = false,
   supportContext = {},
   emptyTitle = 'No application history yet',
   emptyDescription = 'Activity for this application will appear here as it is recorded.',
 }) {
-  const events = useMemo(
-    () => [...(timeline || [])].sort((a, b) => {
-      const left = new Date(a?.createdAt || 0).getTime();
-      const right = new Date(b?.createdAt || 0).getTime();
-      return right - left;
-    }),
-    [timeline],
-  );
+  const events = useMemo(() => visibleApplicationHistoryEntries(timeline, {
+    viewerRole, issuerVerificationConfirmed, registryRegistrationConfirmed, applicationComplete,
+  }), [timeline, viewerRole, issuerVerificationConfirmed, registryRegistrationConfirmed, applicationComplete]);
   const [expanded, setExpanded] = useState(() => new Set());
 
   useEffect(() => {
@@ -335,8 +409,11 @@ export function ApplicationHistory({
       return;
     }
     setExpanded((current) => {
-      if (current.size) return current;
-      return new Set([events[0].id]);
+      const validIds = new Set(events.map((event) => event.id));
+      const retained = [...current].filter((id) => validIds.has(id));
+      // If the latest refresh combined two events, open the new milestone
+      // instead of retaining an expansion ID that no longer exists.
+      return new Set(retained.length ? retained : [events[0].id]);
     });
   }, [events]);
 
@@ -373,6 +450,10 @@ export function ApplicationHistory({
           actorNames={actorNames}
           viewerRole={viewerRole}
           currentStatus={currentStatus}
+          claimsConfirmed={claimsConfirmed}
+          applicationComplete={applicationComplete}
+          issuerVerificationConfirmed={issuerVerificationConfirmed}
+          registryRegistrationConfirmed={registryRegistrationConfirmed}
           supportContext={supportContext}
         />
       ))}

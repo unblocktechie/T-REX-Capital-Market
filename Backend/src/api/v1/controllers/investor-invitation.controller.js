@@ -2,7 +2,7 @@ const { sendSuccess } = require('../../../utils/response');
 
 const createInvestorInvitationController = (service) => ({
   issuerInvestors: async (req, res) => {
-    const result = await service.listIssuerInvestors(req.user, req.query);
+    const result = await service.listIssuerInvestors(req.user, req.query, req.selectedChain);
     return sendSuccess(req, res, {
       message: 'Completed investors fetched successfully.',
       data: result.items,
@@ -10,7 +10,7 @@ const createInvestorInvitationController = (service) => ({
     });
   },
   invite: async (req, res) => {
-    const result = await service.invite(req.user, req.params.investorUid, req.body);
+    const result = await service.invite(req.user, req.params.investorUid, req.body, req.selectedChain);
     return sendSuccess(req, res, {
       statusCode: result.alreadyExisted ? 200 : 201,
       message: result.processing
@@ -20,7 +20,7 @@ const createInvestorInvitationController = (service) => ({
     });
   },
   investorList: async (req, res) => {
-    const result = await service.listInvestorInvitations(req.user, req.query);
+    const result = await service.listInvestorInvitations(req.user, req.query, req.selectedChain);
     return sendSuccess(req, res, {
       message: 'Your investor invitations fetched successfully.',
       data: result.items,
@@ -29,11 +29,11 @@ const createInvestorInvitationController = (service) => ({
   },
   investorGet: async (req, res) => sendSuccess(req, res, {
     message: 'Investor invitation fetched successfully.',
-    data: await service.getInvestorInvitation(req.user, req.params.invitationUid),
+    data: await service.getInvestorInvitation(req.user, req.params.invitationUid, req.selectedChain),
   }),
   investorViewed: async (req, res) => sendSuccess(req, res, {
     message: 'Investor invitation marked as viewed.',
-    data: await service.viewInvestorInvitation(req.user, req.params.invitationUid),
+    data: await service.viewInvestorInvitation(req.user, req.params.invitationUid, req.selectedChain),
   }),
 });
 

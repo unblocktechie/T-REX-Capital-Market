@@ -34,12 +34,15 @@ import {
 import { investorMarketplaceService } from '@/services/investor/investorMarketplaceService';
 import { getErrorMessage } from '@/utils/error';
 import { getInvestmentJourney } from '@/utils/investmentJourney';
+import { readApplicationProgress, isClaimSubmissionUnlocked, isApplicationCompleted } from '@/utils/applicationProgress';
+import { useNetworkStore } from '@/store/network.store';
 
 const CLAIM_SCREEN_STATUSES = new Set([
   'verifiedbyissuer',
   'verified',
   'claimrequired',
   'claimsubmitted',
+  'registered',
 ]);
 
 const CLAIM_UI_STATUS = Object.freeze({
@@ -229,9 +232,10 @@ const backendRequestId = (error) =>
       '',
   ).trim();
 
-const transactionExplorerUrl = (txHash) => {
+const transactionExplorerUrl = (txHash, chainId) => {
   if (!validTransactionHash(txHash)) return '';
-  const baseUrl = web3Config.requiredChain?.blockExplorers?.default?.url;
+  const chain = web3Config.getChainById(chainId) || web3Config.requiredChain;
+  const baseUrl = chain?.blockExplorers?.default?.url;
   return baseUrl ? `${baseUrl}/tx/${txHash}` : '';
 };
 
@@ -245,7 +249,7 @@ export default function SubmitClaimPage() {
   const { interestUid } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const wallet = useWalletConnection();
+  const selectedChainId = useNetworkStore((state) => state.getActiveChainId(user));
   const [application, setApplication] = useState(null);
   const [token, setToken] = useState(null);
   const [claimContext, setClaimContext] = useState(null);
@@ -253,6 +257,15 @@ export default function SubmitClaimPage() {
   const [claimUi, setClaimUi] = useState({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const claimChainId = Number(
+    claimContext?.chainId ||
+      token?.chainId ||
+      token?.deployment?.chainId ||
+      application?.chainId ||
+      application?.interest?.chainId ||
+      0,
+  ) || undefined;
+  const wallet = useWalletConnection(claimChainId);
   const submissionLocksRef = useRef(new Set());
   const verificationLocksRef = useRef(new Set());
   const retryLocksRef = useRef(new Set());
@@ -415,8 +428,24 @@ export default function SubmitClaimPage() {
         }
         return CLAIM_WORKFLOW_STATUS.PENDING_CONFIRMATION;
       } else {
-        const message = getClaimWorkflowErrorMessage(error, 'We couldn’t confirm this verification. Please try again.');
         const code = backendErrorCode(error);
+        if (code === 'ISSUER_REGISTRATION_REQUIRED') {
+          // The hash is already broadcast. Keep the recovery record, show a waiting
+          // state, and refresh server progress rather than inviting another wallet send.
+          updateClaimUi(claimId, {
+            status: CLAIM_UI_STATUS.VERIFYING,
+            stage: '',
+            txHash,
+            errorCode: code,
+            requestId: backendRequestId(error),
+            noticeTitle: 'Waiting for issuer',
+            message: 'Waiting for issuer verification and registration. Your existing transaction will be reconciled when prerequisites are ready.',
+            noticeTone: 'warning',
+          });
+          if (notify) toast.info('Waiting for issuer registration');
+          return CLAIM_WORKFLOW_STATUS.PENDING_CONFIRMATION;
+        }
+        const message = getClaimWorkflowErrorMessage(error, 'We couldn’t confirm this verification. Please try again.');
         updateClaimUi(claimId, {
           status: CLAIM_UI_STATUS.FAILED,
           stage: '',
@@ -474,8 +503,16 @@ export default function SubmitClaimPage() {
 
   const loadClaimContext = useCallback(async ({ silent = false } = {}) => {
     if (!interestUid) return;
+    const isSelectedApplicationChain = () => useNetworkStore.getState().getActiveChainId(user) === selectedChainId;
+    if (!isSelectedApplicationChain()) return;
     if (silent) setRefreshing(true);
-    else setLoading(true);
+    else {
+      setLoading(true);
+      setApplication(null);
+      setToken(null);
+      setClaimContext(null);
+      setClaimUi({});
+    }
 
     try {
       const [detail, backendClaims, investorProfile] = await Promise.all([
@@ -501,6 +538,9 @@ export default function SubmitClaimPage() {
         // only used for display labels, so a catalogue refresh must not block claims.
       }
 
+      // A slow response from the previous chain must never replace the next
+      // chain's application or unlock transactions with stale parameters.
+      if (!isSelectedApplicationChain()) return;
       const claims = Array.isArray(backendClaims?.claims) ? backendClaims.claims : [];
       const responseInterestId = String(backendClaims?.interestId || interestUid);
       if (responseInterestId !== String(interestUid)) {
@@ -624,14 +664,16 @@ export default function SubmitClaimPage() {
           '',
       );
     } catch (error) {
-      if (!silent) {
+      if (isSelectedApplicationChain() && !silent) {
         toast.error(getClaimWorkflowErrorMessage(error, 'Unable to load the verification requirements for this application.'));
       }
     } finally {
-      if (silent) setRefreshing(false);
-      else setLoading(false);
+      if (isSelectedApplicationChain()) {
+        if (silent) setRefreshing(false);
+        else setLoading(false);
+      }
     }
-  }, [interestUid]);
+  }, [interestUid, selectedChainId, user]);
 
   useEffect(() => {
     void loadClaimContext();
@@ -877,10 +919,23 @@ export default function SubmitClaimPage() {
       application?.status,
   );
   const isClaimScreenAllowed = CLAIM_SCREEN_STATUSES.has(backendStatus);
+  const progress = readApplicationProgress(claimContext?.application, claimContext, application?.interest, application);
+  const claimsUnlocked = isClaimSubmissionUnlocked(progress);
+  const applicationComplete = isApplicationCompleted(progress, backendStatus);
+  const awaitingIssuer = !claimsUnlocked && !applicationComplete && progress.claimsConfirmed !== true;
+  const issuerWaitingMessage = 'Pending issuer verification/registration. The issuer must verify the claims and confirm Identity Registry registration before you can submit.';
+
 
   const handleClaimSubmit = useCallback(async (claim, { allowWaiting = false, ignoreRecovery = false, force = false } = {}) => {
     const claimId = claimIdOf(claim);
     if (!claimId || submissionLocksRef.current.has(claimId)) return;
+    // Recovery of an already broadcast hash is allowed separately, but new
+    // prepare/wallet requests are strictly gated on server progress flags.
+    if (!isClaimSubmissionUnlocked(readApplicationProgress(claimContext?.application, claimContext, application?.interest, application))) {
+      toast.info('Waiting for issuer', { description: issuerWaitingMessage });
+      await loadClaimContext({ silent: true });
+      return;
+    }
 
     const currentStatus = claimUi[claimId]?.status || backendClaimStatus(claim);
     if (!force && (
@@ -908,29 +963,29 @@ export default function SubmitClaimPage() {
     }
 
     if (!wallet.isConnected || !wallet.address || !wallet.connector) {
-      const message = 'Open the Privy secure account linked to your investor profile before completing this verification.';
+      const message = 'Connect your registered investor wallet before completing this verification.';
       updateClaimUi(claimId, {
         status: CLAIM_UI_STATUS.PENDING,
-        noticeTitle: 'Privy secure account required',
+        noticeTitle: 'Wallet connection required',
         message,
         noticeTone: 'error',
       });
-      toast.error('Privy secure account required', { description: message });
+      toast.error('Wallet connection required', { description: message });
       return;
     }
 
     if (registeredWallet && !addressesEqual(wallet.address, registeredWallet)) {
       updateClaimUi(claimId, {
         status: CLAIM_UI_STATUS.PENDING,
-        noticeTitle: 'Approved secure account required',
+        noticeTitle: 'Registered wallet required',
         message: WALLET_MISMATCH_MESSAGE,
         noticeTone: 'error',
       });
-      toast.error('Approved secure account required', { description: WALLET_MISMATCH_MESSAGE });
+      toast.error('Registered wallet required', { description: WALLET_MISMATCH_MESSAGE });
       return;
     }
 
-    if (!wallet.isCorrectNetwork || wallet.chainId !== web3Config.requiredChain.id) {
+    if (claimChainId && (!wallet.isCorrectNetwork || wallet.chainId !== claimChainId)) {
       updateClaimUi(claimId, {
         status: CLAIM_UI_STATUS.PENDING,
         noticeTitle: 'Wrong network',
@@ -968,6 +1023,23 @@ export default function SubmitClaimPage() {
         throw error;
       }
 
+      const preparedChainId = Number(preparedClaim?.chainId || claimChainId || wallet.requiredChain?.id || 0) || undefined;
+      const activeSelectedChain = useNetworkStore.getState().getActiveChainId(user);
+      if (activeSelectedChain && preparedChainId !== activeSelectedChain) {
+        throw new Error('Your selected network changed. Refresh this application before submitting a wallet transaction.');
+      }
+      if (preparedChainId && wallet.chainId !== preparedChainId) {
+        try {
+          await wallet.switchChain(preparedChainId);
+        } catch (switchError) {
+          const error = new Error('Switch to the network required for this verification, then try again.');
+          error.code = 'WRONG_WALLET_NETWORK';
+          error.cause = switchError;
+          throw error;
+        }
+      }
+      updateClaimUi(claimId, { chainId: preparedChainId });
+
       const preparedStatusValue = normalizeStatus(preparedClaim?.status);
       if (preparedClaim?.alreadyConfirmed === true || preparedStatusValue === 'confirmed') {
         investorClaimRecoveryStore.remove(interestUid, claimId);
@@ -1003,6 +1075,9 @@ export default function SubmitClaimPage() {
         throw error;
       }
 
+      if (useNetworkStore.getState().getActiveChainId(user) !== (preparedChainId || claimChainId)) {
+        throw new Error('The selected network changed. Refresh the application before confirming a claim transaction.');
+      }
       updateClaimUi(claimId, {
         status: CLAIM_UI_STATUS.SUBMITTING,
         stage: 'WALLET',
@@ -1013,19 +1088,23 @@ export default function SubmitClaimPage() {
         noticeTone: 'info',
       });
     } catch (error) {
-      const message = getClaimWorkflowErrorMessage(error, 'We couldn’t prepare this verification.');
       const code = backendErrorCode(error) || String(error?.code || '');
+      const message = code === 'ISSUER_REGISTRATION_REQUIRED' ? issuerWaitingMessage
+        : getClaimWorkflowErrorMessage(error, 'We couldn’t prepare this verification.');
       updateClaimUi(claimId, {
         status: CLAIM_UI_STATUS.PENDING,
         stage: '',
         txHash: '',
         errorCode: code,
         requestId: backendRequestId(error),
-        noticeTitle: 'Verification preparation failed',
+        noticeTitle: code === 'ISSUER_REGISTRATION_REQUIRED' ? 'Waiting for issuer' : 'Verification preparation failed',
         message,
         noticeTone: 'error',
       });
-      toast.error('Verification preparation failed', { description: message });
+      if (code === 'ISSUER_REGISTRATION_REQUIRED') {
+        toast.info('Waiting for issuer', { description: message });
+        void loadClaimContext({ silent: true });
+      } else toast.error('Verification preparation failed', { description: message });
       submissionLocksRef.current.delete(claimId);
       return;
     }
@@ -1036,6 +1115,7 @@ export default function SubmitClaimPage() {
         connectedAddress: wallet.address,
         registeredWalletAddress: registeredWallet,
         preparedClaim,
+        chainId: preparedClaim?.chainId || claimChainId || wallet.requiredChain?.id,
       });
 
       // Store the hash before any backend request. If the backend is unavailable,
@@ -1092,7 +1172,7 @@ export default function SubmitClaimPage() {
             error?.code === 'WRONG_WALLET_NETWORK'
               ? 'Wrong network'
               : error?.code === 'WALLET_MISMATCH'
-                ? 'Approved secure account required'
+                ? 'Registered wallet required'
                 : 'Approval not submitted',
           message,
           noticeTone: 'error',
@@ -1103,9 +1183,13 @@ export default function SubmitClaimPage() {
       submissionLocksRef.current.delete(claimId);
     }
   }, [
+    claimChainId,
     claimUi,
+    claimContext,
+    application,
     interestUid,
     loadClaimContext,
+    user,
     registeredWallet,
     updateClaimUi,
     verifySubmittedTransaction,
@@ -1114,6 +1198,7 @@ export default function SubmitClaimPage() {
     wallet.connector,
     wallet.isConnected,
     wallet.isCorrectNetwork,
+    wallet.switchChain,
   ]);
 
   const handleClaimRetry = useCallback(async (claim) => {
@@ -1234,13 +1319,14 @@ export default function SubmitClaimPage() {
       }
 
       if (httpStatus === 409) {
+        const waitingOnIssuer = code === 'ISSUER_REGISTRATION_REQUIRED';
         updateClaimUi(claimId, {
-          status: currentStatus,
+          status: waitingOnIssuer ? CLAIM_UI_STATUS.PENDING : currentStatus,
           retrying: false,
           errorCode: code,
           requestId,
-          noticeTitle: 'Application status changed',
-          message,
+          noticeTitle: waitingOnIssuer ? 'Waiting for issuer' : 'Application status changed',
+          message: waitingOnIssuer ? issuerWaitingMessage : message,
           noticeTone: 'warning',
         });
         await loadClaimContext({ silent: true });
@@ -1301,11 +1387,17 @@ export default function SubmitClaimPage() {
     updateClaimUi,
   ]);
 
+  useEffect(() => {
+    if (!awaitingIssuer || loading || !interestUid) return undefined;
+    const timer = window.setInterval(() => { void loadClaimContext({ silent: true }); }, 12_000);
+    return () => window.clearInterval(timer);
+  }, [awaitingIssuer, loading, interestUid, loadClaimContext]);
+
   const verificationJourney = getInvestmentJourney({
-    status: allClaimsConfirmed
-      ? 'claimSubmitted'
-      : application?.interest?.status || claimContext?.application?.status || 'verifiedByIssuer',
+    status: claimContext?.application?.status || application?.interest?.status || backendStatus,
     viewerRole: 'investor',
+    progress,
+    purchaseReady: applicationComplete,
   });
 
   if (loading) {
@@ -1355,7 +1447,7 @@ export default function SubmitClaimPage() {
     );
   }
 
-  if (!isClaimScreenAllowed) {
+  if (!isClaimScreenAllowed && !awaitingIssuer) {
     return (
       <Card className="submit-claim-empty-state">
         <CheckCircle2 size={34} />
@@ -1382,17 +1474,23 @@ export default function SubmitClaimPage() {
         <div>
           <div className="submit-claim-title-line">
             <h1>Complete Your Verification</h1>
-            {allClaimsConfirmed ? (
+            {applicationComplete ? (
               <span className="submit-claim-complete-badge"><CheckCircle2 size={13} /> Complete</span>
-            ) : processingClaimCount > 0 ? (
+            ) : awaitingIssuer ? (
+              <span className="submit-claim-processing-badge"><Clock3 size={13} /> Waiting for issuer</span>
+            ) : allClaimsConfirmed || processingClaimCount > 0 ? (
               <span className="submit-claim-processing-badge"><Clock3 size={13} /> Processing</span>
             ) : (
               <span className="submit-claim-action-badge"><Circle size={8} fill="currentColor" /> Your Action</span>
             )}
           </div>
           <p>
-            {allClaimsConfirmed ? (
-              <>You completed all required checks for <strong>{token.name} ({token.symbol})</strong>. Nothing else is needed from you while the issuer completes final approval.</>
+            {applicationComplete ? (
+              <>Your application for <strong>{token.name} ({token.symbol})</strong> is complete. You can now invest, subject to token eligibility.</>
+            ) : awaitingIssuer ? (
+              <>{issuerWaitingMessage}</>
+            ) : allClaimsConfirmed ? (
+              <>All required claim transactions have been confirmed. Your application is being finalized automatically; no additional issuer approval is needed.</>
             ) : processingClaimCount > 0 ? (
               <>Your verification for <strong>{token.name} ({token.symbol})</strong> is being processed. Nothing is needed from you right now.</>
             ) : (
@@ -1405,7 +1503,9 @@ export default function SubmitClaimPage() {
         </Button>
       </header>
 
-      <InvestmentJourneyTracker journey={verificationJourney} />
+      <InvestmentJourneyTracker journey={verificationJourney} action={applicationComplete ? (
+        <Button onClick={() => navigate(ROUTES.purchaseToken(interestUid))}>Invest Now</Button>
+      ) : null} />
 
       <Card className="submit-claim-context-card">
         <div>
@@ -1454,7 +1554,7 @@ export default function SubmitClaimPage() {
                 const isNotInitiated = normalizeStatus(claim?.status) === 'notinitiated';
                 const shouldRetryBeforeWallet = isFailed || (status === CLAIM_UI_STATUS.PENDING && !isNotInitiated);
                 const missingClaimId = !claimId;
-                const explorerUrl = transactionExplorerUrl(ui.txHash);
+                const explorerUrl = transactionExplorerUrl(ui.txHash, ui.chainId || claimChainId || wallet.chainId || wallet.requiredChain?.id);
 
                 return (
                   <Card
@@ -1494,6 +1594,8 @@ export default function SubmitClaimPage() {
                         <Button
                           onClick={() => void (shouldRetryBeforeWallet ? handleClaimRetry(claim) : handleClaimSubmit(claim))}
                           disabled={
+                            !claimsUnlocked ||
+                            applicationComplete ||
                             isConfirmed ||
                             isWaiting ||
                             isConfirming ||
@@ -1631,7 +1733,7 @@ export default function SubmitClaimPage() {
                   <strong>What happens next</strong>
                   <small>
                     {allClaimsConfirmed
-                      ? 'Waiting for issuer final approval'
+                      ? applicationComplete ? 'Invest Now is available' : 'Application finalizing automatically — no issuer action required'
                       : processingClaimCount
                         ? 'Waiting for verification processing'
                         : 'Complete all required checks first'}
@@ -1644,7 +1746,7 @@ export default function SubmitClaimPage() {
           <Card className="submit-claim-network-card">
             <div className="submit-claim-network-card__title"><Info size={18} /><strong>About wallet approval</strong></div>
             <p>
-              Some verification checks may ask you to approve a secure action in your registered wallet. Simply follow the wallet prompt to continue. <small>Technical network: {web3Config.requiredChain.name}</small>
+              Some verification checks may ask you to approve a secure action in your registered wallet. Simply follow the wallet prompt to continue. <small>Technical network: {wallet.requiredChain.name}</small>
             </p>
           </Card>
 

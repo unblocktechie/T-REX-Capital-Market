@@ -9,6 +9,10 @@ const { OrganizationOptionRepository } = require('../repositories/organization-o
 const { OrganizationRepository } = require('../repositories/organization.repository');
 const { TokenRepository } = require('../repositories/token.repository');
 const { TokenOptionRepository } = require('../repositories/token-option.repository');
+const { PaymentTokenRepository } = require('../repositories/payment-token.repository');
+const { ChainRepository } = require('../repositories/chain.repository');
+const { ChainAuditRepository } = require('../repositories/chain-audit.repository');
+const { UserChainIdentityRepository } = require('../repositories/user-chain-identity.repository');
 const { TokenDeploymentAttemptRepository } = require('../repositories/token-deployment-attempt.repository');
 const { InvestorRepository } = require('../repositories/investor.repository');
 const { InvestorOptionRepository } = require('../repositories/investor-option.repository');
@@ -29,7 +33,6 @@ const { MenuService } = require('../services/menu.service');
 const { PermissionService } = require('../services/permission.service');
 const { GeneralSettingService } = require('../services/general-setting.service');
 const { AuthService } = require('../services/auth.service');
-const { PrivyService } = require('../services/privy.service');
 const { LocationService } = require('../services/location.service');
 const { OrganizationService } = require('../services/organization.service');
 const { OrganizationAdminService } = require('../services/organization-admin.service');
@@ -40,6 +43,8 @@ const { TokenService } = require('../services/token.service');
 const { TokenDeploymentAttemptService } = require('../services/token-deployment-attempt.service');
 const { InvestorService } = require('../services/investor.service');
 const { InvestmentService } = require('../services/investment.service');
+const { ApplicationJourneyService } = require('../services/application-journey.service');
+const { TokenHolderSummaryService } = require('../services/blockchain/token-holder-summary.service');
 const { IssuerClaimService } = require('../services/issuer-claim.service');
 const { InvestorClaimService } = require('../services/investor-claim.service');
 const { ClaimSignatureService } = require('../services/blockchain/claim-signature.service');
@@ -52,9 +57,17 @@ const { IdentityRegistryRegistrationService } = require('../services/identity-re
 const { TokenPurchaseService } = require('../services/token-purchase.service');
 const { TokenRedemptionService } = require('../services/token-redemption.service');
 const { TokenRedemptionBlockchainService } = require('../services/blockchain/token-redemption-blockchain.service');
+const { PaymentTokenRegistryService } = require('../services/blockchain/payment-token-registry.service');
+const { ChainRuntimeService } = require('../services/chain-runtime.service');
+const { ChainAdminService } = require('../services/chain-admin.service');
+const { ChainPublicConfigurationService } = require('../services/chain-public-configuration.service');
+const { PaymentTokenAdminService } = require('../services/payment-token-admin.service');
+const { UserChainIdentityService } = require('../services/user-chain-identity.service');
 const { TokenTransferService } = require('../services/token-transfer.service');
 const { BlockchainTransactionService } = require('../services/blockchain/blockchain-transaction.service');
+const { MultiChainBlockchainTransactionService } = require('../services/blockchain/multi-chain-blockchain-transaction.service');
 const { BlockchainTransactionIndexerService } = require('../services/blockchain/blockchain-transaction-indexer.service');
+const { MultiChainRunnerService } = require('../services/blockchain/multi-chain-runner.service');
 const { InvestorInvitationService } = require('../services/investor-invitation.service');
 const { TokenImageService } = require('../services/common/token-image.service');
 const { TrexDeploymentSyncRunner } = require('../jobs/trex-deployment-sync.runner');
@@ -81,8 +94,11 @@ const { createTokenRedemptionController } = require('../api/v1/controllers/token
 const { createTokenTransferController } = require('../api/v1/controllers/token-transfer.controller');
 const { createBlockchainTransactionController } = require('../api/v1/controllers/blockchain-transaction.controller');
 const { createInvestorInvitationController } = require('../api/v1/controllers/investor-invitation.controller');
+const { createChainController } = require('../api/v1/controllers/chain.controller');
+const { createPaymentTokenAdminController } = require('../api/v1/controllers/payment-token-admin.controller');
 const { createAuthenticate } = require('../middleware/authenticate.middleware');
 const { createAuthorize } = require('../middleware/authorize.middleware');
+const { createRequireInvestorChain } = require('../middleware/investor-chain.middleware');
 
 const userRepository = new UserRepository();
 const roleRepository = new RoleRepository();
@@ -95,6 +111,10 @@ const organizationOptionRepository = new OrganizationOptionRepository();
 const organizationRepository = new OrganizationRepository();
 const organizationIdentityService = new OrganizationIdentityService();
 const tokenRepository = new TokenRepository();
+const chainRepository = new ChainRepository();
+const chainAuditRepository = new ChainAuditRepository();
+const userChainIdentityRepository = new UserChainIdentityRepository();
+const paymentTokenRepository = new PaymentTokenRepository();
 const tokenOptionRepository = new TokenOptionRepository();
 const tokenDeploymentAttemptRepository = new TokenDeploymentAttemptRepository();
 const investorRepository = new InvestorRepository();
@@ -110,32 +130,63 @@ const tokenTransferRepository = new TokenTransferRepository();
 const blockchainTransactionRepository = new BlockchainTransactionRepository();
 const investorInvitationRepository = new InvestorInvitationRepository();
 const walletOwnershipRepository = new WalletOwnershipRepository();
+const masterImageService = new TokenImageService();
+const chainRuntimeService = new ChainRuntimeService({ repository: chainRepository });
+const requireInvestorChain = createRequireInvestorChain(chainRuntimeService);
+const chainAdminService = new ChainAdminService({
+  repository: chainRepository,
+  auditRepository: chainAuditRepository,
+  paymentTokenRepository,
+  runtimeService: chainRuntimeService,
+  imageService: masterImageService,
+});
+const paymentTokenAdminService = new PaymentTokenAdminService({
+  repository: paymentTokenRepository,
+  chainRuntimeService,
+  imageService: masterImageService,
+});
 const claimSignatureService = new ClaimSignatureService();
 const claimSubmissionVerifierService = new ClaimSubmissionVerifierService();
 const claimStateService = new ClaimStateService();
 const identityRegistryVerifierService = new IdentityRegistryVerifierService();
 const tokenImageService = new TokenImageService();
 const tokenDeploymentReceiptService = new TokenDeploymentReceiptService();
-const tokenRedemptionBlockchainService = new TokenRedemptionBlockchainService();
-const privyService = new PrivyService();
+const tokenRedemptionBlockchainService = new TokenRedemptionBlockchainService(undefined, {
+  paymentTokenRepository,
+});
+const paymentTokenRegistryService = new PaymentTokenRegistryService({ paymentTokenRepository, chainRuntimeService });
+const chainPublicConfigurationService = new ChainPublicConfigurationService({
+  chainRepository,
+  paymentTokenRegistryService,
+});
+const userChainIdentityService = new UserChainIdentityService({
+  repository: userChainIdentityRepository,
+  chainRuntimeService,
+  identityService: organizationIdentityService,
+  organizationRepository,
+  investorRepository,
+});
 
 const userService = new UserService(userRepository, roleRepository);
 const roleService = new RoleService(roleRepository, userRepository, permissionRepository);
 const menuService = new MenuService(menuRepository, permissionRepository);
 const permissionService = new PermissionService(permissionRepository, roleRepository, menuRepository);
 const settingService = new GeneralSettingService(settingRepository);
-const authService = new AuthService({ userRepository, roleRepository, authTokenRepository, emailService, privyService });
+const authService = new AuthService({ userRepository, roleRepository, authTokenRepository, emailService });
 const locationService = new LocationService(locationRepository);
 const organizationService = new OrganizationService({
   repository: organizationRepository,
   optionRepository: organizationOptionRepository,
   locationService,
   walletOwnershipRepository,
-  userRepository,
+  chainRuntimeService,
+  userChainIdentityService,
 });
 const organizationAdminService = new OrganizationAdminService(
   organizationRepository,
   organizationIdentityService,
+  undefined,
+  { chainRuntimeService, userChainIdentityService },
 );
 const tokenService = new TokenService({
   repository: tokenRepository,
@@ -145,6 +196,9 @@ const tokenService = new TokenService({
   imageService: tokenImageService,
   deploymentReceiptService: tokenDeploymentReceiptService,
   attemptRepository: tokenDeploymentAttemptRepository,
+  paymentTokenRepository,
+  chainRuntimeService,
+  userChainIdentityRepository,
 });
 const tokenDeploymentAttemptService = new TokenDeploymentAttemptService({
   attemptRepository: tokenDeploymentAttemptRepository,
@@ -152,33 +206,63 @@ const tokenDeploymentAttemptService = new TokenDeploymentAttemptService({
   organizationRepository,
   tokenService,
   deploymentReceiptService: tokenDeploymentReceiptService,
+  chainRuntimeService,
 });
-const trexDeploymentSyncService = new TrexDeploymentSyncService({
-  settingRepository,
-  organizationRepository,
-  tokenRepository,
-  attemptRepository: tokenDeploymentAttemptRepository,
+const trexDeploymentSyncService = new MultiChainRunnerService({
+  chainRuntimeService, settingRepository, name: 'TREX deployment sync',
+  factory: (config) => new TrexDeploymentSyncService({
+    settingRepository, organizationRepository, tokenRepository,
+    attemptRepository: tokenDeploymentAttemptRepository, config,
+  }),
 });
 const trexDeploymentSyncRunner = new TrexDeploymentSyncRunner(trexDeploymentSyncService);
+const applicationJourneyService = new ApplicationJourneyService({
+  registryRepository: identityRegistryRegistrationRepository, interestRepository: investmentRepository,
+});
 const claimRecoveryService = new ClaimRecoveryService({
+  journeyService: applicationJourneyService,
   settingRepository,
   submissionRepository: investorClaimSubmissionRepository,
   issuerClaimRepository,
   interestRepository: investmentRepository,
   tokenRepository,
 });
-const claimRecoveryRunner = new ClaimRecoveryRunner(claimRecoveryService);
+const claimRecoveryRunnerService = new MultiChainRunnerService({
+  chainRuntimeService, settingRepository, name: 'Claim recovery',
+  factory: (config) => new ClaimRecoveryService({
+    journeyService: applicationJourneyService,
+    settingRepository, submissionRepository: investorClaimSubmissionRepository,
+    issuerClaimRepository, interestRepository: investmentRepository, tokenRepository, config,
+  }),
+});
+const claimRecoveryRunner = new ClaimRecoveryRunner(claimRecoveryRunnerService);
 const claimIndexerService = new ClaimIndexerService({
   settingRepository,
   indexerRepository: claimIndexerRepository,
   submissionRepository: investorClaimSubmissionRepository,
   recoveryService: claimRecoveryService,
 });
-const claimIndexerRunner = new ClaimIndexerRunner(claimIndexerService);
+const claimIndexerRunnerService = new MultiChainRunnerService({
+  chainRuntimeService, settingRepository, name: 'Claim indexer',
+  factory: (config) => {
+    const recoveryService = new ClaimRecoveryService({
+      journeyService: applicationJourneyService,
+      settingRepository, submissionRepository: investorClaimSubmissionRepository,
+      issuerClaimRepository, interestRepository: investmentRepository, tokenRepository, config,
+    });
+    return new ClaimIndexerService({
+      settingRepository, indexerRepository: claimIndexerRepository,
+      submissionRepository: investorClaimSubmissionRepository, recoveryService, config,
+    });
+  },
+});
+const claimIndexerRunner = new ClaimIndexerRunner(claimIndexerRunnerService);
 const identityRegistryRegistrationService = new IdentityRegistryRegistrationService({
+  journeyService: applicationJourneyService,
   repository: identityRegistryRegistrationRepository,
   interestRepository: investmentRepository,
   verifier: identityRegistryVerifierService,
+  chainRuntimeService,
 });
 const identityRegistryReconciliationService = new IdentityRegistryReconciliationService({
   settingRepository,
@@ -187,35 +271,68 @@ const identityRegistryReconciliationService = new IdentityRegistryReconciliation
   verifier: identityRegistryVerifierService,
   finalizationService: identityRegistryRegistrationService,
 });
-const identityRegistryReconciliationRunner = new IdentityRegistryReconciliationRunner(identityRegistryReconciliationService);
-const blockchainTransactionService = new BlockchainTransactionService({
+const identityRegistryRunnerService = new MultiChainRunnerService({
+  chainRuntimeService, settingRepository, name: 'Identity Registry reconciliation',
+  factory: (config) => {
+    const verifier = new IdentityRegistryVerifierService(config);
+    const finalizationService = new IdentityRegistryRegistrationService({
+      journeyService: applicationJourneyService,
+      repository: identityRegistryRegistrationRepository,
+      interestRepository: investmentRepository,
+      verifier,
+      config,
+    });
+    return new IdentityRegistryReconciliationService({
+      settingRepository, repository: identityRegistryRegistrationRepository,
+      checkpointRepository: claimIndexerRepository, verifier, finalizationService, config,
+    });
+  },
+});
+const identityRegistryReconciliationRunner = new IdentityRegistryReconciliationRunner(identityRegistryRunnerService);
+const blockchainTransactionService = new MultiChainBlockchainTransactionService({
   repository: blockchainTransactionRepository,
+  paymentTokenRepository,
+  chainRuntimeService,
 });
 const tokenPurchaseService = new TokenPurchaseService({
   repository: tokenPurchaseRepository,
   investmentRepository,
   tokenRepository,
+  paymentTokenRepository,
 });
 const tokenRedemptionService = new TokenRedemptionService({
   repository: tokenRedemptionRepository,
   blockchain: tokenRedemptionBlockchainService,
+  paymentTokenRepository,
+  chainRuntimeService,
 });
 const tokenTransferService = new TokenTransferService({
   repository: tokenTransferRepository,
 });
-const blockchainTransactionIndexerService = new BlockchainTransactionIndexerService({
-  settingRepository,
-  repository: blockchainTransactionRepository,
-  checkpointRepository: claimIndexerRepository,
-  transactionService: blockchainTransactionService,
+const blockchainTransactionIndexerService = new MultiChainRunnerService({
+  chainRuntimeService, settingRepository, name: 'Canonical transaction indexer',
+  factory: (config) => {
+    const transactionService = new BlockchainTransactionService({
+      repository: blockchainTransactionRepository, paymentTokenRepository, config,
+    });
+    return new BlockchainTransactionIndexerService({
+      settingRepository, repository: blockchainTransactionRepository,
+      checkpointRepository: claimIndexerRepository, transactionService, config,
+    });
+  },
 });
 const blockchainTransactionIndexerRunner = new BlockchainTransactionIndexerRunner(blockchainTransactionIndexerService);
+const tokenHolderSummaryService = new TokenHolderSummaryService({ chainRepository });
 const investmentService = new InvestmentService({
+  journeyService: applicationJourneyService,
+  getHolderSummary: token => tokenHolderSummaryService.summary(token),
   repository: investmentRepository,
   tokenRepository,
   investorRepository,
   organizationRepository,
   tokenImageService,
+  paymentTokenRepository,
+  userChainIdentityRepository,
   // approveInterest requires a SIGNED issuer claim verification before promoting to verifiedByIssuer.
   issuerClaimRepository,
 });
@@ -231,7 +348,8 @@ const investorService = new InvestorService({
   locationService,
   identityService: organizationIdentityService,
   walletOwnershipRepository,
-  userRepository,
+  chainRuntimeService,
+  userChainIdentityService,
   // Enforces the investment-interest upload gate + resubmission sync on document upload.
   investmentService,
 });
@@ -243,6 +361,7 @@ const issuerClaimService = new IssuerClaimService({
   claimSignatureService,
 });
 const investorClaimService = new InvestorClaimService({
+  journeyService: applicationJourneyService,
   repository: investorClaimSubmissionRepository,
   interestRepository: investmentRepository,
   issuerClaimRepository,
@@ -253,6 +372,23 @@ const investorClaimService = new InvestorClaimService({
   recoveryService: claimRecoveryService,
   claimStateService,
   claimIndexerService,
+  chainServicesFactory: async (chainUid, chainId) => {
+    const config = chainUid
+      ? await chainRuntimeService.byUid(chainUid)
+      : await chainRuntimeService.byChainId(chainId);
+    const verifier = new ClaimSubmissionVerifierService(config);
+    const state = new ClaimStateService(config);
+    const recovery = new ClaimRecoveryService({
+      journeyService: applicationJourneyService,
+      settingRepository, submissionRepository: investorClaimSubmissionRepository,
+      issuerClaimRepository, interestRepository: investmentRepository, tokenRepository, config,
+    });
+    const indexer = new ClaimIndexerService({
+      settingRepository, indexerRepository: claimIndexerRepository,
+      submissionRepository: investorClaimSubmissionRepository, recoveryService: recovery, config,
+    });
+    return { verifier, claimStateService: state, recoveryService: recovery, claimIndexerService: indexer };
+  },
 });
 
 const controllers = {
@@ -265,7 +401,7 @@ const controllers = {
   locations: createLocationController(locationService),
   organizations: createOrganizationController(organizationService, organizationOptionRepository),
   organizationAdmin: createOrganizationAdminController(organizationAdminService),
-  tokens: createTokenController(tokenService, tokenOptionRepository),
+  tokens: createTokenController(tokenService, tokenOptionRepository, paymentTokenRegistryService),
   deploymentAttempts: createDeploymentAttemptController(tokenDeploymentAttemptService),
   investors: createInvestorController(investorService, investorOptionRepository),
   investments: createInvestmentController(investmentService),
@@ -277,6 +413,13 @@ const controllers = {
   tokenTransfers: createTokenTransferController(tokenTransferService),
   blockchainTransactions: createBlockchainTransactionController(blockchainTransactionService),
   investorInvitations: createInvestorInvitationController(investorInvitationService),
+  chains: createChainController({
+    runtimeService: chainRuntimeService,
+    publicConfigurationService: chainPublicConfigurationService,
+    adminService: chainAdminService,
+    identityService: userChainIdentityService,
+  }),
+  paymentTokenAdmin: createPaymentTokenAdminController(paymentTokenAdminService),
 };
 
 module.exports = {
@@ -290,6 +433,8 @@ module.exports = {
     identityRegistryRegistrationService, identityRegistryVerifierService, identityRegistryReconciliationService,
     tokenPurchaseService,
     tokenRedemptionService, tokenRedemptionBlockchainService,
+    paymentTokenRegistryService,
+    chainRuntimeService, chainAdminService, chainPublicConfigurationService, paymentTokenAdminService, userChainIdentityService,
     tokenTransferService,
     blockchainTransactionService, blockchainTransactionIndexerService,
     investorInvitationService,
@@ -297,6 +442,8 @@ module.exports = {
   repositories: {
     userRepository, roleRepository, menuRepository, permissionRepository, settingRepository, authTokenRepository,
     locationRepository, organizationOptionRepository, organizationRepository, tokenRepository, tokenOptionRepository,
+    paymentTokenRepository,
+    chainRepository, userChainIdentityRepository,
     tokenDeploymentAttemptRepository, investorRepository, investorOptionRepository, investmentRepository, issuerClaimRepository,
     investorClaimSubmissionRepository, claimIndexerRepository,
     identityRegistryRegistrationRepository,
@@ -315,4 +462,5 @@ module.exports = {
   },
   authenticate: createAuthenticate(userRepository),
   authorize: createAuthorize(permissionRepository),
+  requireInvestorChain,
 };

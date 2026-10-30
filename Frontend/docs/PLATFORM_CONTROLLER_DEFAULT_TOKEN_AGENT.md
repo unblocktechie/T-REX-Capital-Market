@@ -1,15 +1,9 @@
-# Platform Controller as a default Token Agent
+# Platform Controller as the default Token Agent
 
-Every token created through the issuer token-creation flow includes the configured Platform Controller as a Token Agent in the `deployTREXSuite` payload.
+Every token created through the issuer token-creation flow includes the selected chain's Platform Controller as a Token Agent in the `deployTREXSuite` payload.
 
-Current default controller:
+The controller address is loaded from `GET /api/v1/chains/{chainUid}/config` at `contracts.platform.platformController`. There is no frontend default controller address and no environment override.
 
-```text
-0x9BEFDF75Dc94bbB36532c5d7A74daab28714f579
-```
+The deployment service adds the Platform Controller to `tokenDetails.tokenAgents` together with the issuer/user-selected token agent and issuer wallet. Addresses are de-duplicated before the gateway transaction is prepared. A separate deployer/platform wallet is not added as a Token Agent.
 
-The deployment service adds this address to `tokenDetails.tokenAgents` together with the issuer/user-selected token agent and existing platform wallet. Addresses are de-duplicated before the gateway transaction is prepared.
-
-This is required so controller-based purchase/mint and redemption/burn flows can operate without a separate post-creation `addAgent` transaction. The deployment verification also checks `token.isAgent(platformController)` after the token suite is created.
-
-The address remains configurable through `VITE_TREX_PLATFORM_CONTROLLER_ADDRESS` for controlled future migrations; if that setting is absent, the current controller above is used automatically.
+This is required so controller-based purchase/mint and redemption/burn flows can operate without a separate post-creation `addAgent` transaction. Deployment verification also checks `token.isAgent(platformController)` after the token suite is created.

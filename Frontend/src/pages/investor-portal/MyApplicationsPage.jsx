@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { AppStatusBadge } from '@/components/common/AppStatusBadge';
 import { MarketplaceTokenImage } from '@/components/investor-marketplace/MarketplaceTokenImage';
+import { InvestorHistoryPagination } from '@/components/investor-marketplace/InvestorHistoryPagination';
 import { DataTable } from '@/components/tables/DataTable';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -12,14 +13,18 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { investorMarketplaceService } from '@/services/investor/investorMarketplaceService';
 import { getErrorMessage } from '@/utils/error';
 import { getInvestmentJourney } from '@/utils/investmentJourney';
+import { readApplicationProgress } from '@/utils/applicationProgress';
 
-export default function MyApplicationsPage() {
-  useDocumentTitle('My Applications');
+const PAGE_SIZE = 5;
+
+export default function MyApplicationsPage({ embedded = false } = {}) {
+  useDocumentTitle(embedded ? 'My Investment' : 'My Applications');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const selectedToken = searchParams.get('token');
   const [applications, setApplications] = useState([]);
   const [query, setQuery] = useState('');
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -39,9 +44,19 @@ export default function MyApplicationsPage() {
       application.symbol,
       application.issuer,
       application.statusMeta?.label,
-      getInvestmentJourney({ status: application.interest?.status || application.status, viewerRole: 'investor', canResubmit: application.interest?.canResubmit, rejectReasonType: application.interest?.rejectReasonType }).statusLabel,
+      getInvestmentJourney({ status: application.interest?.status || application.status, viewerRole: 'investor', canResubmit: application.interest?.canResubmit, rejectReasonType: application.interest?.rejectReasonType, progress: readApplicationProgress(application.interest, application) }).statusLabel,
     ].join(' ').toLowerCase().includes(search));
   }, [applications, query]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [query]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedApplications = useMemo(() =>
+    filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+  [filtered, currentPage]);
 
   const columns = useMemo(() => [
     {
@@ -61,7 +76,7 @@ export default function MyApplicationsPage() {
       key: 'status',
       header: 'Where you are',
       render: (_value, application) => {
-        const journey = getInvestmentJourney({ status: application.interest?.status || application.status, viewerRole: 'investor', canResubmit: application.interest?.canResubmit, rejectReasonType: application.interest?.rejectReasonType });
+        const journey = getInvestmentJourney({ status: application.interest?.status || application.status, viewerRole: 'investor', canResubmit: application.interest?.canResubmit, rejectReasonType: application.interest?.rejectReasonType, progress: readApplicationProgress(application.interest, application) });
         return <AppStatusBadge status={application.interest?.status || application.status} label={journey.statusLabel} tone={journey.tone} />;
       },
     },
@@ -69,7 +84,7 @@ export default function MyApplicationsPage() {
       key: 'nextStep',
       header: 'What happens now',
       render: (_value, application) => {
-        const journey = getInvestmentJourney({ status: application.interest?.status || application.status, viewerRole: 'investor', canResubmit: application.interest?.canResubmit, rejectReasonType: application.interest?.rejectReasonType });
+        const journey = getInvestmentJourney({ status: application.interest?.status || application.status, viewerRole: 'investor', canResubmit: application.interest?.canResubmit, rejectReasonType: application.interest?.rejectReasonType, progress: readApplicationProgress(application.interest, application) });
         return <div className="application-journey-table-copy"><strong>{journey.title}</strong><small>Next action: {journey.owner}</small></div>;
       },
     },
@@ -97,19 +112,29 @@ export default function MyApplicationsPage() {
         <>
           <Card className="marketplace-application-toolbar">
             <label className="marketplace-application-search"><Search size={16} /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search applications" aria-label="Search investment applications" /></label>
-            <span><ShieldCheck size={15} /> Open an application to see its full 5-step journey.</span>
+            <span><ShieldCheck size={15} /> Open an application to see its 4-step journey.</span>
           </Card>
 
           <Card className="marketplace-application-table-card common-table-card">
             <DataTable
               columns={columns}
-              rows={filtered}
+              rows={paginatedApplications}
               loading={loading}
               rowKey={(row) => row.interestUid || row.id}
               rowClassName={(row) => selectedToken === row.id ? 'is-highlighted' : ''}
               emptyTitle="No matching applications"
               emptyDescription="Try another application search term."
             />
+            {!loading && totalPages > 1 ? (
+              <div className="investor-my-investment__applications-pagination">
+                <InvestorHistoryPagination
+                  page={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setPage}
+                  itemLabel="applications"
+                />
+              </div>
+            ) : null}
           </Card>
         </>
       ) : (

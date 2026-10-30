@@ -1,3 +1,4 @@
+import { paymentContextOf } from '@/config/payment-tokens';
 import {
   ArrowRight,
   BadgeCheck,
@@ -21,6 +22,7 @@ import { useTokenIssuanceStore } from '@/store/tokenIssuance.store';
 import { getPlatformTokenPrice } from '@/services/blockchain/trexPlatformController.service';
 import { readTrexTokenPaused } from '@/services/trexDeployment.service';
 import { getDeploymentTransactionHash } from '@/utils/transactionHash';
+import { getErrorMessage } from '@/utils/error';
 
 const firstText = (...values) =>
   values
@@ -48,6 +50,8 @@ export default function DeploymentSuccessPage() {
 
   const raw = token.token || {};
   const information = raw.tokenInformation || raw.information || raw;
+  const tokenChainId = Number(raw.chainId || raw.deployment?.chainId || information.chainId || deployment.result?.chainId || 0) || undefined;
+  const tokenChain = web3Config.getChainById(tokenChainId) || web3Config.requiredChain;
   const tokenContractAddress = firstText(
     raw.tokenAddress,
     raw.contractAddress,
@@ -56,6 +60,7 @@ export default function DeploymentSuccessPage() {
     raw.deployment?.contracts?.token,
     raw.deployment?.tokenAddress,
   );
+  const { paymentTokenAddress, controllerAddress } = paymentContextOf(raw, token.mapped?.supplyPricing);
   const desiredPrice = firstText(
     information.currentTokenPrice,
     raw.currentTokenPrice,
@@ -76,7 +81,7 @@ export default function DeploymentSuccessPage() {
     if (token.isPending) return undefined;
     if (!tokenContractAddress) {
       setChainReadiness('unavailable');
-      setChainIssue({ step: 'configuration', message: 'The asset reference is unavailable for the final status check.' });
+      setChainIssue({ step: 'configuration', message: 'The token contract address is unavailable for the final on-chain check.' });
       return undefined;
     }
 
@@ -84,9 +89,9 @@ export default function DeploymentSuccessPage() {
     setChainReadiness('checking');
     setChainIssue(null);
     Promise.all([
-      readTrexTokenPaused({ tokenAddress: tokenContractAddress }),
+      readTrexTokenPaused({ tokenAddress: tokenContractAddress, chainId: tokenChain.id }),
       desiredPrice
-        ? getPlatformTokenPrice({ tokenAddress: tokenContractAddress })
+        ? getPlatformTokenPrice({ tokenAddress: tokenContractAddress, paymentTokenAddress, controllerAddress, chainId: tokenChain.id })
         : Promise.resolve(null),
     ])
       .then(([paused, price]) => {
@@ -117,14 +122,14 @@ export default function DeploymentSuccessPage() {
         setChainReadiness('unavailable');
         setChainIssue({
           step: 'configuration',
-          message: error?.message || 'The final asset status could not be verified.',
+          message: getErrorMessage(error, 'The final on-chain state could not be verified. Please try again.'),
         });
       });
 
     return () => {
       active = false;
     };
-  }, [desiredPrice, token.isPending, tokenContractAddress]);
+  }, [desiredPrice, token.isPending, tokenContractAddress, paymentTokenAddress, controllerAddress, tokenChain.id]);
 
   useEffect(() => {
     if (
@@ -140,7 +145,7 @@ export default function DeploymentSuccessPage() {
       status: 'error',
       activeStage: 3,
       transactionHash,
-      error: chainIssue?.message || 'The final asset status needs attention.',
+      error: chainIssue?.message || 'The final on-chain state needs attention.',
       canRetry: true,
       retryMode,
       pendingSync: {
@@ -239,8 +244,8 @@ export default function DeploymentSuccessPage() {
     raw.symbol,
   ) || 'TOKEN';
   const network =
-    firstText(raw.network, raw.networkName, information.network, deployment.result?.network) ||
-    web3Config.requiredChain.name;
+    firstText(raw.chainName, raw.network, raw.networkName, information.network, deployment.result?.network) ||
+    tokenChain.name;
   const tokenUid = token.tokenUid || firstText(raw.tokenUid, raw.uid, raw.id, deployment.result?.tokenUid);
   const deployedAt = firstText(
     raw.deployedAt,
@@ -248,7 +253,7 @@ export default function DeploymentSuccessPage() {
     deployment.result?.deployedAt,
     raw.updatedAt,
   );
-  const explorerBase = web3Config.requiredChain.blockExplorers?.default?.url || '';
+  const explorerBase = tokenChain.blockExplorers?.default?.url || '';
   const transactionExplorer = explorerBase
     ? `${explorerBase}/tx/${transactionHash}`
     : undefined;
@@ -287,7 +292,7 @@ export default function DeploymentSuccessPage() {
             onClick={() => window.open(transactionExplorer, '_blank', 'noopener,noreferrer')}
             disabled={!transactionExplorer}
           >
-            View on {web3Config.requiredChain.blockExplorers?.default?.name || 'block explorer'}
+            View on Etherscan
           </Button>
         </div>
 

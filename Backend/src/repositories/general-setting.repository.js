@@ -1,5 +1,6 @@
 const { BaseRepository } = require('./base.repository');
 const { execute } = require('../database/connection');
+const { createUid } = require('../utils/token');
 
 class GeneralSettingRepository extends BaseRepository {
   constructor() {
@@ -39,6 +40,17 @@ class GeneralSettingRepository extends BaseRepository {
       executor,
     );
     return result.affectedRows > 0;
+  }
+
+  async upsertInternalValue(settingKey, settingValue, group = 'blockchainCheckpoint', executor) {
+    await execute(
+      `INSERT INTO \`generalSettings\`
+       (\`settingUid\`,\`settingKey\`,\`settingValue\`,\`valueType\`,\`settingGroup\`,\`description\`,\`isPublic\`)
+       VALUES (?, ?, ?, 'number', ?, 'Chain-scoped blockchain checkpoint.', FALSE)
+       ON DUPLICATE KEY UPDATE \`settingValue\` = VALUES(\`settingValue\`),
+         \`isActive\` = TRUE, \`isDeleted\` = FALSE, \`updatedAt\` = UTC_TIMESTAMP(3)`,
+      [createUid(), settingKey, String(settingValue), group], executor,
+    );
   }
 }
 

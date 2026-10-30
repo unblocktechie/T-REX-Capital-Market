@@ -15,6 +15,18 @@ const CONTROLLER_ABI = [
   'function quoteRedeem(address token,uint256 tokenAmount) view returns (uint256 paymentAmount,uint256 price,uint8 tokenDecimals,address issuer)',
   'event TokensRedeemed(address indexed investor,address indexed token,address indexed issuer,uint256 tokenAmount,uint256 paymentAmount,uint256 price)',
 ];
+const MULTI_PAYMENT_CONTROLLER_ABI = [
+  'function buy(address token,address paymentToken,uint256 tokenAmount)',
+  'function redeem(address investor,address token,address paymentToken,uint256 tokenAmount)',
+  'function isPaymentToken(address token) view returns (bool)',
+  'function paymentTokens() view returns (address[])',
+  'function getTokenInfo(address token) view returns (address issuer,uint8 tokenDecimals,uint256 price,bool controllerIsAgent)',
+  'function quoteBuy(address token,address paymentToken,uint256 tokenAmount) view returns (uint256 paymentAmount,uint256 pricePerToken,uint8 tokenDecimals,address issuer)',
+  'function quoteRedeem(address token,address paymentToken,uint256 tokenAmount) view returns (uint256 paymentAmount,uint256 pricePerToken,uint8 tokenDecimals,address issuer)',
+  'event TokensPurchased(address indexed investor,address indexed token,address indexed issuer,address paymentToken,uint256 tokenAmount,uint256 paymentAmount,uint256 pricePerToken)',
+  'event TokensRedeemed(address indexed investor,address indexed token,address indexed issuer,address paymentToken,uint256 tokenAmount,uint256 paymentAmount,uint256 pricePerToken)',
+];
+const ALL_CONTROLLER_ABI = [...CONTROLLER_ABI, ...MULTI_PAYMENT_CONTROLLER_ABI];
 const TOKEN_ABI = [
   'function transfer(address to,uint256 amount) returns (bool)',
   'event Transfer(address indexed from,address indexed to,uint256 value)',
@@ -37,20 +49,21 @@ const confirmationsAt = (latestBlock, receiptBlock) => Math.max(
 );
 
 class BlockchainTransactionService {
-  constructor({ repository, config = env.blockchain, transactionRunner = withTransaction, dependencies = {} }) {
+  constructor({ repository, paymentTokenRepository, config = env.blockchain, transactionRunner = withTransaction, dependencies = {} }) {
     this.repository = repository;
+    this.paymentTokenRepository = paymentTokenRepository;
     this.config = config;
     this.transactionRunner = transactionRunner;
     this.providerFactory = dependencies.providerFactory || ((url) => new ethers.JsonRpcProvider(url));
     this.contractFactory = dependencies.contractFactory || ((address, abi, runner) => new ethers.Contract(address, abi, runner));
-    this.controllerInterface = dependencies.controllerInterface || new ethers.Interface(CONTROLLER_ABI);
+    this.controllerInterface = dependencies.controllerInterface || new ethers.Interface(ALL_CONTROLLER_ABI);
     this.tokenInterface = dependencies.tokenInterface || new ethers.Interface(TOKEN_ABI);
     this.paymentInterface = dependencies.paymentInterface || new ethers.Interface(PAYMENT_ABI);
     this.delegationInterface = dependencies.delegationInterface || new ethers.Interface(DELEGATION_MANAGER_ABI);
   }
 
   requiredConfirmations() {
-    return Math.max(1, Number(this.config.transactionIndexerConfirmations || this.config.confirmations || 1));
+    return Math.max(1, Number(this.config.transactionIndexerConfirmations || this.config.confirmations || 2));
   }
 
   provider() {
@@ -66,12 +79,26 @@ class BlockchainTransactionService {
     return ethers.getAddress(address);
   }
 
-  paymentAddress() {
-    const address = this.config.purchaseUsdtAddress || this.config.redemptionUsdtAddress;
-    if (!ethers.isAddress(address || '')) {
-      throw new ApiError(500, 'Payment token is not configured.', undefined, 'PAYMENT_TOKEN_NOT_CONFIGURED');
+  async paymentAddresses() {
+    const tokens = await this.paymentTokenRepository.listActive(this.config.chainId);
+    return tokens.map((token) => ethers.getAddress(token.contractAddress));
+  }
+
+  async defaultPaymentAddress(action = null) {
+    const token = await this.paymentTokenRepository.findDefault(this.config.chainId, action);
+    if (!token) {
+      throw new ApiError(500, 'No default payment token is configured for this network.', undefined,
+        'DEFAULT_PAYMENT_TOKEN_NOT_CONFIGURED');
     }
-    return ethers.getAddress(address);
+    return ethers.getAddress(token.contractAddress);
+  }
+
+  async paymentToken(address, action = null) {
+    const token = await this.paymentTokenRepository.findActiveByAddress(address, this.config.chainId, action);
+    if (!token) {
+      throw new ApiError(422, 'Transaction uses an unsupported payment token.', undefined, 'UNSUPPORTED_PAYMENT_TOKEN');
+    }
+    return token;
   }
 
   delegationManagerAddresses() {
@@ -145,21 +172,28 @@ class BlockchainTransactionService {
 
   controllerCall(action, decoded, transactionSender) {
     if (action === 'INVEST') {
+      const multiPayment = Number(decoded.fragment?.inputs?.length || 0) === 3;
       return {
         tokenAddress: decoded.args[0],
-        tokenAmountRaw: decoded.args[1].toString(),
+        paymentTokenAddress: multiPayment ? decoded.args[1] : null,
+        tokenAmountRaw: decoded.args[multiPayment ? 2 : 1].toString(),
         investorWallet: ethers.getAddress(transactionSender),
         issuerExecuted: false,
+        multiPayment,
       };
     }
-    const issuerExecuted = Number(decoded.fragment?.inputs?.length || 0) === 3;
+    const inputCount = Number(decoded.fragment?.inputs?.length || 0);
+    const issuerExecuted = inputCount >= 3;
+    const multiPayment = inputCount === 4;
     return {
       tokenAddress: decoded.args[issuerExecuted ? 1 : 0],
-      tokenAmountRaw: decoded.args[issuerExecuted ? 2 : 1].toString(),
+      paymentTokenAddress: multiPayment ? decoded.args[2] : null,
+      tokenAmountRaw: decoded.args[multiPayment ? 3 : issuerExecuted ? 2 : 1].toString(),
       investorWallet: issuerExecuted
         ? ethers.getAddress(decoded.args[0])
         : ethers.getAddress(transactionSender),
       issuerExecuted,
+      multiPayment,
     };
   }
 
@@ -187,8 +221,8 @@ class BlockchainTransactionService {
     return { log, from, to, amountRaw };
   }
 
-  paymentTransferLog(log, expected = {}) {
-    if (!sameAddress(log.address, this.paymentAddress())) return null;
+  paymentTransferLog(log, paymentTokenAddress, expected = {}) {
+    if (!sameAddress(log.address, paymentTokenAddress)) return null;
     let parsed;
     try { parsed = this.paymentInterface.parseLog(log); } catch { return null; }
     if (parsed?.name !== 'Transfer') return null;
@@ -208,14 +242,40 @@ class BlockchainTransactionService {
     const investor = ethers.getAddress(parsed.args[0]);
     const token = ethers.getAddress(parsed.args[1]);
     const issuer = ethers.getAddress(parsed.args[2]);
-    const tokenAmountRaw = parsed.args[3].toString();
-    const paymentAmountRaw = parsed.args[4].toString();
-    const priceRaw = parsed.args[5].toString();
+    const multiPayment = Number(parsed.fragment?.inputs?.length || 0) === 7;
+    const paymentTokenAddress = multiPayment ? ethers.getAddress(parsed.args[3]) : null;
+    const tokenAmountRaw = parsed.args[multiPayment ? 4 : 3].toString();
+    const paymentAmountRaw = parsed.args[multiPayment ? 5 : 4].toString();
+    const priceRaw = parsed.args[multiPayment ? 6 : 5].toString();
     if (expected.investor && !sameAddress(investor, expected.investor)) return null;
     if (expected.token && !sameAddress(token, expected.token)) return null;
     if (expected.issuer && !sameAddress(issuer, expected.issuer)) return null;
     if (expected.tokenAmountRaw && tokenAmountRaw !== String(expected.tokenAmountRaw)) return null;
-    return { log, investor, token, issuer, tokenAmountRaw, paymentAmountRaw, priceRaw };
+    if (expected.paymentToken && (!paymentTokenAddress || !sameAddress(paymentTokenAddress, expected.paymentToken))) return null;
+    return { log, investor, token, issuer, paymentTokenAddress, tokenAmountRaw, paymentAmountRaw, priceRaw };
+  }
+
+  purchaseEventLog(log, controllerAddress, expected = {}) {
+    if (!sameAddress(log.address, controllerAddress)) return null;
+    let parsed;
+    try { parsed = this.controllerInterface.parseLog(log); } catch { return null; }
+    if (parsed?.name !== 'TokensPurchased') return null;
+    const result = {
+      log,
+      investor: ethers.getAddress(parsed.args[0]),
+      token: ethers.getAddress(parsed.args[1]),
+      issuer: ethers.getAddress(parsed.args[2]),
+      paymentTokenAddress: ethers.getAddress(parsed.args[3]),
+      tokenAmountRaw: parsed.args[4].toString(),
+      paymentAmountRaw: parsed.args[5].toString(),
+      priceRaw: parsed.args[6].toString(),
+    };
+    if (expected.investor && !sameAddress(result.investor, expected.investor)) return null;
+    if (expected.token && !sameAddress(result.token, expected.token)) return null;
+    if (expected.issuer && !sameAddress(result.issuer, expected.issuer)) return null;
+    if (expected.paymentToken && !sameAddress(result.paymentTokenAddress, expected.paymentToken)) return null;
+    if (expected.tokenAmountRaw && result.tokenAmountRaw !== String(expected.tokenAmountRaw)) return null;
+    return result;
   }
 
   receiptFields(receipt, anchor, block, confirmationCount) {
@@ -238,6 +298,21 @@ class BlockchainTransactionService {
       throw new ApiError(422, 'Transaction token amount must be greater than zero.', undefined, 'INVALID_TRANSACTION_AMOUNT');
     }
     const issuerWallet = ethers.getAddress(token.issuerWalletAddress);
+    const storedPaymentAddress = token.paymentTokenAddress
+      || await this.defaultPaymentAddress(action === 'INVEST' ? 'PURCHASE' : 'REDEMPTION');
+    const paymentTokenAddress = ethers.getAddress(call.paymentTokenAddress || storedPaymentAddress);
+    if (!sameAddress(paymentTokenAddress, storedPaymentAddress)) {
+      throw new ApiError(
+        422,
+        'Transaction payment token does not match the payment token selected for this token.',
+        undefined,
+        'PAYMENT_TOKEN_MISMATCH',
+      );
+    }
+    const paymentTokenConfig = await this.paymentToken(
+      paymentTokenAddress,
+      action === 'INVEST' ? 'PURCHASE' : 'REDEMPTION',
+    );
     if (action === 'REDEMPTION' && call.issuerExecuted && !sameAddress(tx.from, issuerWallet)) {
       throw new ApiError(403, 'Redemption transaction sender is not the token issuer wallet.', undefined, 'TRANSACTION_SENDER_MISMATCH');
     }
@@ -254,12 +329,13 @@ class BlockchainTransactionService {
     }
     const paymentEvent = (receipt.logs || []).map((log) => this.paymentTransferLog(
       log,
+      paymentTokenAddress,
       action === 'INVEST'
         ? { from: investorWallet, to: issuerWallet }
         : { from: issuerWallet, to: investorWallet },
     )).find(Boolean);
     if (!paymentEvent || BigInt(paymentEvent.amountRaw) <= 0n) {
-      throw new ApiError(422, 'Expected USDT settlement event is missing.', undefined, 'PAYMENT_EVENT_MISSING');
+      throw new ApiError(422, 'Expected payment-token settlement event is missing.', undefined, 'PAYMENT_EVENT_MISSING');
     }
 
     const redemptionEvent = action === 'REDEMPTION'
@@ -267,6 +343,7 @@ class BlockchainTransactionService {
         investor: investorWallet,
         token: token.tokenAddress,
         issuer: issuerWallet,
+        paymentToken: call.multiPayment ? paymentTokenAddress : null,
         tokenAmountRaw,
       })).find(Boolean)
       : null;
@@ -274,40 +351,87 @@ class BlockchainTransactionService {
       throw new ApiError(422, 'Expected TokensRedeemed event is missing or does not match the request.', undefined, 'REDEMPTION_EVENT_MISSING');
     }
 
-    const controller = this.contractFactory(controllerAddress, CONTROLLER_ABI, provider);
-    const paymentToken = await controller.paymentToken({ blockTag: receipt.blockNumber });
-    if (!sameAddress(paymentToken, this.paymentAddress())) {
-      throw new ApiError(422, 'Controller payment token does not match backend configuration.', undefined, 'PAYMENT_TOKEN_MISMATCH');
+    const purchaseEvent = action === 'INVEST' && call.multiPayment
+      ? (receipt.logs || []).map((log) => this.purchaseEventLog(log, controllerAddress, {
+        investor: investorWallet,
+        token: token.tokenAddress,
+        issuer: issuerWallet,
+        paymentToken: paymentTokenAddress,
+        tokenAmountRaw,
+      })).find(Boolean)
+      : null;
+    if (action === 'INVEST' && call.multiPayment && !purchaseEvent) {
+      throw new ApiError(422, 'Expected TokensPurchased event is missing or does not match the request.', undefined, 'PURCHASE_EVENT_MISSING');
+    }
+
+    const controller = this.contractFactory(controllerAddress, ALL_CONTROLLER_ABI, provider);
+    if (call.multiPayment) {
+      const enabled = await controller.isPaymentToken(paymentTokenAddress, { blockTag: receipt.blockNumber });
+      if (!enabled) {
+        throw new ApiError(422, 'Payment token is not enabled by the Platform Controller.', undefined, 'PAYMENT_TOKEN_NOT_ENABLED');
+      }
+    } else {
+      const legacyPaymentToken = await controller.paymentToken({ blockTag: receipt.blockNumber });
+      if (!sameAddress(legacyPaymentToken, paymentTokenAddress)) {
+        throw new ApiError(422, 'Legacy Controller payment token does not match token configuration.', undefined, 'PAYMENT_TOKEN_MISMATCH');
+      }
     }
     const tokenInfo = await controller.getTokenInfo(token.tokenAddress, { blockTag: receipt.blockNumber });
     if (!sameAddress(tokenInfo[0], issuerWallet) || Number(tokenInfo[1]) !== Number(token.decimals)) {
       throw new ApiError(422, 'Controller token configuration does not match backend token metadata.', undefined, 'TOKEN_CONFIGURATION_MISMATCH');
     }
-    const quoteMethod = action === 'INVEST' ? 'quoteBuy' : 'quoteRedeem';
-    const quote = await controller[quoteMethod](token.tokenAddress, tokenAmountRaw, { blockTag: receipt.blockNumber });
+    const quoteSignature = action === 'INVEST'
+      ? (call.multiPayment
+        ? 'quoteBuy(address,address,uint256)'
+        : 'quoteBuy(address,uint256)')
+      : (call.multiPayment
+        ? 'quoteRedeem(address,address,uint256)'
+        : 'quoteRedeem(address,uint256)');
+    const quoteArgs = call.multiPayment
+      ? [token.tokenAddress, paymentTokenAddress, tokenAmountRaw]
+      : [token.tokenAddress, tokenAmountRaw];
+    const quoteFunction = controller[quoteSignature]
+      || controller[action === 'INVEST' ? 'quoteBuy' : 'quoteRedeem'];
+    const quote = await quoteFunction(...quoteArgs, { blockTag: receipt.blockNumber });
     if (BigInt(quote[0]) !== BigInt(paymentEvent.amountRaw)
       || !sameAddress(quote[3], issuerWallet)
       || Number(quote[2]) !== Number(token.decimals)
       || BigInt(quote[1]) !== BigInt(tokenInfo[2])) {
-      throw new ApiError(422, 'USDT settlement does not match the authoritative controller quote.', undefined, 'PAYMENT_AMOUNT_MISMATCH');
+      throw new ApiError(422, 'Payment-token settlement does not match the authoritative controller quote.', undefined, 'PAYMENT_AMOUNT_MISMATCH');
     }
     if (redemptionEvent && (BigInt(redemptionEvent.paymentAmountRaw) !== BigInt(quote[0])
       || BigInt(redemptionEvent.priceRaw) !== BigInt(quote[1]))) {
       throw new ApiError(422, 'TokensRedeemed event does not match the authoritative controller quote.', undefined, 'REDEMPTION_EVENT_MISMATCH');
     }
+    if (purchaseEvent && (BigInt(purchaseEvent.paymentAmountRaw) !== BigInt(quote[0])
+      || BigInt(purchaseEvent.priceRaw) !== BigInt(quote[1]))) {
+      throw new ApiError(422, 'TokensPurchased event does not match the authoritative controller quote.', undefined, 'PURCHASE_EVENT_MISMATCH');
+    }
 
-    const payment = this.contractFactory(this.paymentAddress(), PAYMENT_ABI, provider);
-    const usdtDecimals = Number(await payment.decimals({ blockTag: receipt.blockNumber }));
+    const payment = this.contractFactory(paymentTokenAddress, PAYMENT_ABI, provider);
+    const paymentTokenDecimals = Number(await payment.decimals({ blockTag: receipt.blockNumber }));
+    if (paymentTokenDecimals !== Number(paymentTokenConfig.decimals)) {
+      throw new ApiError(422, 'Payment token decimals do not match backend configuration.', undefined, 'PAYMENT_TOKEN_METADATA_MISMATCH');
+    }
+    const paymentAmountFormatted = ethers.formatUnits(paymentEvent.amountRaw, paymentTokenDecimals);
     return {
+      chainUid: token.chainUid || this.config.chainUid || null,
       chainId: Number(this.config.chainId), tokenUid: token.tokenUid, organizationUid: token.organizationUid,
       tokenAddress: ethers.getAddress(token.tokenAddress), controllerAddress,
       transactionHash: tx.hash.toLowerCase(), type: action, executionType, initiatedByUserUid: userUid || null,
       initiatedByWallet: ethers.getAddress(tx.from), fromWallet: paymentEvent.from, toWallet: paymentEvent.to,
       tokenAmountRaw, tokenAmountFormatted: ethers.formatUnits(tokenAmountRaw, Number(token.decimals)),
+      paymentTokenAddress,
+      paymentTokenName: paymentTokenConfig.name,
+      paymentTokenSymbol: paymentTokenConfig.symbol,
+      paymentTokenDecimals,
+      paymentAmountRaw: paymentEvent.amountRaw,
+      paymentAmountFormatted,
+      // Legacy aliases are retained until existing reporting clients migrate.
       usdtAmountRaw: paymentEvent.amountRaw,
-      usdtAmountFormatted: ethers.formatUnits(paymentEvent.amountRaw, usdtDecimals),
+      usdtAmountFormatted: paymentAmountFormatted,
       tokenSymbol: token.tokenSymbol, status: 'CONFIRMED', confirmedAt: new Date(), isCanonical: true,
-      ...this.receiptFields(receipt, redemptionEvent || paymentEvent, block, confirmationCount),
+      ...this.receiptFields(receipt, redemptionEvent || purchaseEvent || paymentEvent, block, confirmationCount),
     };
   }
 
@@ -320,6 +444,7 @@ class BlockchainTransactionService {
     })).find(Boolean);
     if (!transferEvent) throw new ApiError(422, 'Expected token Transfer event is missing.', undefined, 'TRANSFER_EVENT_MISSING');
     return {
+      chainUid: token.chainUid || this.config.chainUid || null,
       chainId: Number(this.config.chainId), tokenUid: token.tokenUid, organizationUid: token.organizationUid,
       tokenAddress: ethers.getAddress(token.tokenAddress), controllerAddress: null,
       transactionHash: tx.hash.toLowerCase(), type: 'TRANSFER', executionType, initiatedByUserUid: userUid || null,
@@ -331,20 +456,32 @@ class BlockchainTransactionService {
     };
   }
 
-  submittedRecord({ tx, token, controllerAddress, action, call, decoded, executionType, userUid }) {
+  async submittedRecord({ tx, token, controllerAddress, action, call, decoded, executionType, userUid }) {
     const sender = ethers.getAddress(tx.from);
     const transfer = action === 'TRANSFER';
     const tokenAmountRaw = transfer ? decoded.args[1].toString() : call.tokenAmountRaw;
     const destination = transfer
       ? ethers.getAddress(decoded.args[0])
       : action === 'REDEMPTION' ? call.investorWallet : controllerAddress;
+    const configuredPaymentToken = transfer ? null : await this.paymentTokenRepository.findActiveByAddress(
+      call.paymentTokenAddress || token.paymentTokenAddress
+        || await this.defaultPaymentAddress(action === 'INVEST' ? 'PURCHASE' : 'REDEMPTION'),
+      this.config.chainId,
+      action === 'INVEST' ? 'PURCHASE' : 'REDEMPTION',
+    );
     return {
+      chainUid: token.chainUid || this.config.chainUid || null,
       chainId: Number(this.config.chainId), tokenUid: token.tokenUid, organizationUid: token.organizationUid,
       tokenAddress: ethers.getAddress(token.tokenAddress), controllerAddress: transfer ? null : controllerAddress,
       transactionHash: tx.hash.toLowerCase(), type: action, executionType, initiatedByUserUid: userUid || null,
       initiatedByWallet: sender, fromWallet: sender,
       toWallet: destination,
       tokenAmountRaw, tokenAmountFormatted: ethers.formatUnits(tokenAmountRaw, Number(token.decimals)),
+      paymentTokenAddress: configuredPaymentToken?.contractAddress || null,
+      paymentTokenName: configuredPaymentToken?.name || null,
+      paymentTokenSymbol: configuredPaymentToken?.symbol || null,
+      paymentTokenDecimals: configuredPaymentToken?.decimals ?? null,
+      paymentAmountRaw: null, paymentAmountFormatted: null,
       usdtAmountRaw: null, usdtAmountFormatted: null, tokenSymbol: token.tokenSymbol,
       status: 'SUBMITTED', confirmationCount: 0, confirmedAt: null, isCanonical: true,
     };
@@ -378,9 +515,12 @@ class BlockchainTransactionService {
       const transactionTokenAddress = action === 'TRANSFER' ? effectiveTarget : call.tokenAddress;
       const token = tokenUid
         ? await this.repository.findTokenByUid(tokenUid)
-        : await this.repository.findTokenByAddress(transactionTokenAddress);
+        : await this.repository.findTokenByAddress(transactionTokenAddress, this.config.chainId);
       if (!token || !sameAddress(token.tokenAddress, transactionTokenAddress)) {
         throw new ApiError(422, 'Transaction token is not a deployed platform token.', undefined, 'INVALID_TRANSACTION_TOKEN');
+      }
+      if (this.config.chainUid && token.chainUid && token.chainUid !== this.config.chainUid) {
+        throw new ApiError(422, 'Transaction token belongs to a different configured chain.', undefined, 'WRONG_TRANSACTION_CHAIN');
       }
       const expectedControllerAddress = action === 'TRANSFER'
         ? null : this.controllerAddress(token.tokenAgentWalletAddress);
@@ -415,7 +555,7 @@ class BlockchainTransactionService {
       }
 
       if (!receipt) {
-        const pending = this.submittedRecord({
+        const pending = await this.submittedRecord({
           tx, token, controllerAddress: expectedControllerAddress, action, call, decoded, executionType,
           userUid: actor?.userUid || user?.userUid,
         });
@@ -431,12 +571,14 @@ class BlockchainTransactionService {
       }
       if (Number(receipt.status) !== 1) {
         const failed = {
-          chainId: Number(chainId), tokenUid: token.tokenUid, organizationUid: token.organizationUid,
+          chainUid: token.chainUid || this.config.chainUid, chainId: Number(chainId),
+          tokenUid: token.tokenUid, organizationUid: token.organizationUid,
           tokenAddress: ethers.getAddress(token.tokenAddress), controllerAddress: expectedControllerAddress,
           transactionHash: tx.hash.toLowerCase(), type: action, executionType,
           initiatedByUserUid: actor?.userUid || user?.userUid || null,
           initiatedByWallet: ethers.getAddress(tx.from), fromWallet: ethers.getAddress(tx.from), toWallet: tx.to ? ethers.getAddress(tx.to) : null,
           tokenSymbol: token.tokenSymbol, status: 'FAILED', confirmationCount: 0, blockNumber: Number(receipt.blockNumber),
+          paymentTokenAddress: call?.paymentTokenAddress || token.paymentTokenAddress || null,
           blockHash: receipt.blockHash, transactionIndex: Number(receipt.index ?? 0), logIndex: null,
           gasUsed: receipt.gasUsed?.toString?.() || null,
           effectiveGasPrice: (receipt.gasPrice || receipt.effectiveGasPrice)?.toString?.() || null,
@@ -482,7 +624,10 @@ class BlockchainTransactionService {
     if (!row) return row;
     return {
       transactionUid: row.transactionUid || null,
-      chainId: Number(row.chainId), tokenUid: row.tokenUid || null, organizationUid: row.organizationUid || null,
+      chainUid: row.chainUid || null, chainId: Number(row.chainId),
+      chainName: row.chainName || null, networkName: row.networkName || null,
+      explorerUrl: row.explorerUrl || null,
+      tokenUid: row.tokenUid || null, organizationUid: row.organizationUid || null,
       tokenAddress: row.tokenAddress || null, controllerAddress: row.controllerAddress || null,
       transactionHash: row.transactionHash, blockNumber: row.blockNumber == null ? null : Number(row.blockNumber),
       blockHash: row.blockHash || null, transactionIndex: row.transactionIndex ?? null, logIndex: row.logIndex ?? null,
@@ -490,6 +635,13 @@ class BlockchainTransactionService {
       type: row.type, executionType: row.executionType || 'DIRECT', initiatedByUserUid: row.initiatedByUserUid,
       initiatedByWallet: row.initiatedByWallet || null, fromWallet: row.fromWallet || null, toWallet: row.toWallet || null,
       tokenAmountRaw: row.tokenAmountRaw || null, tokenAmount: row.tokenAmountFormatted == null ? null : String(row.tokenAmountFormatted),
+      paymentTokenAddress: row.paymentTokenAddress || null,
+      paymentTokenName: row.paymentTokenName || null,
+      paymentTokenSymbol: row.paymentTokenSymbol || null,
+      paymentTokenDecimals: row.paymentTokenDecimals == null ? null : Number(row.paymentTokenDecimals),
+      paymentAmountRaw: row.paymentAmountRaw || row.usdtAmountRaw || null,
+      paymentAmount: (row.paymentAmountFormatted ?? row.usdtAmountFormatted) == null
+        ? null : String(row.paymentAmountFormatted ?? row.usdtAmountFormatted),
       usdtAmountRaw: row.usdtAmountRaw || null, usdtAmount: row.usdtAmountFormatted == null ? null : String(row.usdtAmountFormatted),
       tokenName: row.tokenName || null, tokenSymbol: row.tokenSymbol, issuerName: row.issuerName || null,
       status: row.status, confirmationCount: Number(row.confirmationCount || 0),
@@ -515,7 +667,8 @@ class BlockchainTransactionService {
   async exportCsv(user, query) {
     if (!['Investor', 'Issuer', 'Super Administrator'].includes(user.roleName)) throw ApiError.forbidden();
     const rows = await this.repository.listForExport(user, query);
-    const columns = ['blockTimestamp', 'type', 'tokenName', 'tokenAmountFormatted', 'tokenSymbol', 'usdtAmountFormatted',
+    const columns = ['blockTimestamp', 'chainId', 'chainName', 'type', 'tokenName', 'tokenAmountFormatted', 'tokenSymbol',
+      'paymentAmountFormatted', 'paymentTokenSymbol', 'paymentTokenAddress',
       'fromWallet', 'toWallet', 'transactionHash', 'status', 'blockNumber'];
     const csvCell = (value) => {
       const text = String(value ?? '');
@@ -529,6 +682,8 @@ class BlockchainTransactionService {
 module.exports = {
   BlockchainTransactionService,
   CONTROLLER_ABI,
+  MULTI_PAYMENT_CONTROLLER_ABI,
+  ALL_CONTROLLER_ABI,
   TOKEN_ABI,
   PAYMENT_ABI,
   DELEGATION_MANAGER_ABI,

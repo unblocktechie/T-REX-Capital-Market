@@ -1,4 +1,4 @@
-import { Building2, Briefcase, Coins, FileText, History, LayoutDashboard, Mail, RefreshCcw, Store, Users, UsersRound, Wallet, WalletCards } from 'lucide-react';
+import { Building2, Briefcase, Coins, History, LayoutDashboard, Network, Store, UsersRound, WalletCards } from 'lucide-react';
 import { PERMISSIONS, ROLES } from './permissions';
 import { ROUTES } from './routes';
 
@@ -23,8 +23,15 @@ export const navigationGroups = Object.freeze([
         roles: [ROLES.issuer],
       },
       {
-        label: 'Tokens',
-        shortLabel: 'Tokens',
+        label: 'Network Access',
+        shortLabel: 'Networks',
+        to: ROUTES.chainAccess,
+        icon: Network,
+        permission: PERMISSIONS.dashboardView,
+      },
+      {
+        label: 'Token Management',
+        shortLabel: 'Token Management',
         to: ROUTES.createToken,
         icon: Coins,
         permission: PERMISSIONS.dashboardView,
@@ -32,18 +39,10 @@ export const navigationGroups = Object.freeze([
         roles: [ROLES.issuer],
       },
       {
-        label: 'Investment Requests',
-        shortLabel: 'Requests',
-        to: ROUTES.investors,
-        icon: UsersRound,
-        permission: PERMISSIONS.dashboardView,
-        roles: [ROLES.issuer],
-      },
-      {
-        label: 'Investors',
+        label: 'Investor Management',
         shortLabel: 'Investors',
-        to: ROUTES.issuerInvestorDirectory,
-        icon: Users,
+        to: ROUTES.issuerInvestorManagement,
+        icon: UsersRound,
         permission: PERMISSIONS.dashboardView,
         roles: [ROLES.issuer],
       },
@@ -56,14 +55,6 @@ export const navigationGroups = Object.freeze([
         roles: [ROLES.issuer],
       },
       {
-        label: 'Redemption Requests',
-        shortLabel: 'Redemptions',
-        to: ROUTES.issuerRedemptions,
-        icon: RefreshCcw,
-        permission: PERMISSIONS.dashboardView,
-        roles: [ROLES.issuer],
-      },
-      {
         label: 'Marketplace',
         shortLabel: 'Marketplace',
         to: ROUTES.marketplace,
@@ -72,26 +63,10 @@ export const navigationGroups = Object.freeze([
         roles: [ROLES.investor],
       },
       {
-        label: 'My Applications',
-        shortLabel: 'Applications',
-        to: ROUTES.applications,
-        icon: FileText,
-        permission: PERMISSIONS.dashboardView,
-        roles: [ROLES.investor],
-      },
-      {
-        label: 'Invitations',
-        shortLabel: 'Invitations',
-        to: ROUTES.invitations,
-        icon: Mail,
-        permission: PERMISSIONS.dashboardView,
-        roles: [ROLES.investor],
-      },
-      {
-        label: 'Portfolio',
-        shortLabel: 'Portfolio',
-        to: ROUTES.portfolio,
-        icon: WalletCards,
+        label: 'My Investment',
+        shortLabel: 'My Investment',
+        to: ROUTES.investorMyInvestment,
+        icon: Briefcase,
         permission: PERMISSIONS.dashboardView,
         roles: [ROLES.investor],
       },
@@ -107,7 +82,7 @@ export const navigationGroups = Object.freeze([
         label: 'Wallet Management',
         shortLabel: 'Wallet',
         to: ROUTES.walletManagement,
-        icon: Wallet,
+        icon: WalletCards,
         permission: PERMISSIONS.dashboardView,
         roles: [ROLES.issuer, ROLES.investor],
       },
@@ -121,13 +96,18 @@ export const routeMeta = Object.freeze({
     title: 'Organization',
     description: 'Verified company details and approved management access',
   },
+  [ROUTES.chainAccess]: { title: 'Network Access', description: 'Unlock and review the blockchain networks available to your account' },
   [ROUTES.createToken]: {
     title: 'Tokens',
     description: 'Guided investment asset setup and launch',
   },
   tokenDetails: {
-    title: 'Investment Asset',
+    title: 'Token Management',
     description: 'Price, investor access, limits, and technical details',
+  },
+  [ROUTES.issuerInvestorManagement]: {
+    title: 'Investor Management',
+    description: 'Manage investors, investment requests, and redemption requests',
   },
   [ROUTES.investors]: {
     title: 'Investment Requests',
@@ -151,9 +131,10 @@ export const routeMeta = Object.freeze({
   },
   [ROUTES.marketplace]: { title: 'Marketplace', description: 'Explore available investment opportunities' },
   marketplaceToken: { title: 'Investment Details', description: 'Review the investment, eligibility requirements, and next action' },
+  [ROUTES.investorMyInvestment]: { title: 'My Investment', description: 'Manage your applications, portfolio, and invitations' },
   [ROUTES.applications]: { title: 'My Applications', description: 'Track your investment applications' },
   [ROUTES.portfolio]: { title: 'Portfolio', description: 'See what you hold, its estimated value and your investment history' },
-  [ROUTES.assetManagement]: { title: 'Manage Investments', description: 'Invest more, send, or redeem assets you are approved to hold' },
-  [ROUTES.walletManagement]: { title: 'Wallet Management', description: 'View USDC and T-REX token balances in your Privy secure account' },
-  [ROUTES.profile]: { title: 'Investor Profile', description: 'Your identity, investment information, documents, and Privy secure account' },
+  [ROUTES.assetManagement]: { title: 'Manage Investments', description: 'Invest, send, or redeem assets you are approved to hold' },
+  [ROUTES.walletManagement]: { title: 'Wallet Management', description: 'View wallet and token balances across supported networks' },
+  [ROUTES.profile]: { title: 'Investor Profile', description: 'Your identity, investment information, documents, and registered wallet' },
 });

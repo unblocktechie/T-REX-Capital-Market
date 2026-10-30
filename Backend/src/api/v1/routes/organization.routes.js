@@ -13,9 +13,10 @@ const createReferenceRouter = ({ locationController, organizationController }) =
   return router;
 };
 
-const createOrganizationRouter = ({ controller, authenticate, authorize }) => {
+const createOrganizationRouter = ({ controller, authenticate, authorize, requireInvestorChain }) => {
   const router = express.Router();
   router.use(authenticate);
+  router.use(requireInvestorChain);
   router.get('/me', authorize, asyncHandler(controller.getMine));
   router.patch('/me/user-notified', authorize, asyncHandler(controller.markUserNotified));
   router.put('/me/company-information', validate({ body: schemas.companyInformation }), authorize, asyncHandler(controller.saveCompanyInformation));

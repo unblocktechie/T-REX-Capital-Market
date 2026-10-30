@@ -1,5 +1,4 @@
 import { CheckCircle2, LockKeyhole, ShieldCheck } from 'lucide-react';
-import { PrivyTrustBadge } from '@/components/branding/PrivyBrand';
 import { Card } from '@/components/ui/Card';
 import { useInvestorOnboarding } from '@/hooks/useInvestorOnboarding';
 import { InvestorStepper } from './InvestorStepper';
@@ -37,14 +36,8 @@ export function InvestorSecurityCard({ title = 'Your information stays private',
       <ul>
         <li><CheckCircle2 size={16} /> Data handling messages are clearly disclosed</li>
         <li><CheckCircle2 size={16} /> Only file metadata is stored in the draft</li>
-        <li><LockKeyhole size={16} /> Your Privy secure account must be ready</li>
+        <li><LockKeyhole size={16} /> Wallet ownership confirmation is required</li>
       </ul>
-      <PrivyTrustBadge
-        compact
-        tone="soft"
-        label="Investor embedded wallet"
-        className="mt-3"
-      />
     </Card>
   );
 }

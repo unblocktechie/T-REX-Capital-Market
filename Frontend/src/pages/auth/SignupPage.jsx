@@ -17,12 +17,10 @@ import { toast } from 'sonner';
 import { authApi } from '@/api/auth';
 import { PasswordStrength } from '@/components/forms/PasswordStrength';
 import { AuthButton } from '@/components/auth/AuthButton';
-import { AuthRecoveryNotice } from '@/components/auth/AuthRecoveryNotice';
 import { Input } from '@/components/ui/Input';
 import { PasswordInput } from '@/components/ui/PasswordInput';
 import { ROUTES } from '@/config/routes';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
-import { usePrivyEmailAuth } from '@/hooks/usePrivyEmailAuth';
 import { authRedirectService } from '@/services/auth-redirect.service';
 import { cn } from '@/utils/cn';
 import { signupSchema } from '@/validations/auth.schemas';
@@ -66,7 +64,6 @@ export default function SignupPage() {
   useDocumentTitle('Create account');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { beginEmailVerification, recoveryState } = usePrivyEmailAuth();
   const accountNotFound = searchParams.get('reason') === 'account-not-found';
   const [redirectContext] = useState(() =>
     accountNotFound ? authRedirectService.getAccountNotFoundContext() : null,
@@ -99,17 +96,10 @@ export default function SignupPage() {
 
   const signup = useMutation({
     mutationFn: authApi.register,
-    onSuccess: async (_data, variables) => {
-      try {
-        await beginEmailVerification(variables.email);
-        toast.success(
-          `${variables.role === 'issuer' ? 'Issuer' : 'Investor'} account saved. We sent a verification code to your email.`,
-        );
-      } catch (error) {
-        toast.error('Your account was saved, but we could not send the verification code.', {
-          description: error?.message || 'Open the verification page and request a new code.',
-        });
-      }
+    onSuccess: (_data, variables) => {
+      toast.success(
+        `${variables.role === 'issuer' ? 'Issuer' : 'Investor'} account created. Check your email for the verification link.`,
+      );
       navigate(`${ROUTES.verifyEmail}?email=${encodeURIComponent(variables.email)}`);
     },
   });
@@ -274,10 +264,7 @@ export default function SignupPage() {
             type="checkbox"
             {...register('terms')}
           />
-          <span>
-            I agree to the <span className="text-[var(--primary-600)]">Terms</span> and{' '}
-            <span className="text-[var(--primary-600)]">Privacy Policy</span>.
-          </span>
+          <span>I agree to the Terms and Privacy Policy.</span>
         </label>
         {errors.terms ? (
           <p className="-mt-1.5 mb-0 text-xs font-semibold text-[var(--danger-500)]">
@@ -288,7 +275,6 @@ export default function SignupPage() {
           Create {selectedRole ? `${selectedRole} ` : ''}account
           <ArrowRight className="size-[18px] shrink-0 self-center" aria-hidden="true" />
         </AuthButton>
-        <AuthRecoveryNotice state={recoveryState} />
       </form>
       <p className="mt-3 mb-0 text-center text-sm text-[var(--text-soft)]">
         Already have an account?{' '}

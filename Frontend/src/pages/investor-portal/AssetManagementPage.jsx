@@ -8,12 +8,16 @@ import { investorMarketplaceService } from '@/services/investor/investorMarketpl
 import { getErrorMessage } from '@/utils/error';
 import { cn } from '@/utils/cn';
 
-const PurchaseTokenPage = lazy(() => import('./PurchaseTokenPage'));
-const SendTokenPage = lazy(() => import('./SendTokenPage'));
-const RedeemTokenPage = lazy(() => import('./RedeemTokenPage'));
+const loadPurchaseTokenPage = () => import('./PurchaseTokenPage');
+const loadSendTokenPage = () => import('./SendTokenPage');
+const loadRedeemTokenPage = () => import('./RedeemTokenPage');
+
+const PurchaseTokenPage = lazy(loadPurchaseTokenPage);
+const SendTokenPage = lazy(loadSendTokenPage);
+const RedeemTokenPage = lazy(loadRedeemTokenPage);
 
 const TABS = Object.freeze([
-  { id: 'invest', label: 'Invest more', icon: Coins },
+  { id: 'invest', label: 'Invest', icon: Coins },
   { id: 'send', label: 'Send', icon: Send },
   { id: 'redeem', label: 'Redeem', icon: RotateCcw },
 ]);
@@ -59,14 +63,56 @@ function OperationLoadingState() {
 
 export default function AssetManagementPage() {
   useDocumentTitle('Manage Investments');
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const requestedInterestUid = String(searchParams.get('interestUid') || '').trim();
   const requestedTokenUid = String(searchParams.get('tokenUid') || '').trim();
   const [applications, setApplications] = useState([]);
-  const [selectedInterestUid, setSelectedInterestUid] = useState('');
-  const [activeTab, setActiveTab] = useState('invest');
+  const activeTab = TABS.some((tab) => tab.id === searchParams.get('tab'))
+    ? searchParams.get('tab') : 'invest';
+
+  const changeTab = (tab) => {
+    setSearchParams((params) => {
+      const next = new URLSearchParams(params);
+      next.set('tab', tab);
+      if (resolvedInterestUid) {
+        next.set('interestUid', resolvedInterestUid);
+        next.delete('tokenUid');
+      }
+      return next;
+    });
+  };
+
+  const changeInvestment = (interestUid) => {
+    setSearchParams((params) => {
+      const next = new URLSearchParams(params);
+      next.set('interestUid', interestUid);
+      next.delete('tokenUid');
+      return next;
+    });
+  };
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+
+  useEffect(() => {
+    // Warm the other operation chunks after the main page becomes interactive.
+    // This removes the first-click code-split pause when moving between Invest,
+    // Send and Redeem without increasing the critical startup work.
+    const preload = () => {
+      void Promise.allSettled([
+        loadPurchaseTokenPage(),
+        loadSendTokenPage(),
+        loadRedeemTokenPage(),
+      ]);
+    };
+
+    if (typeof window.requestIdleCallback === 'function') {
+      const idleId = window.requestIdleCallback(preload, { timeout: 1_200 });
+      return () => window.cancelIdleCallback?.(idleId);
+    }
+
+    const timer = window.setTimeout(preload, 350);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -108,13 +154,15 @@ export default function AssetManagementPage() {
     ? interestUidOf(registeredApplications.find((application) => tokenUidOf(application) === requestedTokenUid))
     : '';
 
-  const resolvedInterestUid = tokenOptions.some((option) => option.value === selectedInterestUid)
-    ? selectedInterestUid
-    : tokenOptions.some((option) => option.value === requestedInterestUid)
-      ? requestedInterestUid
-      : tokenOptions.some((option) => option.value === requestedTokenInterestUid)
-        ? requestedTokenInterestUid
-        : tokenOptions[0]?.value || '';
+  // Never silently switch to another investment when a deep link requests a
+  // specific one. Eligibility and access are still checked by the operation.
+  const hasExplicitSelection = Boolean(requestedInterestUid || requestedTokenUid);
+  const resolvedInterestUid = requestedInterestUid
+    ? (tokenOptions.some((option) => option.value === requestedInterestUid) ? requestedInterestUid : '')
+    : requestedTokenUid
+      ? requestedTokenInterestUid
+      : tokenOptions[0]?.value || '';
+  const selectionUnavailable = hasExplicitSelection && !resolvedInterestUid;
 
   const selectedApplication = registeredApplications.find(
     (application) => interestUidOf(application) === resolvedInterestUid,
@@ -126,6 +174,7 @@ export default function AssetManagementPage() {
     const sharedProps = {
       interestUid: resolvedInterestUid,
       embedded: true,
+      initialApplication: selectedApplication,
     };
 
     if (activeTab === 'send') {
@@ -143,7 +192,7 @@ export default function AssetManagementPage() {
         <div>
           <span className="eyebrow">Your approved investments</span>
           <h1>Manage Investments</h1>
-          <p>Choose an investment, then invest more, send units to another approved investor, or redeem your units.</p>
+          <p>Choose an investment, then invest, send units to another approved investor, or redeem your units.</p>
         </div>
         <span className="asset-management-header__status">
           <ShieldCheck size={17} /> Approved investments only
@@ -159,7 +208,7 @@ export default function AssetManagementPage() {
           <MarketplaceDropdown
             value={resolvedInterestUid}
             options={tokenOptions}
-            onChange={setSelectedInterestUid}
+            onChange={changeInvestment}
             icon={ArrowDownUp}
             ariaLabel="Select an approved investment"
             placeholder={loading ? 'Loading investments…' : 'Select an investment'}
@@ -181,7 +230,7 @@ export default function AssetManagementPage() {
                 role="tab"
                 aria-selected={selected}
                 className={cn('asset-management-tab', selected && 'is-active')}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => changeTab(tab.id)}
                 disabled={!resolvedInterestUid}
               >
                 <Icon size={17} aria-hidden="true" />
@@ -191,13 +240,13 @@ export default function AssetManagementPage() {
           })}
         </div>
         <div className="asset-management-action-guide" role="status">
-          <strong>{activeTab === 'invest' ? 'Invest more' : activeTab === 'send' ? 'Send units' : 'Redeem units'}</strong>
+          <strong>{activeTab === 'invest' ? 'Invest' : activeTab === 'send' ? 'Send units' : 'Redeem units'}</strong>
           <span>
             {activeTab === 'invest'
-              ? 'Choose how many units to buy. If USDC approval is needed, you will complete it once before investing.'
+              ? 'Choose how many units to buy. If payment-token approval is needed, you will complete it once before investing.'
               : activeTab === 'send'
-                ? 'Enter the approved recipient account address and amount. We check eligibility before you confirm securely with Privy.'
-                : 'Choose how many units to redeem. The issuer reviews your request and completes the final redemption after approval.'}
+                ? 'Enter the approved recipient wallet and amount. We check eligibility before your wallet asks you to confirm.'
+                : 'Choose how many units to redeem. The issuer reviews your request and signs the final redemption from the organization wallet when it is ready.'}
           </span>
         </div>
       </Card>
@@ -211,10 +260,12 @@ export default function AssetManagementPage() {
           <p>{loadError}</p>
         </Card>
       ) : !resolvedInterestUid ? (
-        <Card className="asset-management-state-card">
+        <Card className="asset-management-state-card" role={selectionUnavailable ? 'alert' : undefined}>
           <ShieldCheck size={29} />
-          <h2>No approved investments yet</h2>
-          <p>An investment will appear here after the issuer approves your application and enables your access.</p>
+          <h2>{selectionUnavailable ? 'Selected investment is unavailable' : 'No approved investments yet'}</h2>
+          <p>{selectionUnavailable
+            ? 'This investment is not in your approved investments. Check your application status or choose another approved investment.'
+            : 'An investment will appear here after the issuer approves your application and enables your access.'}</p>
         </Card>
       ) : (
         <section

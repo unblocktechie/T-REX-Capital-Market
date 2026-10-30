@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { ethers } from 'ethers';
 import OnchainID from '@onchain-id/solidity';
 import * as fs from 'fs';
-import { getNetwork, deploymentsPathFor } from './network-config';
+import * as path from 'path';
 
 
 
@@ -37,12 +37,11 @@ export interface OrganizationIdentityResult {
 }
 
 function loadIdentityFactory(platform: ethers.Wallet) {
-  const networkName = getNetwork().name;
-  const deploymentsPath = deploymentsPathFor(networkName);
+  const deploymentsPath = path.join(__dirname, '..', 'deployments', 'sepolia.json');
   const deployment = JSON.parse(fs.readFileSync(deploymentsPath, 'utf8'));
   const identityFactoryAddress = deployment.platform.identityFactory;
   if (!identityFactoryAddress) {
-    throw new Error(`deployments/${networkName}.json has no platform.identityFactory — run phase0-01 first`);
+    throw new Error('deployments/sepolia.json has no platform.identityFactory — run phase0-01 first');
   }
   return new ethers.Contract(identityFactoryAddress, OnchainID.contracts.Factory.abi, platform);
 }
@@ -57,10 +56,10 @@ export async function createOrganizationIdentity(orgWalletAddress: string, salt:
     throw new Error(`Invalid wallet address: ${orgWalletAddress}`);
   }
 
-  const { rpcUrl } = getNetwork();
+  const rpcUrl = process.env.SEPOLIA_RPC_URL;
   const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
-  if (!privateKey) {
-    throw new Error('Missing DEPLOYER_PRIVATE_KEY in .env');
+  if (!rpcUrl || !privateKey) {
+    throw new Error('Missing SEPOLIA_RPC_URL or DEPLOYER_PRIVATE_KEY in .env');
   }
 
   const provider = new ethers.JsonRpcProvider(rpcUrl);

@@ -1,263 +1,210 @@
-import { usePrivy, useWallets } from '@privy-io/react-auth';
-import { createPublicClient, http } from 'viem';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { env } from '@/config/env';
+import {
+  useBalance,
+  useConnect,
+  useConnection,
+  useConnectors,
+  useDisconnect,
+  useSwitchChain,
+} from 'wagmi';
+import { useState } from 'react';
 import { web3Config } from '@/config/web3';
-import { isTransientError, retryAsync } from '@/utils/retry';
+import { useAuthStore } from '@/store/auth.store';
+import { networkUserKey, useNetworkStore } from '@/store/network.store';
 import { formatWalletBalance, shortenWalletAddress } from '@/utils/wallet';
 
-const publicClient = createPublicClient({
-  chain: web3Config.requiredChain,
-  transport: http(env.web3.rpcUrl),
-});
+const getErrorCode = (error) =>
+  error?.code ??
+  error?.cause?.code ??
+  error?.details?.code ??
+  error?.data?.originalError?.code;
 
-const WALLET_REFRESH_TTL = 12_000;
-const WALLET_REFRESH_INTERVAL = 30_000;
-let walletSnapshotCache = null;
-let walletRefreshFlight = null;
+const getErrorText = (error) =>
+  `${error?.shortMessage || ''} ${error?.details || ''} ${error?.message || ''}`.toLowerCase();
 
-const parseHexChainId = (value) => {
-  if (!value) return undefined;
-  const numeric = Number.parseInt(String(value), 16);
-  return Number.isFinite(numeric) ? numeric : undefined;
-};
+const isRejectedWalletRequest = (error) =>
+  getErrorCode(error) === 4001 ||
+  /user rejected|user denied|request rejected/.test(getErrorText(error));
 
-const invalidateWalletSnapshot = () => {
-  walletSnapshotCache = null;
-};
+const isPendingWalletRequest = (error) =>
+  getErrorCode(error) === -32002 ||
+  /already pending|request of type.*already pending/.test(getErrorText(error));
 
-const loadWalletSnapshot = async (embeddedWallet, { force = false } = {}) => {
-  const address = embeddedWallet?.address;
-  if (!address) return { chainId: undefined, balance: undefined };
+const toHexChainId = (chainId) => `0x${Number(chainId).toString(16)}`;
 
-  const normalizedAddress = String(address).toLowerCase();
-  const cacheIsFresh =
-    !force &&
-    walletSnapshotCache?.address === normalizedAddress &&
-    Date.now() - walletSnapshotCache.updatedAt < WALLET_REFRESH_TTL;
-  if (cacheIsFresh) return walletSnapshotCache.snapshot;
+async function requestProviderChainSwitch(connector, chain) {
+  const provider = await connector?.getProvider?.();
 
-  if (walletRefreshFlight?.address === normalizedAddress) return walletRefreshFlight.promise;
+  if (!provider?.request) {
+    throw new Error('The connected wallet does not support automatic network switching.');
+  }
 
-  const promise = (async () => {
-    const provider = await retryAsync(() => embeddedWallet.getEthereumProvider(), {
-      maxAttempts: 3,
-      baseDelayMs: 500,
-      maxDelayMs: 4_000,
-      shouldRetry: isTransientError,
+  const chainId = toHexChainId(chain.id);
+
+  try {
+    await provider.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId }],
+    });
+  } catch (error) {
+    if (isRejectedWalletRequest(error)) throw error;
+
+    const shouldAddChain =
+      getErrorCode(error) === 4902 ||
+      /unknown chain|unrecognized chain/.test(getErrorText(error));
+    if (!shouldAddChain) throw error;
+
+    const rpcUrls = chain.rpcUrls?.default?.http || chain.rpcUrls?.public?.http || [];
+    const explorerUrl = chain.blockExplorers?.default?.url;
+
+    await provider.request({
+      method: 'wallet_addEthereumChain',
+      params: [
+        {
+          chainId,
+          chainName: chain.name,
+          nativeCurrency: chain.nativeCurrency,
+          rpcUrls,
+          ...(explorerUrl ? { blockExplorerUrls: [explorerUrl] } : {}),
+        },
+      ],
     });
 
-    // The provider chain is transaction-critical, while the balance is display-only.
-    // Resolve the chain first so a temporary public-RPC balance failure cannot make a
-    // correctly configured Privy wallet look like it is on the wrong network.
-    const providerChainId = await retryAsync(
-      () => provider.request({ method: 'eth_chainId' }),
-      {
-        maxAttempts: 3,
-        baseDelayMs: 650,
-        maxDelayMs: 5_000,
-        shouldRetry: isTransientError,
-      },
-    );
+    await provider.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId }],
+    });
+  }
 
-    let value;
-    try {
-      value = await retryAsync(() => publicClient.getBalance({ address }), {
-        maxAttempts: 3,
-        baseDelayMs: 650,
-        maxDelayMs: 5_000,
-        shouldRetry: isTransientError,
-      });
-    } catch {
-      // Balance visibility is best effort. Transaction flows validate their required
-      // amounts separately and must not mistake a balance RPC outage for a network issue.
-      value = undefined;
-    }
+  return chain;
+}
 
-    const snapshot = {
-      chainId: parseHexChainId(providerChainId),
-      balance:
-        typeof value === 'bigint'
-          ? {
-              value,
-              decimals: 18,
-              symbol: web3Config.requiredChain.nativeCurrency.symbol,
-            }
-          : undefined,
-    };
-    walletSnapshotCache = { address: normalizedAddress, updatedAt: Date.now(), snapshot };
-    return snapshot;
-  })().finally(() => {
-    if (walletRefreshFlight?.promise === promise) walletRefreshFlight = null;
+export function useWalletConnection(requiredChainId) {
+  const connection = useConnection();
+  const connectors = useConnectors();
+  const user = useAuthStore((state) => state.user);
+  const userKey = networkUserKey(user);
+  const activeChainId = useNetworkStore((state) => state.activeChainByUser[userKey] || null);
+  const connectMutation = useConnect({ mutation: { meta: { silent: true } } });
+  const disconnectMutation = useDisconnect({ mutation: { meta: { silent: true } } });
+  const switchMutation = useSwitchChain({ mutation: { meta: { silent: true } } });
+  const [providerSwitchingChainId, setProviderSwitchingChainId] = useState();
+  const connectedSupportedChainId = web3Config.getChainById(connection.chainId)?.id || null;
+  // Chain precedence is contextual action -> user's active application network ->
+  // already-connected supported wallet network -> platform default. The connected
+  // chain fallback prevents a valid ARC/other-chain session from briefly being
+  // treated as Sepolia while persisted/account network context is still loading.
+  const requestedChainId = Number(requiredChainId) || Number(activeChainId) || connectedSupportedChainId || null;
+  const requiredChain = web3Config.getChainById(requestedChainId) || web3Config.requiredChain;
+
+  const isSupportedChain = web3Config.supportedChains.some(
+    (chain) => chain.id === connection.chainId,
+  );
+  const isConfiguredWalletChain = web3Config.walletChains.some(
+    (chain) => chain.id === connection.chainId,
+  );
+
+  const balanceQuery = useBalance({
+    address: connection.address,
+    chainId: isConfiguredWalletChain ? connection.chainId : undefined,
+    query: {
+      // Wagmi throws a technical ChainNotConfiguredError when a connected wallet
+      // is on a chain that is not registered in the wallet config. Bridge-only
+      // networks (such as Ethereum) are registered with Wagmi but deliberately
+      // remain outside the platform-supported investment chain catalogue.
+      enabled: Boolean(connection.address && connection.chainId && isConfiguredWalletChain),
+      refetchInterval: 20_000,
+      meta: { silent: true },
+    },
   });
 
-  walletRefreshFlight = { address: normalizedAddress, promise };
-  return promise;
-};
+  const switchChain = async (chainId, connectorOverride) => {
+    const targetChain = web3Config.walletChains.find((chain) => chain.id === Number(chainId));
+    const activeConnector = connectorOverride || connection.connector;
 
-export function useWalletConnection() {
-  const { ready: privyReady, authenticated } = usePrivy();
-  const { ready: walletsReady, wallets } = useWallets();
-  const embeddedWallet = useMemo(
-    () => wallets.find((wallet) => wallet.walletClientType === 'privy'),
-    [wallets],
-  );
-  const [chainId, setChainId] = useState();
-  const [balance, setBalance] = useState();
-  const [isRefreshing, setIsRefreshing] = useState(false);
+    if (!targetChain) {
+      throw new Error('The requested wallet network is not configured in this application.');
+    }
 
-  const connector = useMemo(
-    () =>
-      embeddedWallet
-        ? {
-            id: 'privy-embedded-wallet',
-            name: 'Privy Embedded Wallet',
-            type: 'privy',
-            getProvider: () => embeddedWallet.getEthereumProvider(),
-          }
-        : null,
-    [embeddedWallet],
-  );
+    if (!activeConnector) {
+      throw new Error('Connect a wallet before switching the network.');
+    }
 
-  const refreshWalletState = useCallback(
-    async ({ force = false } = {}) => {
-      if (!embeddedWallet?.address) {
-        setChainId(undefined);
-        setBalance(undefined);
-        return { chainId: undefined, balance: undefined };
-      }
+    try {
+      return await switchMutation.mutateAsync({ chainId });
+    } catch (error) {
+      if (isRejectedWalletRequest(error) || isPendingWalletRequest(error)) throw error;
 
-      setIsRefreshing(true);
+      setProviderSwitchingChainId(chainId);
       try {
-        const snapshot = await loadWalletSnapshot(embeddedWallet, { force });
-        setChainId(snapshot.chainId);
-        setBalance(snapshot.balance);
-        return snapshot;
+        return await requestProviderChainSwitch(activeConnector, targetChain);
       } finally {
-        setIsRefreshing(false);
+        setProviderSwitchingChainId(undefined);
       }
-    },
-    [embeddedWallet],
-  );
-
-  const refresh = useCallback(
-    () => refreshWalletState({ force: true }),
-    [refreshWalletState],
-  );
-
-  const getActiveChainId = useCallback(async () => {
-    if (!embeddedWallet) {
-      throw new Error('Your Privy secure account is not available. Sign in again.');
+    } finally {
+      switchMutation.reset();
     }
+  };
 
-    const provider = await retryAsync(() => embeddedWallet.getEthereumProvider(), {
-      maxAttempts: 3,
-      baseDelayMs: 500,
-      maxDelayMs: 4_000,
-      shouldRetry: isTransientError,
+  const connect = async (connector) => {
+    try {
+      const result = await connectMutation.mutateAsync({
+        connector,
+        chainId: requiredChain.id,
+      });
+
+      if (result.chainId !== requiredChain.id) {
+        await requestProviderChainSwitch(connector, requiredChain);
+      }
+
+      return result;
+    } finally {
+      // TanStack mutations retain their last variables after they settle. Resetting
+      // prevents a rejected/cancelled wallet request from leaving its option in a
+      // permanent loading state when the modal stays open.
+      connectMutation.reset();
+    }
+  };
+
+  const disconnect = async () =>
+    disconnectMutation.mutateAsync({
+      connector: connection.connector,
     });
-    const providerChainId = await retryAsync(
-      () => provider.request({ method: 'eth_chainId' }),
-      {
-        maxAttempts: 3,
-        baseDelayMs: 650,
-        maxDelayMs: 5_000,
-        shouldRetry: isTransientError,
-      },
-    );
-    const resolvedChainId = parseHexChainId(providerChainId);
-    setChainId(resolvedChainId);
-    return resolvedChainId;
-  }, [embeddedWallet]);
 
-  useEffect(() => {
-    refreshWalletState().catch(() => undefined);
-    if (!embeddedWallet?.address) return undefined;
-
-    const timer = window.setInterval(
-      () => refreshWalletState().catch(() => undefined),
-      WALLET_REFRESH_INTERVAL,
-    );
-    return () => window.clearInterval(timer);
-  }, [embeddedWallet?.address, refreshWalletState]);
-
-  const switchChain = useCallback(
-    async (targetChainId) => {
-      const target = web3Config.supportedChains.find(
-        (chain) => chain.id === Number(targetChainId),
-      );
-      if (!target)
-        throw new Error('The requested network is not configured in this application.');
-      if (!embeddedWallet)
-        throw new Error('Your Privy secure account is not available. Sign in again.');
-
-      await embeddedWallet.switchChain(target.id);
-      invalidateWalletSnapshot();
-      await refreshWalletState({ force: true });
-      return target;
-    },
-    [embeddedWallet, refreshWalletState],
-  );
-
-  const connect = useCallback(async () => {
-    if (!embeddedWallet) {
-      throw new Error(
-        'Your Privy secure account is prepared when you sign in. Sign in again to restore access.',
-      );
-    }
-
-    const snapshot = await refreshWalletState();
-    return {
-      address: embeddedWallet.address,
-      addresses: [embeddedWallet.address],
-      chainId: snapshot?.chainId ?? chainId,
-    };
-  }, [chainId, embeddedWallet, refreshWalletState]);
-
-  // Kept only as a compatibility surface for legacy callers. Wallet account switching is
-  // intentionally disabled in V2 because the wallet is bound to the authenticated Privy user.
-  const disconnect = useCallback(async () => undefined, []);
-
-  const address = embeddedWallet?.address || undefined;
-  const isConnected = Boolean(
-    privyReady && walletsReady && authenticated && embeddedWallet?.address,
-  );
-  // Transaction pages can wait until Privy has finished resolving the wallet list,
-  // then perform an authoritative provider refresh before submitting any transaction.
-  const isReady = Boolean(privyReady && walletsReady);
-  const isSupportedChain = web3Config.supportedChains.some((chain) => chain.id === chainId);
-  const isCorrectNetwork = isConnected && chainId === web3Config.requiredChain.id;
-  const chain = web3Config.supportedChains.find((item) => item.id === chainId);
+  const isCorrectNetwork =
+    connection.isConnected && connection.chainId === requiredChain.id;
 
   return {
-    status: isConnected ? 'connected' : 'disconnected',
-    isReady,
-    isConnected,
-    isConnecting: false,
-    isDisconnected: !isConnected,
-    address,
-    addresses: address ? [address] : [],
-    chainId,
-    chain,
-    connector,
-    connectors: connector ? [connector] : [],
+    ...connection,
+    connectors,
     connect,
     disconnect,
     switchChain,
-    requiredChain: web3Config.requiredChain,
+    requiredChain,
     supportedChains: web3Config.supportedChains,
-    walletConnectConfigured: false,
+    walletChains: web3Config.walletChains,
+    walletConnectConfigured: web3Config.walletConnectConfigured,
     isCorrectNetwork,
     isSupportedChain,
-    isUnsupportedNetwork: isConnected && !isSupportedChain,
-    isBusy: isRefreshing,
-    connectingConnectorId: undefined,
-    switchingChainId: undefined,
-    balance,
-    balanceLabel: isRefreshing && !balance ? 'Loading balance…' : formatWalletBalance(balance),
-    refresh,
-    getActiveChainId,
-    shortAddress: shortenWalletAddress(address),
-    walletSource: 'privy',
+    isConfiguredWalletChain,
+    isBridgeOnlyChain: connection.isConnected && isConfiguredWalletChain && !isSupportedChain,
+    isUnsupportedNetwork: connection.isConnected && !isSupportedChain,
+    isUnknownNetwork: connection.isConnected && !isConfiguredWalletChain,
+    isBusy:
+      connectMutation.isPending ||
+      disconnectMutation.isPending ||
+      switchMutation.isPending ||
+      Boolean(providerSwitchingChainId),
+    connectingConnectorId: connectMutation.isPending
+      ? connectMutation.variables?.connector?.id
+      : undefined,
+    switchingChainId: switchMutation.variables?.chainId || providerSwitchingChainId,
+    balance: balanceQuery.data,
+    balanceLabel:
+      !isConfiguredWalletChain && connection.isConnected
+        ? 'Unavailable on this network'
+        : balanceQuery.isPending
+          ? 'Loading balance…'
+          : formatWalletBalance(balanceQuery.data),
+    shortAddress: shortenWalletAddress(connection.address),
   };
 }

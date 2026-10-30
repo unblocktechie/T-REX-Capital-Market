@@ -73,7 +73,6 @@ export default function ResetPasswordPage() {
       <DelayedTrexLoader
         delay={220}
         variant="verification"
-        eyebrow="Password security check"
         title="Validating your reset link"
         message="We are securely checking this request before allowing a password change."
       />

@@ -1,5 +1,5 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { WorkspaceRouteLoader } from '@/components/loaders/DelayedTrexLoader';
+import { WorkspacePageSkeleton } from '@/components/loaders/WorkspacePageSkeleton';
 import { ROUTES } from '@/config/routes';
 import { ROLES } from '@/config/permissions';
 import { useAuth } from '@/hooks/useAuth';
@@ -37,7 +37,7 @@ export function OrganizationAccessMiddleware() {
   if (user?.role !== ROLES.issuer) return <Outlet />;
 
   if (isLoading) {
-    return <WorkspaceRouteLoader />;
+    return <WorkspacePageSkeleton />;
   }
 
   if (error?.response?.status === 403) {

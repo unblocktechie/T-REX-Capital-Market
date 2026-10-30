@@ -70,6 +70,15 @@ class TrexDeploymentSyncService {
     return row ? row.settingValue : undefined;
   }
 
+  checkpointKey() {
+    // Legacy/custom repositories used one global key. Production exposes the
+    // upsert capability and therefore uses a distinct checkpoint per chain.
+    if (typeof this.settingRepository.upsertInternalValue !== 'function') {
+      return SETTING_KEYS.lastSyncBlock;
+    }
+    return `${SETTING_KEYS.lastSyncBlock}.${Number(this.config.chainId)}`;
+  }
+
   async getNumber(key, fallback) {
     const raw = await this.getSettingRaw(key);
     const value = Number(raw);
@@ -142,9 +151,9 @@ class TrexDeploymentSyncService {
     }
 
     const offset = Math.max(1, Math.trunc(await this.getNumber(SETTING_KEYS.blockOffset, 500)));
-    const confirmationBlocks = Math.max(0, Math.trunc(await this.getNumber(SETTING_KEYS.confirmationBlocks, 1)));
+    const confirmationBlocks = Math.max(0, Math.trunc(await this.getNumber(SETTING_KEYS.confirmationBlocks, 2)));
     const startBlock = Math.max(0, Math.trunc(await this.getNumber(SETTING_KEYS.startBlock, 0)));
-    let lastSync = Math.max(0, Math.trunc(await this.getNumber(SETTING_KEYS.lastSyncBlock, 0)));
+    let lastSync = Math.max(0, Math.trunc(await this.getNumber(this.checkpointKey(), 0)));
 
     let provider;
     try {
@@ -213,7 +222,14 @@ class TrexDeploymentSyncService {
         stats.blocksScanned += (to - from + 1);
         stats.toBlock = to;
         // Advance the checkpoint only after a chunk is fully processed.
-        await this.settingRepository.setValueByKey(SETTING_KEYS.lastSyncBlock, to);
+        if (typeof this.settingRepository.upsertInternalValue === 'function') {
+          await this.settingRepository.upsertInternalValue(this.checkpointKey(), to);
+        } else {
+          // Backward-compatible adapter for older/custom repositories. The production
+          // repository uses the chain-scoped upsert above so a newly added chain does
+          // not require a pre-seeded checkpoint row.
+          await this.settingRepository.setValueByKey(this.checkpointKey(), to);
+        }
         from = to + 1;
       }
 
@@ -268,6 +284,12 @@ class TrexDeploymentSyncService {
       });
       return 'skipped';
     }
+    if (token.chainUid && this.config.chainUid && token.chainUid !== this.config.chainUid) {
+      logger.info('TREX deployment sync: token belongs to another configured chain; skipping', {
+        tokenUid: token.tokenUid, tokenChainUid: token.chainUid, scannerChainUid: this.config.chainUid,
+      });
+      return 'skipped';
+    }
 
     // Idempotency: already synchronized?
     if (token.status === 'deployed') {
@@ -295,7 +317,7 @@ class TrexDeploymentSyncService {
 
     // Cross-token uniqueness guards (contract address / tx hash not owned elsewhere).
     if (this.tokenRepository.findByTokenAddressExcept) {
-      const addressOwner = await this.tokenRepository.findByTokenAddressExcept(tokenAddress, token.tokenUid);
+      const addressOwner = await this.tokenRepository.findByTokenAddressExcept(tokenAddress, token.tokenUid, undefined, token.chainUid);
       if (addressOwner) {
         logger.warn('TREX deployment sync: contract address already assigned to another token; skipping', {
           tokenAddress, otherTokenUid: addressOwner.tokenUid,
@@ -304,7 +326,7 @@ class TrexDeploymentSyncService {
       }
     }
     if (this.tokenRepository.findByDeployTxHashExcept) {
-      const hashOwner = await this.tokenRepository.findByDeployTxHashExcept(transactionHash, token.tokenUid);
+      const hashOwner = await this.tokenRepository.findByDeployTxHashExcept(transactionHash, token.tokenUid, undefined, token.chainUid);
       if (hashOwner) {
         logger.warn('TREX deployment sync: transaction hash already linked to another token; skipping', {
           transactionHash, otherTokenUid: hashOwner.tokenUid,

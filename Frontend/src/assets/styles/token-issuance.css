@@ -5673,6 +5673,22 @@
   font-weight: 500;
 }
 
+/* Small network identity chip: artwork from the backend chain record, then name. */
+.token-dashboard-header__status > .token-dashboard-header__network-chip {
+  padding: 4px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-subtle, #f8fafc);
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.token-dashboard-header__network-chip > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .token-dashboard-header__actions {
   display: flex;
   justify-content: flex-end;
@@ -6026,15 +6042,13 @@
   gap: 11px;
 }
 
-.token-dashboard-permissions,
-.token-dashboard-country-list {
+.token-dashboard-permissions {
   display: flex;
   flex-wrap: wrap;
   gap: 7px;
 }
 
-.token-dashboard-permissions span,
-.token-dashboard-country-list span {
+.token-dashboard-permissions span {
   display: inline-flex;
   align-items: center;
   min-height: 29px;
@@ -6128,10 +6142,6 @@
   font-weight: 600;
   text-align: right;
   overflow-wrap: anywhere;
-}
-
-.token-dashboard-country-list {
-  padding-top: 13px;
 }
 
 .token-dashboard-deployment-grid {
@@ -7037,16 +7047,7 @@
   }
 }
 
-/* Round 5: settlement/network context on issuer asset details */
-.token-dashboard-header__asset-context {
-  display: flex;
-  min-width: 0;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 7px;
-  margin-top: 8px;
-}
-
+/* Currency amounts and existing input alignment. */
 .token-dashboard-header__price-value {
   display: inline-flex;
   width: fit-content;
@@ -7056,8 +7057,12 @@
   white-space: nowrap;
 }
 
+/* Keep the payment-token mark readable beside the 24px current price.
+   Scope this size to the issuer's price overview, not all token icons. */
 .token-dashboard-header__price-value > .token-icon {
-  flex: 0 0 auto;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
 }
 
 .token-dashboard-header__price-value > span {
@@ -7066,20 +7071,6 @@
   text-overflow: ellipsis;
 }
 
-@media (max-width: 620px) {
-  .token-dashboard-header__asset-context {
-    gap: 6px;
-  }
-
-  .token-dashboard-header__price-value {
-    font-size: 15px;
-  }
-}
-
-/* Currency-aware amount field -------------------------------------------------
-   Keeps the familiar numeric input while adding a compact, non-interactive
-   USDC visual cue. The icon sits inside the control without affecting input
-   semantics, validation, or touch targets. */
 .issuance-currency-input {
   position: relative;
   min-width: 0;
@@ -7116,5 +7107,769 @@
 
   .issuance-currency-input__control {
     padding-left: 42px;
+  }
+}
+
+/* Payment catalogue: keep the existing select behavior and responsive sizing. */
+.payment-token-select .org-select-trigger { min-height: 54px; }
+.payment-token-select .org-select-trigger__value { min-width: 0; flex: 1; text-align: left; }
+.payment-token-select .payment-token-choice { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.payment-token-select .payment-token-choice > span:first-child { flex: 0 0 auto; }
+.payment-token-select .payment-token-choice__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.payment-token-select .payment-token-choice__text strong { font-size: 13px; font-weight: 600; line-height: 1.3; }
+.payment-token-select .payment-token-choice__text small { font-size: 11px; line-height: 1.35; color: var(--text-muted, #64748b); white-space: normal; overflow-wrap: anywhere; }
+.payment-token-select .org-select-option { min-height: 58px; gap: 10px; }
+.payment-token-select .org-select-option > span { min-width: 0; flex: 1; }
+.payment-token-select .org-select-option > svg { flex-shrink: 0; }
+
+/* Asset-details payment selector: match the adjacent price input while keeping
+   the selected token and required chain visible in one responsive row. */
+.payment-token-select--compact .org-select-trigger {
+  min-height: 46px;
+}
+
+.payment-token-select--compact .org-select-trigger__value {
+  overflow: hidden;
+}
+
+.payment-token-choice--compact-value {
+  width: 100%;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.payment-token-choice__compact-text {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: baseline;
+  gap: 6px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.payment-token-choice__compact-text strong {
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.payment-token-choice__compact-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted, #64748b);
+  font-size: 11px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+}
+
+.payment-token-choice__network {
+  display: inline-flex;
+  min-height: 22px;
+  flex: 0 0 auto;
+  align-items: center;
+  border: 1px solid color-mix(in srgb, var(--primary-500) 18%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary-500) 6%, var(--surface));
+  padding: 2px 8px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+@media (max-width: 420px) {
+  .payment-token-select--compact .payment-token-choice__compact-name {
+    display: none;
+  }
+
+  .payment-token-choice__network {
+    padding-inline: 7px;
+  }
+}
+
+/* Token Management: compact issuer-facing overview. Deliberately scoped so
+   wizard, admin and investor screens retain their existing presentation. */
+.token-dashboard-header--simplified {
+  gap: 16px 22px;
+  background: var(--surface);
+  padding: clamp(18px, 2.5vw, 28px);
+}
+
+.token-dashboard-header--simplified h1 {
+  font-size: clamp(23px, 2.5vw, 32px);
+  margin: 3px 0 10px;
+}
+
+.token-dashboard-header--simplified .token-dashboard-logo {
+  border: 1px solid #e2e8f0;
+  border-radius: 15px;
+  background: #f8fafc;
+  color: #252c34;
+}
+
+.token-dashboard-header--simplified .token-dashboard-header__description {
+  max-width: 100%;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* Token Management descriptions are collapsed only when their rendered text
+   exceeds three lines. All saved text remains present and readable on expand. */
+.token-dashboard-header--simplified .token-dashboard-description {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.token-dashboard-header--simplified .token-dashboard-description__text {
+  max-width: 100%;
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.token-dashboard-header--simplified .token-dashboard-description__text--collapsed {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+
+.token-dashboard-header--simplified .token-dashboard-description__toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  margin-top: 7px;
+  padding: 6px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #252c34;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.token-dashboard-header--simplified .token-dashboard-description__toggle:hover {
+  background: #f1f5f9;
+}
+
+.token-dashboard-header--simplified .token-dashboard-description__toggle:focus-visible {
+  outline: 2px solid #334155;
+  outline-offset: 2px;
+}
+
+.token-dashboard-pricing {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-width: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 13px;
+  background: #f8fafc;
+  padding: 15px 18px;
+}
+
+.token-dashboard-pricing .token-dashboard-header__price {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.token-dashboard-pricing .token-dashboard-header__price-label {
+  justify-content: flex-start;
+  gap: 18px;
+}
+
+.token-dashboard-pricing .token-dashboard-header__price-value {
+  font-size: clamp(19px, 2.1vw, 26px);
+  font-weight: 650;
+}
+
+.token-dashboard-pricing__initial {
+  display: grid;
+  gap: 6px;
+  flex: 0 1 auto;
+  min-width: 0;
+  border-left: 1px solid #e2e8f0;
+  padding-left: clamp(16px, 3vw, 40px);
+}
+
+.token-dashboard-pricing__initial small {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.token-dashboard-pricing__initial strong {
+  color: #252c34;
+  font-size: 16px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.token-dashboard-grid--simplified {
+  /* Grid stretching matches card heights without forcing a fixed height. */
+  align-items: stretch;
+}
+
+.token-dashboard-grid--simplified > .token-dashboard-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.token-dashboard-grid--simplified > .token-dashboard-card > .token-dashboard-card__body {
+  flex: 1;
+}
+
+.token-dashboard-grid--simplified .token-dashboard-card,
+.token-dashboard-management-card,
+.token-dashboard-technical-section {
+  min-width: 0;
+}
+
+.token-dashboard-grid--simplified .token-dashboard-card > header,
+.token-dashboard-management-card > header {
+  background: #f8fafc;
+}
+
+.token-dashboard-grid--simplified .token-dashboard-card > header svg,
+.token-dashboard-management-card > header svg,
+.token-dashboard-management-card .token-dashboard-management-list article > svg {
+  color: #475569;
+}
+
+.token-dashboard-grid--simplified .token-dashboard-card__body {
+  gap: 12px;
+}
+
+.token-dashboard-access-summary {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.token-dashboard-access-summary strong {
+  color: #252c34;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.token-dashboard-access-summary > span {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.token-dashboard-check-list {
+  display: grid;
+  min-width: 0;
+}
+
+.token-dashboard-check-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.token-dashboard-check-row:last-child,
+.token-dashboard-grid--simplified .token-dashboard-setting-row:last-of-type {
+  border-bottom: 0;
+}
+
+.token-dashboard-check-row > div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  color: #252c34;
+  font-size: 13px;
+  font-weight: 550;
+}
+
+.token-dashboard-check-row > div > svg {
+  flex: 0 0 auto;
+  color: #64748b;
+}
+
+.token-dashboard-check-row > div > span {
+  overflow-wrap: anywhere;
+}
+
+.token-dashboard-check-row > .issuance-status {
+  flex: 0 0 auto;
+}
+
+.token-dashboard-technical-section .issuance-help-details {
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: var(--shadow-sm);
+}
+
+.token-dashboard-technical-section .issuance-help-details > summary {
+  min-height: 61px;
+  padding: 16px 18px;
+  background: #f8fafc;
+  color: #252c34;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.token-dashboard-technical-section .issuance-help-details > summary svg {
+  color: #64748b;
+}
+
+.token-dashboard-technical-section .issuance-help-details__content {
+  padding: 18px;
+  gap: 20px;
+  font-size: 13px;
+}
+
+.token-dashboard-technical__group {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.token-dashboard-technical__group:not(:last-child) {
+  padding-bottom: 20px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.token-dashboard-technical__group h3 {
+  margin: 0 0 2px;
+  color: #252c34;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.token-dashboard-technical__group .issuance-address {
+  min-width: 0;
+  background: #f8fafc;
+}
+
+.token-dashboard-technical__group .issuance-address code {
+  overflow-wrap: anywhere;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.token-dashboard-technical__group .token-dashboard-setting-row {
+  padding: 9px 0;
+}
+
+.token-dashboard-technical__transaction {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  width: fit-content;
+  padding: 9px 0;
+  font-size: 13px;
+  font-weight: 600;
+  text-underline-offset: 3px;
+}
+
+.token-dashboard-technical__transaction svg {
+  flex-shrink: 0;
+}
+
+@media (max-width: 620px) {
+  .token-dashboard-header--simplified {
+    padding: 18px 15px;
+  }
+
+  .token-dashboard-pricing {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 13px;
+    padding: 14px;
+  }
+
+  .token-dashboard-pricing__initial {
+    border-left: 0;
+    border-top: 1px solid #e2e8f0;
+    padding: 12px 0 0;
+  }
+
+  .token-dashboard-check-row {
+    flex-wrap: wrap;
+  }
+
+  .token-dashboard-technical-section .issuance-help-details__content {
+    padding: 13px;
+  }
+
+}
+
+.token-dashboard-technical-section .issuance-help-details > summary:hover,
+.token-dashboard-technical-section .issuance-help-details > summary:focus-visible {
+  background: #f1f5f9;
+  color: #252c34;
+}
+
+.token-dashboard-check-name {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  overflow-wrap: anywhere;
+}
+
+.token-dashboard-check-name small {
+  color: #64748b;
+  font-size: 11.5px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+
+/* Token Management: readable values, labels and status chips without globally
+   overriding token issuance forms, other dashboards or shared primitives. */
+.token-dashboard-page .token-dashboard-card h2 {
+  font-size: 18px;
+}
+
+.token-dashboard-page .issuance-status {
+  font-size: 11.5px;
+  line-height: 1.3;
+  min-height: 26px;
+  padding: 4px 9px;
+}
+
+.token-dashboard-page .token-dashboard-header__description,
+.token-dashboard-page .token-dashboard-access-summary > span,
+.token-dashboard-page .token-dashboard-empty,
+.token-dashboard-page .token-dashboard-check-name small {
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.token-dashboard-page .token-dashboard-access-summary strong,
+.token-dashboard-page .token-dashboard-setting-row strong {
+  font-size: 15px;
+}
+
+.token-dashboard-page .token-dashboard-setting-row > span,
+.token-dashboard-page .token-dashboard-check-row > div {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.token-dashboard-page .token-dashboard-pricing__initial small,
+.token-dashboard-page .token-dashboard-header__price-label small {
+  font-size: 13px;
+}
+
+.token-dashboard-page .token-dashboard-header__price-label button,
+.token-dashboard-page .token-dashboard-technical__transaction {
+  font-size: 14px;
+}
+
+.token-dashboard-page .token-dashboard-pricing__initial strong {
+  font-size: 17px;
+}
+
+.token-dashboard-page .token-dashboard-header__status > span:not(.issuance-status) {
+  font-size: 13px;
+}
+
+.token-dashboard-page .token-dashboard-technical__group h3 {
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.token-dashboard-page .token-dashboard-technical-section .issuance-help-details__content {
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.token-dashboard-page .token-dashboard-technical__group .issuance-address {
+  gap: 12px;
+  padding: 13px 15px;
+}
+
+.token-dashboard-page .token-dashboard-technical__group .issuance-address small {
+  display: block;
+  margin-bottom: 5px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.token-dashboard-page .token-dashboard-technical__group .issuance-address code {
+  font-size: 14px;
+  line-height: 1.55;
+  font-weight: 550;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.token-dashboard-page .token-dashboard-technical__group .issuance-address__actions button,
+.token-dashboard-page .token-dashboard-technical__group .issuance-address__actions a {
+  width: 38px;
+  height: 38px;
+}
+
+.token-dashboard-role-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  min-width: 0;
+}
+
+.token-dashboard-role {
+  display: grid;
+  align-content: start;
+  gap: 13px;
+  min-width: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 13px;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.token-dashboard-role__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.token-dashboard-role__heading > div {
+  min-width: 0;
+}
+
+.token-dashboard-role__heading strong {
+  display: block;
+  color: #252c34;
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.token-dashboard-role__heading p {
+  margin: 5px 0 0;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.token-dashboard-role__heading .issuance-status {
+  flex: 0 0 auto;
+}
+
+.token-dashboard-role > .issuance-address {
+  align-self: end;
+}
+
+@media (max-width: 840px) {
+  .token-dashboard-role-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 620px) {
+  .token-dashboard-page .token-dashboard-technical__group .issuance-address {
+    padding: 12px;
+  }
+
+  .token-dashboard-page .token-dashboard-technical__group .issuance-address code {
+    font-size: 13px;
+  }
+
+  .token-dashboard-role {
+    padding: 13px;
+  }
+
+  .token-dashboard-role__heading {
+    flex-wrap: wrap;
+  }
+}
+
+/* Issuer Token Management: country summary remains one row regardless of the
+   number of restrictions. The expanded list floats above the document, not
+   inside either stretched dashboard card. */
+.token-dashboard-page .token-dashboard-country-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 2px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #334155;
+  font: inherit;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: #cbd5e1;
+  text-underline-offset: 3px;
+}
+
+.token-dashboard-page .token-dashboard-country-trigger:hover {
+  color: #252c34;
+  text-decoration-color: #64748b;
+}
+
+.token-dashboard-country-trigger svg {
+  flex: 0 0 auto;
+  transition: transform 150ms ease;
+}
+
+.token-dashboard-country-trigger[aria-expanded='true'] svg {
+  transform: rotate(180deg);
+}
+
+.token-dashboard-country-trigger:focus-visible,
+.token-dashboard-country-popover__close:focus-visible {
+  outline: 2px solid #64748b;
+  outline-offset: 3px;
+}
+
+.token-dashboard-country-popover {
+  position: fixed;
+  z-index: 1200;
+  width: min(340px, calc(100vw - 24px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 12px 36px rgb(15 23 42 / 15%);
+  color: #252c34;
+}
+
+.token-dashboard-country-popover__header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 15px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.token-dashboard-country-popover__header > div {
+  display: grid;
+  gap: 3px;
+}
+
+.token-dashboard-country-popover__header strong {
+  color: #252c34;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.token-dashboard-country-popover__header span,
+.token-dashboard-country-modal__count {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.token-dashboard-country-popover__close {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.token-dashboard-country-popover__close:hover {
+  border-color: #e2e8f0;
+  background: #f1f5f9;
+  color: #252c34;
+}
+
+.token-dashboard-country-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.token-dashboard-country-scroll:focus-visible {
+  outline: 2px solid #94a3b8;
+  outline-offset: -2px;
+}
+
+.token-dashboard-country-items {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 3px 15px;
+  list-style: none;
+}
+
+.token-dashboard-country-items li {
+  padding: 11px 0;
+  border-bottom: 1px solid #e2e8f0;
+  color: #334155;
+  font-size: 14px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.token-dashboard-country-items li:last-child {
+  border-bottom: 0;
+}
+
+.token-dashboard-country-modal__body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.token-dashboard-country-modal__count {
+  flex: 0 0 auto;
+  margin: 0 0 10px;
+}
+
+@media (max-width: 840px) {
+  /* Stacked cards return to their natural independent heights. */
+  .token-dashboard-grid--simplified {
+    align-items: start;
+  }
+}
+
+@media (max-width: 620px) {
+  .token-dashboard-page .token-dashboard-country-trigger {
+    min-height: 40px;
+    white-space: normal;
+    text-align: right;
+  }
+
+  .token-dashboard-country-modal .token-dashboard-country-scroll {
+    max-height: 55dvh;
   }
 }

@@ -38,6 +38,7 @@ const receiptFields = (receipt, log) => ({
 class TokenPurchaseBlockchainService {
   constructor(config = env.blockchain, dependencies = {}) {
     this.config = config;
+    this.paymentTokenRepository = dependencies.paymentTokenRepository || null;
     this.providerFactory = dependencies.providerFactory || ((url) => new ethers.JsonRpcProvider(url));
     this.walletFactory = dependencies.walletFactory || ((key, provider) => new ethers.Wallet(key, provider));
     this.contractFactory = dependencies.contractFactory || ((address, abi, runner) => new ethers.Contract(address, abi, runner));
@@ -46,7 +47,7 @@ class TokenPurchaseBlockchainService {
     this.transferTopic = this.usdtInterface.getEvent('Transfer').topicHash;
   }
 
-  confirmations() { return Math.max(1, Number(this.config.purchaseConfirmations || 1)); }
+  confirmations() { return Math.max(1, Number(this.config.purchaseConfirmations || 2)); }
 
   async withProvider(work) {
     if (!this.config.sepoliaRpcUrl) throw new PurchaseBlockchainError('RPC_UNAVAILABLE', 'Blockchain RPC is not configured.', { transient: true });
@@ -232,7 +233,7 @@ class TokenPurchaseBlockchainService {
     confirmations = this.confirmations(),
     timeoutMs = Number(this.config.transactionTimeoutMs || 120000),
   } = {}) {
-    const required = Math.max(1, Number(confirmations || 1));
+    const required = Math.max(1, Number(confirmations || 2));
     try {
       const receipt = await this.withProvider((provider) => provider.waitForTransaction(
         txHash, required, Math.max(1000, Number(timeoutMs || 120000)),
@@ -264,7 +265,12 @@ class TokenPurchaseBlockchainService {
 
   async scanPaymentEvents(fromBlock, toBlock) {
     return this.withProvider(async (provider, chainId) => {
-      const logs = await provider.getLogs({ address: this.config.purchaseUsdtAddress, topics: [this.transferTopic], fromBlock, toBlock });
+      const paymentTokens = this.paymentTokenRepository
+        ? await this.paymentTokenRepository.listActive(chainId, 'PURCHASE')
+        : [];
+      const addresses = paymentTokens.map((token) => token.contractAddress);
+      if (!addresses.length) return [];
+      const logs = await provider.getLogs({ address: addresses, topics: [this.transferTopic], fromBlock, toBlock });
       return logs.map((log) => {
         const parsed = this.usdtInterface.parseLog(log);
         return {

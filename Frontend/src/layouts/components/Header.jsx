@@ -1,9 +1,9 @@
-import { usePrivy } from '@privy-io/react-auth';
 import { useEffect, useRef, useState } from 'react';
 import { Building2, ChevronDown, LogOut, Menu, UserRound } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { authService } from '@/api/auth';
 import { TrexLogo } from '@/components/branding/TrexLogo';
+import { AppNetworkSwitcher } from '@/components/common/AppNetworkSwitcher';
 import { WalletControl } from '@/components/wallet/WalletControl';
 import { routeMeta } from '@/config/navigation';
 import { ROLES } from '@/config/permissions';
@@ -18,13 +18,22 @@ const formatRole = (role) => {
     .replace(/\b\w/g, (character) => character.toUpperCase());
 };
 
-export function Header({ onboardingOnly = false }) {
+export function Header({ onboardingOnly = false, network: appNetwork }) {
   const { user } = useAuth();
-  const { authenticated: privyAuthenticated, logout: privyLogout } = usePrivy();
   const location = useLocation();
   const navigate = useNavigate();
   const toggleSidebar = useUiStore((state) => state.toggleSidebar);
   const toggleSidebarCollapsed = useUiStore((state) => state.toggleSidebarCollapsed);
+  const walletRequiredChainId = useUiStore((state) => state.walletRequiredChainId);
+  const effectiveWalletChainId = walletRequiredChainId || appNetwork?.activeChainId;
+  const isNetworkAwareUser = user?.role === ROLES.issuer || user?.role === ROLES.investor;
+  const isInvestorOnboardingRoute =
+    user?.role === ROLES.investor && location.pathname === ROUTES.investors;
+  const showNetworkSwitcher =
+    Boolean(appNetwork) &&
+    isNetworkAwareUser &&
+    location.pathname !== ROUTES.organizationReview &&
+    !isInvestorOnboardingRoute;
   const [profileOpen, setProfileOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const profileRef = useRef(null);
@@ -40,7 +49,7 @@ export function Header({ onboardingOnly = false }) {
     user?.role === ROLES.investor && location.pathname === ROUTES.dashboard
       ? { title: 'Investor Dashboard', description: 'Your next actions, applications, and investments' }
       : user?.role === ROLES.investor && location.pathname === ROUTES.profile
-        ? { title: 'Investor Profile', description: 'Your identity, eligibility information, documents, and Privy secure account' }
+        ? { title: 'Investor Profile', description: 'Your identity, eligibility information, documents, and registered wallet' }
         : user?.role === ROLES.investor && location.pathname === ROUTES.investors
           ? { title: 'Investor Onboarding', description: 'Set up your investor profile and eligibility' }
           : null;
@@ -90,7 +99,6 @@ export function Header({ onboardingOnly = false }) {
     setIsLoggingOut(true);
     try {
       await authService.logout();
-      if (privyAuthenticated) await privyLogout();
       navigate(ROUTES.login, { replace: true });
     } finally {
       setIsLoggingOut(false);
@@ -178,8 +186,9 @@ export function Header({ onboardingOnly = false }) {
           <TrexLogo />
         </div>
         <div className="onboarding-header__account">
+          {showNetworkSwitcher ? <AppNetworkSwitcher pathname={location.pathname} onboardingOnly network={appNetwork} /> : null}
           <div className="header-wallet-control">
-            <WalletControl onboarding context={user?.role === ROLES.investor ? 'investor' : 'organization'} />
+            <WalletControl onboarding context={user?.role === ROLES.investor ? 'investor' : 'organization'} requiredChainId={effectiveWalletChainId} />
           </div>
           {accountMenu}
         </div>
@@ -204,8 +213,9 @@ export function Header({ onboardingOnly = false }) {
       </div>
 
       <div className="app-header__actions">
+        {showNetworkSwitcher ? <AppNetworkSwitcher pathname={location.pathname} network={appNetwork} /> : null}
         <div className="header-wallet-control">
-          <WalletControl context={user?.role === ROLES.investor ? 'investor' : 'organization'} />
+          <WalletControl context={user?.role === ROLES.investor ? 'investor' : 'organization'} requiredChainId={effectiveWalletChainId} />
         </div>
         {accountMenu}
       </div>

@@ -3,15 +3,20 @@ import { investorApi } from '@/api/investor';
 import { ROLES } from '@/config/permissions';
 import { useAuth } from '@/hooks/useAuth';
 import { investorClaimRecoveryStore } from '@/services/investor/investorClaimRecoveryStore';
+import { networkUserKey, useNetworkStore } from '@/store/network.store';
 
 const normalize = (value) => String(value || '').trim().toUpperCase();
 
 export function InvestorClaimRecoveryBootstrap() {
   const { user, isAuthenticated } = useAuth();
   const inFlightRef = useRef(new Set());
+  const userKey = networkUserKey(user);
+  const selectedChainUid = useNetworkStore(
+    (state) => state.activeChainUidByUser[userKey] || '',
+  );
 
   useEffect(() => {
-    if (!isAuthenticated || user?.role !== ROLES.investor) return undefined;
+    if (!isAuthenticated || user?.role !== ROLES.investor || !selectedChainUid) return undefined;
 
     const reconcileOnce = async () => {
       // The Submit Claim page owns visible finite polling. Outside that page this
@@ -48,7 +53,7 @@ export function InvestorClaimRecoveryBootstrap() {
     void reconcileOnce();
     window.addEventListener('online', reconcileOnce);
     return () => window.removeEventListener('online', reconcileOnce);
-  }, [isAuthenticated, user?.role]);
+  }, [isAuthenticated, selectedChainUid, user?.role]);
 
   return null;
 }

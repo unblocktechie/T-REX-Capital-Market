@@ -22,6 +22,8 @@ tags:
   - name: Token Purchases
   - name: Token Redemptions
   - name: Investor Invitations
+  - name: Chains
+  - name: Admin Chains
 
 x-list-operation: &listOperation
   security: [{ bearerAuth: [] }]
@@ -42,6 +44,27 @@ x-get-operation: &getOperation
     '401': { $ref: '#/components/responses/Unauthorized' }
     '403': { $ref: '#/components/responses/Forbidden' }
     '404': { $ref: '#/components/responses/NotFound' }
+x-create-operation: &createOperation
+  security: [{ bearerAuth: [] }]
+  requestBody:
+    required: true
+    content: { application/json: { schema: { type: object, additionalProperties: true } } }
+  responses:
+    '201': { description: Record created }
+    '401': { $ref: '#/components/responses/Unauthorized' }
+    '403': { $ref: '#/components/responses/Forbidden' }
+    '422': { $ref: '#/components/responses/ValidationError' }
+x-update-operation: &updateOperation
+  security: [{ bearerAuth: [] }]
+  requestBody:
+    required: true
+    content: { application/json: { schema: { type: object, additionalProperties: true } } }
+  responses:
+    '200': { description: Record updated }
+    '401': { $ref: '#/components/responses/Unauthorized' }
+    '403': { $ref: '#/components/responses/Forbidden' }
+    '404': { $ref: '#/components/responses/NotFound' }
+    '422': { $ref: '#/components/responses/ValidationError' }
 x-delete-operation: &deleteOperation
   security: [{ bearerAuth: [] }]
   responses:
@@ -379,6 +402,19 @@ paths:
       summary: Get decimals, restriction modes, and claim-topic master values
       responses:
         '200': { description: Token options including claim topic values 1 and 2 }
+  /api/v1/payment-tokens:
+    get:
+      tags: [Token Creation, Chains]
+      summary: List active payment tokens supported on the selected chain
+      description: Returns active paymentTokenMaster rows that are also present in the selected Platform Controller paymentTokens() allowlist.
+      security: []
+      parameters:
+        - { name: chainUid, in: query, schema: { type: string, format: uuid } }
+        - { name: chainId, in: query, schema: { type: integer, format: int64 } }
+        - { name: action, in: query, schema: { type: string, enum: [PURCHASE, REDEMPTION] } }
+      responses:
+        '200': { description: Supported payment-token metadata and contract addresses }
+        '503': { description: Platform Controller payment-token allowlist could not be verified }
   /api/v1/tokens/me:
     get:
       tags: [Token Creation]
@@ -738,7 +774,7 @@ paths:
   /api/v1/investments/me/portfolio:
     get:
       tags: [Token Purchases]
-      summary: List the authenticated investor's portfolio from confirmed canonical transactions
+      summary: List the authenticated investor's canonical confirmed token portfolio
       security: [{ bearerAuth: [] }]
       parameters:
         - { $ref: '#/components/parameters/Page' }
@@ -957,6 +993,163 @@ paths:
       responses:
         '200': { description: Invitation is VIEWED }
         '404': { description: Invitation does not belong to the investor }
+
+  /api/v1/chains:
+    get:
+      tags: [Chains]
+      summary: List active supported chains
+      security: []
+      responses:
+        '200': { description: Wallet-safe chain configuration list, content: { application/json: { schema: { $ref: '#/components/schemas/SuccessResponse' } } } }
+  /api/v1/chains/me:
+    get:
+      tags: [Chains]
+      summary: List the authenticated user's per-chain ONCHAINID access
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: 'Chains with LOCKED, CREATING, FAILED, or CREATED identity state' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/chains/{chainUid}/config:
+    get:
+      tags: [Chains]
+      summary: Get the complete browser-safe configuration for one active chain
+      security: []
+      parameters:
+        - { name: chainUid, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: 'Public RPC, native currency, complete contract suite, confirmations, and controller-verified payment tokens' }
+        '404': { description: Active chain not found }
+        '503': { description: Platform Controller payment-token registry could not be verified }
+  /api/v1/chains/{chainUid}/unlock:
+    post:
+      tags: [Chains]
+      summary: Idempotently create or reuse ONCHAINID on a chain
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: chainUid, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Chain ONCHAINID created or already unlocked }
+        '409': { description: Onboarding incomplete or identity creation already in progress }
+        '502': { description: Identity Factory operation failed }
+  /api/v1/chains/{chainUid}/image:
+    get:
+      tags: [Chains]
+      summary: Read the public network image
+      security: []
+      parameters:
+        - { name: chainUid, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Optimized WebP network image }
+        '404': { description: Network image not found }
+  /api/v1/admin/chains:
+    get:
+      tags: [Admin Chains]
+      summary: List chain configurations
+      <<: *listOperation
+    post:
+      tags: [Admin Chains]
+      summary: Create and validate a complete chain deployment configuration
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '201': { description: 'Chain and controller-verified payment-token rows created; signer remains write-only' }
+        '409': { description: Duplicate chain }
+        '422': { description: 'RPC, deployed contract, payment-token registry, address, or signer validation failed' }
+  /api/v1/admin/chains/{chainUid}:
+    parameters:
+      - { name: chainUid, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Admin Chains]
+      summary: Get a redacted chain configuration
+      <<: *getOperation
+    patch:
+      tags: [Admin Chains]
+      summary: Update only public RPC, explorer, fallback RPCs, or active state
+      <<: *updateOperation
+  /api/v1/admin/chains/{chainUid}/image:
+    parameters:
+      - { name: chainUid, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      tags: [Admin Chains]
+      summary: Add or replace a network image
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [image]
+              properties:
+                image: { type: string, format: binary }
+      responses:
+        '200': { description: Network image updated }
+        '422': { description: Invalid or missing image }
+  /api/v1/admin/chains/{chainUid}/audits:
+    parameters:
+      - { name: chainUid, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Admin Chains]
+      summary: List append-only network configuration audits
+      <<: *listOperation
+  /api/v1/admin/payment-tokens:
+    get:
+      tags: [Admin Chains]
+      summary: List payment-token configurations
+      <<: *listOperation
+    post:
+      tags: [Admin Chains]
+      summary: Create a chain-scoped payment token
+      <<: *createOperation
+  /api/v1/admin/payment-tokens/{paymentTokenUid}:
+    parameters:
+      - { name: paymentTokenUid, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Admin Chains]
+      summary: Get a payment token
+      <<: *getOperation
+    patch:
+      tags: [Admin Chains]
+      summary: Update a payment token; purchase/redemption capabilities are immutable
+      <<: *updateOperation
+    delete:
+      tags: [Admin Chains]
+      summary: Delete an unused non-default payment token
+      <<: *deleteOperation
+  /api/v1/admin/payment-tokens/{paymentTokenUid}/image:
+    parameters:
+      - { name: paymentTokenUid, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      tags: [Admin Chains]
+      summary: Add or replace a payment-token image
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [image]
+              properties:
+                image: { type: string, format: binary }
+      responses:
+        '200': { description: Payment-token image updated }
+        '422': { description: Invalid or missing image }
+  /api/v1/payment-tokens/{paymentTokenUid}/image:
+    get:
+      tags: [Chains]
+      summary: Read the public payment-token image
+      security: []
+      parameters:
+        - { name: paymentTokenUid, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Optimized WebP payment-token image }
+        '404': { description: Payment-token image not found }
 
 components:
   securitySchemes:
@@ -1192,6 +1385,10 @@ components:
         treasuryWalletAddress:
           type: string
           pattern: '^0x[a-fA-F0-9]{40}$'
+        paymentTokenAddress:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+          description: Must match an active contractAddress returned by GET /api/v1/payment-tokens.
         tokenDescription: { type: string, maxLength: 2000 }
         tokenImage:
           type: string
@@ -1225,7 +1422,7 @@ components:
           type: array
           uniqueItems: true
           maxItems: 250
-          description: Server resolves each UID to countryMaster.numericCode (ISO 3166-1 numeric).
+          description: Empty means no geographic restriction. For non-empty arrays, the server resolves each UID to countryMaster.numericCode (ISO 3166-1 numeric).
           items: { type: string, format: uuid }
         isDraft: { type: boolean, example: false }
     TokenGovernanceInput:

@@ -8,6 +8,7 @@ Load these resources in parallel:
 
 ```http
 GET /api/v1/token-options
+GET /api/v1/payment-tokens
 GET /api/v1/locations/countries?page=1&limit=250
 GET /api/v1/tokens/me
 ```
@@ -37,7 +38,8 @@ Send `multipart/form-data` to:
 PUT /api/v1/tokens/me/information
 ```
 
-Fields are `tokenName`, `tokenSymbol`, `decimals`, `initialTokenPrice`, `treasuryWalletAddress`, `tokenDescription`, `isDraft`, and optional file part `tokenImage`.
+Fields are `tokenName`, `tokenSymbol`, `decimals`, `initialTokenPrice`, `treasuryWalletAddress`,
+`paymentTokenAddress`, `tokenDescription`, `isDraft`, and optional file part `tokenImage`.
 
 Frontend behavior:
 
@@ -47,6 +49,8 @@ Frontend behavior:
 - Decimals dropdown contains only 2, 6, 8, and 18.
 - Price must be greater than zero.
 - Treasury address must be a valid EVM address.
+- Payment currency is selected from `GET /api/v1/payment-tokens`; submit its exact
+  `contractAddress` as `paymentTokenAddress`. Never allow a free-text contract address.
 - Completed Step 1 requires an image. A resumed token with `imageUrl` may continue without re-uploading it.
 - Client checks improve UX, but the server performs authoritative signature, corruption, dimension, and optimization validation.
 
@@ -86,7 +90,7 @@ Content-Type: application/json
 }
 ```
 
-Use an amount input for `maxBalancePerInvestor`, not a percentage input. It represents the absolute number of tokens one investor may hold, must be greater than zero, and supports up to 18 decimal places. Use a multi-select with unique country UIDs. Completed data requires both holding-limit fields, a mode, and at least one country. Show country names and optionally their three-digit numeric codes.
+Use an amount input for `maxBalancePerInvestor`, not a percentage input. It represents the absolute number of tokens one investor may hold, must be greater than zero, and supports up to 18 decimal places. Use a multi-select with unique country UIDs. `countryUids: []` explicitly means no geographic restriction and is valid for a completed step. When the array is empty, do not configure an empty on-chain allowlist that would deny everyone; omit/disable the geographic restriction module for that token. For a non-empty list, apply the selected allowlist/blocklist mode and show country names with optional three-digit numeric codes.
 
 ## Step 4: Governance roles
 
@@ -104,7 +108,7 @@ Manager address:
 Send to `PUT /api/v1/tokens/me/governance`. `identityManagerWalletAddress` must exactly represent
 the organization wallet (comparison is case-insensitive). The response and subsequent
 `GET /tokens/me` returns `tokenAgentWalletAddress` as the Platform Controller assigned when that
-token was created. New tokens use `0x972E9CEf9eA9d3A9d7f3261bb8e16bA59E76a0FB` by default. Existing
+token was created. New tokens use `0x4052D80c222111234b89AFDfff597B5De8DA50cd` by default. Existing
 tokens retain their previously stored Token Agent. Render it as read-only in review screens and use
 that backend value when building the TREX deployment transaction.
 
@@ -133,7 +137,7 @@ First send the TREX deployment transaction from the connected frontend wallet an
 }
 ```
 
-Do not send contract addresses from browser state. The backend independently reads the Arc Testnet receipt, decodes the factory's `TREXSuiteDeployed` event, and returns the authoritative addresses. Success returns `status: deployed` with `platformAgentWallet`, the six suite addresses, `deployTxHash`, `deployedAtBlock`, and `deployedAt`.
+Do not send contract addresses from browser state. The backend independently reads the Network receipt, decodes the factory's `TREXSuiteDeployed` event, and returns the authoritative addresses. Success returns `status: deployed` with `platformAgentWallet`, the six suite addresses, `deployTxHash`, `deployedAtBlock`, and `deployedAt`.
 
 If the API returns `422 TOKEN_DEPLOYMENT_VERIFICATION_FAILED`, show `message` to the user and reload `GET /tokens/me`. The stored token will have `status: deploymentFailed` and `contractTxnMessage`; the user may retry deployment. A `deployed` token's creation fields are read-only, but its owning issuer may update `currentTokenPrice` through the dedicated price endpoint below.
 

@@ -5,9 +5,10 @@ const { tokenImageUpload } = require('../../../middleware/token-image-upload.mid
 const schemas = require('../../../schemas/token.schema');
 const deploymentSchemas = require('../../../schemas/deployment-attempt.schema');
 
-const createTokenRouter = ({ controller, deploymentController, authenticate, authorize }) => {
+const createTokenRouter = ({ controller, deploymentController, authenticate, authorize, requireInvestorChain }) => {
   const router = express.Router();
   router.use(authenticate);
+  router.use(requireInvestorChain);
   router.get('/me', authorize, asyncHandler(controller.getMine));
   router.put(
     '/me/information',

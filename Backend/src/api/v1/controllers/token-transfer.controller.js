@@ -12,11 +12,11 @@ const createTokenTransferController = (service) => ({
 
   get: async (req, res) => sendSuccess(req, res, {
     message: 'Token transfer fetched successfully.',
-    data: await service.get(req.user, req.params.transferUid),
+    data: await service.get(req.user, req.params.transferUid, req.selectedChain),
   }),
 
   list: async (req, res) => {
-    const result = await service.list(req.user, req.params.tokenUid, req.query);
+    const result = await service.list(req.user, req.params.tokenUid, req.query, req.selectedChain);
     return sendSuccess(req, res, {
       message: 'Token transfer history fetched successfully.',
       data: result.items,

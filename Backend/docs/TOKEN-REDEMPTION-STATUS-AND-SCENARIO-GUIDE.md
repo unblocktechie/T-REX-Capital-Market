@@ -18,7 +18,7 @@ The frontend must not interpret an approved business request as a completed bloc
 | --- | --- | --- |
 | `PENDING_INVESTOR_AUTHORIZATION` | Investor | Request exists; complete the existing wallet authorization or cancel. |
 | `PENDING_ISSUER_APPROVAL` | Issuer | Issuer reviews and approves or rejects. |
-| `ISSUER_APPROVED` | Issuer | Request is approved. Issuer checks USDT allowance/balance and signs `redeem(investor, token, amount)`. |
+| `ISSUER_APPROVED` | Issuer | Request is approved. Issuer checks selected payment-token allowance/balance and signs `redeem(investor, token, paymentToken, amount)`. |
 | `ISSUER_REJECTED` | Issuer | Terminal rejection; show the reason. |
 | `CANCELLED` | Investor/system | Terminal cancellation before the blockchain redemption is submitted. |
 | `EXPIRED` | Background expiry | Unsigned/incomplete request expired; create a new request if eligible. |

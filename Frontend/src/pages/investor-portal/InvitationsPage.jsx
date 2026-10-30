@@ -17,7 +17,7 @@ import { investorInvitationService } from '@/services/investor/investorInvitatio
 import { formatDate } from '@/utils/date';
 import { getErrorMessage } from '@/utils/error';
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 5;
 
 const INVITATION_FILTERS = [
   { value: 'all', label: 'All invitations', description: 'Show new and previously viewed invitations' },
@@ -27,8 +27,8 @@ const INVITATION_FILTERS = [
 
 const invitationDate = (invitation) => invitation?.sentAt || invitation?.createdAt || invitation?.updatedAt;
 
-export default function InvitationsPage() {
-  useDocumentTitle('Invitations');
+export default function InvitationsPage({ embedded = false } = {}) {
+  useDocumentTitle(embedded ? 'My Investment' : 'Invitations');
   const navigate = useNavigate();
   const [items, setItems] = useState([]);
   const [meta, setMeta] = useState({ page: 1, limit: PAGE_SIZE, total: 0, totalPages: 1 });

@@ -29,17 +29,14 @@ const PAGE_SIZE = 5;
 const FILTERS = [
   { value: 'all', label: 'All redemptions', description: 'Show every redemption request' },
   { value: 'PENDING_ISSUER_APPROVAL', label: 'Needs your review', description: 'Requests waiting for your approve or reject decision' },
-  { value: 'TOKENS_LOCKED', label: 'Ready for issuer', description: 'Issuer checks are ready and the organization can review and confirm the redemption' },
-  { value: 'PAYMENT_SUBMITTED', label: 'Redemption submitted', description: 'The redemption is being confirmed' },
-  { value: 'BURN_SUBMITTED', label: 'Finalizing redemption', description: 'Redemption is being completed' },
+  { value: 'TOKENS_LOCKED', label: 'Ready for issuer', description: 'Issuer checks are ready and the organization wallet can execute Redeem' },
   { value: 'COMPLETED', label: 'Completed', description: 'Finished redemptions' },
-  { value: 'MANUAL_REVIEW', label: 'Support review required', description: 'Requests that need additional support' },
 ];
 
 const createdAt = (item) => cleanRedemptionText(item?.createdAt || item?.requestedAt || item?.submittedAt || item?.updatedAt);
 
-export default function IssuerRedemptionsPage() {
-  useDocumentTitle('Issuer Redemptions');
+export default function IssuerRedemptionsPage({ embedded = false } = {}) {
+  useDocumentTitle(embedded ? 'Investor Management' : 'Issuer Redemptions');
   const navigate = useNavigate();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -161,7 +158,7 @@ export default function IssuerRedemptionsPage() {
         <div>
           <span className="issuer-redemptions-eyebrow">Investor redemption requests</span>
           <h1>Redemptions</h1>
-          <p>Review investor redemption requests, approve or reject each request, then review and confirm approved redemptions securely with Privy.</p>
+          <p>Review investor redemption requests, approve or reject each request, execute approved redemptions from the organization wallet, and track confirmation.</p>
         </div>
         <Button variant="secondary" size="sm" icon={RefreshCw} loading={refreshing} onClick={() => load({ quiet: true })}>Refresh</Button>
       </header>

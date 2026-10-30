@@ -23,80 +23,62 @@ const toneIcon = (tone) => {
 const STEP_GUIDANCE = {
   investor: [
     {
-      what: 'This is your request to invest in the asset. You provide the information the issuer needs to review your request.',
-      action: 'Complete the required details and documents, then submit your application.',
-      how: 'Open the application, complete every required field, upload any requested documents, and select Submit.',
-      complete: 'This step will show Completed and your application will move to Issuer review.',
-      next: 'The issuer reviews the information and documents you submitted.',
+      what: 'Submit your request and supporting documents for issuer review.',
+      action: 'Complete all required fields and upload documents.',
+      how: 'Submit your investment application with the requested documents.',
+      complete: 'Your application reaches the issuer review queue.',
+      next: 'The issuer verifies claims and registers your identity on-chain.',
     },
     {
-      what: 'The issuer checks your application and decides whether it can move forward.',
-      action: 'Usually, you only need to wait. If the issuer asks for changes, update the requested information and submit it again.',
-      how: 'The issuer reviews your details. If changes are requested, open the application, make the requested updates, and resubmit it.',
-      complete: 'This step will show Completed after the issuer approves the review.',
-      next: 'You will be asked to complete any required investor checks.',
+      what: 'The issuer reviews your application, completes the required approvals, and finishes the registration step for you.',
+      action: 'Wait for the issuer. Update your documents only if the issuer asks for changes.',
+      how: 'The issuer confirms the required checks and completes one wallet transaction to finish this step.',
+      complete: 'This step is complete once the issuer finishes the approvals and the registration is confirmed.',
+      next: 'You can then submit your required claim from your own wallet.',
     },
     {
-      what: 'You complete the checks required before you can be approved to invest in this asset.',
-      action: 'Complete the checks shown in your application when this step becomes active.',
-      how: 'Open the checks step, follow the instructions, provide the requested information, and submit it.',
-      complete: 'This step will show Completed after your required checks have been successfully submitted and accepted.',
-      next: 'The issuer completes the final approval needed to enable your investment access.',
+      what: 'Submit the signed claims to your ONCHAINID using your investor wallet.',
+      action: 'Submit each required claim using your investor wallet.',
+      how: 'Open Submit Claim, approve each required wallet transaction, and wait for blockchain confirmation.',
+      complete: 'Every required claim is confirmed and your application moves to Completed.',
+      next: 'Invest Now becomes available subject to the asset’s eligibility rules.',
     },
     {
-      what: 'The issuer completes the last approval needed to give you access to invest in this asset.',
-      action: 'You normally do not need to do anything here. Wait while the issuer or platform completes the approval.',
-      how: 'The issuer completes the final approval. You can refresh the application to see the latest status.',
-      complete: 'This step will show Completed and your application will move to Ready to invest.',
-      next: 'Your investment access is enabled and you can choose to invest.',
-    },
-    {
-      what: 'All required application checks and approvals are finished. You are approved to invest in this asset.',
-      action: 'No setup action is required. Choose Invest when you are ready to continue.',
-      how: 'Open the asset, select Invest, and follow the investment instructions shown on screen.',
-      complete: 'You will see Ready to invest and the journey will show all steps completed.',
-      next: 'You can proceed with your investment whenever you are ready.',
+      what: 'All application prerequisites are complete.',
+      action: 'Choose Invest Now when you are ready.',
+      how: 'Your investment still needs to pass the existing contract eligibility and payment checks.',
+      complete: 'The application is Completed.',
+      next: 'You can proceed with investing.',
     },
   ],
   issuer: [
     {
-      what: 'The investor is preparing and submitting their request to invest in your asset.',
-      action: 'Nothing is needed from you until the investor submits the application.',
-      how: 'The investor completes the required details and documents, then submits the application to you.',
-      complete: 'This step will show Completed and the request will move to your review.',
-      next: 'You review the investor information and submitted documents.',
+      what: 'The investor submits an application and supporting documents.',
+      action: 'Wait for the submitted application.',
+      how: 'The investor completes the required information and documents.',
+      complete: 'The request appears in your review queue.',
+      next: 'Review, sign and register the investor.',
     },
     {
-      what: 'You review the investor information and documents before allowing the request to move forward.',
-      action: 'Check the application and documents, then approve it or ask the investor to make changes.',
-      how: 'Review the submitted details and documents below. Choose Approve & Continue if everything is correct, or Request changes or decline if something needs attention.',
-      complete: 'This step will show Completed after your approval is confirmed.',
-      next: 'The investor completes the required investor checks.',
+      what: 'Review the investor, approve the required checks, and register the identity in one step.',
+      action: 'Review the documents, confirm the required approvals, and complete the registration transaction from your issuer wallet.',
+      how: 'Select Approve & Continue. Confirm the claim approvals first, then complete the MetaMask registration transaction. The issuer pays the gas fee for registration.',
+      complete: 'This step is complete after the approvals and the registration transaction are successfully confirmed.',
+      next: 'The investor can then submit their claim without any further issuer action.',
     },
     {
-      what: 'The investor completes the identity or eligibility checks required for this asset.',
-      action: 'You usually do not need to do anything here. Wait for the investor to finish the required checks.',
-      how: 'The investor follows the check instructions and submits the required information.',
-      complete: 'This step will show Completed and the request will return to you for final approval.',
-      next: 'You complete the final approval that enables the investor to participate.',
+      what: 'The investor submits their signed claims to their ONCHAINID.',
+      action: 'No issuer approval is required.',
+      how: 'The investor sends and confirms each required claim from their own wallet.',
+      complete: 'The final claim is verified and the application completes automatically.',
+      next: 'The investor can proceed to investing.',
     },
     {
-      what: 'This is the final approval that enables the approved investor to participate in this asset.',
-      action: 'Review the completed checks and complete final approval when the request asks you to do so.',
-      how: 'Select Complete Final Approval and follow the confirmation steps. If it is processing, wait for confirmation before trying again.',
-      complete: 'This step will show Completed and Investor access enabled will appear on the request.',
-      next: 'The investor becomes ready to invest.',
-    },
-    {
-      what: 'The investor has completed all required checks and now has access to invest in this asset.',
-      action: featureFlags.contactSupportActions
-        ? 'No approval action is required. You can invite the investor to invest if you want to notify them.'
-        : 'No approval action is required. The investor can continue with their investment when ready.',
-      how: featureFlags.contactSupportActions
-        ? 'Use Invite to Invest to notify the investor, or simply wait for them to continue on their own.'
-        : 'No further issuer action is required at this stage.',
-      complete: 'You will see Investor access enabled and all journey steps will show Completed.',
-      next: 'The investor can proceed with their investment.',
+      what: 'The application is completed and the investor can continue independently.',
+      action: 'No further issuer action is required.',
+      how: 'All required confirmations have been verified.',
+      complete: 'The application status is Completed.',
+      next: 'The investor can invest subject to contract eligibility.',
     },
   ],
 };
@@ -109,7 +91,7 @@ const ownerWaitingText = (owner) => {
 };
 
 const getUserAction = ({ guidance, stage, journey }) => {
-  if (stage.state === 'complete' && stage.id === 'investment-stage-5') return guidance.action;
+  if (stage.state === 'complete' && stage.id === 'investment-stage-4') return guidance.action;
   if (stage.state === 'complete') return 'Nothing — this step is already complete.';
   if (stage.state === 'blocked') return 'Nothing — this step was not reached because this application is no longer moving forward.';
 
@@ -117,7 +99,8 @@ const getUserAction = ({ guidance, stage, journey }) => {
     return `No action yet. Finish the current step first. When this step starts: ${guidance.action}`;
   }
 
-  if (journey.owner === 'You') return guidance.action;
+  const roleOwner = journey.viewerRole === 'issuer' ? 'Issuer' : 'Investor';
+  if (journey.owner === 'You' || journey.owner === roleOwner) return guidance.action;
   if (journey.owner === 'No action needed' || journey.owner === 'No action required') {
     return 'Nothing is needed from you for this step.';
   }
@@ -135,6 +118,13 @@ export function InvestmentJourneyTracker({ journey, action = null, secondaryActi
   const openStage = openGuidanceIndex === null ? null : journey.stages[openGuidanceIndex];
   const openGuidance = openStage ? STEP_GUIDANCE[role][openGuidanceIndex] : null;
   const openPanelId = `${guidanceId}-step-guidance`;
+  const hasActions = Boolean(action || secondaryAction);
+  const statusMeta = (
+    <div className="investment-journey__current-meta">
+      <span className={`investment-journey__status is-${journey.tone}`}>{journey.statusLabel}</span>
+      <span className="investment-journey__owner">Who acts next: <strong>{journey.owner}</strong></span>
+    </div>
+  );
 
   return (
     <Card className={`investment-journey investment-journey--${journey.tone}`}>
@@ -147,18 +137,17 @@ export function InvestmentJourneyTracker({ journey, action = null, secondaryActi
             : 'See what is complete, what is happening now, and what comes next. Select any info icon for step-by-step help.'}</p>
         </div>
         <span className="investment-journey__step-count">
-          {journey.complete ? 'All 5 steps complete' : `Step ${journey.currentIndex + 1} of 5`}
+          {journey.complete ? 'All 4 steps complete' : `Step ${journey.currentIndex + 1} of 4`}
         </span>
       </div>
 
       <div className={`investment-journey__current is-${journey.tone}`} role="status">
         <span className="investment-journey__current-icon"><CurrentIcon size={20} /></span>
         <div className="investment-journey__current-copy">
-          <div className="investment-journey__current-meta">
-            <span className={`investment-journey__status is-${journey.tone}`}>{journey.statusLabel}</span>
-            <span className="investment-journey__owner">Who acts next: <strong>{journey.owner}</strong></span>
+          <div className="investment-journey__current-headline">
+            <h3>{journey.title}</h3>
+            {!hasActions ? statusMeta : null}
           </div>
-          <h3>{journey.title}</h3>
           <p>{journey.message}</p>
           {journey.next ? (
             <div className="investment-journey__next">
@@ -167,10 +156,13 @@ export function InvestmentJourneyTracker({ journey, action = null, secondaryActi
             </div>
           ) : null}
         </div>
-        {action || secondaryAction ? (
-          <div className="investment-journey__actions">
-            {action}
-            {secondaryAction}
+        {hasActions ? (
+          <div className="investment-journey__actions-panel">
+            {statusMeta}
+            <div className="investment-journey__actions">
+              {action}
+              {secondaryAction}
+            </div>
           </div>
         ) : null}
       </div>

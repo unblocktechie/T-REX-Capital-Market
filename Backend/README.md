@@ -54,6 +54,7 @@ copy .env.example .env
 mysql -u root -p < database/trex-capital-market.sql
 npm run seed:locations
 npm run seed:admin
+npm run seed:test-users
 npm run dev
 ```
 
@@ -111,6 +112,10 @@ See `docs/BLOCKCHAIN-TRANSACTION-INDEXER.md` and
 `docs/FRONTEND-BLOCKCHAIN-TRANSACTION-GUIDE.md`. The complete status ownership, API order,
 frontend polling rules, and indexer recovery behavior are documented in
 `docs/BLOCKCHAIN-TRANSACTION-STATUS-AND-API-FLOW.md`.
+For a database exported from case-insensitive Windows MySQL and imported into case-sensitive Linux
+MySQL, run `database/fix-linux-table-name-case.sql` after selecting the hosted database. It renames
+all 48 tables to the exact camelCase identifiers used by runtime queries. See
+`docs/DATABASE-TABLE-CASE-GUIDE.md` before running it.
 
 ```bash
 npm run check

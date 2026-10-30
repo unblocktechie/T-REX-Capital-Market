@@ -8,7 +8,7 @@ const organizationFields = [
   'cityUid', 'postalCode', 'countryOfIncorporationUid', 'dateOfIncorporation', 'taxIdentificationNumber',
   'industryUid', 'businessActivity', 'website', 'walletAddress', 'currentStep', 'isDraft', 'status', 'submittedAt',
   'rejectionReason', 'rejectionCount', 'canResubmit', 'isUserNotified',
-  'contractAddress', 'contractTxnHash', 'contractTxnMessage',
+  'onboardingChainUid', 'contractAddress', 'contractTxnHash', 'contractTxnMessage',
 ];
 
 class OrganizationRepository {

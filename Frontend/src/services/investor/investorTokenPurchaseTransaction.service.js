@@ -1,10 +1,11 @@
 import {
   createPublicClient,
+  createWalletClient,
+  custom,
   getAddress,
   http,
   isAddress,
 } from 'viem';
-import { env } from '@/config/env';
 import { web3Config } from '@/config/web3';
 import {
   approvePlatformPurchaseSpending,
@@ -64,21 +65,74 @@ const publicClientFor = (chainId) => {
   const chain = chainFor(chainId);
   return createPublicClient({
     chain,
-    transport: http(env.web3.rpcUrl),
+    transport: http(web3Config.getChainRecordById(chain.id)?.publicRpcUrl),
   });
+};
+
+const activeRegisteredWallet = async ({ connector, connectedAddress, investorWalletAddress, chainId }) => {
+  if (!connector?.getProvider) {
+    throw new Error('Connect your registered investor wallet before continuing.');
+  }
+  if (!isAddress(connectedAddress || '')) {
+    throw new Error('Connect your registered investor wallet before continuing.');
+  }
+
+  const chain = chainFor(chainId);
+  const registeredAddress = requiredAddress(investorWalletAddress, 'Registered investor wallet');
+  const provider = await connector.getProvider();
+  if (!provider?.request) {
+    throw new Error('The connected wallet is unavailable. Reconnect it and try again.');
+  }
+
+  const accounts = await provider.request({ method: 'eth_accounts' });
+  const activeProviderAddress = Array.isArray(accounts) ? accounts[0] : '';
+  if (!isAddress(activeProviderAddress || '')) {
+    throw new Error('Reconnect your registered investor wallet before continuing.');
+  }
+
+  if (getAddress(activeProviderAddress) !== registeredAddress) {
+    const error = new Error('Switch to the wallet registered for this investment before continuing.');
+    error.code = 'WALLET_MISMATCH';
+    throw error;
+  }
+
+  if (getAddress(activeProviderAddress) !== getAddress(connectedAddress)) {
+    const error = new Error('Your active wallet account changed. Reconnect your registered wallet and try again.');
+    error.code = 'WALLET_ACCOUNT_CHANGED';
+    throw error;
+  }
+
+  const providerChainId = parseChainId(await provider.request({ method: 'eth_chainId' }));
+  if (providerChainId !== chain.id) {
+    const error = new Error(`Switch your wallet to ${chain.name} and try again.`);
+    error.code = 'WRONG_WALLET_NETWORK';
+    error.requiredChainId = chain.id;
+    throw error;
+  }
+
+  return {
+    provider,
+    chain,
+    account: getAddress(activeProviderAddress),
+    registeredAddress,
+  };
 };
 
 /**
  * Read whether the registered investor already completed the app's persistent
- * USDC spending approval. This is a read-only on-chain check and survives page
- * refreshes because the allowance lives in the USDC contract.
+ * payment token spending approval. This is a read-only on-chain check and survives page
+ * refreshes because the allowance lives in the payment token contract.
  */
-export async function getInvestorUsdtSpendingApproval({
+export async function getInvestorPaymentSpendingApproval({
+  controllerAddress,
+  paymentTokenAddress,
   investorWalletAddress,
   chainId,
   requiredPaymentAmountRaw,
 }) {
   return getPlatformPaymentApprovalState({
+    controllerAddress,
+    paymentTokenAddress,
     owner: investorWalletAddress,
     chainId,
     requiredAmountRaw: requiredPaymentAmountRaw,
@@ -86,11 +140,13 @@ export async function getInvestorUsdtSpendingApproval({
 }
 
 /**
- * Complete the one-time USDC spending approval only. No purchase is submitted
+ * Complete the one-time payment token spending approval only. No purchase is submitted
  * by this function. The Platform Controller receives MAX_UINT256 allowance so
  * later purchases can reuse the same permission without another approval.
  */
-export async function approveInvestorUsdtSpending({
+export async function approveInvestorPaymentSpending({
+  controllerAddress,
+  paymentTokenAddress,
   connector,
   connectedAddress,
   investorWalletAddress,
@@ -98,6 +154,8 @@ export async function approveInvestorUsdtSpending({
   onStep,
 }) {
   return approvePlatformPurchaseSpending({
+    controllerAddress,
+    paymentTokenAddress,
     connector,
     connectedAddress,
     investorWalletAddress,
@@ -108,10 +166,12 @@ export async function approveInvestorUsdtSpending({
 
 /**
  * Submit a purchase directly from the registered investor wallet to the
- * Platform Controller. No backend purchase intent is required. USDC spending
+ * Platform Controller. No backend purchase intent is required. payment token spending
  * approval remains a separate wallet transaction.
  */
 export async function submitInvestorPurchasePayment({
+  controllerAddress,
+  paymentTokenAddress,
   connector,
   connectedAddress,
   investorWalletAddress,
@@ -123,6 +183,8 @@ export async function submitInvestorPurchasePayment({
   onStep,
 }) {
   return submitPlatformPurchase({
+    controllerAddress,
+    paymentTokenAddress,
     connector,
     connectedAddress,
     investorWalletAddress,
@@ -154,7 +216,7 @@ export async function getInvestorPurchaseTokenBalance(preparedPurchase) {
   const tokenAddress = requiredAddress(preparedPurchase?.tokenAddress, 'Token contract');
   const investorWalletAddress = requiredAddress(
     preparedPurchase?.investorWalletAddress,
-    'Investor Privy secure account',
+    'Registered investor wallet',
   );
 
   return publicClientFor(preparedPurchase?.chainId).readContract({
@@ -163,4 +225,48 @@ export async function getInvestorPurchaseTokenBalance(preparedPurchase) {
     functionName: 'balanceOf',
     args: [investorWalletAddress],
   });
+}
+
+/**
+ * Ask the connected wallet to track the deployed ERC-3643 token after a first
+ * successful purchase. wallet_watchAsset is only called for the registered wallet
+ * on the required network and never affects purchase settlement.
+ */
+export async function addInvestorPurchaseTokenToWallet({
+  connector,
+  connectedAddress,
+  chainId,
+  investorWalletAddress,
+  tokenAddress,
+  tokenSymbol,
+  tokenDecimals,
+}) {
+  const address = requiredAddress(tokenAddress, 'Token contract');
+  const symbol = String(tokenSymbol || '').trim();
+  const decimals = Number(tokenDecimals);
+  if (!symbol) throw new Error('The token symbol is unavailable. Refresh the page and try again.');
+  if (!Number.isSafeInteger(decimals) || decimals < 0 || decimals > 36) {
+    throw new Error('The token decimals are unavailable. Refresh the page and try again.');
+  }
+
+  const { provider } = await activeRegisteredWallet({
+    connector,
+    connectedAddress,
+    investorWalletAddress,
+    chainId,
+  });
+
+  const added = await provider.request({
+    method: 'wallet_watchAsset',
+    params: {
+      type: 'ERC20',
+      options: {
+        address,
+        symbol,
+        decimals,
+      },
+    },
+  });
+
+  return added === true;
 }

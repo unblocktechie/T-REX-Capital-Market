@@ -1,0 +1,119 @@
+/*
+ * Shared non-auth form normalization.
+ *
+ * This scope intentionally lives only under MainLayout/AdminLayout so auth pages
+ * keep their existing rounded visual language. It also prevents validation/help
+ * text in one grid field from stretching a neighboring control to match the
+ * taller grid row.
+ */
+.app-form-scope {
+  --app-form-control-radius: 8px;
+}
+
+/* Keep controls pinned to their natural height when another field in the same
+   grid row renders validation or helper copy. */
+.app-form-scope :where(
+  .app-form-field,
+  .field,
+  .org-field,
+  .issuance-field,
+  .support-contact-field,
+  .issuer-decision-field,
+  .marketplace-interest-note-field
+) {
+  align-self: start;
+  align-content: start;
+}
+
+.app-form-scope :where(
+  .org-form-grid,
+  .issuance-form-grid,
+  .support-contact-grid
+) {
+  align-items: start;
+}
+
+/* Shared form-control shape. Only controls/shells are normalized; cards,
+   notices, buttons and other application surfaces keep their current radii. */
+.app-form-scope :where(
+  .app-form-control,
+  .input-shell,
+  .org-select-shell,
+  .org-select-trigger,
+  .org-date-trigger,
+  .org-textarea,
+  .issuance-control,
+  .country-selector__control,
+  .marketplace-header-search,
+  .marketplace-application-search,
+  .marketplace-investment-input,
+  .investor-portfolio-search,
+  .investor-token-action-amount-field,
+  .investor-token-action-text-field,
+  .header-search
+) {
+  border-radius: var(--app-form-control-radius);
+}
+
+/* Native form controls used by admin, issuer, investor and modal forms. Hidden
+   file/radio/checkbox controls are excluded so choice cards and upload UIs are
+   not visually changed. */
+.app-form-scope :where(
+  input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):not([type='hidden']),
+  select,
+  textarea
+) {
+  border-radius: var(--app-form-control-radius);
+}
+
+/* Custom select/listbox triggers use the same control radius throughout the
+   signed-in application. Auth pages remain outside this scope. */
+.app-form-scope :where(
+  button[aria-haspopup='listbox'],
+  [role='combobox'],
+  .marketplace-dropdown__trigger
+) {
+  border-radius: var(--app-form-control-radius);
+}
+
+
+/* Search and amount controls in a few screens use the label itself as the
+   visible bordered shell. Checkbox/radio/file labels are intentionally omitted. */
+.app-form-scope label:has(> input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):not([type='hidden'])) {
+  border-radius: var(--app-form-control-radius);
+}
+
+/* A few form controls draw their visible border on a wrapping label rather than
+   the input itself. Normalizing those shells keeps the visual language aligned. */
+.app-form-scope :where(
+  label.marketplace-header-search,
+  label.marketplace-application-search,
+  label.investor-portfolio-search,
+  label.investor-token-action-amount-field,
+  label.investor-token-action-text-field
+) {
+  border-radius: var(--app-form-control-radius);
+}
+
+/* Form-specific controls whose border is defined by feature styles. */
+.app-form-scope :where(
+  .support-contact-field input,
+  .support-contact-field textarea,
+  .support-contact-subject-dropdown .marketplace-dropdown__trigger,
+  .marketplace-interest-note-field textarea,
+  .issuer-decision-field select,
+  .issuer-decision-field textarea,
+  .marketplace-upload-field select
+) {
+  border-radius: var(--app-form-control-radius);
+}
+
+/* Preserve the current responsive behavior: on single-column layouts every
+   field still occupies the available width, but validation copy cannot inflate
+   neighboring controls on wider multi-column layouts. */
+@media (max-width: 680px) {
+  .app-form-scope :where(.app-form-field, .org-field, .issuance-field, .support-contact-field) {
+    width: 100%;
+    max-width: 100%;
+  }
+}

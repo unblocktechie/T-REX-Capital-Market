@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Building2, ChevronLeft, ChevronRight, UserRound, X } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { TrexLogo } from '@/components/branding/TrexLogo';
+import { appConfig } from '@/config/app.config';
 import { navigationGroups } from '@/config/navigation';
 import { ROLES } from '@/config/permissions';
 import { OrganizationStatusBadge } from '@/components/organization/OrganizationStatusBadge';
@@ -13,7 +14,7 @@ import { useSidebarActionIndicators } from '@/hooks/useSidebarActionIndicators';
 import { ORGANIZATION_STATUSES } from '@/services/organizationStorageService';
 import { ROUTES } from '@/config/routes';
 import { cn } from '@/utils/cn';
-import { web3Config } from '@/config/web3';
+import { getNetworkEnvironmentLabel } from '@/utils/networkEnvironment';
 
 const formatRole = (role) => {
   if (!role) return 'Issuer';
@@ -22,7 +23,11 @@ const formatRole = (role) => {
     .replace(/\b\w/g, (character) => character.toUpperCase());
 };
 
-export function Sidebar() {
+// These pages remain routable (including from the header's network menu),
+// but are intentionally not primary sidebar destinations.
+const hiddenSidebarRoutes = new Set([ROUTES.organization, ROUTES.chainAccess]);
+
+export function Sidebar({ network }) {
   const { user } = useAuth();
   const { organization } = useOrganization();
   const tokenRecord = useMyToken({ enabled: user?.role === ROLES.issuer });
@@ -37,9 +42,10 @@ export function Sidebar() {
   const workspaceName = isIssuer
     ? user?.company || user?.name || 'Issuer account'
     : user?.name || `${roleLabel} account`;
-  const networkLabel = web3Config.requiredChain?.testnet
-    ? 'Testnet'
-    : web3Config.requiredChain?.name || 'Network';
+  const networkEnvironmentLabel = getNetworkEnvironmentLabel(
+    network?.activeChain,
+    appConfig.deploymentEnvironment,
+  );
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 900px)');
@@ -92,13 +98,14 @@ export function Sidebar() {
             <small>{roleLabel} workspace</small>
             <strong>{workspaceName}</strong>
           </span>
-          <span className="workspace-pill__network">{networkLabel}</span>
+          <span className="workspace-pill__network">{networkEnvironmentLabel}</span>
         </div>
 
         <nav className="sidebar__nav" aria-label="Primary navigation">
           {navigationGroups.map((group) => {
             const visibleItems = group.items.filter(
               (item) =>
+                !hiddenSidebarRoutes.has(item.to) &&
                 canSee(item.permission) &&
                 (!item.roles || item.roles.includes(user?.role)) &&
                 (!item.dynamicOrganization || user?.role === ROLES.issuer) &&
@@ -111,7 +118,13 @@ export function Sidebar() {
                 {visibleItems.map((item) => {
                   const isOrganizationItem = item.dynamicOrganization;
                   const isTokenItem = item.dynamicToken;
-                  const attentionCount = Math.max(0, Number(actionIndicators.data?.[item.to]) || 0);
+                  const attentionCount = item.to === ROUTES.issuerInvestorManagement
+                    ? Math.max(0, Number(actionIndicators.data?.[ROUTES.investors]) || 0)
+                      + Math.max(0, Number(actionIndicators.data?.[ROUTES.issuerRedemptions]) || 0)
+                    : item.to === ROUTES.investorMyInvestment
+                      ? Math.max(0, Number(actionIndicators.data?.[ROUTES.applications]) || 0)
+                        + Math.max(0, Number(actionIndicators.data?.[ROUTES.invitations]) || 0)
+                      : Math.max(0, Number(actionIndicators.data?.[item.to]) || 0);
                   const hasAttention = attentionCount > 0;
                   const attentionTone = item.to === ROUTES.invitations ? 'new' : 'action';
                   const label =

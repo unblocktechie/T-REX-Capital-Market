@@ -79,7 +79,7 @@ class TokenPurchaseMintService {
       row = await this.repository.findByUid(row.purchaseUid);
       if (confirmImmediately) {
         const verified = await this.blockchain.waitForMint(submitted.txHash, this.expected(row), {
-          confirmations: Math.max(1, Number(this.config.purchaseConfirmations || 1)),
+          confirmations: Math.max(1, Number(this.config.purchaseConfirmations || 2)),
           timeoutMs: Number(this.config.transactionTimeoutMs || 120000),
         });
         await this.transactionRunner(async (connection) => {

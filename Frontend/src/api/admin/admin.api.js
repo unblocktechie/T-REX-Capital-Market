@@ -9,6 +9,15 @@ import { adminMockApi } from './admin.mock';
 
 const unwrap = (response) => response.data?.data ?? response.data;
 
+// Organization decisions can take longer than ordinary reads while the backend
+// completes the approval/rejection workflow. Never allow this request to fall
+// back to the old 15 second timeout, even if a stale local env file is present.
+const ADMIN_DECISION_TIMEOUT_MS = 500_000;
+const adminDecisionRequestConfig = () => ({
+  skipGlobalLoader: true,
+  timeout: Math.max(env.requestTimeout, ADMIN_DECISION_TIMEOUT_MS),
+});
+
 const normalizeListParams = ({
   page = 1,
   pageSize = 20,
@@ -159,7 +168,7 @@ export const adminApi = Object.freeze({
     const response = await apiClient.patch(
       ADMIN_ENDPOINTS.organizationStatus(organizationUid),
       { status: 'approved' },
-      { skipGlobalLoader: true },
+      adminDecisionRequestConfig(),
     );
     return mapAdminOrganizationDetail(unwrap(response));
   },
@@ -171,7 +180,7 @@ export const adminApi = Object.freeze({
     const response = await apiClient.patch(
       ADMIN_ENDPOINTS.organizationStatus(organizationUid),
       { status: 'rejected', rejectionReason },
-      { skipGlobalLoader: true },
+      adminDecisionRequestConfig(),
     );
     return mapAdminOrganizationDetail(unwrap(response));
   },

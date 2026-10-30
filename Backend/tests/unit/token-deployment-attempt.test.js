@@ -2,14 +2,24 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const { TokenDeploymentAttemptService } = require('../../src/services/token-deployment-attempt.service');
-const { TokenService } = require('../../src/services/token.service');
+const { TokenService: BaseTokenService } = require('../../src/services/token.service');
 
 const ORG_WALLET = '0x1111111111111111111111111111111111111111';
-const PLATFORM_CONTROLLER = '0x40e81FAA4e6D54ae0632DF146939bB5858359271';
+const PLATFORM_CONTROLLER = '0x4052D80c222111234b89AFDfff597B5De8DA50cd';
 const OTHER_WALLET = '0x2222222222222222222222222222222222222222';
 const TX_HASH = `0x${'a'.repeat(64)}`;
 const TX_HASH_2 = `0x${'b'.repeat(64)}`;
 const CHAIN_ID = 11155111;
+const DEFAULT_PAYMENT_TOKEN = '0x86B14D29A59b745bF08c42661322d13142d5eb49';
+const paymentTokenRepository = {
+  findDefault: async () => ({ contractAddress: DEFAULT_PAYMENT_TOKEN }),
+  findActiveByAddress: async (contractAddress) => ({
+    contractAddress, name: 'USDT', symbol: 'USDT', decimals: 6,
+  }),
+};
+class TokenService extends BaseTokenService {
+  constructor(options) { super({ paymentTokenRepository, ...options }); }
+}
 
 const issuer = { userUid: 'user-1', roleName: 'Issuer' };
 const organization = { organizationUid: 'org-1', status: 'approved', walletAddress: ORG_WALLET };

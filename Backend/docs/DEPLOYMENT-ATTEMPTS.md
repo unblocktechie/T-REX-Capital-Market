@@ -117,7 +117,7 @@ Gateway builds), calls `factory.getToken(salt)`, and:
 
 This requires the owner to be the approved organization wallet and the token name to match what
 was deployed. Configure the lookup start block with `TREX_FACTORY_START_BLOCK` (the factory
-deploy block) to avoid scanning Arc Testnet from genesis.
+deploy block) to avoid scanning Network from genesis.
 
 ### GET `/api/v1/tokens/me/deployment-attempts/active`
 Resume state after a refresh.
@@ -171,14 +171,14 @@ without re-verifying or redeploying.
 
 ## Independent blockchain verification
 
-Verification uses the configured Arc Testnet RPC (`BLOCKCHAIN_RPC_URL`, chain `5042002`) and the
-existing `TokenDeploymentReceiptService`. The backend never trusts frontend-supplied
+Verification uses the token's selected `chainMaster` record and a chain-specific
+`TokenDeploymentReceiptService`. The backend never trusts frontend-supplied
 success, contract address, block number, sender, chain, confirmation count, or event data.
 It confirms: the receipt exists with the required confirmations, `status === 1`, the
-`TREXSuiteDeployed` event was emitted by the configured `TREX_FACTORY_ADDRESS`, every suite
+`TREXSuiteDeployed` event was emitted by that chain's configured `trexFactoryAddress`, every suite
 address is a valid non-zero address, the block timestamp resolves, the sender matches the
 attempt wallet, and neither the contract address nor the transaction hash already belongs to
-another token. RPC URLs and keys come only from environment configuration.
+another token on that chain. RPC URLs and contract addresses come from `chainMaster`.
 
 ## Configuration
 

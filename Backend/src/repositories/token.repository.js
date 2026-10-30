@@ -3,8 +3,9 @@ const { createUid } = require('../utils/token');
 const { identifier } = require('./base.repository');
 
 const tokenFields = [
+  'chainUid',
   'tokenName', 'tokenSymbol', 'decimals', 'initialTokenPrice', 'currentTokenPrice',
-  'treasuryWalletAddress', 'tokenDescription',
+  'treasuryWalletAddress', 'paymentTokenAddress', 'tokenDescription',
   'imageOriginalFileName', 'imageStorageKey', 'imageMimeType', 'imageFileSize', 'imageWidth', 'imageHeight',
   'imageChecksumSha256', 'imageVirusScanStatus', 'trustedClaimIssuerWalletAddress', 'maxInvestors',
   'maxBalancePerInvestor', 'countryRestrictionMode', 'tokenAgentWalletAddress', 'identityManagerWalletAddress',
@@ -60,23 +61,25 @@ class TokenRepository {
     return rows[0] || null;
   }
 
-  async findByTokenAddressExcept(tokenAddress, exceptTokenUid, executor) {
+  async findByTokenAddressExcept(tokenAddress, exceptTokenUid, executor, chainUid = null) {
+    const chainClause = chainUid ? ' AND `chainUid` = ?' : '';
     const rows = await execute(
       `SELECT \`tokenUid\`, \`tokenAddress\`, \`deployTxHash\`
        FROM \`tokenMaster\`
-       WHERE \`tokenAddress\` = ? AND \`tokenUid\` <> ? AND \`isDeleted\` = 0 LIMIT 1`,
-      [tokenAddress, exceptTokenUid],
+       WHERE \`tokenAddress\` = ? AND \`tokenUid\` <> ? AND \`isDeleted\` = 0${chainClause} LIMIT 1`,
+      chainUid ? [tokenAddress, exceptTokenUid, chainUid] : [tokenAddress, exceptTokenUid],
       executor,
     );
     return rows[0] || null;
   }
 
-  async findByDeployTxHashExcept(deployTxHash, exceptTokenUid, executor) {
+  async findByDeployTxHashExcept(deployTxHash, exceptTokenUid, executor, chainUid = null) {
+    const chainClause = chainUid ? ' AND `chainUid` = ?' : '';
     const rows = await execute(
       `SELECT \`tokenUid\`, \`tokenAddress\`, \`deployTxHash\`
        FROM \`tokenMaster\`
-       WHERE \`deployTxHash\` = ? AND \`tokenUid\` <> ? AND \`isDeleted\` = 0 LIMIT 1`,
-      [deployTxHash, exceptTokenUid],
+       WHERE \`deployTxHash\` = ? AND \`tokenUid\` <> ? AND \`isDeleted\` = 0${chainClause} LIMIT 1`,
+      chainUid ? [deployTxHash, exceptTokenUid, chainUid] : [deployTxHash, exceptTokenUid],
       executor,
     );
     return rows[0] || null;

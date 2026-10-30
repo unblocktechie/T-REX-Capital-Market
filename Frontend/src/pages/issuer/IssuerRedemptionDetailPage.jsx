@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { paymentContextOf } from '@/config/payment-tokens';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -15,6 +16,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { getAddress, isAddress } from 'viem';
 import { toast } from 'sonner';
 import { investmentApi } from '@/api/investments';
+import { tokenApi } from '@/api/tokens';
 import { AppStatusBadge } from '@/components/common/AppStatusBadge';
 import { CompactAddress } from '@/components/common/CompactAddress';
 import { Button } from '@/components/ui/Button';
@@ -54,6 +56,7 @@ import {
 
 const TERMINAL = new Set(['COMPLETED', 'ISSUER_REJECTED', 'CANCELLED', 'EXPIRED', 'MANUAL_REVIEW']);
 const POLL_MS = 7000;
+const MIN_FUNDING_CHECK_DISPLAY_MS = 900;
 const REDEMPTION_FUNDING_STATUSES = new Set([
   'ISSUER_APPROVED',
   'TOKENS_LOCKED',
@@ -70,10 +73,62 @@ const addressesEqual = (left, right) => {
 const detailValue = (value) => cleanRedemptionText(value) || '—';
 const redemptionTokenUid = (value) => cleanRedemptionText(
   value?.tokenUid
+  || value?.tokenId
+  || value?.assetUid
   || value?.token?.tokenUid
+  || value?.token?.tokenId
   || value?.token?.uid
-  || value?.token?.id,
+  || value?.token?.id
+  || value?.asset?.tokenUid
+  || value?.asset?.uid
+  || value?.asset?.id,
 );
+
+const tokenRecordUid = (value) => cleanRedemptionText(
+  value?.tokenUid
+  || value?.tokenUID
+  || value?.tokenId
+  || value?.uid
+  || value?.id
+  || value?.server?.tokenUid
+  || value?.token?.tokenUid
+  || value?.token?.tokenId
+  || value?.token?.uid
+  || value?.token?.id
+  || value?.asset?.tokenUid
+  || value?.asset?.uid
+  || value?.asset?.id,
+);
+
+const tokenRecordAddress = (value) => cleanRedemptionText(
+  value?.tokenAddress
+  || value?.contractAddress
+  || value?.address
+  || value?.token?.tokenAddress
+  || value?.token?.contractAddress
+  || value?.token?.address
+  || value?.asset?.tokenAddress
+  || value?.asset?.contractAddress
+  || value?.asset?.address
+  || value?.tokenInformation?.tokenAddress
+  || value?.information?.tokenAddress
+  || value?.deployment?.tokenAddress
+  || value?.deployment?.contracts?.token,
+);
+
+const recordMatchesRedemptionToken = (record, tokenUid, tokenAddress) => {
+  const recordUid = tokenRecordUid(record);
+  if (recordUid && tokenUid) return recordUid === tokenUid;
+
+  const recordAddress = tokenRecordAddress(record);
+  return Boolean(
+    recordAddress
+    && tokenAddress
+    && isAddress(recordAddress, { strict: false })
+    && isAddress(tokenAddress, { strict: false })
+    && addressesEqual(recordAddress, tokenAddress),
+  );
+};
 
 function StatusStep({ icon: Icon, label, value, active = false, complete = false }) {
   return (
@@ -87,8 +142,8 @@ function StatusStep({ icon: Icon, label, value, active = false, complete = false
 export default function IssuerRedemptionDetailPage() {
   const { redemptionUid } = useParams();
   const navigate = useNavigate();
-  const wallet = useWalletConnection();
   const [redemption, setRedemption] = useState(null);
+  const wallet = useWalletConnection(redemption?.chainId);
   const [loading, setLoading] = useState(true);
   const [action, setAction] = useState('');
   const [decision, setDecision] = useState('');
@@ -98,9 +153,12 @@ export default function IssuerRedemptionDetailPage() {
   const [funding, setFunding] = useState(null);
   const [fundingLoading, setFundingLoading] = useState(false);
   const [fundingError, setFundingError] = useState('');
+  const [redemptionAsset, setRedemptionAsset] = useState(null);
+  const [redemptionAssetResolved, setRedemptionAssetResolved] = useState(false);
   const [walletFundingIssue, setWalletFundingIssue] = useState(null);
   const [submittedRedemptionHash, setSubmittedRedemptionHash] = useState('');
   const mounted = useRef(true);
+  const settledFundingCheckKey = useRef('');
 
   useDocumentTitle('Redemption Details');
 
@@ -130,6 +188,15 @@ export default function IssuerRedemptionDetailPage() {
   const terminal = TERMINAL.has(status);
   const awaitingDecision = status === 'PENDING_ISSUER_APPROVAL';
   const fundingPhase = REDEMPTION_FUNDING_STATUSES.has(status);
+  const tokenUid = redemptionTokenUid(redemption);
+  const redemptionTokenAddress = cleanRedemptionText(
+    redemption?.tokenAddress || redemption?.token?.tokenAddress || redemption?.token?.address,
+  );
+  const directPaymentContext = useMemo(() => paymentContextOf(redemption), [redemption]);
+  const redemptionPaymentContext = useMemo(
+    () => paymentContextOf(redemptionAsset, redemption),
+    [redemptionAsset, redemption],
+  );
   const fundingCheckPending = fundingPhase && !funding && !fundingError;
   const issuerAllowanceReady = Boolean(funding?.issuerAllowanceSufficient);
   const issuerBalanceReady = Boolean(funding?.issuerBalanceSufficient);
@@ -139,6 +206,70 @@ export default function IssuerRedemptionDetailPage() {
     && !fundingLoading
     && !fundingError
     && !issuerAllowanceReady;
+
+  useEffect(() => {
+    if (!fundingPhase || terminal) {
+      setRedemptionAsset(null);
+      setRedemptionAssetResolved(false);
+      return undefined;
+    }
+
+    // Newer redemption payloads already contain the asset's payment-token address.
+    // Older issuer-redemption rows do not, so recover it from the issuer's own token
+    // record instead of guessing from a symbol or an environment-wide default.
+    if (isAddress(directPaymentContext.paymentTokenAddress || '', { strict: false })) {
+      setRedemptionAsset(null);
+      setRedemptionAssetResolved(true);
+      return undefined;
+    }
+
+    if (!tokenUid && !isAddress(redemptionTokenAddress || '', { strict: false })) {
+      setRedemptionAsset(null);
+      setRedemptionAssetResolved(true);
+      return undefined;
+    }
+
+    let active = true;
+    setRedemptionAssetResolved(false);
+
+    const resolveAsset = async () => {
+      let matched = null;
+
+      try {
+        const issuerToken = await tokenApi.getMyToken();
+        if (recordMatchesRedemptionToken(issuerToken, tokenUid, redemptionTokenAddress)) {
+          matched = issuerToken;
+        }
+      } catch {
+        // The redemption can still be resolved through the token catalogue endpoint.
+      }
+
+      if (!matched && tokenUid) {
+        try {
+          const tokenRecord = await investmentApi.getToken(tokenUid);
+          if (recordMatchesRedemptionToken(tokenRecord, tokenUid, redemptionTokenAddress)) {
+            matched = tokenRecord;
+          }
+        } catch {
+          // Keep the original redemption payload. The normal funding error below
+          // remains the final guard if neither authoritative endpoint is available.
+        }
+      }
+
+      if (!active) return;
+      setRedemptionAsset(matched);
+      setRedemptionAssetResolved(true);
+    };
+
+    void resolveAsset();
+    return () => { active = false; };
+  }, [
+    directPaymentContext.paymentTokenAddress,
+    fundingPhase,
+    redemptionTokenAddress,
+    terminal,
+    tokenUid,
+  ]);
 
   useEffect(() => {
     if (!redemptionUid || loading || terminal || document.visibilityState !== 'visible') return undefined;
@@ -183,9 +314,17 @@ export default function IssuerRedemptionDetailPage() {
 
   useEffect(() => {
     if (!fundingPhase || terminal || !redemption) {
+      settledFundingCheckKey.current = '';
       setFunding(null);
       setFundingError('');
       setFundingLoading(false);
+      return undefined;
+    }
+
+    if (!redemptionAssetResolved) {
+      setFunding(null);
+      setFundingError('');
+      setFundingLoading(true);
       return undefined;
     }
 
@@ -195,20 +334,68 @@ export default function IssuerRedemptionDetailPage() {
     const tokenAmount = cleanRedemptionText(redemption?.tokenAmount || redemption?.amount);
     if (!Number.isSafeInteger(chainId) || !tokenAddress || (!tokenAmountRaw && !tokenAmount)) return undefined;
 
+    const fundingCheckKey = [
+      redemptionUid,
+      chainId,
+      tokenAddress.toLowerCase(),
+      tokenAmountRaw || tokenAmount,
+      redemptionPaymentContext.paymentTokenAddress || '',
+      redemptionPaymentContext.controllerAddress || '',
+    ].join('|');
+    const showForegroundLoading = settledFundingCheckKey.current !== fundingCheckKey;
+    const startedAt = Date.now();
     let active = true;
-    setFundingLoading(true);
-    setFundingError('');
-    getPlatformRedemptionFunding({ chainId, tokenAddress, tokenAmountRaw, tokenAmount })
-      .then((next) => { if (active) setFunding(next); })
-      .catch((fundingLoadError) => {
+    let minimumDelayTimer;
+    let finishMinimumDelay;
+
+    if (showForegroundLoading) {
+      setFundingLoading(true);
+      setFundingError('');
+    }
+
+    const waitForMinimumDisplay = () => {
+      if (!showForegroundLoading) return Promise.resolve();
+      const remaining = Math.max(0, MIN_FUNDING_CHECK_DISPLAY_MS - (Date.now() - startedAt));
+      if (!remaining) return Promise.resolve();
+      return new Promise((resolve) => {
+        finishMinimumDelay = resolve;
+        minimumDelayTimer = window.setTimeout(resolve, remaining);
+      });
+    };
+
+    const refreshFunding = async () => {
+      try {
+        const next = await getPlatformRedemptionFunding({
+          ...redemptionPaymentContext,
+          chainId,
+          tokenAddress,
+          tokenAmountRaw,
+          tokenAmount,
+        });
+        await waitForMinimumDisplay();
         if (!active) return;
+        settledFundingCheckKey.current = fundingCheckKey;
+        setFunding(next);
+        setFundingError('');
+      } catch (fundingLoadError) {
+        await waitForMinimumDisplay();
+        if (!active) return;
+        settledFundingCheckKey.current = fundingCheckKey;
         setFunding(null);
         setFundingError(getErrorMessage(fundingLoadError, 'Unable to verify redemption funding right now.'));
-      })
-      .finally(() => { if (active) setFundingLoading(false); });
+      } finally {
+        if (active && showForegroundLoading) setFundingLoading(false);
+      }
+    };
 
-    return () => { active = false; };
-  }, [fundingPhase, redemption, status, terminal]);
+    void refreshFunding();
+
+    return () => {
+      active = false;
+      if (minimumDelayTimer) window.clearTimeout(minimumDelayTimer);
+      if (finishMinimumDelay) finishMinimumDelay();
+    };
+  }, [fundingPhase, redemption, redemptionAssetResolved, redemptionPaymentContext, redemptionUid, status, terminal]);
 
   const statusMeta = issuerRedemptionStatusMeta(status);
   const chainId = Number(redemption?.chainId);
@@ -216,7 +403,6 @@ export default function IssuerRedemptionDetailPage() {
   const correctIssuerWallet = Boolean(wallet.address && expectedIssuerWallet && addressesEqual(wallet.address, expectedIssuerWallet));
   const correctChain = Number.isSafeInteger(chainId) && wallet.chainId === chainId;
   const canSwitchChain = Number.isSafeInteger(chainId) && wallet.supportedChains.some((chain) => chain.id === chainId);
-  const tokenUid = redemptionTokenUid(redemption);
   const configuredRedemptionChain = wallet.supportedChains.find((chain) => chain.id === chainId) || wallet.requiredChain;
   const resolveWalletFundingIssue = useCallback((walletError) => getWalletFundingIssue(walletError, {
     walletAddress: wallet.address || expectedIssuerWallet,
@@ -366,14 +552,14 @@ export default function IssuerRedemptionDetailPage() {
     setAction('funding');
     try {
       if (!wallet.isConnected || !wallet.connector || !wallet.address) {
-        throw new Error('Open the Privy secure account in the header before continuing.');
+        throw new Error('Connect the organization wallet in the header before continuing.');
       }
       if (fundingError) throw new Error(fundingError);
 
       const chainId = Number(redemption?.chainId);
       if (!Number.isSafeInteger(chainId)) throw new Error('The secure account setup could not be verified. Refresh and try again.');
       if (!correctIssuerWallet) {
-        throw new Error('Use the Privy secure account linked to this organization before continuing.');
+        throw new Error('Switch to the organization wallet that owns this token before continuing.');
       }
       if (!correctChain) {
         if (canSwitchChain) await wallet.switchChain(chainId);
@@ -381,6 +567,7 @@ export default function IssuerRedemptionDetailPage() {
       }
 
       const result = await approvePlatformRedemptionFunding({
+        ...redemptionPaymentContext,
         connector: wallet.connector,
         connectedAddress: wallet.address,
         chainId,
@@ -389,13 +576,13 @@ export default function IssuerRedemptionDetailPage() {
         tokenAmount: cleanRedemptionText(redemption?.tokenAmount || redemption?.amount),
         onStep: ({ stage }) => {
           if (stage === 'approval-signature') {
-            toast.info('Allow USDC payments', { description: 'This is a separate one-time permission. It does not redeem units or send a redemption payment by itself.' });
+            toast.info('Allow payment token payments', { description: 'This is a separate one-time permission. It does not redeem units or send a redemption payment by itself.' });
           }
         },
       });
       setFunding(result.funding);
       if (result.alreadyApproved) {
-        toast.success('Payment setup is ready', { description: 'You can confirm the redemption once the organization secure account has enough USDC.' });
+        toast.success('Payment setup is ready', { description: 'You can confirm the redemption once the organization secure account has enough payment token.' });
       } else {
         toast.success('Payment setup complete', { description: 'No further setup is needed for future redemptions while this permission remains available.' });
       }
@@ -418,11 +605,11 @@ export default function IssuerRedemptionDetailPage() {
     setAction('redeem');
     try {
       if (!wallet.isConnected || !wallet.connector || !wallet.address) {
-        throw new Error('Open the Privy secure account in the header before continuing.');
+        throw new Error('Connect the organization wallet in the header before continuing.');
       }
       if (fundingError) throw new Error(fundingError);
       if (!funding?.issuerAllowanceSufficient) {
-        throw new Error('Allow USDC payments before executing this redemption.');
+        throw new Error('Allow payment token payments before executing this redemption.');
       }
       if (!funding?.issuerBalanceSufficient) {
         const paymentSymbol = funding?.paymentTokenSymbol || 'payment token';
@@ -444,7 +631,7 @@ export default function IssuerRedemptionDetailPage() {
         throw new Error('The secure account setup could not be verified. Refresh and try again.');
       }
       if (!correctIssuerWallet) {
-        throw new Error('Use the Privy secure account linked to this organization before continuing.');
+        throw new Error('Switch to the organization wallet that owns this token before continuing.');
       }
       if (!correctChain) {
         if (canSwitchChain) await wallet.switchChain(chainId);
@@ -452,6 +639,8 @@ export default function IssuerRedemptionDetailPage() {
       }
 
       const result = await submitPlatformRedemption({
+        expectedPaymentAmountRaw: funding.paymentAmount.toString(),
+        ...redemptionPaymentContext,
         connector: wallet.connector,
         connectedAddress: wallet.address,
         investorWalletAddress: cleanRedemptionText(redemption?.investorWalletAddress),
@@ -461,7 +650,7 @@ export default function IssuerRedemptionDetailPage() {
         tokenAmount: cleanRedemptionText(redemption?.tokenAmount || redemption?.amount),
         onStep: ({ stage }) => {
           if (stage === 'redeem-signature') {
-            toast.info('Review and confirm redemption', { description: 'Confirm securely with Privy after you review the redemption amount.' });
+            toast.info('Confirm redemption', { description: 'The organization wallet is signing the final redemption transaction.' });
           }
         },
       });
@@ -474,6 +663,7 @@ export default function IssuerRedemptionDetailPage() {
       setSubmittedRedemptionHash(txHash);
       if (tokenUid) {
         saveObservedWalletTransaction({
+          ...redemptionPaymentContext,
           chainId,
           txHash,
           tokenUid,
@@ -490,7 +680,7 @@ export default function IssuerRedemptionDetailPage() {
       toast.success('Redemption submitted', { description: 'Your redemption is being confirmed. Do not submit another redemption request.' });
 
       await waitForPlatformTransactionReceipt({ txHash, chainId });
-      toast.success('Redemption confirmed', { description: 'The investor units were redeemed and the USDC payment was completed.' });
+      toast.success('Redemption confirmed', { description: 'The investor units were redeemed and the payment token payment was completed.' });
       markRedemptionConfirmedLocally(txHash);
 
       if (tokenUid) {
@@ -530,6 +720,7 @@ export default function IssuerRedemptionDetailPage() {
         if (fundingIssue) setWalletFundingIssue(fundingIssue);
         toast.error(getErrorMessage(redeemError, 'Unable to execute this redemption.'));
         await getPlatformRedemptionFunding({
+          ...redemptionPaymentContext,
           chainId,
           tokenAddress: cleanRedemptionText(redemption?.tokenAddress || redemption?.token?.tokenAddress || redemption?.token?.address),
           tokenAmountRaw: cleanRedemptionText(redemption?.tokenAmountRaw),
@@ -559,7 +750,7 @@ export default function IssuerRedemptionDetailPage() {
   }
 
   const created = cleanRedemptionText(redemption?.createdAt || redemption?.requestedAt || redemption?.submittedAt);
-  const paymentAmount = detailValue(funding?.paymentAmountFormatted || redemption?.usdtAmount || redemption?.usdtAmountFormatted || redemption?.payment?.amount);
+  const paymentAmount = detailValue(funding?.paymentAmountFormatted || redemption?.paymentAmountFormatted || redemption?.paymentAmount || redemption?.usdtAmount || redemption?.usdtAmountFormatted || redemption?.payment?.amount);
   const paymentHash = issuerPaymentHash(redemption) || submittedRedemptionHash;
   const burnHash = issuerBurnHash(redemption);
   const explorerName = transactionExplorerName(redemption?.chainId);
@@ -610,11 +801,11 @@ export default function IssuerRedemptionDetailPage() {
     }
 
     if (paymentReady) {
-      return 'USDC payment permission and balance are ready. Review and confirm the redemption with Privy.';
+      return 'payment token allowance and balance are ready. Execute the redemption from the organization wallet.';
     }
 
     if (issuerAllowanceReady && !issuerBalanceReady) {
-      return 'The organization secure account needs enough USDC before you can confirm this redemption.';
+      return 'The organization secure account needs enough payment token before you can confirm this redemption.';
     }
 
     return baseMessage;
@@ -626,7 +817,7 @@ export default function IssuerRedemptionDetailPage() {
         <div>
           <span className="issuer-redemptions-eyebrow">Redemption review</span>
           <h1>{issuerRedemptionTokenLabel(redemption)}</h1>
-          <p>Review the request and prepare USDC if needed. When everything is ready, review and confirm the redemption securely with Privy.</p>
+          <p>Review the request, prepare payment token if needed, then execute the final Redeem transaction from the organization wallet.</p>
         </div>
         <AppStatusBadge status={status} label={statusMeta.label} tone={statusMeta.tone} />
       </header>
@@ -645,16 +836,6 @@ export default function IssuerRedemptionDetailPage() {
               <div><span>Requested</span><strong>{created ? formatDate(created, 'MMM DD, YYYY · hh:mm A') : '—'}</strong></div>
               <div><span>Investor secure account</span><strong>{redemption?.investorWalletAddress ? 'Linked to investor profile' : 'Not available'}</strong></div>
             </div>
-            {(redemption?.investorWalletAddress || expectedIssuerWallet || Number.isSafeInteger(chainId)) ? (
-              <details className="investor-technical-details">
-                <summary>View account details</summary>
-                <div className="issuer-redemption-payment-summary">
-                  {redemption?.investorWalletAddress ? <div><span>Investor Privy wallet address</span><CompactAddress value={redemption.investorWalletAddress} label="Investor Privy wallet address" /></div> : null}
-                  {expectedIssuerWallet ? <div><span>Organization Privy wallet address</span><CompactAddress value={expectedIssuerWallet} label="Organization Privy wallet address" /></div> : null}
-                  {Number.isSafeInteger(chainId) ? <div><span>Network</span><strong>{wallet.supportedChains.find((chain) => chain.id === chainId)?.name || `Chain ${chainId}`}</strong></div> : null}
-                </div>
-              </details>
-            ) : null}
           </Card>
 
           <Card className="issuer-redemption-card">
@@ -684,11 +865,11 @@ export default function IssuerRedemptionDetailPage() {
 
         <aside className="issuer-redemption-detail-side">
           <Card className="issuer-redemption-card issuer-redemption-action-card">
-            <div className="issuer-redemption-card__heading"><div><span>Required action</span><h2>{awaitingDecision ? 'Review request' : fundingPhase ? fundingCheckPending || fundingLoading ? 'Preparing redemption' : fundingError ? 'Unable to check readiness' : approvalNeeded ? 'One-time payment setup' : !issuerBalanceReady ? 'Add USDC for this redemption' : 'Execute redemption' : status === 'ISSUER_REJECTED' ? 'Redemption outcome' : 'Redemption progress'}</h2></div><WalletCards size={21} /></div>
+            <div className="issuer-redemption-card__heading"><div><span>Required action</span><h2>{awaitingDecision ? 'Review request' : fundingPhase ? fundingCheckPending || fundingLoading ? 'Preparing redemption' : fundingError ? 'Unable to check readiness' : approvalNeeded ? 'One-time payment setup' : !issuerBalanceReady ? 'Add payment token for this redemption' : 'Execute redemption' : status === 'ISSUER_REJECTED' ? 'Redemption outcome' : 'Redemption progress'}</h2></div><WalletCards size={21} /></div>
 
             {awaitingDecision ? (
               <>
-                <p>Review the investor’s request, then approve or reject it. If approved, you will review and confirm the final redemption with the organization’s Privy secure account after USDC readiness is verified.</p>
+                <p>Review the investor’s request, then approve or reject it. If approved, the organization wallet completes the final redemption after payment token readiness is verified.</p>
                 <div className="issuer-redemption-action-stack">
                   <Button loading={action === 'approve'} disabled={Boolean(action)} onClick={() => openDecisionModal('approve')} icon={CheckCircle2}>Approve redemption</Button>
                   <Button variant="danger" loading={action === 'reject'} disabled={Boolean(action)} onClick={() => openDecisionModal('reject')} icon={XCircle}>Reject redemption</Button>
@@ -697,7 +878,7 @@ export default function IssuerRedemptionDetailPage() {
             ) : fundingPhase ? (
               <>
                 {fundingCheckPending || fundingLoading ? (
-                  <div className="issuer-redemption-live"><RefreshCw size={16} className="issuer-redemption-spin" /><span>Checking that this redemption is ready…</span></div>
+                  <div className="issuer-redemption-live" role="status" aria-live="polite"><RefreshCw size={16} className="issuer-redemption-spin" /><span>Checking that this redemption is ready…</span></div>
                 ) : null}
 
                 {fundingError ? (
@@ -706,13 +887,13 @@ export default function IssuerRedemptionDetailPage() {
 
                 {approvalNeeded ? (
                   <>
-                    <p>This organization needs a one-time payment setup before redemptions can be processed. Complete it once with the approved Privy secure account.</p>
+                    <p>This organization needs a one-time payment setup before redemptions can be processed. Complete it once from the approved organization wallet.</p>
                     <div className="issuer-redemption-payment-summary">
-                      <div><span>Current redemption</span><strong>{paymentAmount !== '—' ? `${paymentAmount} USDC` : 'Unavailable'}</strong></div>
-                      <div><span>Payment permission</span><strong>Required once</strong></div>
-                      <div><span>Secure account</span><strong>Securely managed by Privy</strong></div>
+                      <div><span>Current redemption</span><strong>{paymentAmount !== '—' ? `${paymentAmount} ${funding?.paymentTokenSymbol || redemptionPaymentContext.paymentTokenSymbol || ''}` : 'Unavailable'}</strong></div>
+                      <div><span>Required network</span><strong>{Number.isSafeInteger(chainId) ? wallet.supportedChains.find((chain) => chain.id === chainId)?.name || `Chain ${chainId}` : '—'}</strong></div>
+                      <div><span>Organization wallet</span>{expectedIssuerWallet ? <CompactAddress value={expectedIssuerWallet} label="Organization wallet" /> : <strong>—</strong>}</div>
                     </div>
-                    {!wallet.isConnected ? <div className="issuer-redemption-inline-alert is-warning"><AlertTriangle size={17} /><span>Open the approved Privy secure account to complete this one-time setup.</span></div> : !correctIssuerWallet ? <div className="issuer-redemption-inline-alert is-danger"><AlertTriangle size={17} /><span>Use the approved Privy secure account before continuing.</span></div> : !correctChain ? <div className="issuer-redemption-inline-alert is-warning"><AlertTriangle size={17} /><span>Your Privy secure account needs a quick setup check before continuing.</span></div> : <div className="issuer-redemption-inline-alert is-success"><CheckCircle2 size={17} /><span>Your Privy secure account is ready.</span></div>}
+                    {!wallet.isConnected ? <div className="issuer-redemption-inline-alert is-warning"><AlertTriangle size={17} /><span>Connect the organization wallet to complete the one-time setup.</span></div> : !correctIssuerWallet ? <div className="issuer-redemption-inline-alert is-danger"><AlertTriangle size={17} /><span>Switch to the approved organization wallet before continuing.</span></div> : !correctChain ? <div className="issuer-redemption-inline-alert is-warning"><AlertTriangle size={17} /><span>Your wallet is on the wrong network. We will ask you to switch before continuing.</span></div> : <div className="issuer-redemption-inline-alert is-success"><CheckCircle2 size={17} /><span>Organization wallet and network are ready.</span></div>}
                     <Button
                       loading={action === 'funding'}
                       disabled={Boolean(action) || Boolean(fundingError) || !wallet.isConnected || !correctIssuerWallet}
@@ -721,28 +902,28 @@ export default function IssuerRedemptionDetailPage() {
                     >
                       Allow payments
                     </Button>
-                    <small className="issuer-redemption-action-note">This one-time permission lets the organization make redemption payments using USDC. You will still review and confirm each redemption before funds are used.</small>
+                    <small className="issuer-redemption-action-note">This one-time permission lets the organization make redemption payments using payment token. You will still review and confirm each redemption before funds are used.</small>
                   </>
                 ) : null}
 
                 {!approvalNeeded && issuerAllowanceReady && funding?.issuerBalanceSufficient === false ? (
                   <>
                     <div className="issuer-redemption-payment-summary">
-                      <div><span>USDC needed</span><strong>{paymentAmount !== '—' ? `${paymentAmount} USDC` : 'Unavailable'}</strong></div>
-                      <div><span>Organization secure account</span><strong>Securely managed by Privy</strong></div>
+                      <div><span>payment token needed</span><strong>{paymentAmount !== '—' ? `${paymentAmount} ${funding?.paymentTokenSymbol || redemptionPaymentContext.paymentTokenSymbol || ''}` : 'Unavailable'}</strong></div>
+                      <div><span>Organization wallet</span>{expectedIssuerWallet ? <CompactAddress value={expectedIssuerWallet} label="Organization wallet" /> : <strong>—</strong>}</div>
                     </div>
-                    <div className="issuer-redemption-inline-alert is-danger"><AlertTriangle size={17} /><span>Add enough USDC to the organization secure account for this redemption, then refresh. Confirmation becomes available once the balance is sufficient.</span></div>
+                    <div className="issuer-redemption-inline-alert is-danger"><AlertTriangle size={17} /><span>Add enough payment token to the organization secure account for this redemption, then refresh. Confirmation becomes available once the balance is sufficient.</span></div>
                   </>
                 ) : null}
 
                 {paymentReady ? (
                   <>
                     <div className="issuer-redemption-payment-summary">
-                      <div><span>Investor receives</span><strong>{paymentAmount !== '—' ? `${paymentAmount} USDC` : 'Unavailable'}</strong></div>
-                      <div><span>Investor secure account</span><strong>{redemption?.investorWalletAddress ? 'Linked to investor profile' : 'Not available'}</strong></div>
-                      <div><span>Organization secure account</span><strong>Securely managed by Privy</strong></div>
+                      <div><span>Investor receives</span><strong>{paymentAmount !== '—' ? `${paymentAmount} ${funding?.paymentTokenSymbol || redemptionPaymentContext.paymentTokenSymbol || ''}` : 'Unavailable'}</strong></div>
+                      <div><span>Investor wallet</span>{redemption?.investorWalletAddress ? <CompactAddress value={redemption.investorWalletAddress} label="Investor wallet" /> : <strong>—</strong>}</div>
+                      <div><span>Organization wallet</span>{expectedIssuerWallet ? <CompactAddress value={expectedIssuerWallet} label="Organization wallet" /> : <strong>—</strong>}</div>
                     </div>
-                    {!wallet.isConnected ? <div className="issuer-redemption-inline-alert is-warning"><AlertTriangle size={17} /><span>Open the approved Privy secure account to confirm this redemption.</span></div> : !correctIssuerWallet ? <div className="issuer-redemption-inline-alert is-danger"><AlertTriangle size={17} /><span>Use the approved Privy secure account before confirming this redemption.</span></div> : !correctChain ? <div className="issuer-redemption-inline-alert is-warning"><AlertTriangle size={17} /><span>Your Privy secure account needs a quick setup check before continuing.</span></div> : <div className="issuer-redemption-inline-alert is-success"><CheckCircle2 size={17} /><span>USDC payment permission, balance, and the Privy secure account are ready.</span></div>}
+                    {!wallet.isConnected ? <div className="issuer-redemption-inline-alert is-warning"><AlertTriangle size={17} /><span>Connect the organization wallet to execute this redemption.</span></div> : !correctIssuerWallet ? <div className="issuer-redemption-inline-alert is-danger"><AlertTriangle size={17} /><span>Switch to the approved organization wallet before executing this redemption.</span></div> : !correctChain ? <div className="issuer-redemption-inline-alert is-warning"><AlertTriangle size={17} /><span>Your wallet is on the wrong network. We will ask you to switch before continuing.</span></div> : <div className="issuer-redemption-inline-alert is-success"><CheckCircle2 size={17} /><span>payment token allowance, balance, organization wallet, and network are ready.</span></div>}
                     <Button
                       loading={action === 'redeem'}
                       disabled={Boolean(action) || Boolean(fundingError) || !wallet.isConnected || !correctIssuerWallet || Boolean(submittedRedemptionHash)}
@@ -751,7 +932,7 @@ export default function IssuerRedemptionDetailPage() {
                     >
                       {submittedRedemptionHash ? 'Redemption submitted' : 'Review and confirm redemption'}
                     </Button>
-                    <small className="issuer-redemption-action-note">Confirming this redemption will remove the redeemed asset units from the investor and send the stated USDC amount from the organization secure account to the investor. Review the amount before you confirm.</small>
+                    <small className="issuer-redemption-action-note">Confirming this redemption will remove the redeemed asset units from the investor and send the stated payment token amount from the organization secure account to the investor. Review the amount before you confirm.</small>
                   </>
                 ) : null}
               </>
@@ -802,7 +983,7 @@ export default function IssuerRedemptionDetailPage() {
             {decision === 'approve' ? <CheckCircle2 size={24} /> : <XCircle size={24} />}
             <div>
               <strong>{decision === 'approve' ? 'Approve this redemption request' : 'End this redemption request'}</strong>
-              <p>{decision === 'approve' ? 'This accepts the investor’s request. Once USDC readiness is verified, you will review and confirm the final redemption securely with Privy.' : 'Reject only if this investor redemption should not proceed. No settlement will be processed.'}</p>
+              <p>{decision === 'approve' ? 'This accepts the investor’s request. Once payment token readiness is verified, the organization wallet signs the final Redeem transaction.' : 'Reject only if this investor redemption should not proceed. No settlement will be processed.'}</p>
             </div>
           </div>
 

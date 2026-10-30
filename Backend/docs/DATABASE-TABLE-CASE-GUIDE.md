@@ -1,6 +1,6 @@
 # Linux MySQL Table-Name Case Guide
 
-The backend uses 45 camelCase table identifiers. Windows MySQL commonly runs with
+The backend uses 51 camelCase table identifiers. Windows MySQL commonly runs with
 `lower_case_table_names=1`, so incorrect lowercase names may work locally. Linux MySQL normally uses
 `lower_case_table_names=0`, where `userMaster` and `usermaster` are different table names.
 
@@ -10,6 +10,10 @@ exact names:
 ```text
 authToken
 blockchainIndexerCheckpoint
+blockchainIndexedContract
+blockchainTransaction
+chainMaster
+chainMasterAudit
 cityMaster
 claimTopicMaster
 countryMaster
@@ -33,6 +37,7 @@ menuMaster
 organizationBeneficialOwner
 organizationDocument
 organizationMaster
+paymentTokenMaster
 permissionMaster
 stateMaster
 tokenClaimTopic
@@ -51,6 +56,7 @@ tokenRedemptionTransaction
 tokenTransfer
 tokenTransferBlockchainEvent
 tokenTransferTransaction
+userChainIdentity
 userMaster
 userRole
 ```
@@ -66,7 +72,7 @@ mysql -u DB_USER -p DB_NAME < database/fix-linux-table-name-case.sql
 ```
 
 The second command must return `0`. The repair script does not access `information_schema`; it
-directly renames the 45 lowercase table names produced by the audited Windows export to the exact
+directly renames the 51 lowercase table names produced by the audited Windows export to the exact
 camelCase names used by the backend.
 
 Run the repair script only once. The renames are issued as a single statement, so MySQL fails the
@@ -77,6 +83,19 @@ name already exists. Inspect the final `SHOW TABLES` output, then restart the ba
 GET /api/health
 GET /api/v1/investments/me/portfolio
 ```
+
+## Recover a partially repaired database
+
+If some tables have already been renamed but others remain lowercase, use the idempotent recovery
+script with an administrative MySQL account:
+
+```bash
+mysql -u root -p DB_NAME < database/fix-linux-table-name-case-partial.sql
+```
+
+This variant reads `information_schema.TABLES`, leaves existing canonical camelCase names alone,
+and renames every remaining lowercase table. It is intended for mixed schemas only; hosted users
+without `information_schema` access should ask an administrator to run it.
 
 ## Important deployment rule
 

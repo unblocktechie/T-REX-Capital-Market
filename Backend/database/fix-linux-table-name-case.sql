@@ -18,6 +18,8 @@ RENAME TABLE
   `blockchainindexercheckpoint` TO `blockchainIndexerCheckpoint`,
   `blockchainindexedcontract` TO `blockchainIndexedContract`,
   `blockchaintransaction` TO `blockchainTransaction`,
+  `chainmaster` TO `chainMaster`,
+  `chainmasteraudit` TO `chainMasterAudit`,
   `citymaster` TO `cityMaster`,
   `claimtopicmaster` TO `claimTopicMaster`,
   `countrymaster` TO `countryMaster`,
@@ -41,6 +43,7 @@ RENAME TABLE
   `organizationbeneficialowner` TO `organizationBeneficialOwner`,
   `organizationdocument` TO `organizationDocument`,
   `organizationmaster` TO `organizationMaster`,
+  `paymenttokenmaster` TO `paymentTokenMaster`,
   `permissionmaster` TO `permissionMaster`,
   `statemaster` TO `stateMaster`,
   `tokenclaimtopic` TO `tokenClaimTopic`,
@@ -59,6 +62,7 @@ RENAME TABLE
   `tokentransfer` TO `tokenTransfer`,
   `tokentransferblockchainevent` TO `tokenTransferBlockchainEvent`,
   `tokentransfertransaction` TO `tokenTransferTransaction`,
+  `userchainidentity` TO `userChainIdentity`,
   `usermaster` TO `userMaster`,
   `userrole` TO `userRole`;
 

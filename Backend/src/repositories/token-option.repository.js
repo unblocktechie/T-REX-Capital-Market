@@ -24,10 +24,11 @@ class TokenOptionRepository {
     );
   }
 
-  async listAll() {
+  async listAll(paymentTokens = []) {
     return {
       decimals: [2, 6, 8, 18],
       countryRestrictionModes: ['allowlist', 'blocklist'],
+      paymentTokens,
       claimTopics: await this.listClaimTopics(),
     };
   }

@@ -2,16 +2,13 @@ import { useEffect, useState } from 'react';
 import { TrexLoader } from '@/components/loaders/TrexLoader';
 
 /**
- * Avoid flashing a full-screen loader for work that finishes within a fraction
- * of a second. This is especially important when route lazy-loading and data
- * guards resolve back-to-back during onboarding/navigation.
+ * Keep the delay for non-startup verification flows to prevent loader flashing.
  */
 export function DelayedTrexLoader({ delay = 220, ...props }) {
-  const [visible, setVisible] = useState(delay <= 0);
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     if (delay <= 0) {
-      setVisible(true);
       return undefined;
     }
 
@@ -19,17 +16,20 @@ export function DelayedTrexLoader({ delay = 220, ...props }) {
     return () => window.clearTimeout(timer);
   }, [delay]);
 
-  if (!visible) return null;
+  if (delay > 0 && !visible) return null;
   return <TrexLoader {...props} />;
 }
 
-export function WorkspaceRouteLoader({ delay = 180 }) {
+/**
+ * Shared minimal T-REX overlay for true application-level waits such as startup,
+ * authentication redirects, workspace bootstrap, and access verification.
+ * Ordinary authenticated menu navigation uses an in-content skeleton instead.
+ */
+export function WorkspaceRouteLoader() {
   return (
-    <DelayedTrexLoader
-      delay={delay}
+    <TrexLoader
       variant="route"
       compact
-      eyebrow="Secure workspace"
       title="Opening your workspace"
       message="Loading your latest T-REX workspace data…"
     />

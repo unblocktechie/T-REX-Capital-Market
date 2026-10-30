@@ -18,7 +18,7 @@ const writeAll = (rows) => {
   try { storage()?.setItem(STORAGE_KEY, JSON.stringify(rows.slice(-50))); } catch { /* best effort only */ }
 };
 
-export function saveObservedWalletTransaction({ chainId, txHash, tokenUid, expectedAction, interestUid = '', redemptionUid = '' }) {
+export function saveObservedWalletTransaction({ chainId, txHash, tokenUid, expectedAction, interestUid = '', redemptionUid = '', paymentTokenAddress = '', controllerAddress = '', paymentTokenSymbol = '' }) {
   const hash = clean(txHash);
   const action = clean(expectedAction).toUpperCase();
   if (!hashOk(hash) || !tokenUid || !['INVEST', 'TRANSFER', 'REDEMPTION'].includes(action)) return null;
@@ -27,6 +27,9 @@ export function saveObservedWalletTransaction({ chainId, txHash, tokenUid, expec
     txHash: hash,
     tokenUid: clean(tokenUid),
     expectedAction: action,
+    paymentTokenAddress: clean(paymentTokenAddress),
+    controllerAddress: clean(controllerAddress),
+    paymentTokenSymbol: clean(paymentTokenSymbol),
     interestUid: clean(interestUid),
     redemptionUid: clean(redemptionUid),
     observedAt: new Date().toISOString(),

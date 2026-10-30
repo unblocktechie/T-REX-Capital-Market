@@ -2,11 +2,12 @@ const ethers = require('ethers');
 const { ApiError } = require('../core/errors/api-error');
 const { withTransaction } = require('../database/connection');
 const { logger } = require('./common/log.service');
+const { assertSelectedChain } = require('../utils/selected-chain');
 
 // Interest states in which the investor may submit on-chain claims. Signing/verification must
 // already have advanced the subscription to verifiedByIssuer; claimSubmitted is included so
 // re-submits after completion are handled idempotently.
-const SUBMITTABLE_INTEREST_STATUSES = ['verifiedByIssuer', 'claimSubmitted'];
+const SUBMITTABLE_INTEREST_STATUSES = ['verifiedByIssuer', 'claimSubmitted', 'registered'];
 
 // Verifier error code -> HTTP status. Everything else is a 422 verification failure.
 const ERROR_STATUS = {
@@ -27,6 +28,8 @@ class InvestorClaimService {
     recoveryService = null,
     claimStateService = null,
     claimIndexerService = null,
+    chainServicesFactory = null,
+    journeyService = null,
     transactionRunner = withTransaction,
   }) {
     this.repository = repository;
@@ -39,7 +42,21 @@ class InvestorClaimService {
     this.recoveryService = recoveryService;
     this.claimStateService = claimStateService;
     this.claimIndexerService = claimIndexerService;
+    this.chainServicesFactory = chainServicesFactory;
+    this.journeyService = journeyService;
     this.transactionRunner = transactionRunner;
+  }
+
+  async chainServices(interest) {
+    if (!this.chainServicesFactory) {
+      return {
+        verifier: this.verifier,
+        recoveryService: this.recoveryService,
+        claimStateService: this.claimStateService,
+        claimIndexerService: this.claimIndexerService,
+      };
+    }
+    return this.chainServicesFactory(interest.chainUid, interest.chainId);
   }
 
   assertInvestor(user) {
@@ -50,7 +67,7 @@ class InvestorClaimService {
 
   // Loads the subscription (interest) and asserts it belongs to the authenticated investor. The
   // investor is resolved from the session, never trusted from the request body.
-  async loadOwnedInterest(user, interestId) {
+  async loadOwnedInterest(user, interestId, selectedChain = null) {
     this.assertInvestor(user);
     const investor = await this.investorRepository.findByUserUid(user.userUid);
     if (!investor) throw ApiError.badRequest('Complete your investor onboarding first.');
@@ -58,6 +75,7 @@ class InvestorClaimService {
     if (!interest || interest.investorUid !== investor.investorUid) {
       throw ApiError.notFound('Subscription was not found.');
     }
+    assertSelectedChain(interest, selectedChain, 'Subscription');
     return { investor, interest };
   }
 
@@ -68,14 +86,15 @@ class InvestorClaimService {
 
   // GET /investor/claims?interestId= — the issuer-signed claims the investor must submit on-chain,
   // plus the trusted investor + issuer identity addresses (derived from the DB).
-  async getClaims(user, interestId) {
-    const { interest } = await this.loadOwnedInterest(user, interestId);
+  async getClaims(user, interestId, selectedChain = null) {
+    const { interest } = await this.loadOwnedInterest(user, interestId, selectedChain);
     const investorIdentityAddress = interest.investorIdentityAddress || null;
     const issuerIdentityAddress = interest.organizationIdentityAddress || null;
 
     const verification = await this.issuerClaimRepository.findLatestVerificationByStatus(interest.interestUid, 'SIGNED');
     if (!verification) {
-      return { interestId, investorIdentityAddress, issuerIdentityAddress, claims: [] };
+      return { interestId, investorIdentityAddress, issuerIdentityAddress, claims: [],
+        ...(this.journeyService ? await this.journeyService.progress(interest) : {}) };
     }
     const [signatures, submissions] = await Promise.all([
       this.issuerClaimRepository.listSignatures(verification.verificationUid),
@@ -99,15 +118,19 @@ class InvestorClaimService {
           txHash: submission?.txHash || null,
         };
       });
-    return { interestId, investorIdentityAddress, issuerIdentityAddress, claims };
+    return { interestId, investorIdentityAddress, issuerIdentityAddress, claims,
+      ...(this.journeyService ? await this.journeyService.progress(interest) : {}) };
   }
 
   // Shared validation for both phases (prepare + submit). Loads the subscription, enforces
   // ownership + state, and loads the expected claim from the DB (never trusting the client).
-  async loadValidatedClaim(user, claimId, interestId) {
-    const { investor, interest } = await this.loadOwnedInterest(user, interestId);
+  async loadValidatedClaim(user, claimId, interestId, selectedChain = null) {
+    const { investor, interest } = await this.loadOwnedInterest(user, interestId, selectedChain);
     if (!SUBMITTABLE_INTEREST_STATUSES.includes(interest.status)) {
       throw ApiError.conflict('Claims can be submitted only after the issuer has verified this subscription.');
+    }
+    if (this.journeyService && !(await this.journeyService.progress(interest)).canSubmitClaims) {
+      throw new ApiError(409, 'Wait for the issuer to verify claims and confirm Identity Registry registration.', undefined, 'ISSUER_REGISTRATION_REQUIRED');
     }
     const investorIdentityAddress = interest.investorIdentityAddress;
     const issuerIdentityAddress = interest.organizationIdentityAddress;
@@ -139,6 +162,8 @@ class InvestorClaimService {
       investorUid: investor.investorUid,
       tokenUid: interest.tokenUid,
       organizationUid: interest.organizationUid,
+      chainUid: interest.chainUid,
+      chainId: Number(interest.chainId),
       claimTopic: Number(claim.claimTopic),
       data: claim.data,
       signature: claim.signature,
@@ -150,9 +175,10 @@ class InvestorClaimService {
   // Phase 1 — POST /investor/claims/:claimId/prepare. Records a PENDING submission and returns
   // the exact on-chain parameters the frontend needs to build the MetaMask transaction (mirrors
   // the token-deployment "create attempt" step). No blockchain call happens here.
-  async prepareClaim(user, claimId, { interestId }) {
-    const ctx = await this.loadValidatedClaim(user, claimId, interestId);
+  async prepareClaim(user, claimId, { interestId }, selectedChain = null) {
+    const ctx = await this.loadValidatedClaim(user, claimId, interestId, selectedChain);
     const { claim, interest, investorIdentityAddress, issuerIdentityAddress } = ctx;
+    const chainServices = await this.chainServices(interest);
 
     const existing = await this.repository.findByInterestAndSignature(interest.interestUid, claim.signatureUid);
     const claimParams = {
@@ -170,9 +196,9 @@ class InvestorClaimService {
     // Capture a narrow recovery starting point. RPC trouble must not block preparation; legacy
     // lookback recovery remains available when the block number cannot be read.
     let preparedAtBlock = null;
-    if (this.claimStateService) {
+    if (chainServices.claimStateService) {
       try {
-        preparedAtBlock = await this.claimStateService.getLatestBlockNumber();
+        preparedAtBlock = await chainServices.claimStateService.getLatestBlockNumber();
       } catch (error) {
         logger.warn('Could not capture claim preparation block; fallback lookback will be used', {
           interestUid: interest.interestUid, claimId, error: error.message,
@@ -207,9 +233,10 @@ class InvestorClaimService {
   //   - known txHash -> direct receipt verification;
   //   - missing txHash -> one Identity.getClaim state read;
   //   - exact state exists -> reconcile a stored indexed event or queue targeted recovery.
-  async retryClaim(user, claimId, { interestId }) {
-    const ctx = await this.loadValidatedClaim(user, claimId, interestId);
+  async retryClaim(user, claimId, { interestId }, selectedChain = null) {
+    const ctx = await this.loadValidatedClaim(user, claimId, interestId, selectedChain);
     const { interest, claim, required } = ctx;
+    const chainServices = await this.chainServices(interest);
 
     const submission = await this.repository.findByInterestAndSignature(interest.interestUid, claim.signatureUid);
     if (!submission) {
@@ -221,7 +248,7 @@ class InvestorClaimService {
 
     if (submission.txHash) {
       try {
-        const verified = await this.verifier.verifyClaimSubmission({
+        const verified = await chainServices.verifier.verifyClaimSubmission({
           txHash: submission.txHash,
           investorIdentityAddress: ctx.investorIdentityAddress,
           issuerIdentityAddress: ctx.issuerIdentityAddress,
@@ -243,12 +270,12 @@ class InvestorClaimService {
       }
     }
 
-    if (!this.claimStateService) {
+    if (!chainServices.claimStateService) {
       throw new ApiError(503, 'On-chain claim state lookup is unavailable.', undefined, 'RPC_UNAVAILABLE');
     }
     let state;
     try {
-      state = await this.claimStateService.inspectClaim({
+      state = await chainServices.claimStateService.inspectClaim({
         investorIdentityAddress: ctx.investorIdentityAddress,
         issuerIdentityAddress: ctx.issuerIdentityAddress,
         claimTopic: Number(claim.claimTopic),
@@ -268,8 +295,8 @@ class InvestorClaimService {
       );
     }
 
-    if (this.claimIndexerService) {
-      const indexed = await this.claimIndexerService.reconcileSubmissionFromStoredEvent(submission);
+    if (chainServices.claimIndexerService) {
+      const indexed = await chainServices.claimIndexerService.reconcileSubmissionFromStoredEvent(submission);
       if (indexed && indexed.status === 'CONFIRMED') {
         const freshInterest = await this.interestRepository.findInterestByUid(interest.interestUid);
         return this.presentRetry('CONFIRMED', true, freshInterest || interest, claim, indexed, required, 'Claim submitted and confirmed.');
@@ -304,6 +331,7 @@ class InvestorClaimService {
         totalRequiredClaims,
         confirmedClaims,
         pendingClaims: Math.max(0, totalRequiredClaims - confirmedClaims),
+        ...(this.journeyService ? await this.journeyService.progress(interest) : {}),
       },
     };
   }
@@ -326,7 +354,7 @@ class InvestorClaimService {
       const confirmedTopics = await this.repository.listConfirmedTopics(interest.interestUid, connection);
       const allConfirmed = required.every((topic) => confirmedTopics.includes(topic));
       let status = locked ? locked.status : interest.status;
-      if (allConfirmed && status === 'verifiedByIssuer') {
+      if (!this.journeyService && allConfirmed && status === 'verifiedByIssuer') {
         const transitioned = await this.interestRepository.transitionInterestStatus(
           interest.interestUid, 'verifiedByIssuer', 'claimSubmitted', connection,
         );
@@ -348,6 +376,12 @@ class InvestorClaimService {
           status = 'claimSubmitted';
         }
       }
+      if (this.journeyService) {
+        const synchronized = await this.journeyService.synchronize(locked, connection, {
+          actorRole: 'investor', actorUserUid: user.userUid,
+        });
+        status = synchronized?.status || status;
+      }
       return { submission: confirmedSubmission, confirmedTopics, status };
     });
 
@@ -364,14 +398,17 @@ class InvestorClaimService {
 
   // POST /investor/claims/:claimId/submit — verify the on-chain claim submission and, when all
   // required claims are confirmed, advance the subscription to claimSubmitted.
-  async submitClaim(user, claimId, { interestId, txHash }) {
-    const ctx = await this.loadValidatedClaim(user, claimId, interestId);
+  async submitClaim(user, claimId, { interestId, txHash }, selectedChain = null) {
+    const ctx = await this.loadValidatedClaim(user, claimId, interestId, selectedChain);
     const { investor, interest, claim, required, investorIdentityAddress, issuerIdentityAddress } = ctx;
+    const chainServices = await this.chainServices(interest);
 
     // Idempotency: an already-confirmed claim returns success without re-verifying.
     const existing = await this.repository.findByInterestAndSignature(interest.interestUid, claimId);
     if (existing && existing.status === 'CONFIRMED') {
-      return this.present(interest, claim, existing, required, 'This claim has already been confirmed.');
+      const synchronized = this.journeyService ? await this.transactionRunner(async connection =>
+        this.journeyService.synchronize(await this.interestRepository.findInterestForUpdate(interest.interestUid, connection), connection)) : interest;
+      return this.present(synchronized || interest, claim, existing, required, 'This claim has already been confirmed.');
     }
 
     const base = this.buildBase(ctx);
@@ -391,7 +428,7 @@ class InvestorClaimService {
     // Independent on-chain verification (no DB locks held during network I/O).
     let verified;
     try {
-      verified = await this.verifier.verifyClaimSubmission({
+      verified = await chainServices.verifier.verifyClaimSubmission({
         txHash,
         investorIdentityAddress,
         issuerIdentityAddress,
@@ -426,7 +463,7 @@ class InvestorClaimService {
     );
   }
 
-  present(interest, claim, submission, required, message, confirmedTopicsOverride, workflowStatus = 'CONFIRMED') {
+  async present(interest, claim, submission, required, message, confirmedTopicsOverride, workflowStatus = 'CONFIRMED') {
     const confirmed = confirmedTopicsOverride
       ? confirmedTopicsOverride.filter((topic) => required.includes(topic)).length
       : undefined;
@@ -448,6 +485,7 @@ class InvestorClaimService {
         totalRequiredClaims,
         confirmedClaims,
         pendingClaims: Math.max(0, totalRequiredClaims - confirmedClaims),
+        ...(this.journeyService ? await this.journeyService.progress(interest) : {}),
       },
     };
   }

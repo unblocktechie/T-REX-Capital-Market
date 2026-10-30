@@ -1,0 +1,39 @@
+{
+  "network": "arbitrumSepolia",
+  "chainId": "421614",
+  "deployer": "0xDbBdcA99d568B54feaAb6c6D34e8f0093c509859",
+  "platform": {
+    "identityImplementationAuthority": "0x69d19cD0fDd741a0ebF76282893B9B57Cf44B38A",
+    "identityFactory": "0xfFfC0785CD31998a53608a600cf1FA1E444aaA7D",
+    "trexImplementationAuthority": "0xB9E24956fb7F8Ca814ff54F31Ed19A57626Dd8D3",
+    "trexFactory": "0x75074F198f787d4788EF1Dd8aFa5955FBb9CcB4A",
+    "trexGateway": "0x657b88Bd7c3F3F11d0AD776587C2a086EDaaA478",
+    "complianceModules": {
+      "countryRestrict": "0xF5D3F29B57f2fd33aDbF5d6A5F5C774C07D18fDf",
+      "maxBalance": "0x45747f7068CE9C743b82ec3E8E92627b495860A6",
+      "maxInvestors": "0xa729d37329Bc0F513d5E50d200ec9cf06a80064F"
+    },
+    "platformController": "0x56E460d45cda7194906aF4F03d70810D15a4FBe0",
+    "paymentTokens": [
+      "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",
+      "0xFFC95faa3d63Cde504a05B567C600B78C0b41892"
+    ],
+    "platformControllerOwner": "0xDbBdcA99d568B54feaAb6c6D34e8f0093c509859",
+    "idFactoryAccessManager": "0x1182639700b0d7453Fe2fEd5EEE700ca4D9D944b",
+    "idFactoryAccessManagerAdmin": "0xDbBdcA99d568B54feaAb6c6D34e8f0093c509859"
+  },
+  "implementations": {
+    "claimTopicsRegistry": "0x59E083A8c676C28C441F12621C7D067457276C38",
+    "trustedIssuersRegistry": "0xe221247C52ece62027eb7D01D0f522d7363Fe875",
+    "identityRegistryStorage": "0x5fC7c0C995Fe3974F04335c6ee148156F345710a",
+    "identityRegistry": "0x32c06Dcd426ee86c4FDD2514c58785ff7A5DDAc0",
+    "modularCompliance": "0x821b1ef73fF0377f892A00A0217519c6A372424a",
+    "token": "0xc781f1D283670252e48e6136B8fd3B8c1d23D9b0",
+    "identity": "0xbcDeFb563f46B95c4dD626051A70f5e6286D5Fa4"
+  },
+  "deployedAt": "2026-09-23T09:51:42.035Z",
+  "versionRegistered": true,
+  "trexFactoryAllowedOnIdentityFactory": true,
+  "trexFactoryOwnershipTransferred": true,
+  "deployerApprovedOnGateway": true
+}

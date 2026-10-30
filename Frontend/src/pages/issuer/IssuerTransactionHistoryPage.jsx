@@ -27,7 +27,7 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { getTokenRecordName, getTokenRecordSymbol, useMyToken } from '@/hooks/useMyToken';
 import { useOrganization } from '@/hooks/useOrganization';
 import { issuerTokenTransactionHistoryService } from '@/services/issuer/issuerTokenTransactionHistory.service';
-import { transactionExplorerUrl } from '@/utils/blockExplorer';
+import { transactionExplorerName, transactionExplorerUrl } from '@/utils/blockExplorer';
 import { getErrorMessage } from '@/utils/error';
 
 const PAGE_SIZE = 10;
@@ -253,16 +253,19 @@ export default function IssuerTransactionHistoryPage() {
     {
       key: 'transactionHash',
       header: 'Transaction',
-      render: (value) => (
-        <CompactAddress
-          value={value}
-          label="Transaction ID"
-          leading={7}
-          trailing={6}
-          href={transactionExplorerUrl(value, history.chainId)}
-          linkLabel="View transaction on block explorer"
-        />
-      ),
+      render: (value, row) => {
+        const transactionChainId = row?.chainId || history.chainId;
+        return (
+          <CompactAddress
+            value={value}
+            label="Transaction ID"
+            leading={7}
+            trailing={6}
+            href={transactionChainId ? transactionExplorerUrl(value, transactionChainId) : ''}
+            linkLabel={`View transaction on ${transactionExplorerName(transactionChainId)}`}
+          />
+        );
+      },
     },
     {
       key: 'status',
@@ -318,7 +321,7 @@ export default function IssuerTransactionHistoryPage() {
       <header className="issuer-page-header issuer-transaction-history-header">
         <div>
           <span className="issuer-redemptions-eyebrow">Token activity</span>
-          <h1>Transaction History</h1>
+          <h1>Activity History</h1>
           <p>
             Track confirmed activity for {tokenName}{tokenSymbol ? ` (${tokenSymbol})` : ''}. Search or filter the list, then export the current view when you need a record.
           </p>

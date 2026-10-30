@@ -30,9 +30,7 @@ const formatInvestorType = (value) => {
 const INVITATION_FILTERS = [
   { value: 'all', label: 'All investors', description: 'Show every completed investor profile' },
   { value: 'notInvited', label: 'Not invited', description: 'Investors who have not received this token invitation' },
-  { value: 'PENDING', label: 'Pending', description: 'Invitation delivery is pending or needs retry' },
-  { value: 'SENT', label: 'Sent', description: 'Invitation email was delivered successfully' },
-  { value: 'VIEWED', label: 'Viewed', description: 'Investor opened the invitation' },
+  { value: 'SENT', label: 'Invited', description: 'Invitation email was delivered successfully' },
 ];
 
 const inviteAction = (investor, busy) => {
@@ -53,8 +51,8 @@ const inviteAction = (investor, busy) => {
   };
 };
 
-export default function IssuerInvestorDirectoryPage() {
-  useDocumentTitle('Investors');
+export default function IssuerInvestorDirectoryPage({ embedded = false } = {}) {
+  useDocumentTitle(embedded ? 'Investor Management' : 'Investors');
   const tokenRecord = useMyToken();
   const tokenUid = tokenRecord.tokenUid;
   const tokenName = getTokenRecordName(tokenRecord.token) || 'Created token';
@@ -193,7 +191,6 @@ export default function IssuerInvestorDirectoryPage() {
       render: (_value, investor) => (
         <div className="invitation-directory-stack">
           <strong>{investor.country || '—'}</strong>
-          <small>{investor.city || investor.countryCode || 'Investor location'}</small>
         </div>
       ),
     },
@@ -207,6 +204,16 @@ export default function IssuerInvestorDirectoryPage() {
       header: 'Action',
       align: 'end',
       render: (_value, investor) => {
+        // A registered investment interest takes precedence over invitation eligibility.
+        // The API already supplies this status for the selected token's investor row.
+        if (String(investor?.investmentInterest?.status || '').trim().toLowerCase() === 'registered') {
+          return (
+            <div className="invitation-directory-action">
+              <span className="app-status-badge app-status-badge--compact app-status-badge--success">Registered</span>
+            </div>
+          );
+        }
+
         if (!investor?.eligibleForInvitation) {
           return <span className="invitation-directory-unavailable" aria-label="Invitation unavailable">—</span>;
         }

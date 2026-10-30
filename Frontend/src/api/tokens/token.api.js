@@ -18,7 +18,7 @@ const requiredText = (value, label) => {
 const normalizeChainId = (value) => {
   const chainId = Number(value);
   if (!Number.isSafeInteger(chainId) || chainId <= 0) {
-    throw new Error('A valid network setting is required.');
+    throw new Error('A valid blockchain chain ID is required.');
   }
   return chainId;
 };
@@ -66,12 +66,13 @@ export const tokenApi = Object.freeze({
       })
       .then(unwrap),
 
-  getImage: () =>
+  getImage: (signal) =>
     apiClient
       .get(TOKEN_ENDPOINTS.image, {
         responseType: 'blob',
         skipGlobalLoader: true,
         timeout: 60_000,
+        ...(signal ? { signal } : {}),
       })
       .then((response) => response.data),
 

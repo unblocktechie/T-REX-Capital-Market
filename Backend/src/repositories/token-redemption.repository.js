@@ -11,7 +11,7 @@ class TokenRedemptionRepository {
               ii.\`investorUid\`, ii.\`investorUserUid\`,
               i.\`walletAddress\` AS \`investorWalletAddress\`, i.\`status\` AS \`investorStatus\`,
               i.\`isActive\` AS \`investorActive\`, i.\`isDeleted\` AS \`investorDeleted\`,
-              t.\`tokenUid\`, t.\`tokenAddress\`, t.\`treasuryWalletAddress\`, t.\`decimals\` AS \`tokenDecimals\`,
+              t.\`tokenUid\`, t.\`chainUid\`, c.\`chainId\`, t.\`tokenAddress\`, t.\`treasuryWalletAddress\`, t.\`paymentTokenAddress\`, t.\`decimals\` AS \`tokenDecimals\`,
               CAST(COALESCE(t.\`currentTokenPrice\`, t.\`initialTokenPrice\`) AS CHAR) AS \`tokenPrice\`,
               t.\`status\` AS \`tokenStatus\`,
               t.\`isActive\` AS \`tokenActive\`, o.\`userUid\` AS \`issuerUserUid\`,
@@ -23,6 +23,7 @@ class TokenRedemptionRepository {
        FROM \`tokenInvestmentInterest\` ii
        INNER JOIN \`investorMaster\` i ON i.\`investorUid\`=ii.\`investorUid\`
        INNER JOIN \`tokenMaster\` t ON t.\`tokenUid\`=ii.\`tokenUid\` AND t.\`isDeleted\`=0
+       INNER JOIN \`chainMaster\` c ON c.\`chainUid\`=t.\`chainUid\` AND c.\`isActive\`=1 AND c.\`isDeleted\`=0
        INNER JOIN \`organizationMaster\` o ON o.\`organizationUid\`=ii.\`organizationUid\` AND o.\`isDeleted\`=0
        WHERE ii.\`investorUserUid\`=? AND ii.\`tokenUid\`=? AND ii.\`isDeleted\`=0 LIMIT 1`,
       [userUid, tokenUid], executor,
@@ -115,21 +116,22 @@ class TokenRedemptionRepository {
     return this.findByUid(redemptionUid, executor);
   }
 
-  async listInvestor(userUid, tokenUid, { page = 1, limit = 20, search = '', status = 'all' } = {}, executor) {
-    return this.list({ investorUserUid: userUid, tokenUid, page, limit, search, status }, executor);
+  async listInvestor(userUid, tokenUid, { page = 1, limit = 20, search = '', status = 'all', chainId = null } = {}, executor) {
+    return this.list({ investorUserUid: userUid, tokenUid, page, limit, search, status, chainId }, executor);
   }
 
   async listIssuer(userUid, options = {}, executor) {
     return this.list({ ...options, issuerUserUid: userUid }, executor);
   }
 
-  async list({ investorUserUid, issuerUserUid, tokenUid, page = 1, limit = 20, search = '', status = 'all' }, executor) {
+  async list({ investorUserUid, issuerUserUid, tokenUid, chainId, page = 1, limit = 20, search = '', status = 'all' }, executor) {
     const safePage = Math.max(1, Math.trunc(page));
     const safeLimit = Math.min(100, Math.max(1, Math.trunc(limit)));
     const conditions = ['r.`isDeleted`=0']; const params = [];
     if (investorUserUid) { conditions.push('r.`investorUserUid`=?'); params.push(investorUserUid); }
     if (issuerUserUid) { conditions.push('r.`issuerUserUid`=?'); params.push(issuerUserUid); }
     if (tokenUid) { conditions.push('r.`tokenUid`=?'); params.push(tokenUid); }
+    if (chainId !== null && chainId !== undefined) { conditions.push('r.`chainId`=?'); params.push(Number(chainId)); }
     if (status && status !== 'all') { conditions.push('r.`status`=?'); params.push(status); }
     const normalized = String(search || '').trim().toLowerCase();
     if (normalized) {

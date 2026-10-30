@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
-import { Navigate, createBrowserRouter } from 'react-router-dom';
+import { Navigate, createBrowserRouter, useLocation, useParams } from 'react-router-dom';
 import { WorkspaceRouteLoader } from '@/components/loaders/DelayedTrexLoader';
+import { AdminPageSkeleton, WorkspacePageSkeleton } from '@/components/loaders/WorkspacePageSkeleton';
 import { TokenCreationAccessGuard } from '@/components/token-issuance/TokenCreationAccessGuard';
 import {
   OrganizationDataGuard,
@@ -15,6 +16,7 @@ import { AuthMiddleware } from '@/middleware/AuthMiddleware';
 import { GuestMiddleware } from '@/middleware/GuestMiddleware';
 import { OrganizationAccessMiddleware } from '@/middleware/OrganizationAccessMiddleware';
 import { RoleMiddleware } from '@/middleware/RoleMiddleware';
+import { SelectedChainBootstrapMiddleware } from '@/middleware/SelectedChainBootstrapMiddleware';
 import { WorkspaceMiddleware } from '@/middleware/WorkspaceMiddleware';
 import { useAuth } from '@/hooks/useAuth';
 import { useInvestorAccessStatus } from '@/hooks/useInvestorAccessStatus';
@@ -26,25 +28,20 @@ const VerifyEmailPage = lazy(() => import('@/pages/auth/VerifyEmailPage'));
 const ForgotPasswordPage = lazy(() => import('@/pages/auth/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('@/pages/auth/ResetPasswordPage'));
 const DashboardPage = lazy(() => import('@/pages/dashboard/DashboardPage'));
+const ChainAccessPage = lazy(() => import('@/pages/common/ChainAccessPage')); 
 const InvestorsRoutePage = lazy(() => import('@/pages/investors/InvestorsRoutePage'));
 const IssuerInvestorSubscriptionReviewPage = lazy(() => import('@/pages/issuer/IssuerInvestorSubscriptionReviewPage'));
-const IssuerInvestorDirectoryPage = lazy(() => import('@/pages/issuer/IssuerInvestorDirectoryPage'));
+const IssuerInvestorManagementPage = lazy(() => import('@/pages/issuer/IssuerInvestorManagementPage'));
 const IssuerTransactionHistoryPage = lazy(() => import('@/pages/issuer/IssuerTransactionHistoryPage'));
-const IssuerRedemptionsPage = lazy(() => import('@/pages/issuer/IssuerRedemptionsPage'));
 const IssuerRedemptionDetailPage = lazy(() => import('@/pages/issuer/IssuerRedemptionDetailPage'));
 const MarketplacePage = lazy(() => import('@/pages/investor-portal/MarketplacePage'));
-const InvitationsPage = lazy(() => import('@/pages/investor-portal/InvitationsPage'));
+const InvestorMyInvestmentPage = lazy(() => import('@/pages/investor-portal/InvestorMyInvestmentPage'));
 const MarketplaceTokenDetailsPage = lazy(() => import('@/pages/investor-portal/MarketplaceTokenDetailsPage'));
-const MyApplicationsPage = lazy(() => import('@/pages/investor-portal/MyApplicationsPage'));
-const PortfolioPage = lazy(() => import('@/pages/investor-portal/PortfolioPage'));
 const AssetManagementPage = lazy(() => import('@/pages/investor-portal/AssetManagementPage'));
+const WalletManagementPage = lazy(() => import('@/pages/wallet/WalletManagementPage'));
 const ApplicationDetailsPage = lazy(() => import('@/pages/investor-portal/ApplicationDetailsPage'));
-const PurchaseTokenPage = lazy(() => import('@/pages/investor-portal/PurchaseTokenPage'));
-const SendTokenPage = lazy(() => import('@/pages/investor-portal/SendTokenPage'));
-const RedeemTokenPage = lazy(() => import('@/pages/investor-portal/RedeemTokenPage'));
 const SubmitClaimPage = lazy(() => import('@/pages/investor-portal/SubmitClaimPage'));
 const ProfilePage = lazy(() => import('@/pages/profile/ProfilePage'));
-const WalletManagementPage = lazy(() => import('@/pages/wallet/WalletManagementPage'));
 const NotFoundPage = lazy(() => import('@/pages/errors/NotFoundPage'));
 const ForbiddenPage = lazy(() => import('@/pages/errors/ForbiddenPage'));
 const UnauthorizedPage = lazy(() => import('@/pages/errors/UnauthorizedPage'));
@@ -71,23 +68,77 @@ const OrganizationOverviewPage = lazy(() => import('@/pages/organization/Organiz
 const AdminDashboardPage = lazy(() => import('@/pages/admin/AdminDashboardPage'));
 const ReviewQueuePage = lazy(() => import('@/pages/admin/ReviewQueuePage'));
 const AdminOrganizationsPage = lazy(() => import('@/pages/admin/AdminOrganizationsPage'));
+const AdminNetworksPage = lazy(() => import('@/pages/admin/AdminNetworksPage')); 
 const OrganizationReviewPage = lazy(() => import('@/pages/admin/OrganizationReviewPage'));
 const AdminProfilePage = lazy(() => import('@/pages/admin/AdminProfilePage'));
+
+function InvestorMyInvestmentLegacyRedirect({ tab }) {
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  params.set('tab', tab);
+  return (
+    <Navigate
+      to={{ pathname: ROUTES.investorMyInvestment, search: `?${params.toString()}` }}
+      replace
+      state={location.state}
+    />
+  );
+}
+
+// Old transaction links stay valid, but the standalone page is no longer
+// rendered. Preserve any other query params and navigation state on redirect.
+function LegacyInvestorOperationRedirect({ tab }) {
+  const { interestUid } = useParams();
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  params.delete('tokenUid');
+  params.set('tab', tab);
+  if (interestUid) params.set('interestUid', interestUid);
+  return (
+    <Navigate
+      to={{ pathname: ROUTES.assetManagement, search: `?${params.toString()}`, hash: location.hash }}
+      replace
+      state={location.state}
+    />
+  );
+}
 
 function HomeRedirect() {
   const { isAuthenticated, user } = useAuth();
   const investorAccess = useInvestorAccessStatus(
     user?.role === ROLES.investor ? user : null,
   );
-  if (!isAuthenticated) return <Navigate to={ROUTES.login} replace />;
-  if (user?.role === ROLES.investor && !investorAccess.isWorkspaceUnlocked) {
-    return <Navigate to={ROUTES.investors} replace />;
-  }
-  return <Navigate to={resolveAuthenticatedLandingRoute(user?.role)} replace />;
+  const destination = !isAuthenticated
+    ? ROUTES.login
+    : user?.role === ROLES.investor && !investorAccess.isWorkspaceUnlocked
+      ? ROUTES.investors
+      : resolveAuthenticatedLandingRoute(user?.role);
+
+  // Keep the shared minimal loader visible while the redirect is pending.
+  return (
+    <>
+      <WorkspaceRouteLoader />
+      <Navigate to={destination} replace />
+    </>
+  );
 }
 
 const withSuspense = (element) => (
-  <Suspense fallback={<WorkspaceRouteLoader delay={120} />}>
+  <Suspense fallback={<WorkspaceRouteLoader />}>
+    {element}
+  </Suspense>
+);
+
+// Once the authenticated shell is mounted, keep it visible during lazy-route
+// loading. The page-specific skeleton takes over when the route component mounts.
+const withWorkspaceSuspense = (element) => (
+  <Suspense fallback={<WorkspacePageSkeleton />}>
+    {element}
+  </Suspense>
+);
+
+const withAdminSuspense = (element) => (
+  <Suspense fallback={<AdminPageSkeleton />}>
     {element}
   </Suspense>
 );
@@ -120,11 +171,12 @@ export const router = createBrowserRouter([
             element: <AdminLayout />,
             children: [
               { index: true, element: <Navigate to={ROUTES.adminReviewQueue} replace /> },
-              { path: 'dashboard', element: withSuspense(<AdminDashboardPage />) },
-              { path: 'reviews', element: withSuspense(<ReviewQueuePage />) },
-              { path: 'organizations', element: withSuspense(<AdminOrganizationsPage />) },
-              { path: 'organizations/:organizationId', element: withSuspense(<OrganizationReviewPage />) },
-              { path: 'profile', element: withSuspense(<AdminProfilePage />) },
+              { path: 'dashboard', element: withAdminSuspense(<AdminDashboardPage />) },
+              { path: 'reviews', element: withAdminSuspense(<ReviewQueuePage />) },
+              { path: 'organizations', element: withAdminSuspense(<AdminOrganizationsPage />) },
+              { path: 'networks', element: withAdminSuspense(<AdminNetworksPage />) },
+              { path: 'organizations/:organizationId', element: withAdminSuspense(<OrganizationReviewPage />) },
+              { path: 'profile', element: withAdminSuspense(<AdminProfilePage />) },
               { path: 'users', element: <Navigate to={ROUTES.adminReviewQueue} replace /> },
               { path: 'audit-logs', element: <Navigate to={ROUTES.adminReviewQueue} replace /> },
               { path: 'settings', element: <Navigate to={ROUTES.adminReviewQueue} replace /> },
@@ -139,15 +191,20 @@ export const router = createBrowserRouter([
         children: [
           {
             path: '/app',
-            element: <MainLayout />,
+            element: (
+              <SelectedChainBootstrapMiddleware>
+                <MainLayout />
+              </SelectedChainBootstrapMiddleware>
+            ),
             children: [
           {
             element: <OrganizationAccessMiddleware />,
             children: [
               { index: true, element: <Navigate to={ROUTES.dashboard} replace /> },
-              { path: 'dashboard', element: withSuspense(<DashboardPage />) },
-              { path: 'wallet', element: withSuspense(<WalletManagementPage />) },
-              { path: 'investors', element: withSuspense(<InvestorsRoutePage />) },
+              { path: 'dashboard', element: withWorkspaceSuspense(<DashboardPage />) },
+              { path: 'networks', element: withWorkspaceSuspense(<ChainAccessPage />) },
+              { path: 'investors', element: withWorkspaceSuspense(<InvestorsRoutePage />) },
+              { path: 'wallet', element: withWorkspaceSuspense(<WalletManagementPage />) },
               {
                 element: <RoleMiddleware roles={[ROLES.issuer]} />,
                 children: [
@@ -159,40 +216,42 @@ export const router = createBrowserRouter([
                   {
                     element: <TokenCreationAccessGuard />,
                     children: [
-                      { path: 'tokens/new', element: withSuspense(<TokenIssuanceOverviewPage />) },
-                      { path: 'tokens/new/token-information', element: withSuspense(<TokenInformationPage />) },
+                      { path: 'tokens/new', element: withWorkspaceSuspense(<TokenIssuanceOverviewPage />) },
+                      { path: 'tokens/new/token-information', element: withWorkspaceSuspense(<TokenInformationPage />) },
                       { path: 'tokens/new/supply-pricing', element: <Navigate to={ROUTES.tokenIssuanceStep('token-information')} replace /> },
-                      { path: 'tokens/new/identity-claims', element: withSuspense(<IdentityClaimsPage />) },
-                      { path: 'tokens/new/compliance', element: withSuspense(<ComplianceRulesPage />) },
-                      { path: 'tokens/new/agents', element: withSuspense(<AgentsPage />) },
-                      { path: 'tokens/new/review', element: withSuspense(<ReviewDeployPage />) },
-                      { path: 'tokens/new/deploying', element: withSuspense(<DeploymentProcessingPage />) },
+                      { path: 'tokens/new/identity-claims', element: withWorkspaceSuspense(<IdentityClaimsPage />) },
+                      { path: 'tokens/new/compliance', element: withWorkspaceSuspense(<ComplianceRulesPage />) },
+                      { path: 'tokens/new/agents', element: withWorkspaceSuspense(<AgentsPage />) },
+                      { path: 'tokens/new/review', element: withWorkspaceSuspense(<ReviewDeployPage />) },
+                      { path: 'tokens/new/deploying', element: withWorkspaceSuspense(<DeploymentProcessingPage />) },
                     ],
                   },
-                  { path: 'tokens/:tokenAddress/success', element: withSuspense(<DeploymentSuccessPage />) },
-                  { path: 'tokens/:tokenAddress', element: withSuspense(<TokenDetailsPage />) },
-                  { path: 'investors/:requestId', element: withSuspense(<IssuerInvestorSubscriptionReviewPage />) },
-                  { path: 'investor-directory', element: withSuspense(<IssuerInvestorDirectoryPage />) },
-                  { path: 'transactions', element: withSuspense(<IssuerTransactionHistoryPage />) },
-                  { path: 'redemptions', element: withSuspense(<IssuerRedemptionsPage />) },
-                  { path: 'redemptions/:redemptionUid', element: withSuspense(<IssuerRedemptionDetailPage />) },
+                  { path: 'tokens/:tokenAddress/success', element: withWorkspaceSuspense(<DeploymentSuccessPage />) },
+                  { path: 'tokens/:tokenAddress', element: withWorkspaceSuspense(<TokenDetailsPage />) },
+                  { path: 'investors/:requestId', element: withWorkspaceSuspense(<IssuerInvestorSubscriptionReviewPage />) },
+                  { path: 'investor-management', element: withWorkspaceSuspense(<IssuerInvestorManagementPage />) },
+                  { path: 'investor-directory', element: <Navigate to={ROUTES.issuerInvestorManagementTab('investors')} replace /> },
+                  { path: 'transactions', element: withWorkspaceSuspense(<IssuerTransactionHistoryPage />) },
+                  { path: 'redemptions', element: <Navigate to={ROUTES.issuerInvestorManagementTab('redemption-requests')} replace /> },
+                  { path: 'redemptions/:redemptionUid', element: withWorkspaceSuspense(<IssuerRedemptionDetailPage />) },
                 ],
               },
               {
                 element: <RoleMiddleware roles={[ROLES.investor]} />,
                 children: [
-                  { path: 'marketplace', element: withSuspense(<MarketplacePage />) },
-                  { path: 'marketplace/:tokenId', element: withSuspense(<MarketplaceTokenDetailsPage />) },
-                  { path: 'invitations', element: withSuspense(<InvitationsPage />) },
-                  { path: 'applications', element: withSuspense(<MyApplicationsPage />) },
-                  { path: 'portfolio', element: withSuspense(<PortfolioPage />) },
-                  { path: 'asset-management', element: withSuspense(<AssetManagementPage />) },
+                  { path: 'marketplace', element: withWorkspaceSuspense(<MarketplacePage />) },
+                  { path: 'marketplace/:tokenId', element: withWorkspaceSuspense(<MarketplaceTokenDetailsPage />) },
+                  { path: 'my-investment', element: withWorkspaceSuspense(<InvestorMyInvestmentPage />) },
+                  { path: 'invitations', element: <InvestorMyInvestmentLegacyRedirect tab="invitation" /> },
+                  { path: 'applications', element: <InvestorMyInvestmentLegacyRedirect tab="my-application" /> },
+                  { path: 'portfolio', element: <InvestorMyInvestmentLegacyRedirect tab="portfolio" /> },
+                  { path: 'asset-management', element: withWorkspaceSuspense(<AssetManagementPage />) },
                   { path: 'transactions', element: <Navigate to={ROUTES.dashboard} replace /> },
-                  { path: 'applications/:interestUid', element: withSuspense(<ApplicationDetailsPage />) },
-                  { path: 'applications/:interestUid/submit-claim', element: withSuspense(<SubmitClaimPage />) },
-                  { path: 'applications/:interestUid/purchase', element: withSuspense(<PurchaseTokenPage />) },
-                  { path: 'applications/:interestUid/send', element: withSuspense(<SendTokenPage />) },
-                  { path: 'applications/:interestUid/redeem', element: withSuspense(<RedeemTokenPage />) },
+                  { path: 'applications/:interestUid', element: withWorkspaceSuspense(<ApplicationDetailsPage />) },
+                  { path: 'applications/:interestUid/submit-claim', element: withWorkspaceSuspense(<SubmitClaimPage />) },
+                  { path: 'applications/:interestUid/purchase', element: <LegacyInvestorOperationRedirect tab="invest" /> },
+                  { path: 'applications/:interestUid/send', element: <LegacyInvestorOperationRedirect tab="send" /> },
+                  { path: 'applications/:interestUid/redeem', element: <LegacyInvestorOperationRedirect tab="redeem" /> },
                 ],
               },
               {
@@ -201,26 +260,26 @@ export const router = createBrowserRouter([
                   {
                     element: <OrganizationDataGuard />,
                     children: [
-                      { path: 'organization', element: withSuspense(<OrganizationEntryPage />) },
+                      { path: 'organization', element: withWorkspaceSuspense(<OrganizationEntryPage />) },
                       {
                         element: <OrganizationEditableGuard />,
                         children: [
-                          { path: 'organization/company-information', element: withSuspense(<CompanyInformationPage />) },
-                          { path: 'organization/jurisdiction', element: withSuspense(<JurisdictionPage />) },
-                          { path: 'organization/ubo', element: withSuspense(<BeneficialOwnersPage />) },
-                          { path: 'organization/documents', element: withSuspense(<DocumentationPage />) },
-                          { path: 'organization/review', element: withSuspense(<ReviewSubmissionPage />) },
+                          { path: 'organization/company-information', element: withWorkspaceSuspense(<CompanyInformationPage />) },
+                          { path: 'organization/jurisdiction', element: withWorkspaceSuspense(<JurisdictionPage />) },
+                          { path: 'organization/ubo', element: withWorkspaceSuspense(<BeneficialOwnersPage />) },
+                          { path: 'organization/documents', element: withWorkspaceSuspense(<DocumentationPage />) },
+                          { path: 'organization/review', element: withWorkspaceSuspense(<ReviewSubmissionPage />) },
                         ],
                       },
-                      { path: 'organization/pending', element: withSuspense(<VerificationPendingPage />) },
-                      { path: 'organization/rejected', element: withSuspense(<VerificationRejectedPage />) },
-                      { path: 'organization/verified', element: withSuspense(<OrganizationVerifiedPage />) },
-                      { path: 'organization/overview', element: withSuspense(<OrganizationOverviewPage />) },
+                      { path: 'organization/pending', element: withWorkspaceSuspense(<VerificationPendingPage />) },
+                      { path: 'organization/rejected', element: withWorkspaceSuspense(<VerificationRejectedPage />) },
+                      { path: 'organization/verified', element: withWorkspaceSuspense(<OrganizationVerifiedPage />) },
+                      { path: 'organization/overview', element: withWorkspaceSuspense(<OrganizationOverviewPage />) },
                     ],
                   },
                 ],
               },
-              { path: 'profile', element: withSuspense(<ProfilePage />) },
+              { path: 'profile', element: withWorkspaceSuspense(<ProfilePage />) },
               {
                 path: 'projects',
                 element: <Navigate to={ROUTES.dashboard} replace />,

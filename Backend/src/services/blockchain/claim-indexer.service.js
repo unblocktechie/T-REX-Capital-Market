@@ -25,7 +25,7 @@ const DEFAULTS = {
   intervalSeconds: 15,
   startBlock: 0,
   blockOffset: 1000,
-  confirmationBlocks: 1,
+  confirmationBlocks: 2,
   addressBatchSize: 100,
   eventBatchSize: 200,
   leaseSeconds: 120,
@@ -143,6 +143,7 @@ class ClaimIndexerService {
   async reconcileEvent(event) {
     const existingOwner = await this.submissionRepository.findByEvent(event.txHash, event.logIndex);
     if (existingOwner) {
+      if (this.recoveryService) await this.recoveryService.finalizeInterestIfComplete(existingOwner);
       await this.indexerRepository.markEvent(event.claimEventUid, {
         status: 'MATCHED', matchedSubmissionUid: existingOwner.submissionUid, message: 'Event was already linked to a confirmed submission.',
       });
@@ -150,6 +151,7 @@ class ClaimIndexerService {
     }
 
     const candidates = await this.submissionRepository.findChainMatchCandidates({
+      chainId: event.chainId,
       identityAddress: event.identityAddress,
       issuerIdentityAddress: event.issuerIdentityAddress,
       claimTopic: event.claimTopic,
@@ -284,7 +286,7 @@ class ClaimIndexerService {
         }
       }
 
-      const identities = (await this.indexerRepository.listIdentityAddresses()).filter(ethers.isAddress);
+      const identities = (await this.indexerRepository.listIdentityAddresses(chainId)).filter(ethers.isAddress);
       const addressBatches = chunks(identities, addressBatchSize);
       stats.identityCount = identities.length;
 

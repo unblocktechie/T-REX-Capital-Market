@@ -10,9 +10,10 @@ const createInvestorReferenceRouter = (controller) => {
   return router;
 };
 
-const createInvestorRouter = ({ controller, authenticate, authorize }) => {
+const createInvestorRouter = ({ controller, authenticate, authorize, requireInvestorChain }) => {
   const router = express.Router();
   router.use(authenticate);
+  router.use(requireInvestorChain);
   router.get('/me', authorize, asyncHandler(controller.getMine));
   router.put('/me/identity', validate({ body: schemas.identityDetails }), authorize, asyncHandler(controller.saveIdentity));
   router.put('/me/compliance', validate({ body: schemas.compliance }), authorize, asyncHandler(controller.saveCompliance));

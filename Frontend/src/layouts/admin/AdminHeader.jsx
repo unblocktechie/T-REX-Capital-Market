@@ -1,4 +1,3 @@
-import { usePrivy } from '@privy-io/react-auth';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, LogOut, Menu, UserRound } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -11,14 +10,13 @@ import { adminRouteMeta } from './admin.navigation';
 
 const getMeta = (pathname) => {
   if (pathname.startsWith('/admin/organizations/') && pathname !== ROUTES.adminOrganizations) {
-    return { title: 'Organization Review', description: 'Review company details, ownership, secure account information, documents, and risk.' };
+    return { title: 'Organization Review', description: 'Review entity, ownership, wallet, documents, and risk.' };
   }
   return adminRouteMeta[pathname] || adminRouteMeta[ROUTES.adminDashboard];
 };
 
 export function AdminHeader() {
   const { user } = useAuth();
-  const { authenticated: privyAuthenticated, logout: privyLogout } = usePrivy();
   const location = useLocation();
   const navigate = useNavigate();
   const toggleSidebar = useUiStore((state) => state.toggleSidebar);
@@ -64,7 +62,6 @@ export function AdminHeader() {
     setLoggingOut(true);
     try {
       await authService.logout();
-      if (privyAuthenticated) await privyLogout();
       navigate(ROUTES.login, { replace: true });
     } finally {
       setLoggingOut(false);

@@ -2,7 +2,8 @@ import 'dotenv/config';
 import { ethers } from 'ethers';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getNetwork, deploymentsPathFor } from './network-config';
+import { loadNetworkConfig, parseNetworkArg } from './lib/network-config';
+import { NonceManager } from './lib/nonce-manager';
 
 /**
  * One-time platform deployment for our custom compliance modules
@@ -14,9 +15,13 @@ import { getNetwork, deploymentsPathFor } from './network-config';
  *
  * Requires `npm run compile` to have been run first, so the artifacts these
  * addresses come from actually exist on disk.
+ *
+ * Resumable: deployments/<network>.json is written after each module (not
+ * just at the end), and modules already recorded there with live on-chain
+ * code are reused instead of redeployed — see phase0-01-deploy-platform.ts
+ * for why this matters.
  */
 
-const deploymentsPath = deploymentsPathFor(getNetwork().name);
 const artifactsDir = path.join(__dirname, '..', 'artifacts', 'contracts', 'modules');
 
 function loadArtifact(contractName: string) {
@@ -24,43 +29,49 @@ function loadArtifact(contractName: string) {
   return JSON.parse(fs.readFileSync(artifactPath, 'utf8'));
 }
 
-async function deployModule(name: string, signer: ethers.Wallet) {
-  const artifact = loadArtifact(name);
-  console.log(`\nDeploying ${name}...`);
-  const factory = new ethers.ContractFactory(artifact.abi, artifact.bytecode, signer);
-  const contract = await factory.deploy();
-  const receipt = await contract.deploymentTransaction()?.wait();
-  const address = await contract.getAddress();
-  console.log(`  -> ${name} deployed at ${address} (tx ${receipt?.hash})`);
-  return address;
-}
-
 async function main() {
-  const { rpcUrl } = getNetwork();
-  const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
-  if (!privateKey) {
-    throw new Error('Missing DEPLOYER_PRIVATE_KEY in .env');
-  }
+  const networkConfig = loadNetworkConfig(parseNetworkArg());
+  const deploymentsPath = networkConfig.deploymentsPath;
 
-  const provider = new ethers.JsonRpcProvider(rpcUrl);
-  const platform = new ethers.Wallet(privateKey, provider);
+  const provider = new ethers.JsonRpcProvider(networkConfig.rpcUrl);
+  const deployer = new ethers.Wallet(networkConfig.deployerPrivateKey, provider);
+  const nonces = new NonceManager(provider, deployer.address);
 
   const deployment = JSON.parse(fs.readFileSync(deploymentsPath, 'utf8'));
+  deployment.platform.complianceModules ||= {};
+  const modules = deployment.platform.complianceModules;
+
+  function save() {
+    fs.writeFileSync(deploymentsPath, JSON.stringify(deployment, null, 2));
+  }
+
+  async function deployOrReuseModule(key: string, name: string) {
+    const existing = modules[key];
+    if (existing) {
+      const code = await provider.getCode(existing);
+      if (code !== '0x') {
+        console.log(`\nSkipping ${name} — already deployed at ${existing}`);
+        return;
+      }
+      console.log(`\n${name} recorded at ${existing} but has no code on-chain, redeploying...`);
+    }
+    const artifact = loadArtifact(name);
+    console.log(`\nDeploying ${name}...`);
+    const factory = new ethers.ContractFactory(artifact.abi, artifact.bytecode, deployer);
+    const contract = await factory.deploy({ nonce: await nonces.take() });
+    const receipt = await contract.deploymentTransaction()?.wait();
+    const address = await contract.getAddress();
+    console.log(`  -> ${name} deployed at ${address} (tx ${receipt?.hash})`);
+    modules[key] = address;
+    save();
+  }
 
   console.log('--- Deploying platform-level compliance modules ---');
-  console.log('Deployer:', platform.address);
+  console.log('Deployer:', deployer.address);
 
-  const countryRestrict = await deployModule('CountryRestrictModule', platform);
-  const maxBalance = await deployModule('MaxBalanceModule', platform);
-  const maxInvestors = await deployModule('MaxInvestorsModule', platform);
-
-  deployment.platform.complianceModules = {
-    countryRestrict,
-    maxBalance,
-    maxInvestors,
-  };
-
-  fs.writeFileSync(deploymentsPath, JSON.stringify(deployment, null, 2));
+  await deployOrReuseModule('countryRestrict', 'CountryRestrictModule');
+  await deployOrReuseModule('maxBalance', 'MaxBalanceModule');
+  await deployOrReuseModule('maxInvestors', 'MaxInvestorsModule');
 
   console.log('\n=== Done ===');
   console.log('Compliance module addresses saved to', deploymentsPath);

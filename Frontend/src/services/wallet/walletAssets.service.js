@@ -1,76 +1,46 @@
 import { createPublicClient, formatUnits, getAddress, http, isAddress } from 'viem';
-import { env } from '@/config/env';
 import { web3Config } from '@/config/web3';
 
 const ERC20_BALANCE_ABI = [
-  {
-    type: 'function',
-    name: 'balanceOf',
-    stateMutability: 'view',
-    inputs: [{ name: 'account', type: 'address' }],
-    outputs: [{ name: 'balance', type: 'uint256' }],
-  },
-  {
-    type: 'function',
-    name: 'decimals',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ name: '', type: 'uint8' }],
-  },
+  { type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: 'account', type: 'address' }], outputs: [{ name: 'balance', type: 'uint256' }] },
+  { type: 'function', name: 'decimals', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint8' }] },
 ];
 
 const clients = new Map();
+const safeDecimals = (value) => {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= 0 && parsed <= 36 ? parsed : null;
+};
 
+// Arc exposes the same USDC value in two units: eth_getBalance / gas uses
+// 18-decimal native units, while the ERC-20 USDC face uses 6 decimals. The
+// chain catalogue describes the token-facing USDC precision, so native RPC
+// balances must use Arc's 18-decimal scale to avoid a 10^12 display/gas error.
+export const resolveNativeRpcDecimals = ({ chainId, symbol, configuredDecimals } = {}) => {
+  if (Number(chainId) === 5042002 && String(symbol || '').trim().toUpperCase() === 'USDC') return 18;
+  return safeDecimals(configuredDecimals) ?? 18;
+};
 const normalizeAddress = (value, label) => {
   const normalized = String(value || '').trim();
   if (!isAddress(normalized)) throw new Error(`${label} is unavailable.`);
   return getAddress(normalized);
 };
 
-const readableChains = () => {
-  const unique = new Map();
-  [...(web3Config.supportedChains || []), ...(web3Config.walletViewChains || [])].forEach((chain) => {
-    if (chain?.id) unique.set(chain.id, chain);
-  });
-  return [...unique.values()];
-};
-
 const publicClientFor = (chainId) => {
-  const resolvedChainId = Number(chainId || web3Config.requiredChain.id);
-  const chain = readableChains().find((item) => item.id === resolvedChainId);
-  if (!chain) throw new Error('This wallet network is not supported by the application.');
-
-  if (!clients.has(chain.id)) {
-    const rpcUrl = chain.id === web3Config.requiredChain.id
-      ? env.web3.rpcUrl
-      : chain.rpcUrls?.default?.http?.[0];
-
-    clients.set(
-      chain.id,
-      createPublicClient({
-        chain,
-        transport: http(rpcUrl),
-      }),
-    );
-  }
-  return clients.get(chain.id);
-};
-
-const safeDecimals = (value) => {
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed >= 0 && parsed <= 36 ? parsed : null;
+  const id = Number(chainId);
+  const chain = web3Config.getWalletChainById(id);
+  const record = web3Config.getWalletChainRecordById(id);
+  if (!chain || !record?.publicRpcUrl) throw new Error('This wallet network is not configured for wallet balances.');
+  if (!clients.has(id)) clients.set(id, createPublicClient({ chain, transport: http(record.publicRpcUrl) }));
+  return clients.get(id);
 };
 
 export async function readWalletNativeBalance({ walletAddress, chainId }) {
   const account = normalizeAddress(walletAddress, 'Wallet address');
-  const resolvedChainId = Number(chainId || web3Config.requiredChain.id);
-  const chain = readableChains().find((item) => item.id === resolvedChainId);
-  if (!chain) throw new Error('This wallet network is not supported by the application.');
-
-  const client = publicClientFor(resolvedChainId);
-  const rawBalance = await client.getBalance({ address: account });
-  const decimals = safeDecimals(chain.nativeCurrency?.decimals) ?? 18;
-
+  const chain = web3Config.getWalletChainById(chainId);
+  if (!chain) throw new Error('This wallet network is not configured for wallet balances.');
+  const rawBalance = await publicClientFor(chain.id).getBalance({ address: account });
+  const decimals = resolveNativeRpcDecimals({ chainId: chain.id, symbol: chain.nativeCurrency?.symbol, configuredDecimals: chain.nativeCurrency?.decimals });
   return {
     rawBalance,
     decimals,
@@ -85,43 +55,37 @@ export async function readWalletTokenBalance({ tokenAddress, walletAddress, chai
   const address = normalizeAddress(tokenAddress, 'Token contract');
   const account = normalizeAddress(walletAddress, 'Wallet address');
   const client = publicClientFor(chainId);
-  const metadataDecimals = safeDecimals(decimals);
-  let resolvedDecimals = metadataDecimals;
-
-  // The token contract is authoritative for decimals. Portfolio/application
-  // metadata can be stale or omitted, which would otherwise expose raw base
-  // units (for example 12,500,000,000 instead of 125 for an 8-decimal token).
-  // Keep metadata only as a defensive fallback for unusual ERC-20 contracts
-  // whose decimals() read is unavailable.
+  let resolvedDecimals = safeDecimals(decimals);
   try {
-    const onchainDecimals = safeDecimals(
-      Number(
-        await client.readContract({
-          address,
-          abi: ERC20_BALANCE_ABI,
-          functionName: 'decimals',
-        }),
-      ),
-    );
-    if (onchainDecimals !== null) resolvedDecimals = onchainDecimals;
+    const onchain = safeDecimals(Number(await client.readContract({ address, abi: ERC20_BALANCE_ABI, functionName: 'decimals' })));
+    if (onchain !== null) resolvedDecimals = onchain;
   } catch (error) {
     if (resolvedDecimals === null) throw error;
   }
+  if (resolvedDecimals === null) throw new Error('Token decimals are unavailable.');
+  const rawBalance = await client.readContract({ address, abi: ERC20_BALANCE_ABI, functionName: 'balanceOf', args: [account] });
+  return { rawBalance, decimals: resolvedDecimals, formatted: formatUnits(rawBalance, resolvedDecimals) };
+}
 
-  if (resolvedDecimals === null) {
-    throw new Error('Token decimals are unavailable.');
+export async function estimateWalletNativeGasBudget({ chainId, gasUnits }) {
+  const chain = web3Config.getWalletChainById(chainId);
+  if (!chain) throw new Error('This wallet network is not configured for wallet balances.');
+  const units = Number(gasUnits);
+  if (!Number.isSafeInteger(units) || units <= 0) throw new Error('Fallback gas units are not configured correctly.');
+  const client = publicClientFor(chain.id);
+  let feePerGas = 0n;
+  let feeSource = '';
+  try {
+    const fees = await client.estimateFeesPerGas();
+    feePerGas = fees?.maxFeePerGas ?? fees?.gasPrice ?? 0n;
+    if (feePerGas > 0n) feeSource = 'estimateFeesPerGas';
+  } catch { /* fall through */ }
+  if (feePerGas <= 0n) {
+    feePerGas = await client.getGasPrice();
+    if (feePerGas > 0n) feeSource = 'getGasPrice';
   }
-
-  const rawBalance = await client.readContract({
-    address,
-    abi: ERC20_BALANCE_ABI,
-    functionName: 'balanceOf',
-    args: [account],
-  });
-
-  return {
-    rawBalance,
-    decimals: resolvedDecimals,
-    formatted: formatUnits(rawBalance, resolvedDecimals),
-  };
+  if (feePerGas <= 0n) throw new Error(`The current gas price on ${chain.name} is unavailable.`);
+  const estimatedRaw = feePerGas * BigInt(units);
+  const decimals = resolveNativeRpcDecimals({ chainId: chain.id, symbol: chain.nativeCurrency?.symbol, configuredDecimals: chain.nativeCurrency?.decimals });
+  return { estimatedRaw, formatted: formatUnits(estimatedRaw, decimals), decimals, symbol: chain.nativeCurrency?.symbol || '', chainId: chain.id, chainName: chain.name, gasUnits: units, feePerGas, feeSource };
 }

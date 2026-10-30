@@ -1,12 +1,14 @@
 import {
   Building2,
   ClipboardCheck,
+  Network,
 } from 'lucide-react';
 import { ROUTES } from '@/config/routes';
 
 export const adminNavigation = [
   { label: 'Review Queue', to: ROUTES.adminReviewQueue, icon: ClipboardCheck, badge: 'review' },
   { label: 'Organizations', to: ROUTES.adminOrganizations, icon: Building2 },
+  { label: 'Network Config', to: ROUTES.adminNetworks, icon: Network },
 ];
 
 export const adminRouteMeta = {
@@ -17,6 +19,10 @@ export const adminRouteMeta = {
   [ROUTES.adminReviewQueue]: {
     title: 'Application Review Queue',
     description: 'Review and verify submitted organizations before allowing token issuance.',
+  },
+  [ROUTES.adminNetworks]: {
+    title: 'Network Configuration',
+    description: 'Manage blockchain networks, contracts, indexers, and payment tokens.',
   },
   [ROUTES.adminOrganizations]: {
     title: 'Organizations',

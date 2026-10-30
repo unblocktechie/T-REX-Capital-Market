@@ -10,6 +10,7 @@ const createDeploymentAttemptController = (service) => ({
       idempotencyKey: req.body.idempotencyKey,
       networkName: req.body.networkName,
       metadata: req.body.metadata,
+      selectedChain: req.selectedChain,
     });
     return sendSuccess(req, res, {
       statusCode: result.created ? HTTP_STATUS.CREATED : HTTP_STATUS.OK,
@@ -27,6 +28,7 @@ const createDeploymentAttemptController = (service) => ({
       transactionHash: req.body.transactionHash,
       walletAddress: req.body.walletAddress,
       chainId: req.body.chainId,
+      selectedChain: req.selectedChain,
     });
     return sendSuccess(req, res, {
       message: 'Deployment transaction recorded.',
@@ -41,6 +43,7 @@ const createDeploymentAttemptController = (service) => ({
       status: req.body.status,
       errorCode: req.body.errorCode,
       errorMessage: req.body.errorMessage,
+      selectedChain: req.selectedChain,
     });
     return sendSuccess(req, res, {
       message: 'Deployment attempt closed.',
@@ -50,7 +53,7 @@ const createDeploymentAttemptController = (service) => ({
 
   active: async (req, res) => sendSuccess(req, res, {
     message: 'Active deployment attempt fetched successfully.',
-    data: await service.getActiveDeploymentAttempt({ user: req.user }),
+    data: await service.getActiveDeploymentAttempt({ user: req.user, selectedChain: req.selectedChain }),
   }),
 });
 

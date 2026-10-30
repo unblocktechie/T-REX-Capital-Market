@@ -2,13 +2,16 @@ import {
   ArrowLeft,
   CheckCircle2,
   Edit3,
+  Network,
+  RefreshCcw,
   Send,
   ShieldCheck,
+  WalletCards,
+  WifiOff,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { PrivyTrustBadge } from '@/components/branding/PrivyBrand';
 import { OrganizationActionBar } from '@/components/organization/OrganizationActionBar';
 import { OrganizationPageLayout } from '@/components/organization/OrganizationPageLayout';
 import { getOrganizationStepRoute } from '@/components/organization/OrganizationStepper';
@@ -17,15 +20,22 @@ import { SubmissionConfirmationModal } from '@/components/organization/Submissio
 import { UploadedDocumentList } from '@/components/organization/UploadedDocumentList';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { ChainSelector } from '@/components/common/ChainSelector';
+import { WalletControl } from '@/components/wallet/WalletControl';
 import { ROUTES } from '@/config/routes';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { usePublicChains } from '@/hooks/useChains';
+import { web3Config } from '@/config/web3';
 import { useOrganization } from '@/hooks/useOrganization';
+import { useAuth } from '@/hooks/useAuth';
+import { formatDate } from '@/utils/date';
+import { useWalletConnection } from '@/hooks/useWalletConnection';
 import { organizationDocumentService } from '@/services/organizationDocumentService';
 import { getErrorMessage } from '@/utils/error';
-import { useAuthStore } from '@/store/auth.store';
-import { shortenWalletAddress } from '@/utils/wallet';
+import { getWalletErrorMessage } from '@/utils/wallet';
 import { beneficialOwnersSchema, isOrganizationReadyForSubmission } from '@/validations/organization.schemas';
-import { formatDate } from '@/utils/date';
+import { useUiStore } from '@/store/ui.store';
+import { networkUserKey, useNetworkStore } from '@/store/network.store';
 
 const EditButton = ({ onClick, label }) => (
   <Button variant="ghost" size="sm" icon={Edit3} onClick={onClick} aria-label={`Edit ${label}`}>
@@ -33,29 +43,76 @@ const EditButton = ({ onClick, label }) => (
   </Button>
 );
 
+const getBackendErrorMessage = (error) => {
+  const payload = error?.response?.data;
+  const message =
+    payload?.message ||
+    (typeof payload?.error === 'string' ? payload.error : payload?.error?.message);
+
+  return typeof message === 'string' ? message.trim() : '';
+};
+
 export default function ReviewSubmissionPage() {
   useDocumentTitle('Final Review & Submission');
   const navigate = useNavigate();
-  const privyWalletAddress = useAuthStore((state) => state.user?.privyWalletAddress || '');
+  const { user } = useAuth();
+  const userKey = networkUserKey(user);
+  const persistedChainId = useNetworkStore((state) => state.activeChainByUser[userKey] || null);
+  const setActiveChainId = useNetworkStore((state) => state.setActiveChainId);
+  const publicChains = usePublicChains();
+  const initialChainUid = web3Config.getChainRecordById(persistedChainId)?.chainUid || web3Config.defaultChainRecord?.chainUid || '';
+  const [selectedChainUid, setSelectedChainUid] = useState(initialChainUid);
+  const selectedChain = (publicChains.data || []).find((item) => item.chainUid === selectedChainUid) || publicChains.data?.[0] || null;
+  const wallet = useWalletConnection(selectedChain?.chainId);
+  const setWalletRequiredChainId = useUiStore((state) => state.setWalletRequiredChainId);
   const { organization, refresh, saveConfirmations, setCurrentStep, submit } = useOrganization();
   const [confirmations, setConfirmations] = useState(organization.confirmations);
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const currentWalletNetwork = wallet.isCorrectNetwork
+    ? wallet.chain?.name || wallet.requiredChain.name
+    : 'Unsupported network';
 
   useEffect(() => {
     refresh().catch(() => undefined);
   }, [refresh]);
 
   useEffect(() => {
+    setWalletRequiredChainId(selectedChain?.chainId);
+    if (selectedChain?.chainId) setActiveChainId(user, selectedChain.chainId, selectedChain.chainUid);
+  }, [selectedChain?.chainId, selectedChain?.chainUid, setActiveChainId, setWalletRequiredChainId, user]);
+
+  useEffect(() => () => {
+    setWalletRequiredChainId(null);
+  }, [setWalletRequiredChainId]);
+
+  useEffect(() => {
     setConfirmations(organization.confirmations);
   }, [organization.confirmations]);
+
+  useEffect(() => {
+    const toastId = 'organization-wallet-network-warning';
+
+    if (!wallet.isConnected || wallet.isCorrectNetwork) {
+      toast.dismiss(toastId);
+      return;
+    }
+
+    toast.warning('Switch network', {
+      id: toastId,
+      description: 'Please switch the wallet network to continue.',
+      duration: 7000,
+    });
+
+    return () => toast.dismiss(toastId);
+  }, [wallet.isConnected, wallet.isCorrectNetwork]);
 
   const allConfirmed = Object.values(confirmations).every(Boolean);
   const applicationComplete = isOrganizationReadyForSubmission(organization);
   const beneficialOwnershipValid = beneficialOwnersSchema.safeParse({
     beneficialOwners: organization.beneficialOwners || [],
   }).success;
-  const walletReady = Boolean(privyWalletAddress);
+  const walletReady = Boolean(selectedChain?.chainUid) && wallet.isConnected && wallet.isCorrectNetwork && Boolean(wallet.address);
 
   const updateConfirmation = (key, checked) => {
     const next = { ...confirmations, [key]: checked };
@@ -73,18 +130,37 @@ export default function ReviewSubmissionPage() {
     }
   };
 
+  const switchToRequiredNetwork = async () => {
+    try {
+      await wallet.switchChain(wallet.requiredChain.id);
+      toast.success('Network switched successfully');
+    } catch (error) {
+      toast.error('Unable to switch network', {
+        description: getWalletErrorMessage(error),
+      });
+    }
+  };
+
   const confirmSubmission = async () => {
     if (!applicationComplete || !allConfirmed || !walletReady) return;
     setSubmitting(true);
     try {
-      await submit();
+      await submit({
+        walletAddress: wallet.address,
+        chainUid: selectedChain.chainUid,
+        walletChainId: selectedChain.chainId,
+        walletNetwork: selectedChain.chainName,
+      });
       setModalOpen(false);
       toast.success('Application submitted', {
-        description: 'Your Privy secure account is linked and the organization review is now in progress.',
+        description: 'The organization wallet was saved and verification is now in progress.',
       });
       navigate(ROUTES.organizationPending, { replace: true });
     } catch (error) {
-      toast.error(getErrorMessage(error, 'Unable to submit the organization application.'));
+      const backendMessage = getBackendErrorMessage(error);
+      toast.error(
+        backendMessage || getErrorMessage(error, 'Unable to submit the organization application.'),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -102,7 +178,7 @@ export default function ReviewSubmissionPage() {
     <OrganizationPageLayout
       step={5}
       title="Final Review & Submission"
-      description="Review the organization details and confirm the final declarations. Your Privy secure account is already linked."
+      description="Verify the organization details, connect the wallet that will control token issuance, and confirm the final declarations before submission."
       onStepChange={submitting ? undefined : goToStep}
     >
       <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(330px,360px)]">
@@ -254,7 +330,7 @@ export default function ReviewSubmissionPage() {
               </span>
               <h2 className="mt-2 mb-2 text-2xl font-semibold text-white">Ready to submit?</h2>
               <p className="m-0 text-sm leading-6 text-slate-300">
-                Your Privy secure account will be used to manage assets and confirm important issuer actions.
+                Connect the wallet that the organization will use for token creation and issuer operations.
               </p>
             </div>
 
@@ -265,28 +341,66 @@ export default function ReviewSubmissionPage() {
                 </div>
               ) : null}
 
+
+              <ChainSelector
+                id="organization-onboarding-chain"
+                chains={publicChains.data || []}
+                value={selectedChainUid}
+                onChange={(event) => setSelectedChainUid(event.target.value)}
+                disabled={submitting || publicChains.isPending}
+                label="First network"
+                description="Your organization ONCHAINID will be created on this network after administrator approval."
+                error={publicChains.isError ? 'Unable to load supported networks.' : ''}
+              />
+
               <div className="grid min-w-0 gap-3">
-                <h3 className="m-0 text-sm font-semibold text-slate-950">Privy secure account</h3>
-                <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <PrivyTrustBadge compact tone="soft" label="Issuer embedded wallet" className="mb-3" />
-                  <strong className="block text-sm text-slate-950">
-                    {privyWalletAddress ? 'Securely managed by Privy' : 'Secure account not linked'}
-                  </strong>
-                  <p className="mt-2 mb-0 text-xs leading-5 text-slate-500">
-                    You do not need to connect another account. Your Privy secure account is linked to your T-REX profile.
-                  </p>
-                  {privyWalletAddress ? (
-                    <details className="mt-3 text-xs text-slate-600">
-                      <summary className="cursor-pointer font-semibold text-slate-800">View Privy wallet details</summary>
-                      <p className="mt-2 mb-0 break-all font-mono" title={privyWalletAddress}>
-                        {shortenWalletAddress(privyWalletAddress, 10, 10)}
-                      </p>
-                    </details>
-                  ) : null}
+                <div className="flex items-center gap-2">
+                  <WalletCards size={17} className="text-slate-500" />
+                  <h3 className="m-0 text-sm font-semibold text-slate-950">Organization wallet</h3>
                 </div>
-                {!walletReady ? (
-                  <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm leading-6 text-rose-800" role="alert">
-                    Complete Privy email verification and secure account setup before submitting the organization.
+
+                {!wallet.isConnected ? (
+                  <>
+                    <WalletControl prominent requiredChainId={selectedChain?.chainId} />
+                    <p className="m-0 text-xs leading-5 text-slate-500">
+                      MetaMask and WalletConnect are supported. The wallet must connect to {wallet.requiredChain.name}.
+                    </p>
+                  </>
+                ) : (
+                  <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 p-3.5 sm:p-4">
+                    <div className="grid min-w-0 gap-3.5">
+                      <span className="flex min-w-0 items-center gap-1.5 text-xs font-semibold leading-5 text-slate-500">
+                        <Network size={13} className="shrink-0" />
+                        <span className="min-w-0 break-words">
+                          {currentWalletNetwork} · {wallet.balanceLabel}
+                        </span>
+                      </span>
+                      <div className="min-w-0">
+                        <WalletControl expanded requiredChainId={selectedChain?.chainId} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {wallet.isConnected && !wallet.isCorrectNetwork ? (
+                  <div className="grid min-w-0 gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4">
+                    <div className="flex min-w-0 gap-2 text-sm leading-6 text-rose-800">
+                      <WifiOff className="mt-1 shrink-0" size={17} />
+                      <span className="min-w-0 break-words">Please switch the wallet network before submission.</span>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={wallet.isBusy}
+                      onClick={switchToRequiredNetwork}
+                      className="inline-flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 text-center text-sm font-semibold text-white transition hover:bg-rose-700 disabled:opacity-60"
+                    >
+                      {wallet.switchingChainId === wallet.requiredChain.id ? (
+                        <RefreshCcw className="animate-spin" size={16} />
+                      ) : (
+                        <Network size={16} />
+                      )}
+                      Switch Network
+                    </button>
                   </div>
                 ) : null}
               </div>
@@ -317,15 +431,17 @@ export default function ReviewSubmissionPage() {
                 ))}
               </div>
 
-              <Button
-                className="w-full"
-                size="lg"
-                icon={Send}
-                disabled={!walletReady || !allConfirmed || !applicationComplete || submitting}
-                onClick={() => setModalOpen(true)}
-              >
-                Submit Application
-              </Button>
+              {walletReady ? (
+                <Button
+                  className="w-full"
+                  size="lg"
+                  icon={Send}
+                  disabled={!allConfirmed || !applicationComplete || !selectedChain || submitting}
+                  onClick={() => setModalOpen(true)}
+                >
+                  Submit Application
+                </Button>
+              ) : null}
             </div>
           </Card>
         </aside>
@@ -354,7 +470,9 @@ export default function ReviewSubmissionPage() {
         onClose={() => !submitting && setModalOpen(false)}
         onConfirm={confirmSubmission}
         loading={submitting}
-        walletAddress={privyWalletAddress}
+        walletAddress={wallet.address}
+        walletBalance={wallet.balanceLabel}
+        networkName={selectedChain?.chainName || wallet.requiredChain.name}
       />
     </OrganizationPageLayout>
   );

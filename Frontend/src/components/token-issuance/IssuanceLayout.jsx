@@ -1,13 +1,21 @@
 import { AlertTriangle, ArrowLeft, RefreshCcw } from 'lucide-react';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { InfoCallout } from '@/components/token-issuance/IssuancePrimitives';
 import { Button } from '@/components/ui/Button';
 import { TOKEN_ISSUANCE_STEPS } from '@/config/tokenIssuance';
 import { ROUTES } from '@/config/routes';
 import { useTokenIssuanceBootstrap } from '@/hooks/useTokenIssuanceBootstrap';
+import { useAuthStore } from '@/store/auth.store';
+import { networkUserKey, useNetworkStore } from '@/store/network.store';
 import { useTokenIssuanceStore } from '@/store/tokenIssuance.store';
 import { cn } from '@/utils/cn';
+import { web3Config } from '@/config/web3';
+import {
+  buildTokenIssuanceNetworkMismatchMessage,
+  getTokenIssuanceNetworkNames,
+} from '@/utils/tokenIssuanceNetwork';
 import { IssuanceStepper } from './IssuanceStepper';
 
 export function IssuanceLayout({
@@ -30,6 +38,11 @@ export function IssuanceLayout({
   const navigate = useNavigate();
   const completedSteps = useTokenIssuanceStore((state) => state.completedSteps);
   const backend = useTokenIssuanceStore((state) => state.backend);
+  const tokenInformation = useTokenIssuanceStore((state) => state.tokenInformation);
+  const authUser = useAuthStore((state) => state.user);
+  const networkKey = networkUserKey(authUser);
+  const appChainId = useNetworkStore((state) => state.activeChainByUser[networkKey] || null);
+  const appChainUid = useNetworkStore((state) => state.activeChainUidByUser[networkKey] || '');
   const bootstrap = useTokenIssuanceBootstrap();
   const currentStep = TOKEN_ISSUANCE_STEPS.find((step) => step.key === stepKey);
 
@@ -65,6 +78,39 @@ export function IssuanceLayout({
     .replace(/[^a-z]/g, '');
   const backendBlocksContinue =
     bootstrap.isLoading || Boolean(bootstrap.error) || backend.isLocked;
+  const assetChainUid = String(
+    tokenInformation.chainUid ||
+      web3Config.getChainRecordById(tokenInformation.chainId)?.chainUid ||
+      '',
+  ).trim();
+  const resolvedAppChainUid = String(
+    appChainUid || web3Config.getChainRecordById(appChainId)?.chainUid || '',
+  ).trim();
+  const networkMismatch = Boolean(
+    assetChainUid &&
+      resolvedAppChainUid &&
+      assetChainUid !== resolvedAppChainUid &&
+      !backend.isLocked,
+  );
+  const networkNames = getTokenIssuanceNetworkNames({
+    assetChainUid,
+    assetChainId: tokenInformation.chainId,
+    assetNetworkName: tokenInformation.network,
+    appChainUid: resolvedAppChainUid,
+    appChainId,
+  });
+  const networkMismatchMessage = buildTokenIssuanceNetworkMismatchMessage(networkNames);
+  const handleContinue = () => {
+    if (networkMismatch) {
+      toast.error('Network selections do not match', {
+        id: 'token-issuance-network-mismatch',
+        description: networkMismatchMessage,
+        duration: 10_000,
+      });
+      return;
+    }
+    onContinue?.();
+  };
 
   return (
     <div className={cn('issuance-page', pageClassName)}>
@@ -148,7 +194,7 @@ export function IssuanceLayout({
             {footerExtra}
             <Button
               icon={continueIcon}
-              onClick={onContinue}
+              onClick={handleContinue}
               disabled={continueDisabled || backendBlocksContinue}
               loading={continueLoading || bootstrap.isLoading}
             >
