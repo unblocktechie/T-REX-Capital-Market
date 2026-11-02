@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   createFallbackInvestorOptions,
@@ -12,6 +13,7 @@ import {
 import { INITIAL_INVESTOR_STATE } from '@/constants/investor';
 import { InvestorOnboardingContext } from '@/context/InvestorOnboardingContext';
 import { useAuth } from '@/hooks/useAuth';
+import { myChainsQueryKey } from '@/hooks/useChains';
 import {
   clearInvestorDraft,
   loadInvestorDraft,
@@ -82,6 +84,7 @@ const withoutLegacyMockDocuments = (browserState) => ({
 
 export function InvestorOnboardingProvider({ children }) {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const hydrationRef = useRef(null);
   if (!hydrationRef.current) {
     const hydration = loadInvestorDraft(user);
@@ -366,12 +369,17 @@ export function InvestorOnboardingProvider({ children }) {
       // Set the one-time success flag before applying the submitted server state so the
       // onboarding route cannot briefly redirect to the dashboard between state updates.
       setShowSubmissionSuccess(true);
+      // Submission creates the investor's ONCHAINID on the selected chain.
+      // /chains/me was already loaded during onboarding, when that same chain
+      // was still locked. Refresh the server-authoritative access list before
+      // exposing the workspace so the navbar never reuses that stale result.
+      await queryClient.invalidateQueries({ queryKey: myChainsQueryKey });
       const fresh = await refreshFromServer();
       return { result, state: fresh };
     } finally {
       setSubmitting(false);
     }
-  }, [refreshFromServer]);
+  }, [queryClient, refreshFromServer]);
 
   // Kept for the legacy hidden selfie step; this now saves only a local recovery snapshot.
   const saveDraft = useCallback(async (patch = {}) => {

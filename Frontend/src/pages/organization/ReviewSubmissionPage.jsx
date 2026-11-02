@@ -25,7 +25,6 @@ import { WalletControl } from '@/components/wallet/WalletControl';
 import { ROUTES } from '@/config/routes';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { usePublicChains } from '@/hooks/useChains';
-import { web3Config } from '@/config/web3';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useAuth } from '@/hooks/useAuth';
 import { formatDate } from '@/utils/date';
@@ -58,11 +57,19 @@ export default function ReviewSubmissionPage() {
   const { user } = useAuth();
   const userKey = networkUserKey(user);
   const persistedChainId = useNetworkStore((state) => state.activeChainByUser[userKey] || null);
+  const persistedChainUid = useNetworkStore((state) => state.activeChainUidByUser[userKey] || '');
   const setActiveChainId = useNetworkStore((state) => state.setActiveChainId);
   const publicChains = usePublicChains();
-  const initialChainUid = web3Config.getChainRecordById(persistedChainId)?.chainUid || web3Config.defaultChainRecord?.chainUid || '';
-  const [selectedChainUid, setSelectedChainUid] = useState(initialChainUid);
-  const selectedChain = (publicChains.data || []).find((item) => item.chainUid === selectedChainUid) || publicChains.data?.[0] || null;
+  // Both the header and final-review picker use the same persisted onboarding
+  // choice, including networks that do not require unlocking yet.
+  const selectedChain = (publicChains.data || []).find((item) =>
+    item.chainUid === persistedChainUid || (!persistedChainUid && item.chainId === Number(persistedChainId))
+  ) || publicChains.data?.[0] || null;
+  const selectedChainUid = selectedChain?.chainUid || '';
+  const selectChain = (chainUid) => {
+    const chain = (publicChains.data || []).find((item) => item.chainUid === chainUid);
+    if (chain) setActiveChainId(user, chain.chainId, chain.chainUid);
+  };
   const wallet = useWalletConnection(selectedChain?.chainId);
   const setWalletRequiredChainId = useUiStore((state) => state.setWalletRequiredChainId);
   const { organization, refresh, saveConfirmations, setCurrentStep, submit } = useOrganization();
@@ -346,7 +353,7 @@ export default function ReviewSubmissionPage() {
                 id="organization-onboarding-chain"
                 chains={publicChains.data || []}
                 value={selectedChainUid}
-                onChange={(event) => setSelectedChainUid(event.target.value)}
+                onChange={(event) => selectChain(event.target.value)}
                 disabled={submitting || publicChains.isPending}
                 label="First network"
                 description="Your organization ONCHAINID will be created on this network after administrator approval."

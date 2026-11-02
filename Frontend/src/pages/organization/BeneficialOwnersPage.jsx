@@ -193,7 +193,7 @@ export default function BeneficialOwnersPage() {
             </div>
             <Button
               type="button"
-              variant="secondary"
+              variant="primary"
               icon={Plus}
               disabled={fieldArray.fields.length >= 20 || Boolean(savingAction)}
               onClick={() => fieldArray.append(newOwner())}

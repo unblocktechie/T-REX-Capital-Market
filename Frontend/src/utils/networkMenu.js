@@ -11,8 +11,8 @@ export const getNetworkMenuChoices = (myChains = [], selectableChains = [], acti
   return activeChain ? [activeChain] : [];
 };
 
-export const canSelectNetwork = (chain, selectionLocked = false) =>
-  Boolean(chain && !selectionLocked && isNetworkUnlocked(chain));
+export const canSelectNetwork = (chain, selectionLocked = false, onboardingOnly = false) =>
+  Boolean(chain && !selectionLocked && (onboardingOnly || isNetworkUnlocked(chain)));
 
 export const canUnlockNetwork = (chain, {
   selectionLocked = false,

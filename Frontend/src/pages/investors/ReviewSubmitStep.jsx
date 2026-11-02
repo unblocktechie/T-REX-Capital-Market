@@ -20,7 +20,6 @@ import { NO_INVESTMENT_EXPERIENCE_VALUE } from '@/constants/investor';
 import { useInvestorOnboarding } from '@/hooks/useInvestorOnboarding';
 import { useAuth } from '@/hooks/useAuth';
 import { usePublicChains } from '@/hooks/useChains';
-import { web3Config } from '@/config/web3';
 import { useCityOptions, useCountryOptions, useStateOptions } from '@/hooks/useLocationOptions';
 import { useWalletConnection } from '@/hooks/useWalletConnection';
 import { getErrorMessage } from '@/utils/error';
@@ -76,13 +75,21 @@ export default function ReviewSubmitStep() {
   } = useInvestorOnboarding();
   const { user } = useAuth();
   const userKey = networkUserKey(user);
-  const persistedChainId = useNetworkStore((store) => store.activeChainByUser[userKey] || null);
+  const persistedChainId = useNetworkStore((state) => state.activeChainByUser[userKey] || null);
+  const persistedChainUid = useNetworkStore((state) => state.activeChainUidByUser[userKey] || '');
   const setActiveChainId = useNetworkStore((store) => store.setActiveChainId);
   const setWalletRequiredChainId = useUiStore((store) => store.setWalletRequiredChainId);
   const publicChains = usePublicChains();
-  const initialChainUid = web3Config.getChainRecordById(persistedChainId)?.chainUid || web3Config.defaultChainRecord?.chainUid || '';
-  const [selectedChainUid, setSelectedChainUid] = useState(initialChainUid);
-  const selectedChain = (publicChains.data || []).find((item) => item.chainUid === selectedChainUid) || publicChains.data?.[0] || null;
+  // Both the header and final-review picker use the same persisted onboarding
+  // choice, including networks that do not require unlocking yet.
+  const selectedChain = (publicChains.data || []).find((item) =>
+    item.chainUid === persistedChainUid || (!persistedChainUid && item.chainId === Number(persistedChainId))
+  ) || publicChains.data?.[0] || null;
+  const selectedChainUid = selectedChain?.chainUid || '';
+  const selectChain = (chainUid) => {
+    const chain = (publicChains.data || []).find((item) => item.chainUid === chainUid);
+    if (chain) setActiveChainId(user, chain.chainId, chain.chainUid);
+  };
   const connectedWallet = useWalletConnection(selectedChain?.chainId);
 
   useEffect(() => {
@@ -206,7 +213,7 @@ export default function ReviewSubmitStep() {
           id="investor-onboarding-chain"
           chains={publicChains.data || []}
           value={selectedChainUid}
-          onChange={(event) => setSelectedChainUid(event.target.value)}
+          onChange={(event) => selectChain(event.target.value)}
           disabled={submitting || publicChains.isPending}
           label="First network"
           description="Your investor ONCHAINID will be created on this network during submission."

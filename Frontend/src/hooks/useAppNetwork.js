@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useConnection } from 'wagmi';
 import { ROLES } from '@/config/permissions';
@@ -7,6 +7,7 @@ import { web3Config } from '@/config/web3';
 import { useAuth } from '@/hooks/useAuth';
 import {
   chainConfigQueryOptions,
+  myChainsQueryKey,
   useChainConfig,
   useMyChains,
   usePublicChains,
@@ -52,11 +53,12 @@ const isChainScopedQuery = (query) => {
 const cancelChainScopedQueries = (queryClient) =>
   queryClient.cancelQueries({ predicate: isChainScopedQuery });
 
-export function useAppNetwork({ pathname = '' } = {}) {
+export function useAppNetwork({ pathname = '', onboardingOnly = false } = {}) {
   const queryClient = useQueryClient();
   const { user, isAuthenticated } = useAuth();
   const isIssuer = user?.role === ROLES.issuer;
   const isInvestor = user?.role === ROLES.investor;
+  const previousOnboardingOnly = useRef(onboardingOnly);
   const publicChains = usePublicChains();
   const myChains = useMyChains({
     enabled: Boolean(isAuthenticated && (isIssuer || isInvestor)),
@@ -68,6 +70,18 @@ export function useAppNetwork({ pathname = '' } = {}) {
         ? 4_000
         : false,
   });
+  // MainLayout stays mounted as an onboarding user enters the workspace.
+  // React Query would otherwise keep the pre-submit /chains/me LOCKED rows for
+  // up to staleTime (even if the selected chain was created during submission).
+  // Cover both onboarding flows without changing the unlock permissions.
+  useEffect(() => {
+    const justCompletedOnboarding = previousOnboardingOnly.current && !onboardingOnly;
+    previousOnboardingOnly.current = onboardingOnly;
+    if (justCompletedOnboarding && isAuthenticated && (isIssuer || isInvestor)) {
+      void queryClient.invalidateQueries({ queryKey: myChainsQueryKey });
+    }
+  }, [isAuthenticated, isIssuer, isInvestor, onboardingOnly, queryClient]);
+
   const userKey = networkUserKey(user);
   const persistedChainId = useNetworkStore((state) => state.activeChainByUser[userKey] || null);
   const persistedChainUid = useNetworkStore((state) => state.activeChainUidByUser[userKey] || '');
@@ -179,14 +193,19 @@ export function useAppNetwork({ pathname = '' } = {}) {
 
   const selectableChains = useMemo(() => {
     if (isNetworkLocked) return lockedChain ? [lockedChain] : [];
+    // Onboarding selects from the supported public catalogue; unlocking an
+    // identity is a separate, post-onboarding operation.
+    if (onboardingOnly) return publicRows;
 
     const source = unlockedChains.length ? unlockedChains : [];
     const next = [...source];
     if (accountChain && !next.some((chain) => chain.chainId === accountChain.chainId)) next.unshift(accountChain);
     return next;
-  }, [accountChain, isNetworkLocked, lockedChain, unlockedChains]);
+  }, [accountChain, isNetworkLocked, lockedChain, onboardingOnly, publicRows, unlockedChains]);
 
-  const contextualChainId = numberOrNull(walletRequiredChainId);
+  // Review-step wallet requirements must not override a freshly selected
+  // onboarding network from the shared header.
+  const contextualChainId = onboardingOnly ? null : numberOrNull(walletRequiredChainId);
   const persistedValid = numberOrNull(persistedChainId)
     && (selectableChains.some((chain) => chain.chainId === Number(persistedChainId)) || !selectableChains.length)
     ? Number(persistedChainId)
@@ -344,7 +363,8 @@ export function useAppNetwork({ pathname = '' } = {}) {
       isNetworkLocked ||
       isNetworkLockLoading ||
       !connectedSupportedChainId ||
-      !mineRows.length
+      !mineRows.length ||
+      onboardingOnly
     ) return undefined;
 
     const walletChain = mineRows.find(
@@ -376,6 +396,7 @@ export function useAppNetwork({ pathname = '' } = {}) {
     isNetworkLockLoading,
     isNetworkLocked,
     mineRows,
+    onboardingOnly,
     queryClient,
     setActiveChainId,
     user,
@@ -387,7 +408,12 @@ export function useAppNetwork({ pathname = '' } = {}) {
       || firstMatch(publicRows, (chain) => chain.chainId === Number(chainId));
     if (!nextChain?.chainUid) return false;
 
-    await queryClient.fetchQuery(chainConfigQueryOptions(nextChain.chainUid));
+    // Match the final-review selector during onboarding: choosing a published
+    // supported network does not require an unlocked identity (or a chain
+    // configuration fetch). Workspace changes retain the existing guard.
+    if (!onboardingOnly) {
+      await queryClient.fetchQuery(chainConfigQueryOptions(nextChain.chainUid));
+    }
 
     const previousChainUid = activeChain?.chainUid || persistedChainUid || '';
     const chainChanged = Boolean(previousChainUid && previousChainUid !== nextChain.chainUid);
@@ -399,7 +425,7 @@ export function useAppNetwork({ pathname = '' } = {}) {
   };
 
   const hasEstablishedNetwork = Boolean(
-    lockedChain || accountChain || unlockedChains.length || persistedValid || connectedSupportedChainId,
+    lockedChain || accountChain || unlockedChains.length || persistedValid || connectedSupportedChainId || (onboardingOnly && publicRows.length),
   );
 
   return {

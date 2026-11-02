@@ -27,13 +27,10 @@ export function Header({ onboardingOnly = false, network: appNetwork }) {
   const walletRequiredChainId = useUiStore((state) => state.walletRequiredChainId);
   const effectiveWalletChainId = walletRequiredChainId || appNetwork?.activeChainId;
   const isNetworkAwareUser = user?.role === ROLES.issuer || user?.role === ROLES.investor;
-  const isInvestorOnboardingRoute =
-    user?.role === ROLES.investor && location.pathname === ROUTES.investors;
   const showNetworkSwitcher =
     Boolean(appNetwork) &&
     isNetworkAwareUser &&
-    location.pathname !== ROUTES.organizationReview &&
-    !isInvestorOnboardingRoute;
+    (onboardingOnly || (location.pathname !== ROUTES.organizationReview && location.pathname !== ROUTES.investors));
   const [profileOpen, setProfileOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const profileRef = useRef(null);

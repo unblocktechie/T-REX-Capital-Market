@@ -11583,3 +11583,50 @@ button.issuer-dashboard-live-metric:disabled {
     margin-left: auto;
   }
 }
+
+/* Keep all onboarding header actions accessible on small screens now that both
+   onboarding flows expose the network selector on every step. */
+@media (max-width: 720px) {
+  .app-header--onboarding {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      'brand brand account'
+      'network wallet wallet';
+    align-content: center;
+    column-gap: 10px;
+    row-gap: 8px;
+    height: auto;
+    min-height: 112px;
+    padding-block: 10px;
+  }
+
+  .app-header--onboarding .onboarding-header__brand {
+    grid-area: brand;
+  }
+
+  .app-header--onboarding .onboarding-header__account {
+    display: contents;
+  }
+
+  .app-header--onboarding .app-network-switcher {
+    grid-area: network;
+    width: 100%;
+  }
+
+  .app-header--onboarding .app-network-switcher > button {
+    width: 100%;
+    max-width: none;
+    min-height: 44px;
+  }
+
+  .app-header--onboarding .header-wallet-control {
+    grid-area: wallet;
+    justify-self: end;
+  }
+
+  .app-header--onboarding .account-menu {
+    grid-area: account;
+    justify-self: end;
+  }
+}

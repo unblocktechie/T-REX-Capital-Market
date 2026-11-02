@@ -542,9 +542,14 @@ button.org-stepper__button {
   display: grid;
 }
 
-.org-ubo-toolbar span {
+.org-ubo-toolbar > div > span {
   color: var(--text-muted);
   font-size: 11px;
+}
+
+.org-ubo-toolbar > .button {
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .org-ubo-toolbar strong {
@@ -3559,7 +3564,7 @@ button.org-stepper__button {
   }
 }
 
-/* Verified organization overview: focused detail-first layout.
+/* Verified organization overview: focused detail-first layout (2026-10-28).
    Scoped to this page; onboarding/admin organization layouts are unchanged. */
 .org-overview-page--reference {
   gap: 16px;
