@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/security/Pausable.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/cryptography/ECDSAUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -51,10 +55,16 @@ interface ITREXToken is IERC20Metadata {
  *                      one payment token's own decimals), set by that
  *                      token's own issuer. The platform takes no
  *                      responsibility for pricing — only the token's
- *                      owner() can call setPrice. At buy/redeem time the
+ *                      owner() can call setPrice, or authorise a price
+ *                      change by signature from its registered service
+ *                      wallet (setPriceOnBehalfOf). At buy/redeem time the
  *                      price is converted into whichever whitelisted
  *                      payment token the caller picked, scaling for that
  *                      token's own decimals.
+ *  - `serviceWalletOf` token address => service wallet whose EIP-712
+ *                      signatures may set prices for that given tokens.
+ *                      Registered by the issuer wallet of given token itself,
+ *                      so the issuer stays in control of who can price their tokens.
  *
  * Everything else — issuer, decimals, agent status — is read live from the
  * T-REX token on every call, so there is no duplicated/stale copy of
@@ -88,8 +98,27 @@ interface ITREXToken is IERC20Metadata {
  *
  * Both flows are a single atomic transaction — payment and mint/burn either
  * both happen or the whole call reverts.
+ *
+ * Upgradeability (UUPS, ERC-1967):
+ *
+ *   Deployed behind an ERC1967Proxy. Issuers add the PROXY address as an
+ *   Agent, and all state lives in the proxy, so a new implementation can be
+ *   rolled out with `upgradeTo` (owner-only) without re-wiring any token or
+ *   re-setting any price. When adding features in a later version:
+ *
+ *    - never reorder, remove or change the type of existing state variables;
+ *    - only append new ones, shrinking `__gap` by the same number of slots;
+ *    - never add a constructor body or `immutable`s — use a
+ *      `reinitializer(n)` function for any new one-off setup.
  */
-contract TREXPlatformController is Ownable, Pausable, ReentrancyGuard {
+contract TREXPlatformController is
+    Initializable,
+    OwnableUpgradeable,
+    PausableUpgradeable,
+    ReentrancyGuardUpgradeable,
+    EIP712Upgradeable,
+    UUPSUpgradeable
+{
     using SafeERC20 for IERC20;
 
     // =============================================================
@@ -129,6 +158,21 @@ contract TREXPlatformController is Ownable, Pausable, ReentrancyGuard {
      *             token per whole T-REX token.
      */
     mapping(address => uint256) public tokenPrice;
+ 
+    /// @dev EIP-712 typehash for `setPriceOnBehalfOf` signatures.
+    bytes32 public constant SET_PRICE_TYPEHASH =
+        keccak256("SetPrice(address token,uint256 newPrice,uint256 nonce,uint256 deadline)");
+
+    /// @notice Token address => service wallet allowed to sign price
+    /// updates for every token that main wallet owns. Zero means none.
+    mapping(address => address) public serviceWalletOf;
+
+    /// @notice Per-signer nonce consumed by each `setPriceOnBehalfOf` call.
+    mapping(address => uint256) public nonces;
+
+    /// @dev Reserved slots so later versions can append state variables
+    /// without shifting storage. Shrink by one per new slot added above.
+    uint256[45] private __gap;
 
     // =============================================================
     //                            EVENTS
@@ -142,6 +186,13 @@ contract TREXPlatformController is Ownable, Pausable, ReentrancyGuard {
         address indexed token,
         uint256 oldPrice,
         uint256 newPrice
+    );
+
+    event ServiceWalletUpdated(
+        address indexed executor,
+        address indexed token,
+        address oldServiceWallet,
+        address indexed newServiceWallet
     );
 
     event TokensPurchased(
@@ -176,32 +227,60 @@ contract TREXPlatformController is Ownable, Pausable, ReentrancyGuard {
     error OnlyIssuerCanRedeem();
     error UnsupportedPaymentToken(address paymentToken);
     error PaymentTokenAlreadyAdded(address paymentToken);
+    error SignatureExpired(uint256 deadline);
+    error InvalidServiceWalletSignature(address token, address signer);
 
     // =============================================================
-    //                         CONSTRUCTOR
+    //                   CONSTRUCTOR / INITIALIZER
     // =============================================================
+
+    /// @dev Locks the implementation contract itself so it can only ever be
+    /// used through a proxy.
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
 
     /**
-     * @param initialOwner Platform owner/admin wallet (backend service wallet).
+     * @notice One-time setup, called by the proxy at deployment.
+     * @param initialOwner Platform owner/admin wallet. Also the only account
+     * that can upgrade the implementation — use a multisig in production.
      * @param initialPaymentTokens Payment tokens to whitelist at deploy time
      * (e.g. [USDT, USDC] on Sepolia). More can be added later via
      * `addPaymentToken`, from `initialOwner`'s wallet, with no redeploy.
      */
-    constructor(address initialOwner, address[] memory initialPaymentTokens) {
+    function initialize(
+        address initialOwner,
+        address[] memory initialPaymentTokens
+    ) external initializer {
         if (initialOwner == address(0)) {
             revert ZeroAddress();
         }
+
+        __Ownable_init();
+        __Pausable_init();
+        __ReentrancyGuard_init();
+        __EIP712_init("TREXPlatformController", "1");
+        __UUPSUpgradeable_init();
 
         for (uint256 i = 0; i < initialPaymentTokens.length; i++) {
             _addPaymentToken(initialPaymentTokens[i]);
         }
 
-        // Ownable() already made the deployer the owner; only transfer if
-        // the platform wallet deploying this isn't meant to stay in charge.
+        // __Ownable_init() made msg.sender the owner; hand over if the
+        // deploying wallet isn't meant to stay in charge.
         if (initialOwner != owner()) {
             _transferOwnership(initialOwner);
         }
     }
+
+    /// @notice Version of the deployed implementation, bumped on every upgrade.
+    function version() external pure virtual returns (string memory) {
+        return "1.1.0";
+    }
+
+    /// @dev Only the platform owner can point the proxy at a new implementation.
+    function _authorizeUpgrade(address) internal override onlyOwner {}
 
     // =============================================================
     //                       ADMIN / CONFIGURATION
@@ -258,29 +337,85 @@ contract TREXPlatformController is Ownable, Pausable, ReentrancyGuard {
      * if sales need to stop.
      */
     function setPrice(address token, uint256 newPrice) external {
-        _requireContract(token);
-
-        if (newPrice == 0) {
-            revert InvalidPrice();
-        }
-
-        // Confirm this is actually an ERC-20-shaped contract before
-        // recording a price for it.
-        try IERC20Metadata(token).decimals() returns (uint8) {
-            // valid
-        } catch {
-            revert InvalidToken();
-        }
-
-        address issuer = ITREXToken(token).owner();
+        address issuer = _validatePriceUpdate(token, newPrice);
         if (msg.sender != issuer) {
             revert NotTokenOwner(token, msg.sender);
         }
 
-        uint256 oldPrice = tokenPrice[token];
-        tokenPrice[token] = newPrice;
+        _setPrice(token, newPrice);
+    }
 
-        emit TokenPriceUpdated(token, oldPrice, newPrice);
+    /**
+     * @notice Register (or rotate) the service wallet allowed to sign price
+     * updates for every token `msg.sender` owns. Pass the zero address to
+     * revoke. Rotating does not reset nonces, so old signatures stay spent.
+     */
+    function setServiceWallet(address serviceWallet, address token) external {
+        address issuer = ITREXToken(token).owner();
+        if (msg.sender != issuer) {
+            revert NotTokenOwner(token, msg.sender);
+        }
+        address oldServiceWallet = serviceWalletOf[token];
+        serviceWalletOf[token] = serviceWallet;
+
+        emit ServiceWalletUpdated(msg.sender, token, oldServiceWallet, serviceWallet);
+    }
+
+    /**
+     * @notice Set the price of a T-REX token using an EIP-712 `SetPrice`
+     * signature from the issuer's registered service wallet. Anyone (e.g.
+     * the platform backend acting as relayer) may submit it; authority
+     * comes solely from the signature, and the issuer's main wallet must
+     * have registered that service wallet via `setServiceWallet` first.
+     *
+     * @param token T-REX token address.
+     * @param newPrice Same units and rules as `setPrice`.
+     * @param deadline Unix timestamp after which the signature is rejected.
+     * @param v Signature `v`.
+     * @param r Signature `r`.
+     * @param s Signature `s`.
+     */
+    function setPriceOnBehalfOf(
+        address token,
+        uint256 newPrice,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external {
+        if (block.timestamp > deadline) {
+            revert SignatureExpired(deadline);
+        }
+
+        _validatePriceUpdate(token, newPrice);
+        address serviceWallet = serviceWalletOf[token];
+
+        // `serviceWallet` is the expected signer, so its nonce is the one the
+        // signature must commit to; a forged signature recovers to a
+        // different address and fails the equality check below.
+        bytes32 digest = _hashTypedDataV4(
+            keccak256(
+                abi.encode(
+                    SET_PRICE_TYPEHASH,
+                    token,
+                    newPrice,
+                    nonces[serviceWallet],
+                    deadline
+                )
+            )
+        );
+        address signer = ECDSAUpgradeable.recover(digest, v, r, s);
+        if (serviceWallet == address(0) || signer != serviceWallet) {
+            revert InvalidServiceWalletSignature(token, signer);
+        }
+        nonces[serviceWallet]++;
+
+        _setPrice(token, newPrice);
+    }
+
+    /// @notice EIP-712 domain separator used by `setPriceOnBehalfOf`.
+    function DOMAIN_SEPARATOR() external view returns (bytes32) {
+        return _domainSeparatorV4();
     }
 
     /// @notice Emergency stop for buy/redeem. Admin functions stay available.
@@ -460,6 +595,36 @@ contract TREXPlatformController is Ownable, Pausable, ReentrancyGuard {
         if (token.code.length == 0) {
             revert InvalidToken();
         }
+    }
+
+    /// @dev Shared checks for setPrice/setPriceOnBehalfOf. Returns the
+    /// token's issuer (its T-REX owner()).
+    function _validatePriceUpdate(
+        address token,
+        uint256 newPrice
+    ) internal view returns (address issuer) {
+        _requireContract(token);
+
+        if (newPrice == 0) {
+            revert InvalidPrice();
+        }
+
+        // Confirm this is actually an ERC-20-shaped contract before
+        // recording a price for it.
+        try IERC20Metadata(token).decimals() returns (uint8) {
+            // valid
+        } catch {
+            revert InvalidToken();
+        }
+
+        issuer = ITREXToken(token).owner();
+    }
+
+    function _setPrice(address token, uint256 newPrice) internal {
+        uint256 oldPrice = tokenPrice[token];
+        tokenPrice[token] = newPrice;
+
+        emit TokenPriceUpdated(token, oldPrice, newPrice);
     }
 
     /// @dev Shared whitelist logic for the constructor and
