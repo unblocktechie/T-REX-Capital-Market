@@ -51,6 +51,24 @@ const submitOrganization = Joi.object({
   chainUid: uid,
 });
 
+const serviceWallet = Joi.object({
+  tokenUid: Joi.string().guid(),
+  serviceWalletAddress: Joi.string().trim().pattern(/^0x[a-fA-F0-9]{40}$/).required().messages({
+    'string.pattern.base': 'serviceWalletAddress must be a valid EVM wallet address.',
+  }),
+});
+
+const issuerApiKeyCreate = Joi.object({
+  ...require('./issuer-api-key-policy.schema').policyFields,
+  name: Joi.string().trim().min(3).max(100).required(),
+  expiresInDays: Joi.number().integer().min(1).max(730).default(365),
+});
+const issuerApiKeyRotate = Joi.object({
+  name: Joi.string().trim().min(3).max(100),
+  expiresInDays: Joi.number().integer().min(1).max(730).default(365),
+});
+const issuerApiKeyParams = Joi.object({ issuerApiKeyUid: uid.required() });
+
 const adminOrganizationListQuery = Joi.object({
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(100).default(20),
@@ -84,7 +102,8 @@ const stateParams = Joi.object({ stateUid: uid.required() });
 
 module.exports = {
   locationListQuery, companyInformation, jurisdiction, beneficialOwners, documentUpload,
-  submitOrganization, adminOrganizationListQuery, reviewOrganization,
+  submitOrganization, serviceWallet, issuerApiKeyCreate, issuerApiKeyRotate, issuerApiKeyParams,
+  adminOrganizationListQuery, reviewOrganization,
   documentParams, organizationParams, adminDocumentParams, adminDocumentFileQuery,
   countryParams, stateParams,
 };

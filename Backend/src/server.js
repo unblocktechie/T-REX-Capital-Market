@@ -24,6 +24,9 @@ const start = async () => {
   jobs.identityRegistryReconciliationRunner.start();
   // Read-only canonical indexer for frontend-executed buy, transfer and redeem transactions.
   jobs.blockchainTransactionIndexerRunner.start();
+  // Platform Controller price/service-wallet events confirm relayed requests and repair missed frontend callbacks.
+  jobs.tokenPriceIndexerRunner.start();
+  jobs.verificationTeamNotificationRunner.start();
 
   const shutdown = (signal) => {
     logger.info('Graceful shutdown started', { signal });
@@ -32,6 +35,8 @@ const start = async () => {
     jobs.claimIndexerRunner.stop();
     jobs.identityRegistryReconciliationRunner.stop();
     jobs.blockchainTransactionIndexerRunner.stop();
+    jobs.tokenPriceIndexerRunner.stop();
+    jobs.verificationTeamNotificationRunner.stop();
     server.close(async () => {
       await closePool();
       logger.info('Graceful shutdown completed');

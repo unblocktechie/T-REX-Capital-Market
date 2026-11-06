@@ -18,6 +18,9 @@ const chainSchemas = require('../../schemas/chain.schema');
 const createV1Router = () => {
   const router = express.Router();
   router.get('/health', health);
+  router.use('/admin', require('./routes/admin-platform.routes').createAdminPlatformRouter({
+    service: dependencies.services.adminPlatformService, authenticate: dependencies.authenticate, authorize: dependencies.authorize,
+  }));
   router.use('/auth', createAuthRouter(dependencies.controllers.auth));
   router.get('/token-options', validate({ query: chainSchemas.publicPaymentTokenQuery }), asyncHandler(dependencies.controllers.tokens.options));
   router.get('/payment-tokens', validate({ query: chainSchemas.publicPaymentTokenQuery }), asyncHandler(dependencies.controllers.tokens.paymentTokens));
@@ -39,6 +42,7 @@ const createV1Router = () => {
   }));
   router.use('/organizations', createOrganizationRouter({
     controller: dependencies.controllers.organizations,
+    apiKeyController: dependencies.controllers.issuerApiKeys,
     authenticate: dependencies.authenticate,
     authorize: dependencies.authorize,
     requireInvestorChain: dependencies.requireInvestorChain,
@@ -52,6 +56,8 @@ const createV1Router = () => {
     controller: dependencies.controllers.tokens,
     deploymentController: dependencies.controllers.deploymentAttempts,
     authenticate: dependencies.authenticate,
+    issuerPriceAuthenticate: dependencies.issuerPriceAuthenticate,
+    issuerPriceRateLimit: dependencies.issuerPriceRateLimit,
     authorize: dependencies.authorize,
     requireInvestorChain: dependencies.requireInvestorChain,
   }));
