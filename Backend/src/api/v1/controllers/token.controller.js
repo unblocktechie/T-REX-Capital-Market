@@ -1,7 +1,7 @@
 const { sendSuccess } = require('../../../utils/response');
 const { HTTP_STATUS } = require('../../../config/constants');
 
-const createTokenController = (service, optionRepository, paymentTokenRegistryService) => ({
+const createTokenController = (service, optionRepository, paymentTokenRegistryService, priceUpdateService) => ({
   options: async (req, res) => {
     const paymentTokens = await paymentTokenRegistryService.listEnabled(req.query);
     return sendSuccess(req, res, {
@@ -33,10 +33,47 @@ const createTokenController = (service, optionRepository, paymentTokenRegistrySe
     message: req.body.isDraft ? 'Token governance draft saved.' : 'Token governance roles saved.',
     data: await service.saveGovernance(req.user, req.body, req.selectedChain),
   }),
-  updatePrice: async (req, res) => sendSuccess(req, res, {
-    message: 'Current token price updated successfully.',
-    data: await service.updateCurrentPrice(req.user, req.body, req.selectedChain),
+  updatePrice: async (req, res) => {
+    const result = await priceUpdateService.confirmDirect(req.user, req.body, req.selectedChain);
+    return sendSuccess(req, res, {
+      statusCode: result.pending ? 202 : 200,
+      message: result.pending ? 'Price transaction verification is pending. Do not submit another transaction.'
+        : 'On-chain token price verified successfully.',
+      data: result.data,
+    });
+  },
+  prepareDirectPrice: async (req, res) => sendSuccess(req, res, {
+    message: 'Pending price update saved. Submit the returned direct transaction from the issuer wallet.',
+    data: await priceUpdateService.prepareDirect(req.user, req.body, req.selectedChain),
   }),
+  cancelDirectPrice: async (req, res) => sendSuccess(req, res, {
+    message: 'Unsigned price request cancellation processed.',
+    data: await priceUpdateService.cancelDirect(req.user, req.params.priceUpdateUid, req.selectedChain, req.body),
+  }),
+  /* Retry API disabled; background indexer owns recovery.
+  retryDirectPrice: async (req, res) => sendSuccess(req, res, {
+    message: 'Price request recovery checked. No transaction was broadcast.',
+    data: await priceUpdateService.recoverDirect(req.user, req.params.priceUpdateUid, req.selectedChain, req.body),
+  }),
+  */
+  preparePriceUpdate: async (req, res) => sendSuccess(req, res, {
+    message: 'Relayed token price update prepared successfully.',
+    data: await priceUpdateService.prepare(req.user, req.body, req.selectedChain),
+  }),
+  submitPriceUpdate: async (req, res) => sendSuccess(req, res, {
+    statusCode: HTTP_STATUS.ACCEPTED,
+    message: 'Token price transaction submitted successfully.',
+    data: await priceUpdateService.submit(req.user, req.body, req.selectedChain, req.auth),
+  }),
+  getPriceUpdate: async (req, res) => sendSuccess(req, res, {
+    message: 'Token price update fetched successfully.',
+    data: await priceUpdateService.get(req.user, req.params.priceUpdateUid, req.selectedChain),
+  }),
+  priceHistory: async (req, res) => {
+    const result = await priceUpdateService.history(req.user, req.query, req.selectedChain);
+    return sendSuccess(req, res, { message: 'Token price history fetched successfully.',
+      data: result.rows, meta: { pagination: result.pagination } });
+  },
   submit: async (req, res) => {
     const result = await service.submit(req.user, req.body, req.selectedChain);
     // Two-phase flow: the transaction is broadcast but not yet confirmed on-chain.

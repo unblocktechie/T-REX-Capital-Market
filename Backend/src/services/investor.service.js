@@ -170,7 +170,7 @@ class InvestorService {
       if (fields.yearsOfExperience === undefined || fields.yearsOfExperience === null || fields.yearsOfExperience === '') {
         throw ApiError.badRequest('Compliance questionnaire is incomplete.', [{ field: 'yearsOfExperience', message: 'yearsOfExperience is required.' }]);
       }
-      if (!investmentCategories.length) throw ApiError.badRequest('Select at least one investment category.');
+      // if (!investmentCategories.length) throw ApiError.badRequest('Select at least one investment category.');
     }
 
     return this.transactionRunner(async (connection) => {
@@ -318,7 +318,7 @@ class InvestorService {
     await this.locationService.validateHierarchy(investor.countryUid, investor.stateUid, investor.cityUid);
 
     const categories = await this.repository.listInvestmentCategories(investor.investorUid);
-    if (!categories.length) throw ApiError.badRequest('Select at least one investment category.');
+    // if (!categories.length) throw ApiError.badRequest('Select at least one investment category.');
     const kycCount = await this.repository.countDocumentsByCategory(investor.investorUid, 'kyc');
     if (!kycCount) throw ApiError.badRequest('Upload at least one identity (KYC) document.');
     const accreditedCount = await this.repository.countDocumentsByCategory(investor.investorUid, 'accredited');

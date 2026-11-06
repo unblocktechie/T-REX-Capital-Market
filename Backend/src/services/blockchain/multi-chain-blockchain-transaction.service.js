@@ -19,7 +19,9 @@ class MultiChainBlockchainTransactionService {
   }
 
   async confirm(user, input) {
-    return (await this.serviceFor(input.chainId)).confirm(user, input);
+    const service = await this.serviceFor(input.chainId);
+    const transaction = await service.confirm(user, input);
+    return service.present(transaction);
   }
 
   async synchronize(input) {

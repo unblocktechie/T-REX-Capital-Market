@@ -83,8 +83,9 @@ const chainUpdate = Joi.object({
       .map((field) => [field, Joi.any().forbidden()]),
   ),
 }).min(1);
-const chainList = listQuery.keys({ isActive: booleanQuery });
-const chainAuditList = listQuery;
+const chainList = listQuery.keys({ isActive: booleanQuery,
+  sortBy: Joi.string().valid('chainName','chainCode','chainId','networkName','isActive','isDefault','displayOrder','createdAt','updatedAt') });
+const chainAuditList = listQuery.keys({ sortBy: Joi.string().valid('createdAt','operation','changedByName','changedByEmail') });
 const chainParams = Joi.object({ chainUid: uid.required() });
 
 const paymentTokenFields = {
@@ -109,7 +110,8 @@ const paymentTokenUpdate = Joi.object({
   supportsPurchase: Joi.any().forbidden(),
   supportsRedemption: Joi.any().forbidden(),
 }).min(1);
-const paymentTokenList = listQuery.keys({ chainUid: uid, isActive: booleanQuery });
+const paymentTokenList = listQuery.keys({ chainUid: uid, isActive: booleanQuery,
+  sortBy: Joi.string().valid('name','symbol','paymentTokenCode','contractAddress','chainName','decimals','isActive','isDefault','displayOrder','createdAt','updatedAt') });
 const paymentTokenParams = Joi.object({ paymentTokenUid: uid.required() });
 const publicPaymentTokenQuery = Joi.object({
   chainUid: uid,

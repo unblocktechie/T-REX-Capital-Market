@@ -6,7 +6,7 @@ const schemas = require('../../../schemas/investment.schema');
 // All investment routes are authenticated + DB-authorized (permissionMaster). The
 // marketplace list/detail/image are granted to admin + investor; the journey endpoints to
 // investor; the review endpoints to issuer. See 20260909_add_investment_journey.sql.
-const createInvestmentRouter = ({ controller, registryController, purchaseController, redemptionController, transferController, transactionController, invitationController, authenticate, authorize }) => {
+const createInvestmentRouter = ({ controller, registryController, purchaseController, redemptionController, transferController, transactionController, invitationController, authenticate, authorize, requireInvestorChain }) => {
   const router = express.Router();
   router.use(authenticate);
   router.use(requireInvestorChain);

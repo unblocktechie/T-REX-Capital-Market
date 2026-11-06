@@ -731,12 +731,22 @@ class InvestmentService {
     assertSelectedChain(interest, selectedChain, 'Investment interest');
     // The document must belong to a submission snapshot of THIS application — the issuer can
     // never reach the investor's other document versions or other applications' documents.
+    return this.getSubmissionDocumentFile(interestUid, documentUid);
+  }
+
+  // Call only after the caller has authorized access to the application.
+  async getSubmissionDocumentFile(interestUid, documentUid) {
     const document = await this.repository.findSubmissionDocument(interestUid, documentUid);
     if (!document) throw ApiError.notFound('Document was not found for this application.');
-
-    const directory = path.resolve(this.investorUploadsDir);
-    const filePath = path.resolve(directory, document.storageKey);
-    if (!filePath.startsWith(`${directory}${path.sep}`) || !fs.existsSync(filePath)) {
+    let filePath;
+    try {
+      const directory = fs.realpathSync(this.investorUploadsDir);
+      if (!document.storageKey || typeof document.storageKey !== 'string') throw new Error('Missing storage key');
+      filePath = fs.realpathSync(path.resolve(directory, document.storageKey));
+      const relative = path.relative(directory, filePath);
+      if (!relative || relative.startsWith(`..${path.sep}`) || relative === '..'
+        || path.isAbsolute(relative) || !fs.statSync(filePath).isFile()) throw new Error('Invalid file');
+    } catch {
       throw ApiError.notFound('The document file is no longer available.');
     }
     return { document, filePath };

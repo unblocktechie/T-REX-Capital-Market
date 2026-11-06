@@ -10,6 +10,10 @@ const createOrganizationController = (service, optionRepository) => ({
   getMine: async (req, res) => sendSuccess(req, res, {
     message: 'Organization form fetched successfully.', data: await service.getFullForm(req.user, req.selectedChain),
   }),
+  updateServiceWallet: async (req, res) => sendSuccess(req, res, {
+    message: 'Issuer service wallet synchronized successfully.',
+    data: await service.updateServiceWallet(req.user, req.body, req.selectedChain),
+  }),
   markUserNotified: async (req, res) => sendSuccess(req, res, {
     message: 'Organization user notification marked successfully.',
     data: await service.markUserNotified(req.user),

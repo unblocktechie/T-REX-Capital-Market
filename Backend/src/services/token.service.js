@@ -59,6 +59,7 @@ class TokenService {
     deploymentReceiptService,
     attemptRepository,
     paymentTokenRepository,
+    priceUpdateRepository,
     chainRuntimeService = null,
     userChainIdentityRepository = null,
     config = env.blockchain,
@@ -72,6 +73,7 @@ class TokenService {
     this.deploymentReceiptService = deploymentReceiptService;
     this.attemptRepository = attemptRepository;
     this.paymentTokenRepository = paymentTokenRepository;
+    this.priceUpdateRepository = priceUpdateRepository;
     this.chainRuntimeService = chainRuntimeService;
     this.userChainIdentityRepository = userChainIdentityRepository;
     this.config = config;
@@ -330,15 +332,20 @@ class TokenService {
     if (token.status !== 'deployed' || !token.isActive) {
       throw new ApiError(409, 'Only an active deployed token price can be changed.', undefined, 'TOKEN_NOT_DEPLOYED');
     }
-    const updated = await this.repository.updateCurrentPriceByOwner(
-      user.userUid,
-      token.tokenUid,
-      input.currentTokenPrice,
-    );
-    if (!updated) {
-      throw new ApiError(409, 'Token price changed concurrently or the token is no longer active.', undefined, 'TOKEN_PRICE_UPDATE_CONFLICT');
-    }
-    return updated;
+    return this.transactionRunner(async (connection) => {
+      const locked = await this.repository.lockPriceByOwner(user.userUid, token.tokenUid, connection);
+      if (!locked || locked.organizationUid !== organization.organizationUid || locked.status !== 'deployed' || !locked.isActive) {
+        throw new ApiError(409, 'Token price changed concurrently or the token is no longer active.', undefined, 'TOKEN_PRICE_UPDATE_CONFLICT');
+      }
+      assertSelectedChain(locked, selectedChain, 'Token');
+      const updated = await this.repository.updateCurrentPriceByOwner(user.userUid, token.tokenUid, input.currentTokenPrice, connection);
+      if (!updated) throw ApiError.conflict('Token price could not be updated.');
+      await this.priceUpdateRepository.createLegacy({
+        token: locked, issuerUserUid: user.userUid, issuerWalletAddress: organization.walletAddress,
+        oldPrice: locked.previousPrice, newPrice: String(input.currentTokenPrice),
+      }, connection);
+      return updated;
+    });
   }
 
   async saveClaims(user, input, selectedChain = null) {

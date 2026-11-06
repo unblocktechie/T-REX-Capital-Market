@@ -17,4 +17,15 @@ const createLimiter = (max) => rateLimit({
 const apiRateLimiter = createLimiter(env.rateLimit.max);
 const authRateLimiter = createLimiter(env.rateLimit.authMax);
 
-module.exports = { apiRateLimiter, authRateLimiter };
+const createIssuerPriceRateLimiter = (service) => require('../utils/async-handler').asyncHandler(async (req, res, next) => {
+  const result = await service.consume(req.user.userUid);
+  if (result.allowed) return next();
+  res.set('Retry-After', String(result.retryAfter));
+  return sendError(req, res, {
+    statusCode: 429,
+    message: 'Too many issuer price API requests. Please try again later.',
+    code: 'PRICE_API_RATE_LIMITED',
+  });
+});
+
+module.exports = { apiRateLimiter, authRateLimiter, createIssuerPriceRateLimiter };

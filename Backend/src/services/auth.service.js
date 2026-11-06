@@ -17,12 +17,14 @@ class AuthService {
     roleRepository,
     authTokenRepository,
     emailService,
+    verificationTeamNotificationService,
     transactionRunner = withTransaction,
   }) {
     this.userRepository = userRepository;
     this.roleRepository = roleRepository;
     this.authTokenRepository = authTokenRepository;
     this.emailService = emailService;
+    this.verificationTeamNotificationService = verificationTeamNotificationService;
     this.transactionRunner = transactionRunner;
   }
 
@@ -106,6 +108,9 @@ class AuthService {
 
       await this.userRepository.markEmailVerified(user.userUid, connection);
       await this.authTokenRepository.markUsed(record.tokenUid, connection);
+      if (!user.emailVerified && this.verificationTeamNotificationService) {
+        await this.verificationTeamNotificationService.enqueue(authIdentity, connection);
+      }
       return this.createAuthenticationSession({ ...authIdentity, emailVerified: true }, connection);
     });
   }

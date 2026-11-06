@@ -2,6 +2,7 @@ const ethers = require('ethers');
 const { execute } = require('../database/connection');
 const { createUid } = require('../utils/token');
 const { sqlInteger } = require('../utils/sql');
+const { orderBy } = require('../utils/admin-sort');
 
 const present = (row) => {
   if (!row) return null;
@@ -126,6 +127,10 @@ class PaymentTokenRepository {
   }
 
   async listAdmin(options = {}, executor) {
+    const order = orderBy(options, { name: 'p.paymentTokenName', symbol: 'p.paymentTokenSymbol', paymentTokenCode: 'p.paymentTokenCode',
+      contractAddress: 'p.contractAddress', chainName: 'c.chainName', decimals: 'p.decimals', isActive: 'p.isActive',
+      isDefault: 'p.isDefault', displayOrder: 'p.displayOrder', createdAt: 'p.createdAt', updatedAt: 'p.updatedAt',
+    }, 'c.displayOrder,p.isDefault DESC,p.displayOrder,p.paymentTokenName,p.paymentTokenUid', 'p.paymentTokenUid');
     const page = Math.max(1, Number(options.page) || 1);
     const limit = Math.max(1, Math.min(100, Number(options.limit) || 20));
     const offset = (page - 1) * limit;
@@ -144,7 +149,7 @@ class PaymentTokenRepository {
        FROM \`paymentTokenMaster\` p
        INNER JOIN \`chainMaster\` c ON c.\`chainUid\` = p.\`chainUid\` AND c.\`isDeleted\` = 0
        WHERE ${where}
-       ORDER BY c.\`displayOrder\`, p.\`isDefault\` DESC, p.\`displayOrder\`, p.\`paymentTokenName\`
+       ORDER BY ${order}
        LIMIT ${sqlInteger(limit, { min: 1, name: 'limit' })} OFFSET ${sqlInteger(offset, { name: 'offset' })}`,
       params, executor,
     );

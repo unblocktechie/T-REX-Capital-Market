@@ -1,10 +1,12 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { ethers } = require('ethers');
 const { ApiError } = require('../core/errors/api-error');
 const { withTransaction } = require('../database/connection');
 const { env } = require('../core/config/env');
 const { logger } = require('./common/log.service');
+const { CONTROLLER_ABI } = require('./blockchain/blockchain-transaction.service');
 
 const requireFields = (data, fields, section) => {
   const missing = fields.filter((field) => data[field] === undefined || data[field] === null || data[field] === '');
@@ -85,7 +87,70 @@ class OrganizationService {
     const selectedChainIdentity = selectedChain && this.userChainIdentityService
       ? await this.userChainIdentityService.getForUser(user, selectedChain.chainUid)
       : null;
-    return { ...organization, selectedChainIdentity, beneficialOwners, documents };
+    const tokenWallets = selectedChain ? (await this.repository.listServiceWalletsByChain(selectedChain.chainUid))
+      .filter(row => row.organizationUid === organization.organizationUid) : [];
+    const selectedChainServiceWallet = tokenWallets.length === 1 ? tokenWallets[0] : null;
+    return {
+      ...organization,
+      serviceWalletAddress: selectedChainServiceWallet?.serviceWalletAddress || null,
+      selectedChainServiceWallet,
+      tokenServiceWallets: tokenWallets,
+      selectedChainIdentity,
+      beneficialOwners,
+      documents,
+    };
+  }
+
+  async updateServiceWallet(user, { serviceWalletAddress, tokenUid }, selectedChain) {
+    this.assertIssuer(user);
+    if (!selectedChain) {
+      throw new ApiError(400, 'Select a blockchain network before updating the service wallet.', undefined, 'SELECTED_CHAIN_REQUIRED');
+    }
+    const organization = await this.repository.findByUserUid(user.userUid);
+    if (!organization || organization.status !== 'approved' || !ethers.isAddress(organization.walletAddress || '')) {
+      throw ApiError.conflict('An approved organization with a valid issuer wallet is required.');
+    }
+    if (!ethers.isAddress(selectedChain.platformControllerAddress || '')) {
+      throw new ApiError(503, 'The selected chain Platform Controller is not configured.', undefined, 'PLATFORM_CONTROLLER_NOT_CONFIGURED');
+    }
+    const requested = ethers.getAddress(serviceWalletAddress);
+    const token = await this.repository.findServiceWalletToken(organization.organizationUid, selectedChain.chainUid, tokenUid);
+    if (!token || !ethers.isAddress(token.tokenAddress || '')) throw ApiError.notFound('Deployed token was not found for this organization and chain.');
+    const controllerAddress = token.tokenAgentWalletAddress || selectedChain.platformControllerAddress;
+    const provider = new ethers.JsonRpcProvider(selectedChain.rpcUrl);
+    try {
+      const network = await provider.getNetwork();
+      if (Number(network.chainId) !== Number(selectedChain.chainId)) {
+        throw new ApiError(503, 'The selected chain RPC is connected to another network.', undefined, 'RPC_CHAIN_MISMATCH');
+      }
+      const controller = new ethers.Contract(controllerAddress, CONTROLLER_ABI, provider);
+      const registered = ethers.getAddress(await controller.serviceWalletOf(token.tokenAddress));
+      if (registered !== requested) {
+        throw new ApiError(
+          422,
+          'The service wallet is not registered on the selected chain. Submit setServiceWallet from the issuer main wallet first.',
+          [{ field: 'serviceWalletAddress', message: `Controller currently reports ${registered}.` }],
+          'SERVICE_WALLET_ONCHAIN_MISMATCH',
+        );
+      }
+      const storedAddress = registered === ethers.ZeroAddress ? null : registered;
+      const chainRecord = await withTransaction(async (connection) => {
+        const record = await this.repository.upsertServiceWallet({
+          tokenUid: token.tokenUid,
+          tokenAddress: token.tokenAddress,
+          organizationUid: organization.organizationUid,
+          chainUid: selectedChain.chainUid,
+          chainId: selectedChain.chainId,
+          controllerAddress: ethers.getAddress(controllerAddress),
+          mainWalletAddress: ethers.getAddress(organization.walletAddress),
+          serviceWalletAddress: storedAddress,
+        }, connection);
+        return record;
+      });
+      return { ...chainRecord, serviceWalletAddress: storedAddress, registeredOnChain: true };
+    } finally {
+      if (typeof provider.destroy === 'function') provider.destroy();
+    }
   }
 
   async markUserNotified(user) {

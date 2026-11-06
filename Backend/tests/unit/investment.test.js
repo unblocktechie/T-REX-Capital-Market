@@ -201,6 +201,25 @@ test('missing token does not trigger holder balance checks', async () => {
   assert.equal(called, false);
 });
 
+test('token details expose shared holder counts without exposing historical investor records', async () => {
+  const { service, state } = makeService();
+  const summary = {totalInvestors: 4, currentHolders: 2, formerHolders: 1, unknownHolders: 1};
+  service.getHolderSummary = async token => {
+    assert.equal(token, state.token);
+    return summary;
+  };
+  const result = await service.getTokenDetails('tok-1');
+  assert.deepEqual(result.holderSummary, summary);
+  assert.equal(result.investors, undefined);
+  assert.equal(result.treasuryWalletAddress, deployedToken.treasuryWalletAddress);
+});
+
+test('missing or wrong-chain token does not run holder balance checks', async () => {
+  const { service } = makeService({token: null});
+  service.getHolderSummary = async () => { assert.fail('must not check balances for a missing token'); };
+  await assert.rejects(() => service.getTokenDetails('missing', {chainUid:'other-chain'}), e => e.statusCode === 404);
+});
+
 test('my-interests returns token cap and public image fields without exposing storage data', async () => {
   const { service } = makeService();
   const interests = await service.listMyInterests(investor, {});
