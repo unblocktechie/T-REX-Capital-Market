@@ -561,6 +561,15 @@ export default function ReviewDeployPage() {
                 <DetailItem label="Approved organization account" full>
                   <AddressDisplay address={tokenInformation.treasuryWallet} compact />
                 </DetailItem>
+                <DetailItem label="Automated price updates" full>
+                  <div className="review-service-wallet-summary is-disabled">
+                    <span className="review-service-wallet-summary__status">Available after deployment</span>
+                    <span className="review-service-wallet-summary__note">
+                      Register a Service Wallet for this specific token once its contract address exists.
+                      No wallet entered during onboarding is treated as verified authorization.
+                    </span>
+                  </div>
+                </DetailItem>
                 <DetailItem label="Investor-facing description" full>
                   <span className="review-description-text">
                     {tokenInformation.description || 'No description provided.'}

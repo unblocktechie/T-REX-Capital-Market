@@ -8,9 +8,10 @@ import { useWalletConnection } from '@/hooks/useWalletConnection';
 import { useTokenIssuanceStore } from '@/store/tokenIssuance.store';
 import { cn } from '@/utils/cn';
 import { getErrorMessage } from '@/utils/error';
+import { NETWORK_UNLOCK_FAILED_MESSAGE } from '@/utils/networkAccessMessages';
 import { getWalletErrorMessage } from '@/utils/wallet';
 import { resolveMasterImageUrl } from '@/utils/masterImage';
-import { canSelectNetwork, canUnlockNetwork, getNetworkMenuChoices, isNetworkUnlocked } from '@/utils/networkMenu';
+import { canSelectNetwork, canUnlockNetwork, getNetworkMenuChoices, isNetworkUnlocked, isSubmittedInvestorNetwork } from '@/utils/networkMenu';
 import { buildTokenIssuanceNetworkMismatchMessage } from '@/utils/tokenIssuanceNetwork';
 
 export function AppNetworkSwitcher({ pathname = '', onboardingOnly = false, network }) {
@@ -26,9 +27,18 @@ export function AppNetworkSwitcher({ pathname = '', onboardingOnly = false, netw
   const activeChain = network.activeChain;
   // /chains/me includes locked, creating, failed and unlocked networks.
   // Keep the existing eligible choices as a fallback during the initial load.
-  const choices = onboardingOnly && !network.isNetworkLocked
+  const onboardingNetworkSelection = onboardingOnly && network.isOnboardingDraftRoute;
+  // Before submission, all public networks are selectable even though the
+  // account's identity and network access have not yet been created.
+  const choices = onboardingNetworkSelection
     ? network.publicChains
     : getNetworkMenuChoices(network.myChains, network.selectableChains, network.activeChain);
+  const onboardingAccessUnconfirmed = Boolean(
+    network.investorOnboardingChainUid && network.myChains.some((chain) =>
+      chain.chainUid === network.investorOnboardingChainUid &&
+      !isNetworkUnlocked(chain) && chain.identityStatus !== 'FAILED',
+    ),
+  );
   const deploymentNetworkPinned = pathname === ROUTES.tokenDeploying;
   const switchingRestricted =
     network.isNetworkLocked || network.isNetworkLockLoading || deploymentNetworkPinned;
@@ -63,6 +73,11 @@ export function AppNetworkSwitcher({ pathname = '', onboardingOnly = false, netw
   }, [open]);
 
   useEffect(() => setOpen(false), [pathname]);
+  // Opening the list must display current server access, not the version
+  // cached while the investor was still completing onboarding.
+  useEffect(() => {
+    if (open && !onboardingNetworkSelection) void network.refetchMyChains();
+  }, [onboardingNetworkSelection, open, network.refetchMyChains]);
   useEffect(() => {
     if (!pollUnlockUid) return;
     const chain = network.myChains.find((row) => row.chainUid === pollUnlockUid);
@@ -72,12 +87,14 @@ export function AppNetworkSwitcher({ pathname = '', onboardingOnly = false, netw
   }, [network.myChains, pollUnlockUid]);
 
   useEffect(() => {
-    if (!pollUnlockUid) return undefined;
+    // Onboarding identity setup may finish after /investors/me/submit returns.
+    // Keep the open menu in sync until the backend confirms its actual status.
+    if (!pollUnlockUid && !(open && onboardingAccessUnconfirmed)) return undefined;
     const intervalId = window.setInterval(() => {
       void network.refetchMyChains();
     }, 4_000);
     return () => window.clearInterval(intervalId);
-  }, [network.refetchMyChains, pollUnlockUid]);
+  }, [network.refetchMyChains, onboardingAccessUnconfirmed, open, pollUnlockUid]);
 
   if (!activeChain || !network.hasEstablishedNetwork) return null;
 
@@ -93,8 +110,12 @@ export function AppNetworkSwitcher({ pathname = '', onboardingOnly = false, netw
     : walletNeedsSwitch
       ? `Wallet is not on ${activeChain.chainName}`
       : '';
+  const canChooseChain = (chain) => onboardingNetworkSelection
+    ? Boolean(chain?.chainId && chain?.chainUid && !switchingRestricted)
+    : canSelectNetwork(chain, switchingRestricted);
+
   const choose = async (chain) => {
-    if (!canSelectNetwork(chain, switchingRestricted, onboardingOnly)) return;
+    if (!canChooseChain(chain)) return;
 
     const changesApplicationNetwork = chain.chainId !== activeChain.chainId;
     let applicationNetworkSelected = !changesApplicationNetwork;
@@ -168,7 +189,7 @@ export function AppNetworkSwitcher({ pathname = '', onboardingOnly = false, netw
         });
       } else {
         toast.error(`Could not unlock ${chain.chainName}`, {
-          description: getErrorMessage(error, 'Try again in a moment.'),
+          description: NETWORK_UNLOCK_FAILED_MESSAGE,
         });
       }
     } finally {
@@ -236,8 +257,8 @@ export function AppNetworkSwitcher({ pathname = '', onboardingOnly = false, netw
                   ? 'Network switching is paused during token creation. You can still review network access.'
                   : network.isNetworkLockLoading
                     ? 'Checking token status. You can review networks while switching is unavailable.'
-                    : onboardingOnly
-                      ? 'Select any supported network. Network unlocking is not required during onboarding.'
+                    : onboardingNetworkSelection
+                      ? 'Choose the network for your onboarding application. Network access will be set up through the normal onboarding process.'
                       : 'Select an unlocked network or unlock another network to use it.'}
             </span>
           </div>
@@ -252,13 +273,13 @@ export function AppNetworkSwitcher({ pathname = '', onboardingOnly = false, netw
               </div>
             </div>
           ) : null}
-          {network.isNetworkAccessError ? (
+          {!onboardingNetworkSelection && network.isNetworkAccessError ? (
             <div className="border-b border-amber-100 bg-amber-50 px-4 py-2 text-xs text-amber-800" role="status">
               Network status could not be refreshed. Unlock actions are temporarily unavailable.
             </div>
           ) : null}
           <div className="max-h-[310px] overflow-y-auto p-1.5">
-            {network.isNetworkAccessLoading && !network.myChains.length ? (
+            {!onboardingNetworkSelection && network.isNetworkAccessLoading && !network.myChains.length ? (
               <div className="flex items-center gap-2 px-3 py-4 text-xs text-slate-500" role="status">
                 <RefreshCcw size={14} className="animate-spin" /> Loading network access…
               </div>
@@ -268,9 +289,9 @@ export function AppNetworkSwitcher({ pathname = '', onboardingOnly = false, netw
               const switching = switchingChainId === chain.chainId;
               const requiredByAsset = assetNetworkNeedsSwitch && chain.chainUid === assetChainUid;
               const isUnlocked = isNetworkUnlocked(chain);
-              const selectableDuringOnboarding = onboardingOnly && !switchingRestricted;
               const isCreating = chain.identityStatus === 'CREATING' || pollUnlockUid === chain.chainUid;
               const isUnlocking = unlockingChainUid === chain.chainUid;
+              const onboardingAccessPending = isSubmittedInvestorNetwork(chain, network.investorOnboardingChainUid);
               const unlockDisabled = !canUnlockNetwork(chain, {
                 selectionLocked: switchingRestricted,
                 unlockBlocked: network.isNetworkUnlockBlocked,
@@ -292,13 +313,13 @@ export function AppNetworkSwitcher({ pathname = '', onboardingOnly = false, netw
                     type="button"
                     role="menuitemradio"
                     aria-checked={selected}
-                    aria-label={`${chain.chainName}, ${selectableDuringOnboarding ? 'supported' : isUnlocked ? 'unlocked' : isCreating ? 'setup in progress' : 'locked'}${selected ? ', selected' : ''}`}
+                    aria-label={`${chain.chainName}, ${onboardingNetworkSelection ? 'available for onboarding' : isUnlocked ? 'unlocked' : isCreating ? 'setup in progress' : onboardingAccessPending ? 'onboarding network access pending' : 'locked'}${selected ? ', selected' : ''}`}
                     className={cn(
                       'flex min-w-0 flex-1 items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
-                      (!isUnlocked && !selectableDuringOnboarding) || switchingRestricted ? 'cursor-not-allowed' : 'hover:bg-slate-100/70',
+                      !canChooseChain(chain) ? 'cursor-not-allowed' : 'hover:bg-slate-100/70',
                     )}
                     onClick={() => void choose(chain)}
-                    disabled={Boolean(switchingChainId) || !canSelectNetwork(chain, switchingRestricted, onboardingOnly)}
+                    disabled={Boolean(switchingChainId) || !canChooseChain(chain)}
                   >
                     <span className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-500">
                       {image ? <img src={image} alt="" className="size-full object-contain p-1" /> : <Network size={17} />}
@@ -314,16 +335,18 @@ export function AppNetworkSwitcher({ pathname = '', onboardingOnly = false, netw
                         <small className="mt-0.5 block text-[11px] font-medium text-amber-700">Asset network in Step 1</small>
                       ) : wallet.isConnected && wallet.chainId !== chain.chainId && selected ? (
                         <small className="mt-0.5 block text-[11px] text-amber-700">Wallet switch required</small>
+                      ) : onboardingNetworkSelection ? (
+                        <small className="mt-0.5 block text-[11px] text-slate-500">Available for onboarding</small>
                       ) : (
                         <small className={cn('mt-0.5 flex items-center gap-1 text-[11px]', isUnlocked ? 'text-emerald-700' : 'text-slate-500')}>
-                          {!onboardingOnly && (isCreating ? <RefreshCcw size={11} className="animate-spin" /> : !isUnlocked ? <Lock size={11} /> : null)}
-                          {onboardingOnly ? 'Supported' : isCreating ? 'Setting up' : isUnlocked ? 'Unlocked' : chain.identityStatus === 'FAILED' ? 'Setup failed' : 'Locked'}
+                          {isCreating ? <RefreshCcw size={11} className="animate-spin" /> : !isUnlocked ? <Lock size={11} /> : null}
+                          {isCreating ? 'Setting up' : isUnlocked ? 'Unlocked' : chain.identityStatus === 'FAILED' ? 'Setup failed' : onboardingAccessPending ? 'Onboarding network · access pending' : 'Locked'}
                         </small>
                       )}
                     </span>
                     {switching ? <RefreshCcw className="shrink-0 animate-spin text-blue-600" size={16} /> : selected ? <Check className="shrink-0 text-blue-600" size={17} /> : null}
                   </button>
-                  {!onboardingOnly && !isUnlocked ? (
+                  {!onboardingNetworkSelection && !isUnlocked && !onboardingAccessPending ? (
                     <button
                       type="button"
                       role="menuitem"

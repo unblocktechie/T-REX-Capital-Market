@@ -32,3 +32,11 @@ export const canUnlockNetwork = (chain, {
   chain.identityStatus !== 'CREATING' &&
   chain.chainUid !== pollingUid
 );
+
+/** Suppress stale Unlock only for a verified submitted investor onboarding chain. */
+export const isSubmittedInvestorNetwork = (chain, onboardingChainUid = '') => Boolean(
+  chain?.chainUid &&
+  onboardingChainUid &&
+  chain.chainUid === onboardingChainUid &&
+  chain.identityStatus === 'LOCKED'
+);

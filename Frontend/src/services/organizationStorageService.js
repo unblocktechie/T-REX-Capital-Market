@@ -28,6 +28,8 @@ export const createInitialOrganization = () => ({
   walletChainUid: '',
   walletChainId: null,
   walletNetwork: '',
+  serviceWalletAddress: '', // Legacy organization-level cache; never authorize with it.
+  tokenServiceWallets: [],
   contractAddress: '',
   selectedChainIdentity: {
     chainUid: '',

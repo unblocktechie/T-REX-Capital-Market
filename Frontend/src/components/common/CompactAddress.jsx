@@ -22,6 +22,7 @@ export function CompactAddress({
   label = 'Wallet address',
   leading = 5,
   trailing = 5,
+  showFull = false,
   className,
   href = '',
   linkLabel = '',
@@ -56,11 +57,11 @@ export function CompactAddress({
     }
   };
 
-  const shortenedValue = shortenWalletAddress(value, leading, trailing);
+  const shortenedValue = showFull ? value : shortenWalletAddress(value, leading, trailing);
   const resolvedLinkLabel = linkLabel || `View ${label.toLowerCase()} on block explorer`;
 
   return (
-    <span className={cn('compact-address', href && 'compact-address--linked', className)}>
+    <span className={cn('compact-address', href && 'compact-address--linked', showFull && 'compact-address--full', className)}>
       {href ? (
         <a
           className="compact-address__value compact-address__value--link"

@@ -22,6 +22,7 @@ export function Modal({
   bodyClassName,
   dialogStyle,
   trapFocus = false,
+  dismissible = true,
 }) {
   const titleId = useId();
   const dialogRef = useRef(null);
@@ -40,8 +41,10 @@ export function Modal({
 
     const onKeyDown = (event) => {
       if (event.key === 'Escape') {
-        event.preventDefault();
-        onCloseRef.current();
+        if (dismissible) {
+          event.preventDefault();
+          onCloseRef.current();
+        }
         return;
       }
       if (event.key !== 'Tab' || !trapFocus) return;
@@ -71,7 +74,7 @@ export function Modal({
       document.body.style.overflow = previousOverflow;
       if (trapFocus) previousFocusRef.current?.focus?.();
     };
-  }, [open, trapFocus]);
+  }, [dismissible, open, trapFocus]);
 
   if (!open) return null;
 
@@ -79,7 +82,7 @@ export function Modal({
     <div
       className="fixed inset-0 z-[1000] flex items-end justify-center bg-slate-950/45 p-0 backdrop-blur-sm sm:items-center sm:p-5"
       role="presentation"
-      onMouseDown={onClose}
+      onMouseDown={dismissible ? onClose : undefined}
     >
       <section
         ref={dialogRef}
@@ -98,14 +101,16 @@ export function Modal({
           <h2 id={titleId} className="m-0 text-lg font-semibold tracking-tight text-slate-950 sm:text-xl">
             {title}
           </h2>
-          <button
-            className="grid size-10 shrink-0 place-items-center rounded-xl border border-transparent text-slate-500 transition hover:border-slate-200 hover:bg-slate-100 hover:text-slate-900"
-            onClick={onClose}
-            aria-label="Close dialog"
-            type="button"
-          >
-            <X size={20} />
-          </button>
+          {dismissible ? (
+            <button
+              className="grid size-10 shrink-0 place-items-center rounded-xl border border-transparent text-slate-500 transition hover:border-slate-200 hover:bg-slate-100 hover:text-slate-900"
+              onClick={onClose}
+              aria-label="Close dialog"
+              type="button"
+            >
+              <X size={20} />
+            </button>
+          ) : null}
         </header>
         <div className={cn('min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6', bodyClassName)}>
           {children}

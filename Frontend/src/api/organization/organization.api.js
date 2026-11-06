@@ -108,4 +108,67 @@ export const organizationApi = Object.freeze({
     apiClient
       .patch(ORGANIZATION_ENDPOINTS.userNotified, undefined, { skipGlobalLoader: true })
       .then(unwrap),
+
+  syncServiceWallet: (serviceWalletAddress, chainUid, tokenUid) => {
+    if (!String(tokenUid || '').trim() || !String(chainUid || '').trim()) {
+      throw new Error('Select a deployed token and its network before synchronizing a Service Wallet.');
+    }
+    return apiClient
+      .put(
+        ORGANIZATION_ENDPOINTS.serviceWallet,
+        { serviceWalletAddress, tokenUid },
+        {
+          skipGlobalLoader: true,
+          skipSelectedChainHeader: true,
+          headers: chainUid ? { 'X-Chain-Uid': chainUid } : undefined,
+        },
+      )
+      .then(unwrap);
+  },
+
+  listApiKeys: () =>
+    apiClient
+      .get(ORGANIZATION_ENDPOINTS.apiKeys, {
+        skipGlobalLoader: true,
+        skipSelectedChainHeader: true,
+      })
+      // Keep the response envelope here because the API-key screen uses both
+      // the rows in `data` and capacity information from `meta`.
+      .then(unwrapEnvelope),
+
+  getApiKeyPolicyOptions: () =>
+    apiClient.get(ORGANIZATION_ENDPOINTS.apiKeyPolicyOptions, {
+      skipGlobalLoader: true,
+      skipSelectedChainHeader: true,
+    }).then(unwrap),
+
+  updateApiKeyPolicy: (issuerApiKeyUid, payload) =>
+    apiClient.put(ORGANIZATION_ENDPOINTS.apiKeyPolicy(issuerApiKeyUid), payload, {
+      skipGlobalLoader: true,
+      skipSelectedChainHeader: true,
+    }).then(unwrap),
+
+  createApiKey: (payload) =>
+    apiClient
+      .post(ORGANIZATION_ENDPOINTS.apiKeys, payload, {
+        skipGlobalLoader: true,
+        skipSelectedChainHeader: true,
+      })
+      .then(unwrap),
+
+  rotateApiKey: (issuerApiKeyUid, payload) =>
+    apiClient
+      .post(ORGANIZATION_ENDPOINTS.apiKeyRotate(issuerApiKeyUid), payload, {
+        skipGlobalLoader: true,
+        skipSelectedChainHeader: true,
+      })
+      .then(unwrap),
+
+  revokeApiKey: (issuerApiKeyUid) =>
+    apiClient
+      .delete(ORGANIZATION_ENDPOINTS.apiKey(issuerApiKeyUid), {
+        skipGlobalLoader: true,
+        skipSelectedChainHeader: true,
+      })
+      .then(unwrap),
 });

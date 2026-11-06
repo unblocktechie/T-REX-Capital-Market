@@ -30,7 +30,7 @@ export const jurisdictionSchema = z.object({
     (value) => new Date(`${value}T00:00:00`) <= today,
     'Date of Incorporation cannot be in the future.',
   ),
-  taxIdentificationNumber: z.string().trim().optional().default(''),
+  taxIdentificationNumber: requiredText('Tax ID / VAT / GST Number'),
   industry: requiredText('Industry'),
   businessActivity: requiredText('Business Activity').max(
     5000,

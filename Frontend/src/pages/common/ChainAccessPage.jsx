@@ -8,7 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useMyChains, useUnlockChain } from '@/hooks/useChains';
 import { useMyToken } from '@/hooks/useMyToken';
 import { ROLES } from '@/config/permissions';
-import { getErrorMessage } from '@/utils/error';
+import { NETWORK_SETUP_FAILED_MESSAGE, NETWORK_UNLOCK_FAILED_MESSAGE } from '@/utils/networkAccessMessages';
 import { shortenWalletAddress } from '@/utils/wallet';
 import { resolveMasterImageUrl } from '@/utils/masterImage';
 import { isTokenCreationLocked } from '@/utils/tokenCreationLock';
@@ -79,7 +79,7 @@ export default function ChainAccessPage() {
         });
         return;
       }
-      toast.error('Network could not be unlocked', { description: getErrorMessage(error, 'Try again in a moment.') });
+      toast.error('Network could not be unlocked', { description: NETWORK_UNLOCK_FAILED_MESSAGE });
     }
   };
 
@@ -111,7 +111,7 @@ export default function ChainAccessPage() {
           const unlockDisabled = busy || issuerNetworkUnlockBlocked;
           const imageUrl = resolveMasterImageUrl(chain);
           return (
-            <article key={chain.chainUid} className="flex min-h-72 flex-col rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:p-6">
+            <article key={chain.chainUid} className="flex min-h-72 min-w-0 flex-col rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:p-6">
               <div className="flex items-start justify-between gap-3">
                 <span className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-950 text-white">
                   {imageUrl ? <img src={imageUrl} alt="" className="size-full bg-white object-contain p-1.5" /> : <Network size={22} />}
@@ -122,14 +122,14 @@ export default function ChainAccessPage() {
                 <h2 className="mb-1 text-lg font-semibold">{chain.chainName}</h2>
                 <p className="m-0 text-sm text-slate-500">Chain ID {chain.chainId} · {chain.nativeCurrencySymbol}{chain.isTestnet ? ' · Testnet' : ''}</p>
               </div>
-              <div className="mt-4 min-h-14 rounded-2xl bg-slate-50 p-3 text-sm text-slate-600">
+              <div className="mt-4 min-h-14 min-w-0 rounded-2xl bg-slate-50 p-3 text-sm leading-6 text-slate-600">
                 {chain.identityStatus === 'CREATED' ? <><span className="block text-xs text-slate-400">ONCHAINID</span><strong className="mt-1 block font-mono text-xs text-slate-700" title={chain.identityAddress}>{shortenWalletAddress(chain.identityAddress, 9, 9) || 'Created'}</strong></> : null}
-                {chain.identityStatus === 'FAILED' ? <span>{chain.identityErrorMessage || 'Identity creation did not complete. You can retry safely.'}</span> : null}
+                {chain.identityStatus === 'FAILED' ? <span>{NETWORK_SETUP_FAILED_MESSAGE}</span> : null}
                 {chain.identityStatus === 'LOCKED' ? <span>{issuerTokenLocksNetworks ? 'This network cannot be unlocked because token creation has already started for this issuer.' : issuerTokenGuardUnavailable ? 'Network changes are temporarily unavailable because token status could not be verified. Refresh and try again.' : issuerTokenGuardLoading ? 'Checking your token status before allowing network changes…' : 'Unlock this network before creating or managing regulated assets on it.'}</span> : null}
                 {chain.identityStatus === 'CREATING' ? <span>Creation is in progress. This page will refresh automatically.</span> : null}
               </div>
-              <div className="mt-auto flex items-center gap-2 pt-5">
-                {chain.isUnlocked ? <div className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-50 px-3 text-sm font-semibold text-emerald-700"><ShieldCheck size={16} /> Ready</div> : <Button className="button--full" loading={busy} disabled={unlockDisabled} onClick={() => unlockChain(chain)}>{issuerTokenLocksNetworks ? 'Network locked' : issuerTokenGuardLoading ? 'Checking token status' : issuerTokenGuardUnavailable ? 'Unlock unavailable' : chain.identityStatus === 'FAILED' ? 'Retry unlock' : 'Unlock network'}</Button>}
+              <div className="mt-auto flex min-w-0 items-center gap-2 pt-5">
+                {chain.isUnlocked ? <div className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-50 px-3 text-sm font-semibold text-emerald-700"><ShieldCheck size={16} /> Ready</div> : <Button className="button--full min-w-0" loading={busy} disabled={unlockDisabled} onClick={() => unlockChain(chain)}>{issuerTokenLocksNetworks ? 'Network locked' : issuerTokenGuardLoading ? 'Checking token status' : issuerTokenGuardUnavailable ? 'Unlock unavailable' : chain.identityStatus === 'FAILED' ? 'Retry unlock' : 'Unlock network'}</Button>}
                 {chain.explorerUrl ? <a className="grid size-10 shrink-0 place-items-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" href={chain.explorerUrl} target="_blank" rel="noreferrer" aria-label={`Open ${chain.chainName} explorer`}><ExternalLink size={16} /></a> : null}
               </div>
             </article>

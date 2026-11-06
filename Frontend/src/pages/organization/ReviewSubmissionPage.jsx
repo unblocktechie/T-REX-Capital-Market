@@ -60,16 +60,10 @@ export default function ReviewSubmissionPage() {
   const persistedChainUid = useNetworkStore((state) => state.activeChainUidByUser[userKey] || '');
   const setActiveChainId = useNetworkStore((state) => state.setActiveChainId);
   const publicChains = usePublicChains();
-  // Both the header and final-review picker use the same persisted onboarding
-  // choice, including networks that do not require unlocking yet.
   const selectedChain = (publicChains.data || []).find((item) =>
-    item.chainUid === persistedChainUid || (!persistedChainUid && item.chainId === Number(persistedChainId))
+    item.chainUid === persistedChainUid || (!persistedChainUid && item.chainId === Number(persistedChainId)),
   ) || publicChains.data?.[0] || null;
   const selectedChainUid = selectedChain?.chainUid || '';
-  const selectChain = (chainUid) => {
-    const chain = (publicChains.data || []).find((item) => item.chainUid === chainUid);
-    if (chain) setActiveChainId(user, chain.chainId, chain.chainUid);
-  };
   const wallet = useWalletConnection(selectedChain?.chainId);
   const setWalletRequiredChainId = useUiStore((state) => state.setWalletRequiredChainId);
   const { organization, refresh, saveConfirmations, setCurrentStep, submit } = useOrganization();
@@ -353,7 +347,10 @@ export default function ReviewSubmissionPage() {
                 id="organization-onboarding-chain"
                 chains={publicChains.data || []}
                 value={selectedChainUid}
-                onChange={(event) => selectChain(event.target.value)}
+                onChange={(event) => {
+                  const chain = (publicChains.data || []).find((item) => item.chainUid === event.target.value);
+                  if (chain) setActiveChainId(user, chain.chainId, chain.chainUid);
+                }}
                 disabled={submitting || publicChains.isPending}
                 label="First network"
                 description="Your organization ONCHAINID will be created on this network after administrator approval."

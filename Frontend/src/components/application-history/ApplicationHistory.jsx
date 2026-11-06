@@ -276,17 +276,27 @@ export function ApplicationHistoryItem({
                   ) : null}
                 </div>
                 <div className="application-history-issuer-step-events" aria-label="Step 2 confirmations">
-                  <div>
-                    <CheckCircle2 size={16} aria-hidden="true" />
-                    <span><strong>Required Claims Verified</strong>
-                      <small>{formatDate(combinedIssuerStep.verification.createdAt, 'MMM DD, YYYY hh:mm A')}</small>
+                  <div className="application-history-issuer-step-event">
+                    <span className="application-history-issuer-step-event__icon" aria-hidden="true">
+                      <CheckCircle2 size={17} />
                     </span>
+                    <div className="application-history-issuer-step-event__content">
+                      <strong>Required Claims Verified</strong>
+                      <time dateTime={combinedIssuerStep.verification.createdAt}>
+                        {formatDate(combinedIssuerStep.verification.createdAt, 'MMM DD, YYYY hh:mm A')}
+                      </time>
+                    </div>
                   </div>
-                  <div>
-                    <CheckCircle2 size={16} aria-hidden="true" />
-                    <span><strong>Identity Registry Registration Confirmed</strong>
-                      <small>{formatDate(combinedIssuerStep.registration.createdAt, 'MMM DD, YYYY hh:mm A')}</small>
+                  <div className="application-history-issuer-step-event">
+                    <span className="application-history-issuer-step-event__icon" aria-hidden="true">
+                      <CheckCircle2 size={17} />
                     </span>
+                    <div className="application-history-issuer-step-event__content">
+                      <strong>Identity Registry Registration Confirmed</strong>
+                      <time dateTime={combinedIssuerStep.registration.createdAt}>
+                        {formatDate(combinedIssuerStep.registration.createdAt, 'MMM DD, YYYY hh:mm A')}
+                      </time>
+                    </div>
                   </div>
                 </div>
               </>

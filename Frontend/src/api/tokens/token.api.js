@@ -1,6 +1,7 @@
 import { apiClient } from '@/api/axios';
 import { assertValidTransactionHash } from '@/utils/transactionHash';
 import { TOKEN_ENDPOINTS } from './token.endpoints';
+import { normalizePriceHistoryQuery, normalizePriceHistoryResponse } from '@/services/price-history/priceHistory.utils';
 
 const DEPLOYMENT_IDEMPOTENCY_KEY_MAX_LENGTH = 99;
 
@@ -77,21 +78,80 @@ export const tokenApi = Object.freeze({
       .then((response) => response.data),
 
 
-  updateCurrentPrice: (currentTokenPrice) => {
+  prepareManualPrice: (currentTokenPrice, chainUid, signal) =>
+    apiClient.post(
+      TOKEN_ENDPOINTS.pricePrepare,
+      { currentTokenPrice: normalizeCurrentTokenPrice(currentTokenPrice) },
+      {
+        skipGlobalLoader: true,
+        skipSelectedChainHeader: true,
+        headers: { 'Content-Type': 'application/json', 'X-Chain-Uid': requiredText(chainUid, 'Original chain UID') },
+        ...(signal ? { signal } : {}),
+      },
+    ).then((response) => {
+      if (response.status !== 200) throw new Error('The price request was not prepared.');
+      return unwrap(response);
+    }),
+
+  getManualPriceUpdate: (priceUpdateUid, chainUid, signal) =>
+    apiClient.get(TOKEN_ENDPOINTS.priceUpdateStatus(requiredText(priceUpdateUid, 'Price request ID')), {
+      skipGlobalLoader: true, skipSelectedChainHeader: true,
+      headers: { 'X-Chain-Uid': requiredText(chainUid, 'Original chain UID') },
+      ...(signal ? { signal } : {}),
+    }).then(unwrap),
+
+  // The backend never treats an HTTP success as proof of cancellation. The
+  // issuer must explicitly confirm that this intent was not broadcast.
+  cancelManualPrice: (priceUpdateUid, chainUid, { confirmNotBroadcast = false } = {}) => {
+    if (confirmNotBroadcast !== true) {
+      throw new Error('Confirm that you did not sign or broadcast this transaction before cancelling.');
+    }
+    return apiClient.post(TOKEN_ENDPOINTS.priceCancel(requiredText(priceUpdateUid, 'Price request ID')),
+      { confirmNotBroadcast: true }, {
+        skipGlobalLoader: true, skipSelectedChainHeader: true,
+        headers: { 'Content-Type': 'application/json', 'X-Chain-Uid': requiredText(chainUid, 'Original chain UID') },
+      }).then(unwrap);
+  },
+
+  updateCurrentPrice: (currentTokenPrice, txHash, chainUid, priceUpdateUid, signal) => {
     const normalized = normalizeCurrentTokenPrice(currentTokenPrice);
-    // Send a raw JSON numeric literal so values with up to 18 decimal places are not
-    // rounded by JavaScript's Number representation before they reach the API.
+    const transactionHash = assertValidTransactionHash(txHash);
+    const selectedChainUid = requiredText(chainUid, 'Transaction chain UID');
+    const savedIntentUid = requiredText(priceUpdateUid, 'Prepared price request ID');
     return apiClient
       .patch(
         TOKEN_ENDPOINTS.price,
-        `{"currentTokenPrice":${normalized}}`,
+        { priceUpdateUid: savedIntentUid, currentTokenPrice: normalized, txHash: transactionHash },
         {
           skipGlobalLoader: true,
-          headers: { 'Content-Type': 'application/json' },
+          skipSelectedChainHeader: true,
+          headers: { 'Content-Type': 'application/json', 'X-Chain-Uid': selectedChainUid },
+          ...(signal ? { signal } : {}),
         },
       )
-      .then(unwrap);
+      .then((response) => {
+        if (response.status !== 200 && response.status !== 202) {
+          throw new Error(`Unexpected price verification response: HTTP ${response.status}.`);
+        }
+        return {
+          pending: response.status === 202,
+          status: response.status === 202 ? String(unwrap(response)?.status || 'PENDING') : 'CONFIRMED',
+          token: response.status === 202 ? null : unwrap(response),
+          priceUpdateUid: savedIntentUid,
+          txHash: transactionHash,
+        };
+      });
   },
+
+  // Uses the active website-session JWT (issuer or investor as authorized by the backend); never an issuer API key.
+  getMyPriceHistory: (filters = {}, signal) =>
+    apiClient
+      .get(TOKEN_ENDPOINTS.priceHistory, {
+        params: normalizePriceHistoryQuery(filters),
+        skipGlobalLoader: true,
+        ...(signal ? { signal } : {}),
+      })
+      .then((response) => normalizePriceHistoryResponse(response.data)),
 
   saveClaims: (payload) =>
     apiClient

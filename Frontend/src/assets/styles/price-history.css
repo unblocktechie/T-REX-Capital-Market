@@ -1,0 +1,464 @@
+/* Read-only issuer audit and public investor price-event panels. */
+.price-history-panel {
+  min-width: 0;
+  margin: 18px 0 22px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+.price-history-panel--investor { margin: 0; }
+.price-history-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 20px;
+  min-width: 0;
+}
+.price-history-heading__icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 38px;
+  height: 38px;
+  border-radius: 11px;
+  color: var(--text-soft);
+  background: var(--surface-muted);
+}
+.price-history-heading__copy { flex: 1 1 0; min-width: 0; }
+.price-history-heading__copy h2 {
+  margin: 0 0 3px;
+  font-size: 17px;
+  line-height: 1.4;
+}
+.price-history-heading__copy p { margin: 0; font-size: 13px; line-height: 1.55; color: var(--text-soft); }
+.price-history-heading > .button { flex: 0 0 auto; min-height: 38px; }
+.price-history-note {
+  margin: 0 20px 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-muted);
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.price-history-note strong { color: var(--text); }
+.price-history-list { min-width: 0; border-top: 1px solid var(--border); container: price-history-table / inline-size; }
+.price-history-column-headings,
+.price-history-row {
+  display: grid;
+  grid-template-columns: minmax(125px, 1.26fr) minmax(110px, 1fr) minmax(145px, 1.17fr) minmax(105px, .8fr) minmax(91px, .74fr) minmax(120px, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 12px 20px;
+  min-width: 0;
+}
+.price-history-column-headings { background: var(--surface-muted); color: var(--text-soft); font-size: 11px; font-weight: 700; }
+.price-history-row { border-top: 1px solid var(--border); font-size: 12px; line-height: 1.55; }
+.price-history-cell { min-width: 0; overflow-wrap: anywhere; color: var(--text-soft); }
+.price-history-cell strong { display: block; font-size: 12px; color: var(--text); font-weight: 650; }
+.price-history-cell--date small { display: block; margin-top: 4px; font-size: 11px; }
+/* Shared semantic badges for issuer, investor, and public event histories. */
+.price-history-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--chip-tone) 26%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--chip-tone) 10%, var(--surface));
+  color: var(--chip-tone);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.price-history-method--manual { --chip-tone: #426f9e; }
+.price-history-method--automated { --chip-tone: #26816d; }
+.price-history-method--onchain { --chip-tone: #735d9c; }
+.price-history-method--unknown,
+.price-history-status--neutral { --chip-tone: var(--text-soft); }
+.price-history-status--success { --chip-tone: var(--success-500); }
+.price-history-status--warning { --chip-tone: var(--warning-500); }
+.price-history-status--danger { --chip-tone: var(--danger-500); }
+/* Cancelled uses the same blue tone as the Manual method chip. */
+.price-history-status--info { --chip-tone: #426f9e; }
+.price-history-new-value {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  column-gap: 8px;
+  row-gap: 3px;
+  max-width: 100%;
+}
+.price-history-direction {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 23px;
+  height: 23px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--direction-tone) 10%, var(--surface));
+  color: var(--direction-tone);
+}
+.price-history-direction--up { --direction-tone: var(--success-500); }
+.price-history-direction--down { --direction-tone: var(--danger-500); }
+.dark .price-history-method--manual,
+.dark .price-history-status--info { --chip-tone: #99bee6; }
+.dark .price-history-method--automated { --chip-tone: #7bd2b1; }
+.dark .price-history-method--onchain { --chip-tone: #b9a3e8; }
+.price-history-price {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  color: var(--text);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.price-history-price > .token-icon { flex-shrink: 0; }
+.price-history-price__amount { min-width: 0; overflow-wrap: anywhere; }
+.price-history-price:focus-visible { border-radius: 4px; outline: 2px solid var(--primary-600); outline-offset: 2px; }
+.price-history-currency { font-weight: 500; color: var(--text-soft); white-space: nowrap; }
+.price-history-transaction { display: inline-flex; align-items: center; gap: 5px; color: var(--primary-600); font-weight: 650; font-size: 12px; border-radius: 4px; }
+.price-history-transaction:hover { text-decoration: underline; }
+.price-history-transaction:focus-visible { outline: 2px solid var(--primary-600); outline-offset: 3px; }
+.price-history-transaction svg { flex: 0 0 auto; }
+.price-history-row-error { grid-column: 1 / -1; margin: 0; color: var(--danger-500); font-size: 12px; }
+.price-history-message { padding: 28px 20px; text-align: center; border-top: 1px solid var(--border); color: var(--text-soft); font-size: 13px; }
+.price-history-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+}
+.price-history-pagination small { color: var(--text-soft); font-size: 12px; }
+.price-history-pagination__controls { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 6px; }
+.price-history-pagination__page {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 36px; min-height: 36px; padding: 5px 8px;
+  border: 1px solid var(--border); border-radius: 9px;
+  background: var(--surface); color: var(--text); font: inherit; font-size: 12px; font-weight: 650;
+  cursor: pointer; font-variant-numeric: tabular-nums;
+}
+.price-history-pagination__page:hover:not(:disabled) { background: var(--surface-muted); }
+.price-history-pagination__page.is-active {
+  color: var(--primary-600); border-color: var(--primary-500);
+  background: color-mix(in srgb, var(--primary-500) 9%, var(--surface));
+}
+.price-history-pagination__page:focus-visible { outline: 2px solid var(--primary-600); outline-offset: 2px; }
+.price-history-pagination__page:disabled { cursor: not-allowed; opacity: .55; }
+.price-history-list--public .price-history-column-headings,
+.price-history-list--public .price-history-row { grid-template-columns: minmax(115px, 1.2fr) minmax(105px, 1fr) minmax(135px, 1.2fr) minmax(92px, .8fr) minmax(88px, .72fr) minmax(115px, 1fr); }
+@container price-history-table (max-width: 950px) {
+  .price-history-column-headings { display: none; }
+  .price-history-row { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 12px; }
+  .price-history-cell--transaction { grid-column: 1 / -1; }
+  .price-history-cell::before { content: attr(data-label); display: block; margin-bottom: 4px; font-size: 11px; font-weight: 650; color: var(--text-muted); }
+  .price-history-list--public .price-history-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 680px) {
+  .price-history-heading { flex-wrap: wrap; padding: 15px; gap: 10px; }
+  .price-history-heading__copy { flex: 1 1 calc(100% - 55px); }
+  .price-history-heading > .button { margin-left: 48px; width: calc(100% - 48px); justify-content: center; }
+  .price-history-note { margin: 0 15px 12px; }
+  .price-history-row { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px 10px; padding: 14px 15px; }
+  .price-history-list--public .price-history-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .price-history-message { padding: 23px 15px; }
+  .price-history-pagination { padding: 14px 15px; align-items: stretch; flex-wrap: wrap; }
+  .price-history-pagination__controls { width: 100%; justify-content: center; }
+  .price-history-pagination__controls .button { flex: 1 1 auto; }
+}
+@container price-history-table (max-width: 440px) {
+  .price-history-row,
+  .price-history-list--public .price-history-row { grid-template-columns: minmax(0, 1fr); }
+  .price-history-cell--transaction { grid-column: auto; }
+}
+/* Provider limitations should not be mistaken for a failed investment or price update. */
+.price-history-message--notice {
+  padding: 11px 20px;
+  text-align: left;
+  background: var(--surface-muted);
+}
+@media (max-width: 680px) {
+  .price-history-message--notice { padding: 12px 15px; }
+}
+.price-history-fallback-link { margin-top: 9px; }
+
+/* Three-row preview and dedicated history table */
+.price-history-cell--wallet { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11px; }
+.price-history-cell--wallet span { overflow-wrap: anywhere; }
+.price-history-full-link {
+  flex: 0 0 auto; align-self: center; text-decoration: none; font-size: 13px;
+  font-weight: 700; color: var(--primary-600); border-radius: 8px; padding: 9px 10px;
+}
+.price-history-full-link:hover { background: var(--surface-muted); text-decoration: underline; }
+.price-history-full-link:focus-visible { outline: 2px solid var(--primary-600); outline-offset: 2px; }
+/* Match the 1360px Asset Details content container without widening other views. */
+.price-history-full-page { width: 100%; max-width: 1360px; box-sizing: border-box; margin: 0 auto; padding: 24px clamp(12px, 2vw, 28px) 36px; min-width: 0; }
+.price-history-full-page__heading h1 { font-size: clamp(22px, 3vw, 30px); line-height: 1.2; margin: 5px 0 7px; }
+.price-history-full-page__heading p { color: var(--text-soft); font-size: 13px; line-height: 1.6; max-width: 72ch; margin: 0; }
+.price-history-full-page .price-history-panel { margin-top: 20px; }
+
+/* Price history controls and chart layout. */
+.price-history-range { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 20px 14px; }
+.price-history-range button { appearance: none; cursor: pointer; border: 1px solid var(--border); background: var(--surface); color: var(--text-soft); border-radius: 8px; padding: 9px 12px; min-height: 40px; font: inherit; font-size: 12px; font-weight: 650; }
+.price-history-range button.is-active { background: var(--surface-muted); color: var(--text); border-color: var(--primary-600); }
+.price-history-range button:focus-visible { outline: 2px solid var(--primary-600); outline-offset: 2px; }
+.price-history-chart__body { padding: 8px 20px 20px; border-top: 1px solid var(--border); min-width: 0; }
+.price-history-chart__visual { width: 100%; min-width: 0; }
+/* Recharts owns its responsive SVG sizing; don't force all nested SVGs to stretch. */
+.price-history-chart__plot { width: 100%; height: 270px; min-width: 0; }
+.price-history-chart__plot .recharts-surface { overflow: visible; }
+.price-history-chart__visual circle { cursor: pointer; }
+.price-history-chart__visual circle:focus { outline: none; stroke-width: 5; }
+.price-history-chart__axis { display: flex; justify-content: space-between; gap: 10px; font-size: 11px; color: var(--text-soft); }
+.price-history-chart__details { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin-top: 16px; padding: 12px 14px; background: var(--surface-muted); border-radius: 10px; overflow-wrap: anywhere; }
+.price-history-chart__details span { color: var(--text-soft); font-size: 12px; }
+.price-history-chart__details strong { color: var(--text); font-size: 16px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.price-history-chart__details small { color: var(--text-soft); font-size: 12px; }
+.price-history-chart__hint { margin: 12px 0 0; font-size: 11px; line-height: 1.6; color: var(--text-soft); }
+@media (max-width: 680px) {
+  .price-history-heading .price-history-full-link { margin-left: 46px; }
+  .price-history-range { padding: 0 15px 12px; }
+  .price-history-range button { flex: 1 1 0; min-width: 0; white-space: nowrap; }
+  .price-history-chart__body { padding: 10px 15px 16px; }
+  .price-history-chart__details { align-items: flex-start; flex-direction: column; }
+  .price-history-full-page { padding: 18px 12px 28px; }
+}
+@media (max-width: 365px) {
+  .price-history-heading .price-history-full-link { margin-left: 0; }
+  .price-history-chart__axis { font-size: 10px; }
+}
+
+/* Single interactive price line, themed consistently across issuer and investor charts. */
+.price-history-chart__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  padding: 0 20px 14px;
+}
+.price-history-chart__toolbar .price-history-range { padding: 0; }
+.price-history-chart__toolbar .price-history-range button.is-active {
+  background: color-mix(in srgb, var(--primary-500) 12%, var(--surface));
+  border-color: var(--primary-500);
+  color: var(--primary-600);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary-500) 12%, transparent);
+}
+.price-history-chart__legend {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-soft);
+  flex-wrap: wrap;
+  white-space: normal;
+}
+.price-history-chart {
+  --price-history-line: #6c91f7;
+}
+.price-history-chart__legend-item { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; font-size: 11px; }
+.price-history-chart__legend-item i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.price-history-chart__legend-item.is-line { color: var(--price-history-line); }
+.price-history-chart__legend-dot {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--primary-600);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-500) 13%, transparent);
+}
+.price-history-chart__count {
+  margin-left: 6px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  background: var(--surface-muted);
+  font-size: 11px;
+}
+.price-history-chart__body { padding-top: 14px; }
+.price-history-chart__visual { position: relative; overflow: visible; }
+.price-history-chart__plot { height: 310px; }
+.price-history-chart__day-tick { fill: var(--text-soft); font-size: 11px; font-weight: 600; }
+.price-history-chart__plot .recharts-xAxis { pointer-events: none; }
+.price-history-chart__tick { fill: var(--text-soft); font-size: 11px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.price-history-chart__plot .recharts-tooltip-wrapper { z-index: 5; pointer-events: none; }
+.price-history-chart__crosshair { stroke: var(--primary-500); stroke-opacity: .32; stroke-width: 1.5; stroke-dasharray: 4 5; pointer-events: none; }
+.price-history-chart__point { cursor: pointer; outline: none; }
+.price-history-chart__segment {
+  fill: none;
+  stroke: var(--price-history-line);
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.price-history-chart__point { --point-color: var(--price-history-line); }
+.price-history-chart__point-halo { fill: color-mix(in srgb, var(--point-color) 16%, transparent); }
+.price-history-chart__point-dot { fill: var(--surface); stroke: var(--point-color); stroke-width: 2.6; transition: stroke-width .16s ease, r .16s ease; }
+.price-history-chart__point.is-active .price-history-chart__point-dot { fill: var(--point-color); stroke: var(--surface); stroke-width: 2.7; }
+.price-history-chart__point:focus-visible .price-history-chart__point-halo { stroke: var(--point-color); stroke-width: 2; }
+/* Two-decimal price labels for <=10 points, or the selected point on denser charts.
+   Text never intercepts point selection or mouse hover. */
+.price-history-chart__point-price {
+  fill: var(--text);
+  stroke: var(--surface);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  paint-order: stroke fill;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+  pointer-events: none;
+}
+.price-history-chart__plot-scroll {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.price-history-chart__plot-scroll:focus-visible {
+  outline: 2px solid var(--primary-500);
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+
+.price-history-chart__axis { padding: 0 18px 0 62px; line-height: 1.45; }
+.price-history-chart__details {
+  align-items: center;
+  margin-top: 14px;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--primary-500) 12%, var(--border));
+  background: color-mix(in srgb, var(--primary-500) 4%, var(--surface));
+}
+.price-history-chart__details-label { font-weight: 650; }
+.price-history-chart__details .price-history-price { font-size: 18px; }
+.price-history-chart__details small { margin-left: auto; }
+@media (max-width: 680px) {
+  .price-history-chart__toolbar { padding: 0 15px 12px; gap: 12px; }
+  .price-history-chart__toolbar .price-history-range { width: 100%; }
+  .price-history-chart__legend { white-space: normal; }
+  .price-history-chart__body { padding-top: 12px; }
+  .price-history-chart__plot { height: 285px; }
+  .price-history-chart__day-tick { font-size: 10px; }
+  .price-history-chart__axis { padding-left: 48px; font-size: 10px; }
+  .price-history-chart__details small { margin-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .price-history-chart__point-dot { transition: none; }
+}
+
+.price-history-chart__tooltip {
+  position: relative;
+  z-index: 2;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: min(220px, calc(100vw - 40px));
+  padding: 8px 11px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-md);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+.price-history-chart__tooltip span { color: var(--text-soft); font-size: 10px; }
+.price-history-chart__tooltip strong { color: var(--primary-600); font-size: 12px; }
+
+@media (max-width: 920px) {
+  .price-history-chart__toolbar { justify-content: flex-start; }
+  .price-history-chart__legend { flex: 1 1 100%; }
+}
+
+/* Admin history: compact rounded pagination consistent with investor UI.
+   Scoped to this panel to leave issuer/investor history controls unchanged. */
+.price-history-panel--admin .price-history-pagination__page {
+  box-sizing: border-box;
+  flex: 0 0 36px;
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  border-radius: 50%;
+}
+.price-history-panel--admin .price-history-pagination__page.is-active {
+  color: #fff;
+  border-color: #0f172a;
+  background: #0f172a;
+}
+.price-history-panel--admin .price-history-pagination__controls > button:not(.price-history-pagination__page) {
+  border-radius: 9999px;
+}
+@media (max-width: 480px) {
+  .price-history-panel--admin .price-history-pagination__controls > button:not(.price-history-pagination__page) {
+    padding-inline: 8px;
+  }
+}
+
+@media (max-width: 640px) {
+  .price-history-panel--admin .price-history-pagination {
+    flex-direction: column;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .price-history-panel--admin .price-history-pagination small { text-align: center; }
+  .price-history-panel--admin .price-history-pagination__controls {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Admin modal: place time-window filters and view mode on one responsive toolbar. */
+.price-history-panel--admin .admin-history-controls {
+  gap: 10px 16px;
+  padding: 14px 16px;
+}
+.price-history-panel--admin .admin-history-controls .price-history-range {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0;
+}
+.price-history-panel--admin .admin-history-controls .price-history-range button {
+  flex: 0 0 auto;
+}
+@media (max-width: 560px) {
+  .price-history-panel--admin .admin-history-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .price-history-panel--admin .admin-history-controls .price-history-range {
+    width: 100%;
+  }
+  .price-history-panel--admin .admin-history-controls .price-history-range button {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .price-history-panel--admin .admin-history-controls > [role="group"]:last-child {
+    align-self: flex-end;
+  }
+}
+
+/* Sorting remains available in the compact/mobile admin history card view. */
+.price-history-panel--admin .admin-history-mobile-sort { display: none; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+@container price-history-table (max-width: 950px) {
+  .price-history-panel--admin .admin-history-mobile-sort { display: block; }
+}

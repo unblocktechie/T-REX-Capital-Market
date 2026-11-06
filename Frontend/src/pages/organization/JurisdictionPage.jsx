@@ -175,6 +175,7 @@ export default function JurisdictionPage() {
             />
             <Input
               label="Tax ID / VAT / GST Number"
+              required
               placeholder="Enter tax, VAT, or GST identifier"
               error={errors.taxIdentificationNumber?.message}
               {...form.register('taxIdentificationNumber')}

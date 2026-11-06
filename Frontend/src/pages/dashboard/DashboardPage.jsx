@@ -686,7 +686,6 @@ function IssuerDashboardPage() {
               <p className="issuer-dashboard-hero-live__intro">Your investment asset is ready to manage.</p>
               <div className="issuer-dashboard-asset-line">
                 <strong>{tokenName}{tokenSymbol ? ` (${tokenSymbol})` : ''}</strong>
-                <Badge tone={tokenStatus.tone}>{tokenStatus.label}</Badge>
               </div>
             </>
           ) : (
