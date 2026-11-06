@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -26,7 +26,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { adminApi } from '@/api/admin';
 import { AdminActivityTimeline } from '@/components/admin/AdminActivityTimeline';
@@ -44,11 +44,27 @@ import { getErrorMessage, sanitizeUserFacingMessage } from '@/utils/error';
 export default function OrganizationReviewPage() {
   const { organizationId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const requestedBack = location.state?.from;
+  const backRoute = requestedBack === ROUTES.adminOrganizations || requestedBack === ROUTES.adminReviewQueue
+    || requestedBack === ROUTES.adminTokens || requestedBack === ROUTES.adminInvestorApplications
+    || (typeof requestedBack === 'string' && /^\/admin\/investors\/[a-zA-Z0-9-]+$/.test(requestedBack))
+    ? requestedBack : ROUTES.adminReviewQueue;
+  const backLabel = backRoute === ROUTES.adminOrganizations ? 'Back to organizations'
+    : backRoute === ROUTES.adminReviewQueue ? 'Back to review queue'
+      : backRoute === ROUTES.adminTokens ? 'Back to platform tokens'
+        : backRoute === ROUTES.adminInvestorApplications ? 'Back to investor applications' : 'Back to investor details';
   const queryClient = useQueryClient();
   const [approveOpen, setApproveOpen] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState(null);
   const [decisionSuccess, setDecisionSuccess] = useState(false);
+
+  // Detail pages must open at the top even when linked from a scrolled table.
+  // Run before paint to avoid briefly showing the previous scroll position.
+  useLayoutEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [organizationId]);
 
   const organizationQuery = useQuery({
     queryKey: ['admin', 'organization', organizationId],
@@ -108,7 +124,7 @@ export default function OrganizationReviewPage() {
           <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-rose-50 text-rose-600"><ShieldAlert className="size-6" /></span>
           <h2 className="mt-4 mb-2 text-xl font-semibold">Organization unavailable</h2>
           <p className="m-0 text-sm text-slate-500">{sanitizeUserFacingMessage(organizationQuery.error?.message) || 'This organization could not be loaded.'}</p>
-          <button type="button" onClick={() => navigate(ROUTES.adminReviewQueue)} className="mt-5 min-h-11 rounded-xl bg-slate-950 px-5 text-sm font-semibold text-white">Return to review queue</button>
+          <button type="button" onClick={() => navigate(backRoute, { state: location.state?.backState })} className="mt-5 min-h-11 rounded-xl bg-slate-950 px-5 text-sm font-semibold text-white">{backLabel}</button>
         </div>
       </div>
     );
@@ -134,21 +150,21 @@ export default function OrganizationReviewPage() {
   return (
     <div className="space-y-6">
       <motion.header initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-[20px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-        <Link to={ROUTES.adminReviewQueue} className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 transition hover:text-slate-950"><ArrowLeft className="size-4" />Back to review queue</Link>
-        <div className="mt-4 flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+        <Link to={backRoute} state={location.state?.backState} className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 transition hover:text-slate-950"><ArrowLeft className="size-4" />{backLabel}</Link>
+        <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex min-w-0 items-start gap-4">
-            <span className="grid size-14 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-slate-950 to-slate-700 text-base font-semibold text-white shadow-lg">{organization.logo}</span>
+            <span className="grid size-14 shrink-0 place-items-center rounded-full bg-gradient-to-br from-slate-950 to-slate-700 text-base font-semibold text-white shadow-lg">{organization.logo}</span>
             <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="m-0 break-words text-2xl font-semibold tracking-normal text-slate-950 sm:text-3xl">{organization.name}</h2>
-                <AdminStatusBadge status={organization.status} />
-              </div>
+              <h2 className="m-0 break-words text-2xl font-semibold tracking-normal text-slate-950 sm:text-3xl">{organization.name}</h2>
               <p className="mt-2 mb-0 text-sm leading-6 text-slate-500">{organization.registrationNumber || 'Registration number not provided'} · Submitted {formatAdminDateTime(organization.submittedAt)}</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-blue-700"><ClipboardCheck className="size-3.5" />{documents.length} documents</span>
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-xs font-semibold text-violet-700"><UserRound className="size-3.5" />{owners.length} beneficial owners</span>
               </div>
             </div>
+          </div>
+          <div className="shrink-0 self-end sm:ml-4 sm:self-start" aria-label="Organization review status">
+            <AdminStatusBadge status={organization.status} />
           </div>
         </div>
       </motion.header>

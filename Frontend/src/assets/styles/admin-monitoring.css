@@ -1,0 +1,157 @@
+/* Admin monitoring: scoped styles for the shared accessible filter dropdown.
+   Menus are portalled, so they need their own class for consistent styling. */
+.admin-monitor-filter.marketplace-dropdown {
+  width: 100%;
+  min-width: 0;
+}
+
+.admin-monitor-filter .marketplace-dropdown__trigger {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  justify-content: flex-start;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  padding: 0 12px;
+  color: #334155;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 3%);
+}
+
+.admin-monitor-filter .marketplace-dropdown__trigger:hover,
+.admin-monitor-filter .marketplace-dropdown__trigger.is-open {
+  border-color: #93c5fd;
+  background: #f8fafc;
+}
+
+.admin-monitor-filter .marketplace-dropdown__trigger:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgb(37 99 235 / 10%);
+}
+
+.admin-monitor-filter .marketplace-dropdown__value {
+  font-size: 14px;
+  font-weight: 500;
+  color: #334155;
+}
+
+.admin-monitor-filter .marketplace-dropdown__trigger > svg:first-child {
+  color: #64748b;
+}
+
+.admin-monitor-filter--selected .marketplace-dropdown__trigger {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.admin-monitor-filter--selected .marketplace-dropdown__value,
+.admin-monitor-filter--selected .marketplace-dropdown__trigger > svg:first-child {
+  color: #1d4ed8;
+}
+
+.marketplace-dropdown__menu.admin-monitor-filter__menu {
+  box-sizing: border-box;
+  z-index: 1900;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fff;
+  padding: 6px;
+  box-shadow: 0 20px 45px rgb(15 23 42 / 15%);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.admin-monitor-filter__menu .marketplace-dropdown__option {
+  min-height: 42px;
+  border-radius: 9px;
+  padding: 9px 12px;
+  color: #334155;
+}
+
+.admin-monitor-filter__menu .marketplace-dropdown__option:hover,
+.admin-monitor-filter__menu .marketplace-dropdown__option:focus-visible,
+.admin-monitor-filter__menu .marketplace-dropdown__option.is-active {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.admin-monitor-filter__menu .marketplace-dropdown__option.is-selected {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.admin-monitor-filter__menu .marketplace-dropdown__option.is-selected:hover,
+.admin-monitor-filter__menu .marketplace-dropdown__option.is-selected:focus-visible {
+  background: #dbeafe;
+}
+
+.admin-monitor-filter__menu .marketplace-dropdown__option-copy strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.admin-monitor-filter__menu .marketplace-dropdown__option-copy small {
+  color: #64748b;
+}
+
+.admin-monitor-filter__menu .marketplace-dropdown__option > svg {
+  color: #2563eb;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-monitor-filter .marketplace-dropdown__trigger,
+  .admin-monitor-filter__menu .marketplace-dropdown__option,
+  .marketplace-dropdown__menu.admin-monitor-filter__menu {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* Unlayered global button defaults set min-width: 0, which overrides Tailwind's
+   min-w-10 utility. Keep page numbers square and readable on every viewport. */
+button.admin-monitor-pagination__page {
+  box-sizing: border-box;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  flex: 0 0 44px;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+/* Compact page controls within the token-investor popup only. */
+button.token-investor-pagination__page {
+  display: inline-flex;
+  box-sizing: border-box;
+  flex: 0 0 34px;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-width: 1px;
+  border-style: solid;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+button.token-investor-pagination__page:disabled { opacity: 0.4; cursor: not-allowed; }
+button.token-investor-pagination__page:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+
+/* The seven-column application table scrolls horizontally on small screens,
+ * rather than compressing issuer names, token symbols or timestamps. */
+.trex-admin-workspace .admin-applications-list .admin-data-table {
+  min-width: 1080px;
+}
