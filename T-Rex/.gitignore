@@ -2,6 +2,12 @@ node_modules/
 dist/
 .env
 
+# Hardhat build output (regenerate with `npx hardhat compile`)
+artifacts/
+cache/
+typechain-types/
+coverage/
+coverage.json
 
 # scripts/verify-chain.ts's own isolated Hardhat build (see hardhat.verify.config.ts)
 verify/artifacts/
