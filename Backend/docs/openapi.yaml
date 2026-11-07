@@ -74,6 +74,278 @@ x-delete-operation: &deleteOperation
     '404': { $ref: '#/components/responses/NotFound' }
 
 paths:
+  /api/v1/organizations/me/api-key-policy-options:
+    get:
+      tags: [Organization]
+      summary: Get configured API key cooldown and allowed-IP bounds
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: IssuerApiKeyCooldownMinSeconds (30), IssuerApiKeyCooldownMaxSeconds (2592000), IssuerApiKeyAllowedIpsMin (1), IssuerApiKeyAllowedIpsMax (3) in data }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/organizations/me/api-keys/{issuerApiKeyUid}/policy:
+    put:
+      tags: [Organization]
+      summary: Replace an owned issuer API key policy without changing its secret
+      description: JWT only. allowedIps required. Omitted optional rules are cleared. See ISSUER-API-KEY-POLICIES.md.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: issuerApiKeyUid, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IssuerApiKeyPolicy' }
+      responses:
+        '200': { description: issuerApiKeyUid and policy in data }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/admin/tokens/{tokenUid}/price-history:
+    get:
+      tags: [Admin]
+      summary: View token price history as an authorized admin
+      description: Same history fields and filters as issuer/investor history. Chain and organization are derived from the token; no selected-chain header is required.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: tokenUid, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: source, in: query, schema: { type: string, enum: [all, manual, automated, legacy, blockchain], default: all } }
+        - { name: status, in: query, schema: { type: string, enum: [all, PENDING, SUBMITTED, CONFIRMED, FAILED, CANCELLED, EXPIRED, ORPHANED, APPLIED], default: all } }
+        - { name: search, in: query, schema: { type: string, maxLength: 100 } }
+      responses:
+        '200': { description: History array in data and pagination in meta.pagination }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/admin/investor-applications/{interestUid}/documents/{documentUid}/download:
+    get:
+      tags: [Admin]
+      summary: Download a document version belonging to this application submission
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: interestUid, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: documentUid, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Private file attachment
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '401': { description: Authentication required }
+        '403': { description: Admin document download permission required }
+        '404': { description: Application, submission document or stored file not found }
+  /api/v1/admin/tokens/{tokenUid}:
+    get:
+      tags: [Admin]
+      summary: Token details and paginated historical investors with current holder status
+      description: Adds string currentTokenBalance/currentTokenBalanceRaw, nullable isCurrentHolder, holderStatus (CURRENT/FORMER/UNKNOWN), balanceBlockNumber, balanceBlockHash and balanceVerifiedAt to investors. Snapshots may be cached for 30 seconds. data.holderSummary counts all search-matching historical investors before holder filtering and pagination, including unknownHolders.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: tokenUid, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: holderStatus, in: query, schema: { type: string, enum: [all, current, former], default: all } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: search, in: query, schema: { type: string, maxLength: 100 } }
+      responses:
+        '200': { description: data.token, data.investors and data.holderSummary (totalInvestors/currentHolders/formerHolders/unknownHolders) with meta.pagination for the filtered investors }
+        '403': { description: Admin permission required }
+        '404': { description: Token not found }
+  /api/v1/admin/investor-applications/{interestUid}/history:
+    get:
+      tags: [Admin]
+      summary: Application timeline using existing investment-history formatting
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: interestUid, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Application status, summary and chronological timeline with document metadata and protected admin download URLs. }
+        '403': { description: Admin permission required }
+        '404': { description: Application not found }
+  /api/v1/admin/issuer-api-key-settings:
+    get:
+      tags: [General Settings]
+      summary: Admin issuer API-key and price-relay settings
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Current configuration in data }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    patch:
+      tags: [General Settings]
+      summary: Update admin issuer api-key and price-relay settings
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdminIssuerKeySettings' }
+      responses:
+        '200': { description: Updated configuration in data }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: Required setting missing; apply migrations }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/admin/notification-settings:
+    get:
+      tags: [General Settings]
+      summary: Admin team verification recipients
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Current configuration in data }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    patch:
+      tags: [General Settings]
+      summary: Update admin team verification recipients
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdminTeamNotificationSettings' }
+      responses:
+        '200': { description: Updated configuration in data }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: Required setting missing; apply migrations }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/admin/investors:
+    get:
+      tags: [Users]
+      summary: List investor accounts including unstarted profiles
+      description: Admin permission required. No selected-chain header. See ADMIN-PLATFORM-MODULES.md for filter semantics and returned fields.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: search, in: query, schema: { type: string, maxLength: 100 } }
+        - { name: chainUid, in: query, schema: { type: string, format: uuid } }
+        - { name: status, in: query, schema: { type: string } }
+      responses:
+        '200': { description: Data array and meta.pagination; application rows include status, stage and awaitingIssuerReview }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/admin/investors/{userUid}:
+    get:
+      tags: [Users]
+      summary: Get investor profile summary
+      description: Admin permission required. No selected-chain header. See ADMIN-PLATFORM-MODULES.md for filter semantics and returned fields.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: userUid, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Investor data }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/admin/investors/{userUid}/chains:
+    get:
+      tags: [Users]
+      summary: List investor chain identity and unlock state
+      description: Admin permission required. No selected-chain header. See ADMIN-PLATFORM-MODULES.md for filter semantics and returned fields.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: userUid, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: search, in: query, schema: { type: string, maxLength: 100 } }
+        - { name: chainUid, in: query, schema: { type: string, format: uuid } }
+        - { name: status, in: query, schema: { type: string } }
+      responses:
+        '200': { description: Data array and meta.pagination; application rows include status, stage and awaitingIssuerReview }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/admin/investors/{userUid}/invested-tokens:
+    get:
+      tags: [Users]
+      summary: List historically invested tokens
+      description: Admin permission required. No selected-chain header. See ADMIN-PLATFORM-MODULES.md for filter semantics and returned fields.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: userUid, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: search, in: query, schema: { type: string, maxLength: 100 } }
+        - { name: chainUid, in: query, schema: { type: string, format: uuid } }
+        - { name: status, in: query, schema: { type: string } }
+        - { name: organizationUid, in: query, schema: { type: string, format: uuid } }
+        - { name: tokenUid, in: query, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Data array and meta.pagination; application rows include status, stage and awaitingIssuerReview }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/admin/investors/{userUid}/applications:
+    get:
+      tags: [Users]
+      summary: List investor applications and current stages
+      description: Admin permission required. No selected-chain header. See ADMIN-PLATFORM-MODULES.md for filter semantics and returned fields.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: userUid, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: search, in: query, schema: { type: string, maxLength: 100 } }
+        - { name: chainUid, in: query, schema: { type: string, format: uuid } }
+        - { name: status, in: query, schema: { type: string } }
+        - { name: organizationUid, in: query, schema: { type: string, format: uuid } }
+        - { name: tokenUid, in: query, schema: { type: string, format: uuid } }
+        - { name: pendingOnly, in: query, description: Only submitIntrest awaiting issuer review, schema: { type: boolean, default: false } }
+      responses:
+        '200': { description: Data array and meta.pagination; application rows include status, stage and awaitingIssuerReview }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/admin/tokens:
+    get:
+      tags: [Users]
+      summary: List tokens across issuers and chains
+      description: Admin permission required. No selected-chain header. See ADMIN-PLATFORM-MODULES.md for filter semantics and returned fields.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: search, in: query, schema: { type: string, maxLength: 100 } }
+        - { name: chainUid, in: query, schema: { type: string, format: uuid } }
+        - { name: status, in: query, schema: { type: string } }
+        - { name: organizationUid, in: query, schema: { type: string, format: uuid } }
+        - { name: tokenUid, in: query, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Data array and meta.pagination; application rows include status, stage and awaitingIssuerReview }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/admin/investor-applications:
+    get:
+      tags: [Users]
+      summary: List all investor applications and issuer-review stages
+      description: Admin permission required. No selected-chain header. See ADMIN-PLATFORM-MODULES.md for filter semantics and returned fields.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: search, in: query, schema: { type: string, maxLength: 100 } }
+        - { name: chainUid, in: query, schema: { type: string, format: uuid } }
+        - { name: status, in: query, schema: { type: string } }
+        - { name: organizationUid, in: query, schema: { type: string, format: uuid } }
+        - { name: tokenUid, in: query, schema: { type: string, format: uuid } }
+        - { name: pendingOnly, in: query, description: Only submitIntrest awaiting issuer review, schema: { type: boolean, default: false } }
+      responses:
+        '200': { description: Data array and meta.pagination; application rows include status, stage and awaitingIssuerReview }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
   /api/health:
     get:
       tags: [Health]
@@ -305,9 +577,84 @@ paths:
       security: [{ bearerAuth: [] }]
       responses:
         '200': { description: Organization notification flag updated }
+  /api/v1/organizations/me/service-wallet:
+    put:
+      tags: [Organization]
+      summary: Synchronize the issuer service wallet registered in the selected Platform Controller
+      description: Requires X-Chain-Uid. Send tokenUid to select an owned token. The backend reads serviceWalletOf(tokenAddress) and saves only an exact on-chain match per token. No private key is accepted. tokenUid may be omitted only when there is exactly one token on the selected chain.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OrganizationServiceWalletInput' }
+      responses:
+        '200': { description: Token-scoped service wallet synchronized }
+        '409': { description: Organization is not approved }
+        '422': { description: Requested address does not match controller state }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/organizations/me/api-keys:
+    post:
+      tags: [Organization]
+      summary: Issue a scoped API key for the issuer's pricing server
+      description: JWT-only. The plaintext API key is returned exactly once and only its SHA-256 hash is stored.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IssuerApiKeyInput' }
+      responses:
+        '201': { description: API key created and plaintext returned once }
+        '409': { description: 'Organization is not approved, or ISSUER_API_KEY_LIMIT_REACHED (message includes current DB-configured limit, default 5).' }
+    get:
+      tags: [Organization]
+      summary: List the issuer's masked API keys
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Existing data array of masked keys, scopes, expiry, last use and revocation state. meta contains maxActiveKeys (DB-configured limit), activeKeyCount (enabled, not deleted/revoked/expired) and remainingSlots (minimum zero). No chain header required.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { type: array, items: { type: object } }
+                  meta:
+                    type: object
+                    required: [maxActiveKeys, activeKeyCount, remainingSlots]
+                    properties:
+                      maxActiveKeys: { type: integer, minimum: 1, example: 5 }
+                      activeKeyCount: { type: integer, minimum: 0, example: 2 }
+                      remainingSlots: { type: integer, minimum: 0, example: 3 }
+  /api/v1/organizations/me/api-keys/{issuerApiKeyUid}:
+    delete:
+      tags: [Organization]
+      summary: Revoke an issuer API key immediately
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: issuerApiKeyUid, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: API key revoked }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/organizations/me/api-keys/{issuerApiKeyUid}/rotate:
+    post:
+      tags: [Organization]
+      summary: Revoke an issuer API key and return its replacement once
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: issuerApiKeyUid, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IssuerApiKeyRotateInput' }
+      responses:
+        '201': { description: Old key revoked and replacement plaintext returned once }
+        '409': { description: 'ISSUER_API_KEY_NOT_ACTIVE if the key is missing, belongs to another issuer, disabled, deleted, revoked or expired. Only active keys can rotate; create a new key otherwise. Organization must be approved.' }
   /api/v1/organizations/me/company-information:
     put:
       tags: [Organization]
@@ -486,11 +833,52 @@ paths:
         '400': { description: A wallet does not match the organization wallet }
         '409': { description: Token is immutable }
         '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/tokens/me/price/prepare:
+    post:
+      tags: [Token Creation]
+      summary: Save a pending manual price update before MetaMask
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: X-Chain-Uid, in: header, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentTokenPrice]
+              properties:
+                currentTokenPrice: { type: string, example: '350' }
+      responses:
+        '200': { description: Saved priceUpdateUid, PENDING or existing SUBMITTED status, authoritative controller/token/issuer/price and pinned transactionRequest including nonce }
+        '409': { description: Another manual price update is pending }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/tokens/me/price/{priceUpdateUid}/cancel:
+    post:
+      tags: [Token Creation]
+      summary: Cancel an unsigned manual price request after wallet rejection
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: X-Chain-Uid, in: header, required: true, schema: { type: string, format: uuid } }
+        - { name: priceUpdateUid, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                txHash: { type: string, pattern: '^0x[a-fA-F0-9]{64}$' }
+      responses:
+        '200': { description: CANCELLED with USER_CANCELLED or existing terminal status. Does not cancel any blockchain transaction. Send an empty JSON object after unsigned wallet rejection. }
+        '409': { description: Request is no longer pending or already has a hash }
+        '404': { description: Request does not belong to the issuer on this chain }
   /api/v1/tokens/me/price:
     patch:
       tags: [Token Creation]
-      summary: Update the current price of the authenticated issuer's deployed token
-      description: Only the token-owning issuer can update currentTokenPrice. initialTokenPrice is never changed. New purchase, redemption, and transfer intents snapshot this current price.
+      summary: Verify and synchronize an issuer-signed on-chain price change
+      description: Requires priceUpdateUid from POST price/prepare, txHash and currentTokenPrice after the issuer directly signs the returned setPrice transaction. Verifies saved intent including nonce, chain, sender, controller, calldata, receipt, canonical block, confirmations and event. Shares one history record with the indexer. initialTokenPrice is unchanged. Wrapped delegation calls return INVALID_PRICE_TRANSACTION_TARGET.
+      parameters:
+        - { name: X-Chain-Uid, in: header, required: true, schema: { type: string, format: uuid } }
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
@@ -498,12 +886,97 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/TokenPriceUpdateInput' }
       responses:
-        '200': { description: Current token price updated; initial token price is unchanged }
+        '200': { description: On-chain price verified; data retains the token response shape }
+        '202': { description: Verification pending; data contains priceUpdateUid, persisted status PENDING or SUBMITTED, nullable txHash and tokenUid. Retry the same hash; do not send another transaction. }
+        '400': { description: Wrong controller, function, price, token or event }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { description: User is not the owning issuer }
         '404': { description: Owned token was not found }
         '409': { description: Token is not active and deployed, or changed concurrently }
         '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/tokens/me/price-history:
+    get:
+      tags: [Token Creation]
+      summary: List token price changes for issuers and investors on the selected chain
+      description: JWT-only. Investors must supply tokenUid for a deployed token on the selected chain. Issuers default to their own token and cannot select another issuer's token. Includes database-only PATCH changes (LEGACY/APPLIED) and blockchain changes. Source flags do not imply confirmation. Decimal prices are strings. No signature data is returned.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: X-Chain-Uid, in: header, required: true, schema: { type: string, format: uuid } }
+        - { name: tokenUid, in: query, description: Required for investors; optional for issuers, schema: { type: string, format: uuid } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: search, in: query, schema: { type: string, maxLength: 100 } }
+        - { name: source, in: query, schema: { type: string, enum: [all, manual, automated, legacy, blockchain], default: all } }
+        - { name: status, in: query, schema: { type: string, enum: [all, APPLIED, PENDING, SUBMITTED, CONFIRMED, FAILED, CANCELLED, ORPHANED], default: all } }
+      responses:
+        '200':
+          description: data array with source flags, old/new prices, status, transaction metadata, timestamps and nullable updatedByWalletAddress (issuer for DIRECT/LEGACY, service-wallet signer for RELAYED, unknown for INDEXED); meta.pagination contains page, limit, total and totalPages.
+        '400': { description: Selected chain is required }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: No deployed token or selected chain mismatch }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/tokens/me/price-updates/prepare:
+    post:
+      tags: [Token Creation]
+      summary: Prepare an EIP-712 service-wallet token price message
+      parameters:
+        - $ref: '#/components/parameters/IssuerPriceChainId'
+      description: API-key callers must send X-Chain-Id. Existing interactive JWT callers continue using X-Chain-Uid.
+      security: [{ bearerAuth: [] }, { issuerApiKeyAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TokenPriceRelayPrepareInput' }
+      responses:
+        '200': { description: Authoritative typed data, nonce, deadline, raw price, chain and controller returned }
+        '400': { description: SELECTED_CHAIN_REQUIRED or UNSUPPORTED_CHAIN for API-key chain selection }
+        '429': { $ref: '#/components/responses/PriceApiRateLimited' }
+        '409': { description: Deployed token or registered service wallet is missing }
+        '422': { description: Token owner, price, or selected chain is invalid (including INVALID_SELECTED_CHAIN) }
+  /api/v1/tokens/me/price-updates:
+    post:
+      tags: [Token Creation]
+      summary: Verify a service-wallet signature and relay setPriceOnBehalfOf
+      parameters:
+        - $ref: '#/components/parameters/IssuerPriceChainId'
+      description: API-key callers must send X-Chain-Id. Existing interactive JWT callers continue using X-Chain-Uid.
+      security: [{ bearerAuth: [] }, { issuerApiKeyAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TokenPriceRelaySubmitInput' }
+      responses:
+        '202': { description: PENDING record created and relayer transaction submitted }
+        '400': { description: SELECTED_CHAIN_REQUIRED or UNSUPPORTED_CHAIN for API-key chain selection }
+        '409': { description: Nonce changed, was already used by another request, or SELECTED_CHAIN_MISMATCH }
+        '422': { description: Signature, deadline, message, or dry-run validation failed }
+        '429':
+          description: 'PRICE_API_RATE_LIMITED for shared issuer attempt budget (Retry-After provided), or existing PRICE_UPDATE_RATE_LIMITED service-wallet limit.'
+          headers:
+            Retry-After: { description: Seconds to wait for the issuer request budget, schema: { type: integer, minimum: 1 } }
+        '502': { description: Relayer could not submit the transaction }
+  /api/v1/tokens/me/price-updates/{priceUpdateUid}:
+    get:
+      tags: [Token Creation]
+      summary: Read a relayed price update on the selected chain
+      description: API-key callers must send X-Chain-Id. Existing interactive JWT callers continue using X-Chain-Uid.
+      security: [{ bearerAuth: [] }, { issuerApiKeyAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/IssuerPriceChainId'
+        - name: priceUpdateUid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Price update status and transaction metadata }
+        '400': { description: SELECTED_CHAIN_REQUIRED or UNSUPPORTED_CHAIN for API-key chain selection }
+        '409': { description: SELECTED_CHAIN_MISMATCH }
+        '422': { description: INVALID_SELECTED_CHAIN or invalid tracking reference }
+        '429': { $ref: '#/components/responses/PriceApiRateLimited' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /api/v1/tokens/me/submit:
     post:
       tags: [Token Creation]
@@ -1154,6 +1627,10 @@ paths:
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+    issuerApiKeyAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: 'trex_iss_<public-id>_<secret>'
   parameters:
     Page: { in: query, name: page, schema: { type: integer, minimum: 1, default: 1 } }
     Limit: { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
@@ -1171,6 +1648,12 @@ components:
     StateUid: { in: path, name: stateUid, required: true, schema: { type: string, format: uuid } }
     DocumentUid: { in: path, name: documentUid, required: true, schema: { type: string, format: uuid } }
     OrganizationUid: { in: path, name: organizationUid, required: true, schema: { type: string, format: uuid } }
+    IssuerPriceChainId:
+      in: header
+      name: X-Chain-Id
+      required: false
+      description: Required for issuer API-key authentication. Public decimal network ID; missing gives SELECTED_CHAIN_REQUIRED, malformed gives INVALID_SELECTED_CHAIN, unsupported or inactive gives UNSUPPORTED_CHAIN. Conflicting chain headers give SELECTED_CHAIN_MISMATCH. JWT callers retain X-Chain-Uid.
+      schema: { type: integer, minimum: 1, maximum: 9007199254740991, example: 11155111 }
     ClaimId: { in: path, name: claimId, required: true, schema: { type: string, format: uuid } }
     InterestUid: { in: path, name: interestUid, required: true, schema: { type: string, format: uuid } }
     RegistryRegistrationUid: { in: path, name: registryRegistrationUid, required: true, schema: { type: string, format: uuid } }
@@ -1179,10 +1662,50 @@ components:
     TransferUid: { in: path, name: transferUid, required: true, schema: { type: string, format: uuid } }
   responses:
     Unauthorized: { description: Missing, invalid, expired, or stale JWT }
+    PriceApiRateLimited:
+      description: Shared issuer prepare/status/submit budget exceeded (PRICE_API_RATE_LIMITED). Default 60 attempts per 60 seconds across API keys, JWTs and chains.
+      headers:
+        Retry-After:
+          description: Seconds until the issuer can retry
+          schema: { type: integer, minimum: 1 }
+      content:
+        application/json:
+          example:
+            success: false
+            message: Too many issuer price API requests. Please try again later.
+            error: { code: PRICE_API_RATE_LIMITED }
+            timestamp: '2026-10-07T00:00:00.000Z'
+            requestId: example-request-id
     Forbidden: { description: Account or role is not allowed to perform the operation }
     NotFound: { description: Resource does not exist }
     ValidationError: { description: Body, query, or route validation failed }
   schemas:
+    AdminIssuerKeySettings:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        IssuerApiKeyMaxActive: { type: integer, minimum: 1, maximum: 1000000, example: 5 }
+        IssuerApiKeyAllowPrivateIps: { type: boolean, default: false, description: Allow exact private LAN IPs for testing }
+        IssuerApiKeyCooldownMinSeconds: { type: integer, minimum: 1, maximum: 2592000, example: 30 }
+        IssuerApiKeyCooldownMaxSeconds: { type: integer, minimum: 1, maximum: 2592000, example: 2592000 }
+        IssuerApiKeyAllowedIpsMin: { type: integer, minimum: 1, maximum: 1000000, example: 1 }
+        IssuerApiKeyAllowedIpsMax: { type: integer, minimum: 1, maximum: 1000000, example: 3 }
+        TokenPriceRelaySignatureTtlSeconds: { type: integer, minimum: 60, maximum: 1000000, example: 600 }
+        TokenPriceRelayRateLimitCount: { type: integer, minimum: 1, maximum: 1000000, example: 10 }
+        TokenPriceRelayRateLimitWindowSeconds: { type: integer, minimum: 1, maximum: 1000000, example: 60 }
+        TokenPriceApiReadRateLimitCount: { type: integer, minimum: 1, maximum: 1000000, example: 60 }
+        TokenPriceApiReadRateLimitWindowSeconds: { type: integer, minimum: 1, maximum: 1000000, example: 60 }
+    AdminTeamNotificationSettings:
+      type: object
+      additionalProperties: false
+      required: [teamNotificationEmails]
+      properties:
+        teamNotificationEmails:
+          type: array
+          maxItems: 20
+          uniqueItems: true
+          items: { type: string, format: email }
     SuccessResponse:
       type: object
       properties:
@@ -1339,12 +1862,76 @@ components:
     TokenPriceUpdateInput:
       type: object
       additionalProperties: false
-      required: [currentTokenPrice]
+      required: [currentTokenPrice, txHash, priceUpdateUid]
       properties:
+        priceUpdateUid: { type: string, format: uuid }
+        txHash: { type: string, pattern: '^0x[a-fA-F0-9]{64}$' }
         currentTokenPrice:
           type: number
           exclusiveMinimum: 0
           example: 1.25
+    OrganizationServiceWalletInput:
+      type: object
+      additionalProperties: false
+      required: [serviceWalletAddress]
+      properties:
+        tokenUid:
+          type: string
+          format: uuid
+          description: Owned token on the selected chain. Required when multiple tokens exist.
+        serviceWalletAddress:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+    IssuerApiKeyPolicy:
+      type: object
+      additionalProperties: false
+      required: [allowedIps]
+      properties: &issuerPolicyProperties
+        threshold: { type: string, nullable: true, description: '>0 to 100, max two decimals; symmetric per-change percentage' }
+        maxCumulative24hPercent: { type: string, nullable: true, description: '>0 to 100, max two decimals; rolling absolute movement percentage' }
+        cooldownSeconds: { type: string, nullable: true, description: Integer string within DB-configured bounds }
+        frequency: { type: string, nullable: true, enum: [hourly, daily, weekly, monthly] }
+        allowedDays: { type: array, nullable: true, minItems: 1, maxItems: 7, uniqueItems: true, items: { type: string, enum: [Mon, Tue, Wed, Thu, Fri, Sat, Sun] } }
+        startTime: { type: string, nullable: true, pattern: '^(?:[01]\d|2[0-3]):[0-5]\d$' }
+        endTime: { type: string, nullable: true, description: Must differ from startTime; earlier end means overnight; required together, pattern: '^(?:[01]\d|2[0-3]):[0-5]\d$' }
+        timezone: { type: string, nullable: true, default: UTC, description: IANA timezone; null or omitted defaults to UTC }
+        allowedIps: { type: array, description: Unique public IPv4/IPv6 addresses; DB limits default 1–3, uniqueItems: true, items: { type: string } }
+    IssuerApiKeyInput:
+      type: object
+      additionalProperties: false
+      required: [name, allowedIps]
+      properties:
+        <<: *issuerPolicyProperties
+        name: { type: string, minLength: 3, maxLength: 100, example: Production pricing bot }
+        expiresInDays: { type: integer, minimum: 1, maximum: 730, default: 365 }
+    IssuerApiKeyRotateInput:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 3, maxLength: 100, example: Production pricing bot v2 }
+        expiresInDays: { type: integer, minimum: 1, maximum: 730, default: 365 }
+    TokenPriceRelayPrepareInput:
+      type: object
+      additionalProperties: false
+      required: [price]
+      properties:
+        price:
+          oneOf:
+            - { type: string, pattern: '^(?:0|[1-9][0-9]{0,17})(?:\.[0-9]{1,18})?$' }
+            - { type: number, exclusiveMinimum: 0 }
+          example: '1.5'
+    TokenPriceRelaySubmitInput:
+      type: object
+      additionalProperties: false
+      required: [tokenAddress, newPriceRaw, nonce, deadline, v, r, s]
+      properties:
+        tokenAddress: { type: string, pattern: '^0x[a-fA-F0-9]{40}$' }
+        newPriceRaw: { type: string, pattern: '^[1-9][0-9]{0,77}$', example: '1500000' }
+        nonce: { type: string, pattern: '^(?:0|[1-9][0-9]{0,77})$', example: '7' }
+        deadline: { type: integer, minimum: 1 }
+        v: { type: integer, enum: [0, 1, 27, 28] }
+        r: { type: string, pattern: '^0x[a-fA-F0-9]{64}$' }
+        s: { type: string, pattern: '^0x[a-fA-F0-9]{64}$' }
     OrganizationSubmitInput:
       type: object
       required: [walletAddress]

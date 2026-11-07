@@ -1,12 +1,12 @@
 # T-REX Capital Market
 
-A web3 capital-markets platform for compliant ERC-3643 (T-REX) token issuance, investor onboarding, wallet-based transactions, and on-chain reconciliation.
+A multichain capital-markets platform for compliant ERC-3643 (T-REX) token issuance, investor onboarding, wallet-executed transactions, and chain-specific reconciliation.
 
 ## Overview
 
-T-REX Capital Market is a three-part application composed of a React/Vite web client, a Node.js/Express API backed by MySQL, and a Hardhat smart-contract workspace built around ERC-3643 and ONCHAINID.
+T-REX Capital Market combines a React/Vite web client, a Node.js/Express API backed by MySQL, and a Hardhat smart-contract workspace built around ERC-3643 and ONCHAINID, alongside a separate public landing site.
 
-The platform supports issuer and investor onboarding, organization KYB, investor KYC, document workflows, per-chain ONCHAINID creation, compliant token configuration and deployment, claims and Identity Registry registration, marketplace discovery, investment applications, invitations, purchases, transfers, redemptions, portfolios, canonical transaction history, administrative review, and chain/payment-token administration.
+The platform supports issuer and investor onboarding, organization KYB, investor KYC, document workflows, per-chain ONCHAINID creation, compliant token configuration and deployment, reordered claims and Identity Registry registration, marketplace discovery, investment applications, invitations, purchases, transfers, redemptions, portfolios, canonical transaction and price history, automated service-wallet price updates, issuer API-key policies, administrative review, and chain/payment-token administration.
 
 The backend is the single source of truth for supported networks and contract suites. The frontend loads active chains, public RPC metadata, platform contracts, implementation contracts, compliance modules, confirmation settings, and payment tokens from backend APIs whenever the selected network changes.
 
@@ -33,6 +33,9 @@ The backend is the single source of truth for supported networks and contract su
 - Chain-specific Platform Controller assignment as the default Token Agent for newly created tokens.
 - Investor directory, invitations, investment application review, claims, Identity Registry registration, and redemption processing.
 - Owner-only current-price updates without changing the immutable initial token price.
+- Manual price requests prepared before wallet execution, with confirmed-event reconciliation, cancellation and expiry.
+- Token-specific service-wallet registration for automated EIP-712 signed price updates; the issuer's bot retains its private key and the backend relays the update and pays gas.
+- API-key creation, masked listing with slot counts, active-key rotation, revocation, scoped authentication, audit history, and configurable per-key policies.
 
 ### Investor workflows
 
@@ -40,7 +43,10 @@ The backend is the single source of truth for supported networks and contract su
 - Per-chain ONCHAINID state with explicit network unlock support.
 - Chain-filtered marketplace, invitations, interests, claims, holdings, portfolio, and transaction history.
 - Identity Registry registration with backend transaction, event, and final-state verification.
-- Wallet-executed investment, token transfer, and redemption flows.
+- Investor-wallet investment and token transfer; issuer-wallet execution of reviewed investor redemption requests.
+- Issuer claim verification followed by issuer-wallet registry registration, then independent investor-wallet claim submission with no final issuer action.
+- Separate verified progress flags for pending issuer work, awaiting investor claims and completed investment applications.
+- Token price history and historical-investor holder counts, distinguishing verified positive, zero and unknown balances.
 - Canonical history recovered from chain events even when the browser does not report a transaction hash.
 - Country-restriction filtering and compliant-token eligibility checks.
 
@@ -56,11 +62,15 @@ The backend is the single source of truth for supported networks and contract su
 - Browser-safe public chain configuration APIs with no private keys or internal RPC URLs.
 - Chain-scoped reads and writes selected through `X-Chain-Uid` for authenticated Issuer and Investor requests.
 - Per-chain checkpointed deployment, claim, Identity Registry, and canonical transaction indexers.
+- Per-chain Controller price and token service-wallet event indexing with receipt recovery for submitted price updates.
 - Receipt, calldata, event, canonical-block, and final-state verification instead of trusting browser-submitted metadata.
 
 ### Operational capabilities
 
 - Admin-only network and payment-token management APIs.
+- Admin investor, invested-token and application views; application timelines and application-scoped protected document downloads.
+- Admin token details, holder summaries, price timestamps/history, and validated collection sorting and filtering.
+- DB-backed issuer API-key/relay policy administration and team notifications after issuer/investor email verification.
 - Immutable chain IDs and contract suites after network creation.
 - Editable public RPC URL, explorer URL, fallback internal RPC URLs, active state, and network image.
 - Append-only `chainMasterAudit` records for network changes.
@@ -102,6 +112,10 @@ User wallet -> selected-chain smart contract -> blockchain
 
 Application history:
 Blockchain events -> backend confirmation/indexers -> MySQL -> APIs -> frontend
+
+Automated pricing (separate from Invest / Transfer / Redemption):
+Issuer bot -> prepare typed data -> service-wallet signature -> authenticated backend relay
+  -> setPriceOnBehalfOf -> confirmed price event -> history / current price
 ```
 
 ```mermaid
@@ -385,6 +399,9 @@ Supported networks come from `GET /api/v1/chains`. Browser-safe contract and pay
 | Chains | `chainMaster`, `chainMasterAudit`, `paymentTokenMaster`, `userChainIdentity` |
 | General/master data | `generalSettings`, `entityTypeMaster`, `industryMaster`, `documentTypeMaster`, `countryMaster`, `stateMaster`, `cityMaster` |
 | Organizations | `organizationMaster`, `organizationBeneficialOwner`, `organizationDocument` |
+| Issuer automation | `issuerApiKey`, `issuerApiKeyAudit`, `issuerApiKeyPolicy`, `tokenPriceApiRequest` |
+| Pricing / service wallets | `tokenPriceUpdate`, `tokenServiceWallet`, `organizationServiceWallet` (legacy compatibility) |
+| Team notifications | `verificationTeamNotification` |
 | Token setup | `tokenMaster`, `tokenClaimTopic`, `tokenCountryRestriction`, `tokenDeploymentAttempt` |
 | Investor onboarding | `investorMaster`, `investorInvestmentCategory`, `investorDocumentTypeMaster`, `investorDocument` |
 | Investment workflow | `tokenInvestmentInterest`, `tokenInvestmentInterestHistory`, `investmentSubmissionDocument`, `investorInvitation` |
@@ -543,6 +560,28 @@ X-Chain-Uid: <selected-chain-uid>
 
 Network delete is intentionally unavailable. Networks are enabled or disabled so historical records remain resolvable. Contract suites and chain IDs are immutable after creation.
 
+#### Admin platform reporting and configuration
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/v1/admin/issuer-api-key-settings` | Read key, policy-bound and price-relay settings |
+| `PATCH` | `/api/v1/admin/issuer-api-key-settings` | Update validated DB-backed automation settings |
+| `GET` | `/api/v1/admin/notification-settings` | Read team notification recipients |
+| `PATCH` | `/api/v1/admin/notification-settings` | Update team notification recipients |
+| `GET` | `/api/v1/admin/investors` | List and filter investor accounts |
+| `GET` | `/api/v1/admin/investors/:userUid` | Return investor details |
+| `GET` | `/api/v1/admin/investors/:userUid/chains` | List investor chain identities and unlock state |
+| `GET` | `/api/v1/admin/investors/:userUid/invested-tokens` | List an investor's invested tokens |
+| `GET` | `/api/v1/admin/investors/:userUid/applications` | List an investor's applications and stages |
+| `GET` | `/api/v1/admin/tokens` | List platform tokens with holder summaries and sorting |
+| `GET` | `/api/v1/admin/tokens/:tokenUid` | Return token details, price dates and paginated historical investors with holder status |
+| `GET` | `/api/v1/admin/tokens/:tokenUid/price-history` | Return token price history |
+| `GET` | `/api/v1/admin/investor-applications` | List applications; wallet/token address search uses exact matching |
+| `GET` | `/api/v1/admin/investor-applications/:interestUid/history` | Return application timeline, organization and document versions |
+| `GET` | `/api/v1/admin/investor-applications/:interestUid/documents/:documentUid/download` | Download a document only after admin authorization and application ownership checks |
+
+Collection endpoints support their own allowlisted `sortBy` and `sortOrder` values; see [Admin sorting](Backend/docs/ADMIN-SORTING.md). Holder counts cover historical investors, not every recipient wallet on-chain. RPC failures remain unknown instead of being classified as former holders.
+
 #### Public reference data
 
 | Method | Route | Purpose |
@@ -561,6 +600,13 @@ Network delete is intentionally unavailable. Networks are enabled or disabled so
 | --- | --- | --- |
 | `GET` | `/api/v1/organizations/me` | Return the authenticated issuer's organization for the selected chain |
 | `PATCH` | `/api/v1/organizations/me/user-notified` | Mark the organization notification as seen |
+| `PUT` | `/api/v1/organizations/me/service-wallet` | Verify and cache the on-chain service wallet for the supplied token |
+| `POST` | `/api/v1/organizations/me/api-keys` | Issue a scoped issuer automation API key; plaintext is returned once |
+| `GET` | `/api/v1/organizations/me/api-keys` | List masked keys with maxActiveKeys, activeKeyCount and remainingSlots |
+| `GET` | `/api/v1/organizations/me/api-key-policy-options` | Return configurable policy limits/options |
+| `PUT` | `/api/v1/organizations/me/api-keys/:issuerApiKeyUid/policy` | Replace an API key's IP allowlist and optional price policy |
+| `POST` | `/api/v1/organizations/me/api-keys/:issuerApiKeyUid/rotate` | Revoke an API key and issue its replacement |
+| `DELETE` | `/api/v1/organizations/me/api-keys/:issuerApiKeyUid` | Revoke an issuer API key immediately |
 | `PUT` | `/api/v1/organizations/me/company-information` | Save company information |
 | `PUT` | `/api/v1/organizations/me/jurisdiction` | Save jurisdiction information |
 | `PUT` | `/api/v1/organizations/me/beneficial-owners` | Save beneficial owners |
@@ -589,7 +635,13 @@ Network delete is intentionally unavailable. Networks are enabled or disabled so
 | `PUT` | `/api/v1/tokens/me/claims` | Save claim-topic configuration |
 | `PUT` | `/api/v1/tokens/me/compliance` | Save compliance rules |
 | `PUT` | `/api/v1/tokens/me/governance` | Save governance roles |
-| `PATCH` | `/api/v1/tokens/me/price` | Update the current token price |
+| `PATCH` | `/api/v1/tokens/me/price` | Verify a wallet-executed price transaction and reconcile its prepared request |
+| `POST` | `/api/v1/tokens/me/price/prepare` | Save a pending manual request with the current old price and transaction parameters |
+| `POST` | `/api/v1/tokens/me/price/:priceUpdateUid/cancel` | Cancel an eligible unsigned manual price request |
+| `GET` | `/api/v1/tokens/me/price-history` | Return price history for an authorized issuer or investor |
+| `POST` | `/api/v1/tokens/me/price-updates/prepare` | Prepare authoritative EIP-712 service-wallet typed data |
+| `POST` | `/api/v1/tokens/me/price-updates` | Verify the signature and relay `setPriceOnBehalfOf` |
+| `GET` | `/api/v1/tokens/me/price-updates/:priceUpdateUid` | Read relayed price-update confirmation state |
 | `POST` | `/api/v1/tokens/me/deployment-attempts` | Create a token deployment attempt |
 | `GET` | `/api/v1/tokens/me/deployment-attempts/active` | Return the active deployment attempt |
 | `PATCH` | `/api/v1/tokens/me/deployment-attempts/:deploymentAttemptUid/submitted` | Record a submitted deployment transaction |
@@ -676,7 +728,7 @@ Network delete is intentionally unavailable. Networks are enabled or disabled so
 
 | Method | Route | Purpose |
 | --- | --- | --- |
-| `POST` | `/api/v1/issuer/claims/sign` | Sign investor claims |
+| `POST` | `/api/v1/issuer/claims/sign` | Verify and store issuer-signed investor claims |
 | `GET` | `/api/v1/issuer/claims/:subscriptionId` | Return issuer claim status for a subscription |
 
 #### Investor claims
@@ -739,6 +791,8 @@ Network delete is intentionally unavailable. Networks are enabled or disabled so
 | `DELETE` | `/api/v1/general-settings/:settingUid` | Delete or deactivate a setting |
 
 Refer to the OpenAPI source and Postman collection for the full request and response contracts.
+
+Price-update retry routes are intentionally not registered. Recovery is handled by receipt/event reconciliation and expiry rather than automatically sending another wallet transaction.
 
 ### Request examples
 
@@ -834,6 +888,26 @@ JWTs include the authenticated user and role identifiers. Protected routes verif
 
 `forgot-password` creates an opaque reset token, stores only its hash, applies the configured TTL, and sends the reset link through SMTP. `verify-reset-token` checks the token and `reset-password` consumes it.
 
+### Issuer bot API keys and policies
+
+Issuers manage keys from the authenticated API Keys UI. Plaintext keys are shown once; the backend stores hashes. API keys authenticate only the price prepare/submit/status routes with `Authorization: Bearer <api-key>`. Bots select the public network through `X-Chain-Id` (for example `11155111`); the backend resolves internal chain identity. Interactive JWT requests retain the selected-chain convention. Key management itself is JWT-only and is not chain-specific.
+
+Creation and rotation use the same issuer row lock. Only active keys can rotate, and revoke/create occur atomically. Active means enabled, not deleted, not revoked and not expired. The default maximum is five active keys per issuer; list responses expose the configured maximum, active count and remaining slots.
+
+Policies require an IP allowlist. Threshold per update, cumulative 24-hour movement, cooldown, frequency, weekdays and time windows are optional and enforced when configured. Overnight windows are supported; missing/null timezone defaults to UTC. Public IPv4 and IPv6 are supported. Private addresses are accepted only when the DB testing setting explicitly permits them. Allowlist the bot server's outbound address, not the issuer browser's address; trusted proxy configuration must preserve the real client IP.
+
+| DB setting | Default |
+| --- | --- |
+| `IssuerApiKeyMaxActive` | `5` |
+| `IssuerApiKeyAllowPrivateIps` | `false` |
+| `IssuerApiKeyAllowedIpsMin` / `IssuerApiKeyAllowedIpsMax` | `1` / `3` |
+| `IssuerApiKeyCooldownMinSeconds` / `IssuerApiKeyCooldownMaxSeconds` | `30` / `2592000` |
+| `TokenPriceRelaySignatureTtlSeconds` | `600` |
+| `TokenPriceRelayRateLimitCount` / `TokenPriceRelayRateLimitWindowSeconds` | `10` / `60` |
+| `TokenPriceApiReadRateLimitCount` / `TokenPriceApiReadRateLimitWindowSeconds` | `60` / `60` |
+
+Settings are DB-backed, not new environment variables. The per-issuer API limiter is shared across keys and chains and applies to prepare, submit and status. Submit also has its service-wallet/chain relay limit. Limits return 429 with Retry-After. See [issuer API-key and bot guide](Backend/docs/ISSUER-API-KEYS-AND-PRICE-BOT-GUIDE.md) and [policy guide](Backend/docs/ISSUER-API-KEY-POLICIES.md).
+
 ## Blockchain / Web3
 
 ### Backend-driven multichain runtime
@@ -856,6 +930,20 @@ Each user can have one ONCHAINID per supported chain. The first identity is crea
 
 The backend signer calls the selected chain's `IDFactoryAccessManager`, which delegates identity creation to the configured Identity Factory. The backend checks the Identity Factory before and after the transaction and records factory address, identity address, transaction evidence, status, and unlock state in `userChainIdentity`.
 
+The signer needs `IDENTITY_AUTHORIZER_ROLE` on that chain's Access Manager. `ADMIN_ROLE` alone does not authorize `createIdentity`; the Identity Factory must also be owned by the configured Access Manager.
+
+### Investment application journey
+
+```text
+Investor applies -> Issuer verifies/signs required claims
+  -> Issuer wallet registers investor in Identity Registry
+  -> Registry receipt/event confirmed -> issuer work complete
+  -> Investor wallet submits all required claims
+  -> Claims confirmed -> registered / COMPLETED -> Invest Now
+```
+
+The application remains pending until issuer verification and registration succeed. It then awaits investor claim submission without requiring another issuer approval. Registry confirmation alone does not complete the journey. The backend exposes `issuerVerificationConfirmed`, `registryRegistrationConfirmed`, `claimsConfirmed`, `canSubmitClaims`, `canInvest`, and `journeyStage`; final investment still depends on current contract eligibility. HTTP confirmation, indexers and recovery share the completion check. Existing claims-first applications remain supported. See [frontend journey integration](Backend/docs/FRONTEND-APPLICATION-JOURNEY-REORDER.md).
+
 ### ERC-3643 / ONCHAINID
 
 The application uses the official ERC-3643 and ONCHAINID packages. The database tracks workflow state and indexed evidence, while executed on-chain state remains authoritative.
@@ -868,6 +956,7 @@ The Platform Controller provides:
 
 - Owner-managed payment-token configuration.
 - Issuer-controlled token pricing.
+- Token-specific `serviceWalletOf(tokenAddress)` and EIP-712 `setPriceOnBehalfOf` automation with nonce/deadline checks.
 - Pause/unpause controls.
 - Atomic purchase settlement.
 - Atomic redemption that burns investor tokens and transfers the selected payment token from Issuer to Investor.
@@ -893,6 +982,14 @@ Payment currencies are linked to a chain through `paymentTokenMaster`. Public AP
 
 The optional fast confirmation endpoint improves UI responsiveness, but indexers remain responsible for recovering transactions missed because of a browser refresh, network failure, or backend outage.
 
+### Manual and automated price history
+
+Manual updates first create a pending request through `/tokens/me/price/prepare`, then the issuer wallet executes the prepared Controller call. `/tokens/me/price` submits the hash for independent verification. Prepared records retain old and requested prices; submission alone never changes the confirmed price. Eligible wallet-cancelled requests use `CANCELLED`, abandoned requests expire, and background reconciliation repairs missed callbacks without a retry transaction. Supported smart-account executions are validated against expected Controller price events and execution details rather than trusting the outer destination alone.
+
+For automated updates, the issuer registers a service wallet per token on-chain. The bot prepares, signs the returned EIP-712 message using its own private key, submits the signature with its API key, then polls status. The backend validates signer, nonce, deadline and policy, simulates, records and relays `setPriceOnBehalfOf`; it never stores the service-wallet private key. Confirmed `TokenPriceUpdated` and token-scoped `ServiceWalletUpdated` events update cached state and history. Manual and bot updates share the current on-chain price; a later confirmed update supersedes an earlier one.
+
+Price history uses Manual / Automated source labels and separate lifecycle statuses, with old/new price, wallet and transaction evidence. The issuer/investor history API and admin token-specific history API expose these records. See [manual price integration](Backend/docs/FRONTEND-MANUAL-PRICE-INTENTS.md), [cancellation and expiry](Backend/docs/FRONTEND-PRICE-CANCEL-EXPIRY.md), and [price history](Backend/docs/FRONTEND-TOKEN-PRICE-HISTORY.md).
+
 ## Background Jobs / Workers
 
 The backend loads every active chain and runs chain-specific jobs sequentially to avoid RPC bursts. A failure on one chain is logged and does not stop processing on other chains.
@@ -904,6 +1001,8 @@ The backend loads every active chain and runs chain-specific jobs sequentially t
 | Global claim indexer | Indexes `ClaimAdded` and `ClaimChanged` across known per-chain ONCHAINIDs |
 | Identity Registry reconciliation | Indexes registration events and reconciles pending registration operations |
 | Canonical transaction indexer | Indexes confirmed INVEST, TRANSFER, and REDEMPTION activity |
+| Token price / service-wallet indexer | Confirms price updates, tracks per-token service wallets, recovers submitted receipts and expires abandoned price requests |
+| Verification team notification runner | Delivers configured team notices after email verification with persisted delivery state |
 | Expiry/recovery runners | Expire abandoned intents and reconcile incomplete workflow records where applicable |
 
 Canonical checkpoints are keyed by indexer and chain ID. Checkpoints advance only after a range is processed successfully. Confirmed records store chain ID, block number, block hash, transaction hash, and log index for idempotency and reorganization checks.
@@ -966,7 +1065,7 @@ npm run check
 npm test
 ```
 
-Tests cover authentication, organizations, investors, tokens, chain administration, payment tokens, claims, registry operations, purchases, transfers, redemptions, canonical transaction verification, and indexer/recovery behavior.
+Tests cover authentication, organizations, investors, tokens, chain administration, payment tokens, claims, reordered registry/application completion, purchases, transfers, redemptions, canonical multichain confirmation formatting, holder counts, bot signatures, API-key rotation/policies/rate limits, manual price cancellation/expiry, receipt recovery, and indexer/recovery behavior. Tests are not a substitute for selected-chain deployment verification and wallet-based end-to-end checks.
 
 ### Smart contracts
 
@@ -1041,6 +1140,12 @@ npm run diagnose:transfer
 
 Deployment addresses are versioned in the repository rather than duplicated in this README. Open the manifest for the required chain:
 
+### Testnet
+
+- [Arc Testnet](T-Rex/deployments/arcTestnet.json)
+- [Whitechain Testnet](T-Rex/deployments/whitechainTestnet.json)
+- [Hedera Testnet](T-Rex/deployments/hederaTestnet.json)
+
 ### Mainnet
 - [Arc Mainnet](T-Rex/deployments/arc.json)
 - [Arbitrum Mainnet](T-Rex/deployments/arbitrum.json)
@@ -1048,12 +1153,16 @@ Deployment addresses are versioned in the repository rather than duplicated in t
 
 Each JSON manifest records the network, chain ID, deployment time, deployer, platform contracts, compliance modules, IDFactoryAccessManager, supported payment tokens, and implementation addresses for that deployment.
 
+Local admin-configured networks may exist without a committed deployment manifest. The live `/chains` API is the source of enabled networks; do not infer runtime availability from this list alone.
+
 ## Security Considerations
 
 - **Secrets:** keep `JWT_SECRET`, `CHAIN_SECRET_ENCRYPTION_KEY`, SMTP/database credentials, and all private keys in server-side secret management. Never expose them through `VITE_*` or public APIs.
 - **Chain signer storage:** chain signer keys are AES-256-GCM encrypted in `chainMaster`; public endpoints never return encrypted or decrypted signer material.
 - **Password hashing:** configure a production-appropriate `BCRYPT_ROUNDS` value.
 - **JWT:** use a high-entropy secret and rotate it through a controlled production process.
+- **Bot credentials:** keep API keys and service-wallet private keys on the issuer's server, never in frontend code. Token-scoped service-wallet authorization is separate from API-key authentication; revoke leaked API keys and replace a compromised service wallet on-chain.
+- **Automation policies:** retain IP allowlists, per-issuer and relay rate limits, simulation and nonce/deadline verification. Do not enable private-IP policies in production merely to bypass an allowlist failure.
 - **Email verification:** login sessions are issued only after one-time token validation and active user/role checks.
 - **Wallet separation:** wallets are normalized and cannot be reused across conflicting Issuer/Investor identities.
 - **Authorization:** protected routes combine JWT authentication with database-backed permission checks.
@@ -1111,3 +1220,51 @@ Check the selected chain's active/indexer flags, RPC health, start blocks, confi
 ### Token image upload is rejected
 
 Check MIME type, actual decoded format, dimensions, file-size settings, SVG screening, and the optional virus scanner configuration.
+
+### Bot returns `API_KEY_IP_NOT_ALLOWED`
+
+Allowlist the public egress IP of the bot machine, which may be IPv4 or IPv6. A browser IP-detection page may report a different machine or protocol. Behind Cloudflare Tunnel and a local-only Nginx origin, forward the trusted Cloudflare client IP and keep the backend inaccessible to untrusted direct traffic; do not trust arbitrary forwarded headers from the Internet.
+
+### Price remains pending/submitted
+
+Check the prepared request, transaction receipt, required confirmations, per-chain price indexer checkpoint and RPC history availability. Manual unsigned requests expire; signed/broadcast transactions require reconciliation, not an automatic second transaction. Cancelling a database request does not cancel a transaction already broadcast to the network; confirmed chain evidence remains authoritative.
+
+## Onchain Stablecoin Settlement on Whitechain
+
+T-REX Capital Market uses onchain stablecoin settlement on Whitechain to enable transparent,
+verifiable payments for compliant ERC-3643 tokenized assets. Unlike traditional payment rails,
+blockchain smart contracts can coordinate stablecoin payments and token ownership transfers within
+a single atomic transaction, eliminating the need for separate settlement reconciliation.
+
+Why Whitechain? Whitechain provides an Ethereum-secured Layer 2 environment with low
+transaction fees, WBT-powered gas payments, and a native bridge supporting test USDC.e and
+USDT.e transfers from Ethereum and Tron. This enables T-REX to explore cross-chain stablecoin
+funding and compliant asset settlement within Whitechain's ecosystem, with future opportunities for
+integration into the WhiteBIT ecosystem.
+
+## Whitechain Hackathon Contributions
+
+### Before the Hackathon — Existing Platform
+
+T-REX Capital Market was already developed and deployed as an ERC-3643-based tokenized asset
+investment platform. It included issuer and investor onboarding, identity verification, compliance
+checks, token management, investment and redemption workflows, and manual onchain token price
+updates.
+
+### During the Hackathon — New Whitechain Development
+
+For this hackathon, we are implementing Automated Token Price Updates on Whitechain, extending
+the existing platform with:
+
+- Automated Price Updates: Enable authorized bots to update token prices onchain without
+  requiring manual wallet confirmation for every update.
+- Service Wallet Registration: Register and verify authorized service wallets onchain.
+- Secure Bot Configuration: Manage API keys, approved IP addresses, and network security
+  restrictions.
+- Price Protection: Configure price-change thresholds, cumulative limits, and minimum/maximum
+  prices.
+- Update Scheduling: Control when and how frequently automated price updates can occur.
+
+Hackathon Contribution: The existing T-REX platform serves as the foundation. The new work
+focuses specifically on building secure, configurable, automated onchain price management on
+Whitechain.
