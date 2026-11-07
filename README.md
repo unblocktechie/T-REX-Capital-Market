@@ -1242,7 +1242,15 @@ USDT.e transfers from Ethereum and Tron. This enables T-REX to explore cross-cha
 funding and compliant asset settlement within Whitechain's ecosystem, with future opportunities for
 integration into the WhiteBIT ecosystem.
 
-## Whitechain Hackathon Contributions
+## Institutional Tokenization Expansion on Hedera
+
+We expanded T-REX Capital Market to Hedera, bringing our ERC-3643 tokenization infrastructure and automated valuation reporting to an ecosystem focused on institutional adoption and real-world asset tokenization.
+
+Hedera's RWA Tokenization Studio aligns with our goal of simplifying institutional asset issuance and management.
+
+We are also exploring Hedera's Cross Ledger Protocol (CLPR) as a future interoperability opportunity, with the long-term goal of enabling tokenized assets to move across blockchain networks.
+
+## Hackathon Contributions
 
 ### Before the Hackathon — Existing Platform
 
@@ -1253,7 +1261,7 @@ updates.
 
 ### During the Hackathon — New Whitechain Development
 
-For this hackathon, we are implementing Automated Token Price Updates on Whitechain, extending
+For this hackathon, we are implementing Automated Token Price Updates on Whitechain and Hedera, extending
 the existing platform with:
 
 - Automated Price Updates: Enable authorized bots to update token prices onchain without
@@ -1265,6 +1273,6 @@ the existing platform with:
   prices.
 - Update Scheduling: Control when and how frequently automated price updates can occur.
 
-Hackathon Contribution: The existing T-REX platform serves as the foundation. The new work
+**Hackathon Contribution:** The existing T-REX platform serves as the foundation. The new work
 focuses specifically on building secure, configurable, automated onchain price management on
 Whitechain.
