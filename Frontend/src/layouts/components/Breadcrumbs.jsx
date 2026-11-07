@@ -20,7 +20,7 @@ const labels = {
   investors: 'Investment Requests',
   'investor-directory': 'Investors',
   invitations: 'Invitations',
-  transactions: 'Transaction History',
+  transactions: 'Activity History',
   redemptions: 'Redemption Requests',
   'api-keys': 'Bot Configuration',
   'corporate-actions': 'Corporate actions',

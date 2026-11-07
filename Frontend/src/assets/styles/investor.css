@@ -20580,9 +20580,11 @@ button.investor-dashboard-live__metric:focus-visible,
     flex-wrap: wrap;
   }
 
-  /* Seven canonical transaction fields are too dense beside the issuer
-     sidebar at tablet widths. Convert each row into a readable record card
-     before content begins clipping or horizontal scrolling. */
+}
+
+/* Keep Activity History as a proper horizontal-scroll table at tablet widths
+   (768px and above). Only phone-sized viewports use record cards. */
+@media (max-width: 767px) {
   .issuer-transaction-table-card {
     overflow: visible;
     border: 0;
@@ -20728,6 +20730,106 @@ button.investor-dashboard-live__metric:focus-visible,
   .issuer-transaction-amount,
   .issuer-transaction-wallet-cell {
     justify-items: start;
+  }
+}
+
+/* The issuer's From/To wallet copy controls match Transaction column: the
+   shortened address and its dedicated, clickable icon must never overlap. */
+.issuer-transaction-table-card .compact-address {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.issuer-transaction-table-card .compact-address__value {
+  flex: 0 0 auto;
+  max-width: none;
+  white-space: nowrap;
+}
+
+.issuer-transaction-table-card .compact-address__copy {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.issuer-transaction-wallet-cell {
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (min-width: 768px) {
+  .issuer-transaction-table-card {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .issuer-transaction-table-card .app-data-table-scroll {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .issuer-transaction-table-card .app-data-table {
+    display: table;
+    min-width: 1080px;
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .issuer-transaction-table-card .app-data-table thead {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+    clip-path: none;
+    white-space: normal;
+  }
+
+  .issuer-transaction-table-card .app-data-table tbody {
+    display: table-row-group;
+  }
+
+  .issuer-transaction-table-card .app-data-table tr {
+    display: table-row;
+  }
+
+  .issuer-transaction-table-card .app-data-table td,
+  .issuer-transaction-table-card .app-data-table td.app-data-table__align-end {
+    display: table-cell;
+    padding-inline: 10px;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  .issuer-transaction-table-card .app-data-table td.app-data-table__align-end {
+    text-align: right;
+  }
+
+  .issuer-transaction-table-card .app-data-table td::before {
+    content: none;
+  }
+
+  .issuer-transaction-table-card .app-data-table th {
+    padding-inline: 10px;
+  }
+
+  .issuer-transaction-table-card .app-data-table th:nth-child(4),
+  .issuer-transaction-table-card .app-data-table th:nth-child(5),
+  .issuer-transaction-table-card .app-data-table td:nth-child(4),
+  .issuer-transaction-table-card .app-data-table td:nth-child(5) {
+    min-width: 170px;
+  }
+
+  .issuer-transaction-table-card .app-data-table td > * {
+    max-width: none;
   }
 }
 
@@ -22328,5 +22430,104 @@ button.investor-dashboard-live__metric:focus-visible,
   .investment-journey__actions-panel .investment-journey__actions .button {
     flex: 1 1 150px;
     min-width: 0;
+  }
+}
+
+/* 2026-11-03 — Tablet header actions for Investor Management and My Investment.
+   The sidebar changes the usable content width, so use app-main container
+   queries for wrapping while reserving full-width actions for narrow phones.
+   All selectors are scoped to these two tabbed workspaces. */
+.issuer-investor-management__panel .issuer-page-header > div:first-child,
+.investor-my-investment .marketplace-applications-header > div:first-child,
+.investor-my-investment .investor-invitations-header > div:first-child,
+.investor-my-investment .investor-portfolio-header > div:first-child {
+  min-width: 0;
+}
+
+/* Match the normal 42px header action across all six tabs, including the
+   Redemption Requests action that previously used the smaller button size. */
+.issuer-investor-management__panel .issuer-page-header > .button,
+.investor-my-investment .marketplace-applications-header > .button,
+.investor-my-investment .investor-invitations-header > .button,
+.investor-my-investment .investor-portfolio-header > .button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding-inline: 16px;
+  white-space: nowrap;
+}
+
+/* Keep the leading icon, text and optional trailing arrow in separate flex
+   items. In particular, Export CSV and Explore Marketplace must not collide. */
+.issuer-investor-management__panel .issuer-page-header > .button > svg,
+.investor-my-investment .marketplace-applications-header > .button > svg,
+.investor-my-investment .investor-invitations-header > .button > svg,
+.investor-my-investment .investor-portfolio-header > .button > svg,
+.issuer-investor-management__panel .issuer-page-header > .button > span > svg,
+.investor-my-investment .marketplace-applications-header > .button > span > svg,
+.investor-my-investment .investor-invitations-header > .button > span > svg,
+.investor-my-investment .investor-portfolio-header > .button > span > svg {
+  flex: 0 0 auto;
+}
+
+.issuer-investor-management__panel .issuer-page-header > .button > span,
+.investor-my-investment .marketplace-applications-header > .button > span,
+.investor-my-investment .investor-invitations-header > .button > span,
+.investor-my-investment .investor-portfolio-header > .button > span {
+  min-width: 0;
+  gap: 8px;
+}
+
+/* At tablet-sized content widths the explanatory copy takes a full row,
+   preventing the unwanted left strip and placing compact actions on the right. */
+@container app-main (max-width: 900px) {
+  .issuer-investor-management__panel .issuer-page-header,
+  .investor-my-investment .marketplace-applications-header,
+  .investor-my-investment .investor-invitations-header,
+  .investor-my-investment .investor-portfolio-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .issuer-investor-management__panel .issuer-page-header > div:first-child,
+  .investor-my-investment .marketplace-applications-header > div:first-child,
+  .investor-my-investment .investor-invitations-header > div:first-child,
+  .investor-my-investment .investor-portfolio-header > div:first-child {
+    width: 100%;
+  }
+
+  .issuer-investor-management__panel .issuer-page-header > .button,
+  .investor-my-investment .marketplace-applications-header > .button,
+  .investor-my-investment .investor-invitations-header > .button,
+  .investor-my-investment .investor-portfolio-header > .button {
+    align-self: flex-end;
+    width: fit-content;
+    max-width: 100%;
+  }
+}
+
+/* Width of the actual device, not the sidebar-reduced content: tablet
+   screens remain right-aligned even when their main area is under 640px. */
+@media (max-width: 640px) {
+  .issuer-investor-management__panel .issuer-page-header > .button,
+  .investor-my-investment .marketplace-applications-header > .button,
+  .investor-my-investment .investor-invitations-header > .button,
+  .investor-my-investment .investor-portfolio-header > .button {
+    align-self: stretch;
+    width: 100%;
+  }
+}
+
+/* The existing Redemption Requests header already stacks at <=1100px by
+   viewport; keep its Refresh action right-aligned even with the sidebar closed. */
+@media (min-width: 641px) and (max-width: 1100px) {
+  .issuer-investor-management__panel .issuer-redemptions-header > .button {
+    align-self: flex-end;
   }
 }

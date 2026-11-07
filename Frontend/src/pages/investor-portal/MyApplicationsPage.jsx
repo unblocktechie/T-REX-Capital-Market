@@ -105,7 +105,7 @@ export default function MyApplicationsPage({ embedded = false } = {}) {
           <h1>My Applications</h1>
           <p>See what is happening with each application, who needs to act next, and when you are ready to invest.</p>
         </div>
-        <Button icon={Store} onClick={() => navigate(ROUTES.marketplace)}>Explore Marketplace <ArrowRight size={17} /></Button>
+        <Button icon={Store} onClick={() => navigate(ROUTES.marketplace)}>Explore Marketplace <ArrowRight size={17} className="shrink-0" aria-hidden="true" /></Button>
       </header>
 
       {loading || applications.length ? (

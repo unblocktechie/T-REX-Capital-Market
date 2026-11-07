@@ -6,17 +6,21 @@ import {
   ChevronUp,
   ExternalLink,
   X,
+  FileCheck2,
   Fingerprint,
   Landmark,
   PencilLine,
+  Settings2,
   TrendingDown,
   TrendingUp,
   ShieldCheck,
+  UsersRound,
+  WalletCards,
 } from 'lucide-react';
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   AddressDisplay,
@@ -24,37 +28,52 @@ import {
   InfoCallout,
   StatusBadge,
 } from '@/components/token-issuance/IssuancePrimitives';
-import { TokenIcon } from '@/components/common/TokenIcon';
 import { NetworkIcon } from '@/components/common/NetworkIcon';
+import { TokenIcon } from '@/components/common/TokenIcon';
 import { TokenPriceValue } from '@/components/common/TokenPriceValue';
+import { PriceUpdatesCard } from '@/components/token-issuance/PriceUpdatesCard';
+import { IssuerPriceHistory } from '@/components/price-history/IssuerPriceHistory';
+import { priceHistoryQueryPrefix } from '@/services/price-history/priceHistory.utils';
+import { verifyDirectPriceUntilSynchronized } from '@/services/issuer/directPriceVerification.service';
+import { sendPreparedManualPriceTransaction, validatePreparedManualPrice } from '@/services/issuer/manualPriceTransaction.service';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ROUTES } from '@/config/routes';
 import { web3Config } from '@/config/web3';
+import { useChainConfig } from '@/hooks/useChains';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useOrganization } from '@/hooks/useOrganization';
+import { usePaymentTokenMetadata } from '@/hooks/usePaymentTokenMetadata';
 import { useWalletConnection } from '@/hooks/useWalletConnection';
 import { useTokenDashboardData } from '@/hooks/useTokenDashboardData';
-import { usePaymentTokenMetadata } from '@/hooks/usePaymentTokenMetadata';
 import { myTokenQueryKey } from '@/hooks/useMyToken';
 import { formatNumber } from '@/utils/tokenIssuance';
 import { blockedCountriesPopoverPosition } from '@/utils/blockedCountriesPopover';
 import { getErrorMessage } from '@/utils/error';
 import { tokenPriceChange, validateCurrentTokenPrice } from '@/utils/tokenPrice';
 import { getDeploymentTransactionHash } from '@/utils/transactionHash';
+import { transactionExplorerUrl } from '@/utils/blockExplorer';
 import { tokenApi } from '@/api/tokens';
-import {
-  getPlatformTokenPrice,
-  setPlatformTokenPrice,
-} from '@/services/blockchain/trexPlatformController.service';
+import { chainsApi } from '@/api/chains';
+import { organizationApi } from '@/api/organization';
+import { getPlatformTokenPrice } from '@/services/blockchain/trexPlatformController.service';
 import {
   clearTokenPriceSyncRecovery,
   loadTokenPriceSyncRecovery,
   saveTokenPriceSyncRecovery,
+  hasBackendPriceVerificationRejection,
 } from '@/services/issuer/tokenPriceSyncRecovery.service';
 import { readTrexTokenPaused } from '@/services/trexDeployment.service';
+import { tokenServiceWalletAddress } from '@/services/issuer/tokenServiceWallet.utils';
+import { resolveTokenServiceWalletController } from '@/services/issuer/tokenServiceWalletController.utils';
+import {
+  registerIssuerServiceWallet,
+  revokeIssuerServiceWallet,
+  SERVICE_WALLET_ZERO_ADDRESS,
+  readTokenServiceWallet,
+} from '@/services/issuer/issuerServiceWallet.service';
 import { useTokenIssuanceStore } from '@/store/tokenIssuance.store';
 
 const firstText = (...values) =>
@@ -68,16 +87,24 @@ const rawAddress = (raw, ...keys) => {
   return '';
 };
 
-const mergeCurrentPriceIntoToken = (currentToken, responseToken, currentTokenPrice) => ({
-  ...(currentToken || {}),
-  ...(responseToken && typeof responseToken === 'object' ? responseToken : {}),
-  currentTokenPrice: String(currentTokenPrice).trim(),
-  tokenInformation: {
-    ...(currentToken?.tokenInformation || currentToken?.information || {}),
-    ...(responseToken?.tokenInformation || responseToken?.information || {}),
-    currentTokenPrice: String(currentTokenPrice).trim(),
-  },
-});
+
+function DetailMetric({ icon: Icon, label, value, helper, mono = false, titleValue }) {
+  return (
+    <article className="token-dashboard-metric">
+      <span className="token-dashboard-metric__icon"><Icon size={20} /></span>
+      <div>
+        <small>{label}</small>
+        <strong
+          className={mono ? 'token-dashboard-metric__mono' : undefined}
+          title={String(titleValue || value)}
+        >
+          {value || '—'}
+        </strong>
+        {helper ? <p>{helper}</p> : null}
+      </div>
+    </article>
+  );
+}
 
 function SettingRow({ label, value, status }) {
   return (
@@ -91,7 +118,6 @@ function SettingRow({ label, value, status }) {
   );
 }
 
-/** Collapse lengthy issuer descriptions without losing the saved backend text. */
 function TokenDescription({ description }) {
   const [expanded, setExpanded] = useState(false);
   const [canExpand, setCanExpand] = useState(false);
@@ -327,10 +353,11 @@ const friendlyClaim = (topic = {}) => {
 
 export default function TokenDetailsPage() {
   const navigate = useNavigate();
+  const [tokenSearchParams, setTokenSearchParams] = useSearchParams();
   const { tokenAddress: routeTokenId } = useParams();
   const token = useTokenDashboardData();
   const queryClient = useQueryClient();
-  const { organization } = useOrganization();
+  const { organization, refresh: refreshOrganization } = useOrganization();
   const mapped = token.mapped || {};
   const information = mapped.tokenInformation || {};
   const identityClaims = mapped.identityClaims || { claimTopics: [], trustedIssuer: {} };
@@ -338,29 +365,62 @@ export default function TokenDetailsPage() {
   const agents = mapped.agents || {};
   const raw = token.token || {};
   const tokenChainId = Number(raw.chainId || raw.deployment?.chainId || information.chainId || 0) || undefined;
+  const tokenChainUid = firstText(
+    raw.chainUid,
+    raw.deployment?.chainUid,
+    raw.chain?.chainUid,
+    raw.network?.chainUid,
+    information.chainUid,
+    token.selectedChainUid,
+    web3Config.getChainRecordById(tokenChainId)?.chainUid,
+  );
+  const tokenChainRecord =
+    web3Config.getChainRecordById(tokenChainId)
+    || web3Config.getChainRecordByUid(tokenChainUid);
+  const tokenChainConfig = useChainConfig(tokenChainUid, {
+    enabled: Boolean(tokenChainUid),
+    staleTime: 30_000,
+  });
+  const tokenChainPresentation = tokenChainConfig.data || tokenChainRecord;
+  // Use the same chain-scoped Platform Controller proxy already configured in
+  // Chain Master. A token does not need its own new controller address.
+  const serviceWalletControllerAddress = resolveTokenServiceWalletController({
+    chainConfig: tokenChainConfig.data,
+    chainRecord: tokenChainRecord,
+    tokenChainUid,
+    tokenChainId,
+  });
   const tokenChain = web3Config.getChainById(tokenChainId) || web3Config.requiredChain;
-  const tokenChainRecord = web3Config.getChainRecordById(tokenChainId);
   const wallet = useWalletConnection(tokenChainId);
   const [priceEditorOpen, setPriceEditorOpen] = useState(false);
+  const [priceAutomationOpen, setPriceAutomationOpen] = useState(false);
+  const [serviceWalletAddress, setServiceWalletAddress] = useState('');
+  const [serviceWalletError, setServiceWalletError] = useState('');
+  const [serviceWalletSuccess, setServiceWalletSuccess] = useState('');
+  const [serviceWalletSubmitting, setServiceWalletSubmitting] = useState(false);
+  const [serviceWalletRevoking, setServiceWalletRevoking] = useState(false);
+  const [serviceWalletPendingSyncAddress, setServiceWalletPendingSyncAddress] = useState('');
   const [newPrice, setNewPrice] = useState('');
   const [priceError, setPriceError] = useState('');
   const [updatingPrice, setUpdatingPrice] = useState(false);
+  const [priceSyncStatus, setPriceSyncStatus] = useState('idle');
+  const [priceSyncMessage, setPriceSyncMessage] = useState('');
+  const priceVerificationRef = useRef(null);
+  const rejectionCancellationRef = useRef(null);
   const [onchainCurrentPrice, setOnchainCurrentPrice] = useState('');
   const [onchainPriceStatus, setOnchainPriceStatus] = useState('loading');
   const [onchainPaused, setOnchainPaused] = useState(null);
   const [transferStateStatus, setTransferStateStatus] = useState('loading');
   const setDeployment = useTokenIssuanceStore((state) => state.setDeployment);
   const { paymentTokenAddress, controllerAddress, paymentTokenSymbol } = paymentContextOf(raw, mapped.supplyPricing);
-  const paymentSymbol = paymentTokenSymbol || mapped.supplyPricing?.currency || 'payment token';
-  // The asset's saved payment-token contract selects the icon from this chain's
-  // backend catalogue. USDG and other custom currencies have no bundled artwork.
   const paymentTokenMetadata = usePaymentTokenMetadata({
     paymentTokenAddress,
-    paymentTokenSymbol: paymentSymbol,
-    chainUid: information.chainUid || raw.chainUid || token.selectedChainUid,
+    paymentTokenSymbol: paymentTokenSymbol || mapped.supplyPricing?.currency,
+    chainUid: tokenChainUid,
     chainId: tokenChainId,
-    enabled: Boolean(token.isDeployed && paymentTokenAddress),
+    enabled: Boolean(paymentTokenAddress && (tokenChainUid || tokenChainId)),
   });
+  const paymentSymbol = paymentTokenMetadata.symbol || paymentTokenSymbol || mapped.supplyPricing?.currency || 'payment token';
   const tokenName = information.name || firstText(raw.tokenName, raw.name) || 'Security Token';
   const symbol = information.symbol || firstText(raw.tokenSymbol, raw.symbol).toUpperCase() || 'TOKEN';
   const candidateTokenContractAddress = rawAddress(
@@ -373,7 +433,71 @@ export default function TokenDetailsPage() {
     'deployment.tokenAddress',
     'deployment.contractAddress',
   );
+  const tokenUid = firstText(raw.tokenUid, information.tokenUid, routeTokenId);
+  const registeredServiceWallet = tokenServiceWalletAddress(
+    organization?.tokenServiceWallets, tokenUid, tokenChainUid,
+  );
+  const serviceWalletContext = `${tokenUid}:${tokenChainUid}`;
+  const botConfigurationParams = new URLSearchParams({ tab: 'api-keys', tokenUid, chainUid: tokenChainUid });
+  const botConfigurationLink = `${ROUTES.issuerApiKeys}?${botConfigurationParams.toString()}`;
+  useEffect(() => {
+    if (token.isLoading || !tokenUid || tokenSearchParams.get('setup') !== 'service-wallet') return;
+    setPriceAutomationOpen(true);
+    setTokenSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete('setup');
+      return next;
+    }, { replace: true });
+  }, [token.isLoading, tokenUid, tokenSearchParams, setTokenSearchParams]);
+  const [onchainServiceWallet, setOnchainServiceWallet] = useState(null);
+  const [serviceWalletLoading, setServiceWalletLoading] = useState(false);
+
   useDocumentTitle(tokenName);
+
+  useEffect(() => {
+    if (!priceAutomationOpen) return;
+    setServiceWalletAddress(
+      String(serviceWalletPendingSyncAddress || registeredServiceWallet || '').trim(),
+    );
+    setServiceWalletError('');
+    setServiceWalletSuccess('');
+  }, [registeredServiceWallet, priceAutomationOpen, serviceWalletPendingSyncAddress]);
+
+  useEffect(() => {
+    // Do not let pending sync state or contract reads leak into another token.
+    setServiceWalletPendingSyncAddress('');
+    setServiceWalletAddress('');
+    setOnchainServiceWallet(null);
+    setServiceWalletError('');
+    setServiceWalletSuccess('');
+  }, [serviceWalletContext]);
+
+  useEffect(() => {
+    // A fresh check runs silently whenever the popup opens. Clear the last
+    // result on close so a warning from an earlier viewing cannot flash first.
+    if (!priceAutomationOpen) {
+      setOnchainServiceWallet(null);
+      setServiceWalletLoading(false);
+      return;
+    }
+    if (!candidateTokenContractAddress || !serviceWalletControllerAddress || !tokenChainId) return;
+    let active = true;
+    setOnchainServiceWallet(null);
+    setServiceWalletLoading(true);
+    readTokenServiceWallet({
+      tokenAddress: candidateTokenContractAddress,
+      chainId: tokenChainId,
+      platformControllerAddress: serviceWalletControllerAddress,
+    }).then((address) => {
+      if (active) setOnchainServiceWallet(address);
+    }).catch(() => {
+      // A failed read is not evidence of registration or revocation.
+      if (active) setOnchainServiceWallet(null);
+    }).finally(() => {
+      if (active) setServiceWalletLoading(false);
+    });
+    return () => { active = false; };
+  }, [priceAutomationOpen, serviceWalletContext, candidateTokenContractAddress, serviceWalletControllerAddress, tokenChainId]);
 
   useEffect(() => {
     if (!candidateTokenContractAddress) {
@@ -433,33 +557,127 @@ export default function TokenDetailsPage() {
     };
   }, [candidateTokenContractAddress, paymentTokenAddress, controllerAddress, tokenChain.id]);
 
-  useEffect(() => {
-    if (!candidateTokenContractAddress) return undefined;
-    const pending = loadTokenPriceSyncRecovery(candidateTokenContractAddress);
-    if (!pending?.currentTokenPrice) return undefined;
-
-    let active = true;
-    tokenApi.updateCurrentPrice(pending.currentTokenPrice)
-      .then((updatedToken) => {
-        if (!active) return;
-        const responseToken = updatedToken?.token && typeof updatedToken.token === 'object'
-          ? updatedToken.token
-          : updatedToken;
-        queryClient.setQueryData(
-          myTokenQueryKey(token.userKey, token.selectedChainUid),
-          (current) => mergeCurrentPriceIntoToken(current, responseToken, pending.currentTokenPrice),
-        );
-        clearTokenPriceSyncRecovery(candidateTokenContractAddress);
-      })
-      .catch(() => {
-        // The on-chain price is already authoritative. Keep the recovery entry so
-        // a later visit can synchronize the account record without another wallet transaction.
+  const runPriceVerification = useCallback(async (pending, { resumed = false } = {}) => {
+    if (priceVerificationRef.current) return;
+    const controller = new AbortController();
+    priceVerificationRef.current = controller;
+    setPriceSyncStatus('awaiting');
+    setPriceSyncMessage('Awaiting confirmation. Checking the original transaction without reopening MetaMask.');
+    try {
+      let pendingHistoryRefreshed = false;
+      const responseToken = await verifyDirectPriceUntilSynchronized({
+        submit: tokenApi.updateCurrentPrice,
+        currentTokenPrice: pending.currentTokenPrice,
+        txHash: pending.txHash,
+        chainUid: pending.chainUid,
+        priceUpdateUid: pending.priceUpdateUid,
+        signal: controller.signal,
+        onPending: () => {
+          setPriceSyncStatus('awaiting');
+          setPriceSyncMessage('Awaiting confirmation. The network is still processing your transaction.');
+          setPriceEditorOpen(false);
+          if (!pendingHistoryRefreshed) {
+            pendingHistoryRefreshed = true;
+            void queryClient.invalidateQueries({ queryKey: priceHistoryQueryPrefix(token.userKey, pending.chainUid) });
+          }
+        },
+        onTemporaryFailure: () => {
+          setPriceSyncStatus('awaiting');
+          setPriceSyncMessage('Verification is temporarily unavailable. Retrying without another wallet transaction.');
+          setPriceEditorOpen(false);
+        },
       });
+      if (controller.signal.aborted) return;
+      clearTokenPriceSyncRecovery(pending.tokenAddress, { chainUid: pending.chainUid, userKey: pending.userKey });
+      setPriceSyncStatus('idle');
+      setPriceSyncMessage('');
+      setPriceEditorOpen(false);
+      // The backend may return a price newer than this transaction. Never overwrite it
+      // with our submitted value or treat an HTTP 202 response as a confirmed update.
+      const resolved = responseToken?.token && typeof responseToken.token === 'object'
+        ? responseToken.token : responseToken;
+      const synchronizedPrice = firstText(
+        resolved?.currentTokenPrice, resolved?.tokenInformation?.currentTokenPrice,
+        resolved?.supplyPricing?.currentPrice,
+      );
+      setOnchainCurrentPrice(synchronizedPrice);
+      // Query refetch errors must not undo a successfully verified backend sync.
+      await Promise.allSettled([
+        queryClient.invalidateQueries({ queryKey: myTokenQueryKey(token.userKey, pending.chainUid) }),
+        queryClient.invalidateQueries({ queryKey: priceHistoryQueryPrefix(token.userKey, pending.chainUid) }),
+      ]);
+      toast.success('Price updated successfully', {
+        description: 'Your new price is confirmed and has been added to your price history.',
+      });
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      // Preserve the transaction reference for recovery. Never ask MetaMask to submit it again.
+      setPriceSyncStatus('attention');
+      const code = String(error?.response?.data?.error?.code || error?.response?.data?.code || error?.code || '').toUpperCase();
+      if (['INVALID_PRICE_TRANSACTION_TARGET', 'INVALID_PRICE_TRANSACTION_DETAILS'].includes(code)) {
+        saveTokenPriceSyncRecovery(pending.tokenAddress, {
+          ...pending, verificationIssue: code, verificationIssueSource: 'backend',
+        });
+      }
+      const message = code === 'INVALID_PRICE_TRANSACTION_TARGET'
+        ? 'The server could not associate this wallet-executed transaction with the saved price request. It may have succeeded on-chain. Keep the transaction hash and request backend reconciliation; do not submit it again.'
+        : code === 'TRANSACTION_FAILED'
+          ? 'The price transaction reverted. Review this failed attempt in history before preparing a new one.'
+          : getErrorMessage(error, 'Verification could not finish. Do not send another wallet transaction.');
+      setPriceSyncMessage(`${message} The saved request remains available for status checks.`);
+      if (!resumed) toast.error('Price verification needs attention', { description: message });
+      setPriceEditorOpen(false);
+    } finally {
+      if (priceVerificationRef.current === controller) priceVerificationRef.current = null;
+      if (!controller.signal.aborted) setUpdatingPrice(false);
+    }
+  }, [queryClient, token.userKey]);
 
+  useEffect(() => {
+    // When the issuer switches networks, do not leave an unrelated asset's price
+    // editor blocked by the previous network's verification indicator.
+    setPriceSyncStatus('idle');
+    setPriceSyncMessage('');
+    setUpdatingPrice(false);
+    // Recovery is scoped to the original issuer, asset and chain. Old entries with
+    // valid chain pin are ignored by the recovery service.
+    const pending = loadTokenPriceSyncRecovery(candidateTokenContractAddress, {
+      chainUid: tokenChainUid,
+      userKey: token.userKey,
+    });
+    if (pending && pending.chainUid === token.selectedChainUid) {
+      if (pending.txHash && hasBackendPriceVerificationRejection(pending)) {
+        // Only an explicit backend rejection is terminal. Older versions saved
+        // client-side RPC inspection warnings before ever submitting PATCH.
+        // Those hashes must be offered to the authoritative backend verifier.
+        setPriceSyncStatus('attention');
+        setPriceSyncMessage('The server has not associated this wallet transaction with the saved price request. Keep its hash and check the explorer or request backend reconciliation. Do not send it again.');
+      } else if (pending.txHash) {
+        void runPriceVerification(pending, { resumed: true });
+      } else {
+        // A missing hash does not prove no broadcast. A rejected wallet prompt
+        // is safe to cancel, while an uncertain outcome must stay protected.
+        setPriceSyncStatus('attention');
+        setPriceSyncMessage(pending.walletSubmissionStartedAt
+          ? 'We could not confirm whether MetaMask sent this transaction. Check your wallet activity. Do not cancel or send it again; contact support if you find a completed transaction.'
+          : pending.walletRejectedAt
+            ? 'You rejected the MetaMask transaction. Checking whether the saved request can be closed.'
+            : pending.walletApprovalAttemptedAt
+              ? 'The earlier wallet request did not finish. Check wallet activity; do not submit another transaction.'
+              : 'A prepared price request already exists. Check its status before attempting another update.');
+      }
+      // A saved, explicitly rejected wallet prompt can resume cleanup after a reload.
+      // Never cancel a request whose broadcast status is uncertain.
+      if (!token.isLoading && token.hasToken && token.isDeployed &&
+        pending.walletRejectedAt && !pending.txHash && !pending.walletSubmissionStartedAt) {
+        void cancelRejectedPriceRequest(pending);
+      }
+    }
     return () => {
-      active = false;
+      priceVerificationRef.current?.abort();
+      priceVerificationRef.current = null;
     };
-  }, [candidateTokenContractAddress, queryClient, token.selectedChainUid, token.userKey]);
+  }, [candidateTokenContractAddress, tokenChainUid, token.selectedChainUid, token.userKey, token.isLoading, token.hasToken, token.isDeployed, runPriceVerification]);
 
   if (token.isLoading) {
     return (
@@ -530,14 +748,15 @@ export default function TokenDetailsPage() {
   const tokenExplorer = tokenContractAddress && explorerBase
     ? `${explorerBase}/address/${tokenContractAddress}`
     : undefined;
-  // Keep the full mapped configuration: disabling a requirement must not make its
-  // existence disappear from the issuer's review screen.
   const claimTopics = identityClaims.claimTopics || [];
   const countryNames = (compliance.countries || [])
     .map((country) => country?.countryName || country?.label || String(country || ''))
     .filter(Boolean);
   const investorAccessConfigured = Boolean(
     organizationOnchainId && identityRegistryAddress && identityRegistryStorageAddress,
+  );
+  const managementReady = Boolean(
+    agents.identityRegistryAgent?.address && agents.tokenAgent?.address,
   );
   const setupNeedsTransferActivation = transferStateStatus === 'ready' && onchainPaused === true;
   const assetReady = token.isDeployed && !setupNeedsTransferActivation && onchainPriceStatus === 'ready';
@@ -567,7 +786,9 @@ export default function TokenDetailsPage() {
   };
 
   const closePriceEditor = () => {
-    if (updatingPrice) return;
+    if (updatingPrice && priceSyncStatus !== 'awaiting') return;
+    // Closing our editor is NOT equivalent to rejecting MetaMask. Do not
+    // cancel an intent unless the wallet explicitly rejected its transaction.
     setPriceEditorOpen(false);
     setPriceError('');
   };
@@ -608,12 +829,339 @@ export default function TokenDetailsPage() {
     navigate(ROUTES.tokenDeploying);
   };
 
-  const handlePriceUpdate = async () => {
-    const validationError = validateCurrentTokenPrice(newPrice);
-    if (validationError) {
-      setPriceError(validationError);
+  const handleServiceWalletRegistration = async (nextServiceWalletAddress) => {
+    setServiceWalletSubmitting(true);
+    setServiceWalletError('');
+    setServiceWalletSuccess('');
+
+    try {
+      if (!tokenUid || !tokenChainUid || !candidateTokenContractAddress || !tokenChainId) {
+        throw new Error('A deployed token address is required before changing its Service Wallet.');
+      }
+      const issuerWalletAddress = String(organization.walletAddress || '').trim();
+      if (!issuerWalletAddress) {
+        throw new Error('The approved organization wallet is unavailable. Refresh the page and try again.');
+      }
+      if (!wallet.isConnected || !wallet.connector || !wallet.address) {
+        throw new Error('Connect the approved organization wallet from the header before registering a Service Wallet.');
+      }
+
+      // Read the existing chain-scoped controller proxy from Chain Master.
+      // Do not require a controller in the token's payment data.
+      const chains = await chainsApi.listPublic();
+      const selectedChain = chains.find((chain) =>
+        (tokenChainUid && chain.chainUid === tokenChainUid) ||
+        (tokenChainId && Number(chain.chainId) === Number(tokenChainId)),
+      );
+      if (!selectedChain) {
+        const error = new Error('The selected network is unavailable. Refresh the network list and try again.');
+        error.code = 'SELECTED_CHAIN_MISMATCH';
+        throw error;
+      }
+      const chainController = resolveTokenServiceWalletController({
+        chainConfig: tokenChainConfig.data,
+        chainRecord: selectedChain,
+        tokenChainUid,
+        tokenChainId,
+      });
+      if (!chainController) {
+        throw new Error('The Platform Controller for this network is missing from Chain Master. Refresh the network configuration and try again.');
+      }
+
+      if (Number(wallet.chainId) !== Number(selectedChain.chainId)) {
+        await wallet.switchChain(selectedChain.chainId);
+      }
+
+      const requestedAddress = String(nextServiceWalletAddress || '').trim();
+      const canRetryBackendSync = Boolean(
+        serviceWalletPendingSyncAddress &&
+        serviceWalletPendingSyncAddress.toLowerCase() === requestedAddress.toLowerCase(),
+      );
+      let registeredAddress = serviceWalletPendingSyncAddress;
+
+      if (!canRetryBackendSync) {
+        const chainResult = await registerIssuerServiceWallet({
+          connector: wallet.connector,
+          connectedAddress: wallet.address,
+          issuerWalletAddress,
+          serviceWalletAddress: requestedAddress,
+          tokenAddress: candidateTokenContractAddress,
+          chainId: selectedChain.chainId,
+          platformControllerAddress: chainController,
+          confirmations: selectedChain.requiredConfirmations,
+        });
+        registeredAddress = chainResult.serviceWalletAddress;
+        setServiceWalletPendingSyncAddress(registeredAddress);
+      }
+
+      // Only synchronize after the on-chain receipt succeeds. If the backend is
+      // briefly behind the selected-chain node, a retry re-runs this PUT only;
+      // it does not ask the issuer to send the same blockchain transaction twice.
+      await organizationApi.syncServiceWallet(registeredAddress, selectedChain.chainUid, tokenUid);
+      const freshOrganization = await refreshOrganization();
+      const confirmedAddress = tokenServiceWalletAddress(
+        freshOrganization?.tokenServiceWallets, tokenUid, tokenChainUid,
+      );
+      if (confirmedAddress.toLowerCase() !== registeredAddress.toLowerCase()) {
+        throw new Error('The token registration is confirmed on-chain but is not yet reflected in your account. Use Sync Service Wallet to retry without another wallet transaction.');
+      }
+      setServiceWalletPendingSyncAddress('');
+      setServiceWalletAddress(confirmedAddress);
+      setOnchainServiceWallet(confirmedAddress);
+      setServiceWalletSuccess('Service Wallet registered and synchronized for this asset.');
+      toast.success('Service Wallet connected', {
+        description: "This wallet can now be used to update this token's price automatically.",
+      });
+    } catch (error) {
+      setServiceWalletError(
+        getErrorMessage(error, 'The Service Wallet could not be registered. Please try again.'),
+      );
+    } finally {
+      setServiceWalletSubmitting(false);
+    }
+  };
+
+
+  const handleServiceWalletRevoke = async () => {
+    if (serviceWalletRevoking || serviceWalletSubmitting || !registeredServiceWallet) return;
+
+    setServiceWalletRevoking(true);
+    setServiceWalletError('');
+    setServiceWalletSuccess('');
+
+    try {
+      if (!tokenUid || !tokenChainUid || !candidateTokenContractAddress || !tokenChainId) {
+        throw new Error('A deployed token address is required before changing its Service Wallet.');
+      }
+      const issuerWalletAddress = String(organization.walletAddress || '').trim();
+      if (!issuerWalletAddress) {
+        throw new Error('The approved organization wallet is unavailable. Refresh the page and try again.');
+      }
+      if (!wallet.isConnected || !wallet.connector || !wallet.address) {
+        throw new Error('Connect the approved organization wallet from the header before removing wallet access.');
+      }
+
+      const chains = await chainsApi.listPublic();
+      const selectedChain = chains.find((chain) =>
+        (tokenChainUid && chain.chainUid === tokenChainUid) ||
+        (tokenChainId && Number(chain.chainId) === Number(tokenChainId)),
+      );
+      if (!selectedChain) {
+        const error = new Error('The selected network is unavailable. Refresh the network list and try again.');
+        error.code = 'SELECTED_CHAIN_MISMATCH';
+        throw error;
+      }
+      const chainController = resolveTokenServiceWalletController({
+        chainConfig: tokenChainConfig.data,
+        chainRecord: selectedChain,
+        tokenChainUid,
+        tokenChainId,
+      });
+      if (!chainController) {
+        throw new Error('The Platform Controller for this network is missing from Chain Master. Refresh the network configuration and try again.');
+      }
+
+      if (Number(wallet.chainId) !== Number(selectedChain.chainId)) {
+        await wallet.switchChain(selectedChain.chainId);
+      }
+
+      const canRetryBackendSync = Boolean(
+        serviceWalletPendingSyncAddress &&
+        serviceWalletPendingSyncAddress.toLowerCase() === SERVICE_WALLET_ZERO_ADDRESS.toLowerCase(),
+      );
+      let revokedAddress = serviceWalletPendingSyncAddress;
+
+      if (!canRetryBackendSync) {
+        const chainResult = await revokeIssuerServiceWallet({
+          connector: wallet.connector,
+          connectedAddress: wallet.address,
+          issuerWalletAddress,
+          tokenAddress: candidateTokenContractAddress,
+          chainId: selectedChain.chainId,
+          platformControllerAddress: chainController,
+          confirmations: selectedChain.requiredConfirmations,
+        });
+        revokedAddress = chainResult.serviceWalletAddress;
+        setServiceWalletPendingSyncAddress(revokedAddress);
+      }
+
+      await organizationApi.syncServiceWallet(revokedAddress, selectedChain.chainUid, tokenUid);
+      const refreshedOrganization = await refreshOrganization();
+      if (tokenServiceWalletAddress(refreshedOrganization?.tokenServiceWallets, tokenUid, tokenChainUid)) {
+        throw new Error('The token revocation is confirmed on-chain but has not yet refreshed in your account. Try again later without sending a new transaction.');
+      }
+      setServiceWalletPendingSyncAddress('');
+      setServiceWalletAddress('');
+      setOnchainServiceWallet('');
+      setServiceWalletSuccess('Wallet access removed for this token. Automatic price updates are no longer authorized for it.');
+      toast.success('Wallet access removed', {
+        description: 'Automatic updates are off for this token. Manual updates and API keys are unchanged.',
+      });
+    } catch (error) {
+      setServiceWalletError(
+        getErrorMessage(error, 'Wallet access could not be removed. Please try again.'),
+      );
+    } finally {
+      setServiceWalletRevoking(false);
+    }
+  };
+
+  const synchronizePriceFromBackend = async (pending) => {
+    // Prefer the freshly fetched authoritative token value over a stale local on-chain read.
+    setOnchainCurrentPrice('');
+    clearTokenPriceSyncRecovery(pending.tokenAddress, { chainUid: pending.chainUid, userKey: pending.userKey });
+    setPriceSyncStatus('idle');
+    setPriceSyncMessage('');
+    setPriceEditorOpen(false);
+    await Promise.allSettled([
+      queryClient.invalidateQueries({ queryKey: myTokenQueryKey(token.userKey, pending.chainUid) }),
+      queryClient.invalidateQueries({ queryKey: priceHistoryQueryPrefix(token.userKey, pending.chainUid) }),
+    ]);
+  };
+
+  // The issuer has opted for cancellation directly on the wallet's explicit
+  // rejection event. Never call this for a closed editor, RPC error, missing
+  // provider response, submitted hash, or uncertain broadcast.
+  const cancelRejectedPriceRequest = async (pending) => {
+    if (!pending?.walletRejectedAt || pending.txHash || pending.walletSubmissionStartedAt) return;
+    if (rejectionCancellationRef.current) return;
+    rejectionCancellationRef.current = pending.priceUpdateUid;
+    setPriceSyncStatus('awaiting');
+    setPriceSyncMessage('Closing the rejected price request. No new wallet transaction will be sent.');
+    try {
+      const remote = await tokenApi.getManualPriceUpdate(pending.priceUpdateUid, pending.chainUid);
+      const remoteStatus = String(remote?.status || '').toUpperCase();
+      if (remote?.txHash) {
+        const recovered = saveTokenPriceSyncRecovery(pending.tokenAddress, {
+          ...pending, txHash: remote.txHash, status: remoteStatus || 'SUBMITTED',
+        });
+        setPriceSyncStatus('attention');
+        setPriceSyncMessage('A transaction hash is already recorded. The request was not cancelled; keep it for verification.');
+        void runPriceVerification(recovered, { resumed: true });
+        return;
+      }
+      if (remoteStatus === 'CONFIRMED' || remoteStatus === 'CANCELLED' || remoteStatus === 'FAILED') {
+        await synchronizePriceFromBackend(pending);
+        return;
+      }
+      if (remoteStatus !== 'PENDING') {
+        throw new Error('This request cannot be cancelled yet. Its current status must be checked.');
+      }
+      // This field is sent ONLY following an explicit EIP-1193 wallet rejection
+      // (not a generic close/network error). The backend still checks mined and
+      // pending wallet nonces and can refuse uncertain cancellation.
+      const result = await tokenApi.cancelManualPrice(pending.priceUpdateUid, pending.chainUid, {
+        confirmNotBroadcast: true,
+      });
+      const recoveryStatus = String(result?.recoveryStatus || '').toUpperCase();
+      const storedStatus = String(result?.status || '').toUpperCase();
+      if (recoveryStatus === 'CANCELLED' || storedStatus === 'CANCELLED' ||
+        (storedStatus === 'FAILED' && String(result?.errorCode || '').toUpperCase() === 'USER_CANCELLED')) {
+        await synchronizePriceFromBackend(pending);
+        toast.info('Price update cancelled', {
+          description: 'The unsigned price request was closed. Your price is unchanged.',
+        });
+        return;
+      }
+      if (recoveryStatus === 'CONFIRMED' || storedStatus === 'CONFIRMED') {
+        await synchronizePriceFromBackend(pending);
+        toast.success('Price update confirmed', {
+          description: 'The existing transaction was confirmed; no new transaction was sent.',
+        });
+        return;
+      }
+      if (result?.txHash) {
+        saveTokenPriceSyncRecovery(pending.tokenAddress, {
+          ...pending, txHash: result.txHash, status: storedStatus || 'SUBMITTED',
+        });
+      }
+      setPriceSyncStatus('attention');
+      setPriceSyncMessage(recoveryStatus === 'BROADCAST_STATUS_UNKNOWN'
+        ? 'The network could not verify whether this transaction was sent. Your request is saved; do not send another transaction.'
+        : 'Your previous price request is still being checked. No new wallet transaction is needed.');
+    } catch (error) {
+      setPriceSyncStatus('attention');
+      setPriceSyncMessage(getErrorMessage(error, 'The rejected price request could not be closed. It remains saved for recovery.'));
+      toast.error('Price request still pending', {
+        description: 'The server could not confirm cancellation. The original request has been preserved.',
+      });
+    } finally {
+      rejectionCancellationRef.current = null;
+    }
+  };
+
+  const submitPreparedWithWallet = async (pending) => {
+    if (pending.txHash) {
+      void runPriceVerification(pending);
       return;
     }
+    if (pending.chainUid !== token.selectedChainUid) throw new Error('Switch to the original asset network to resume the prepared transaction.');
+    // Mark the wallet invocation only AFTER sender/network validation and
+    // immediately BEFORE the actual provider call. An interrupted prompt may
+    // have broadcast successfully even if its hash never reached the page.
+    let prompted = pending;
+    let hash;
+    try {
+      hash = await sendPreparedManualPriceTransaction({
+        connector: wallet.connector,
+        connectedAddress: wallet.address,
+        issuerWalletAddress: pending.issuerWalletAddress,
+        tokenAddress: pending.tokenAddress,
+        chainId: pending.chainId,
+        prepared: { ...pending, status: 'PENDING' },
+        onBeforeBroadcast: () => {
+          prompted = saveTokenPriceSyncRecovery(pending.tokenAddress, {
+            ...pending, walletSubmissionStartedAt: new Date().toISOString(),
+          });
+        },
+      });
+    } catch (error) {
+      // An explicit wallet rejection is the only unambiguous no-broadcast
+      // signal. Other failures may occur AFTER the transaction was submitted.
+      const code = String(error?.code ?? error?.cause?.code ?? '');
+      if (code === '4001' || code === 'ACTION_REJECTED') {
+        // This provider invocation was explicitly rejected before returning a hash.
+        // The backend still checks the nonce and can leave an uncertain request unresolved.
+        const rejected = saveTokenPriceSyncRecovery(pending.tokenAddress, {
+          ...prompted, walletSubmissionStartedAt: '', walletRejectedAt: new Date().toISOString(),
+        });
+        setPriceEditorOpen(false);
+        await cancelRejectedPriceRequest(rejected);
+        return;
+      }
+      // Unknown provider/RPC errors after opening MetaMask are NOT safe to cancel.
+      setPriceSyncStatus('attention');
+      setPriceSyncMessage('MetaMask did not return a transaction hash. Check wallet activity before doing anything else. Do not cancel or send another transaction if it may have been broadcast.');
+      setPriceEditorOpen(false);
+      return;
+    }
+    // Match the working frontend: persist the returned hash immediately and
+    // let the backend PATCH endpoint verify the saved intent. A wallet's RPC
+    // transaction lookup can report wrapped/delayed data and must not block
+    // the authoritative request before the backend has checked it.
+    // This path never asks MetaMask to send another transaction.
+    const broadcast = saveTokenPriceSyncRecovery(pending.tokenAddress, {
+      ...prompted, txHash: hash, status: 'SUBMITTED',
+    });
+    setPriceSyncStatus('awaiting');
+    setPriceSyncMessage('Awaiting confirmation. The server is checking the original MetaMask transaction.');
+    setPriceEditorOpen(false);
+    toast.info('Price update in progress', {
+      description: "Your transaction was sent successfully. We'll update your price once it's confirmed.",
+    });
+    void runPriceVerification(broadcast);
+  };
+
+  const handlePriceUpdate = async () => {
+    if (updatingPrice || priceSyncStatus !== 'idle') return;
+    const previouslyPrepared = loadTokenPriceSyncRecovery(tokenContractAddress, { chainUid: tokenChainUid, userKey: token.userKey });
+    if (previouslyPrepared) {
+      setPriceError('An earlier price request is still pending. Check its status before starting another update.');
+      setPriceSyncStatus('attention');
+      return;
+    }
+    const validationError = validateCurrentTokenPrice(newPrice);
+    if (validationError) { setPriceError(validationError); return; }
     if (tokenPriceChange(currentPrice, newPrice)?.direction === 'unchanged') {
       setPriceError('Enter a price different from the current price.');
       return;
@@ -622,62 +1170,74 @@ export default function TokenDetailsPage() {
     setUpdatingPrice(true);
     setPriceError('');
     try {
-      if (!tokenContractAddress) {
-        throw new Error('The token contract is unavailable. Refresh the page and try again.');
+      if (!tokenContractAddress) throw new Error('The token contract is unavailable. Refresh and retry.');
+      if (!tokenChainUid || token.selectedChainUid !== tokenChainUid) {
+        throw new Error('Switch to the token’s original network before updating its price.');
       }
       const approvedWallet = organization.walletAddress || information.treasuryWallet;
       if (!wallet.isConnected || !wallet.connector || !wallet.address) {
-        throw new Error('Connect your Organization Wallet from the header before updating the current price.');
+        throw new Error('Connect your approved organization wallet before changing the price.');
       }
-      if (!wallet.isCorrectNetwork) {
-        await wallet.switchChain(wallet.requiredChain.id);
+      if (!approvedWallet || approvedWallet.toLowerCase() !== wallet.address.toLowerCase()) {
+        throw new Error('The connected wallet is not the organization’s approved issuer wallet.');
       }
-
-      const chainResult = await setPlatformTokenPrice({
-        paymentTokenAddress, controllerAddress,
-        connector: wallet.connector,
-        connectedAddress: wallet.address,
+      if (!wallet.isCorrectNetwork) await wallet.switchChain(wallet.requiredChain.id);
+      const submittedPrice = String(newPrice).trim();
+      // Save the intent BEFORE asking MetaMask for a transaction. This prevents
+      // a wallet rejection or page close from losing the PENDING audit entry.
+      const prepared = await tokenApi.prepareManualPrice(submittedPrice, tokenChainUid);
+      validatePreparedManualPrice(prepared, {
         issuerWalletAddress: approvedWallet,
         tokenAddress: tokenContractAddress,
-        currentTokenPrice: newPrice,
-        chainId: wallet.requiredChain.id,
+        chainId: tokenChainId || wallet.requiredChain.id,
       });
-      const confirmedPrice = chainResult.currentTokenPrice || String(newPrice).trim();
-      setOnchainCurrentPrice(confirmedPrice);
-      setOnchainPriceStatus('ready');
-      saveTokenPriceSyncRecovery(tokenContractAddress, {
-        currentTokenPrice: confirmedPrice,
-        txHash: chainResult.txHash,
+      const pending = saveTokenPriceSyncRecovery(tokenContractAddress, {
+        priceUpdateUid: prepared.priceUpdateUid,
+        currentTokenPrice: submittedPrice,
+        chainUid: tokenChainUid,
+        userKey: token.userKey,
+        chainId: prepared.chainId,
+        issuerWalletAddress: prepared.issuerWalletAddress,
+        controllerAddress: prepared.controllerAddress,
+        tokenUid: prepared.tokenUid,
+        transactionRequest: prepared.transactionRequest,
+        txHash: prepared.txHash || '',
+        status: prepared.status,
       });
-
-      queryClient.setQueryData(
-        myTokenQueryKey(token.userKey, token.selectedChainUid),
-        (current) => mergeCurrentPriceIntoToken(current, null, confirmedPrice),
-      );
-
-      try {
-        const updatedToken = await tokenApi.updateCurrentPrice(confirmedPrice);
-        const responseToken = updatedToken?.token && typeof updatedToken.token === 'object'
-          ? updatedToken.token
-          : updatedToken;
-        queryClient.setQueryData(
-          myTokenQueryKey(token.userKey, token.selectedChainUid),
-          (current) => mergeCurrentPriceIntoToken(current, responseToken, confirmedPrice),
-        );
-        clearTokenPriceSyncRecovery(tokenContractAddress);
-        setPriceEditorOpen(false);
-        toast.success('Current price updated', {
-          description: <span>{tokenName} now uses <TokenPriceValue value={confirmedPrice} suffix={` ${paymentSymbol}`} /> for new purchases and redemptions.</span>,
-        });
-      } catch (syncError) {
-        setPriceEditorOpen(false);
-        toast.warning('Price updated — account display is still syncing', {
-          description: 'The new price is active. We will retry the account update automatically; do not submit another price change.',
-        });
-        console.warn('Token price account synchronization is pending.', syncError);
+      // Surface the prepared intent in price history before MetaMask opens.
+      void queryClient.invalidateQueries({ queryKey: priceHistoryQueryPrefix(token.userKey, pending.chainUid) });
+      if (pending.txHash) {
+        // A prepared request already submitted on-chain must NEVER open the wallet.
+        void runPriceVerification(pending, { resumed: true });
+      } else {
+        // Prepare and wallet approval form one user action. Do not add a second
+        // wallet approval button or replay a rejected/uncertain request.
+        const remote = await tokenApi.getManualPriceUpdate(pending.priceUpdateUid, pending.chainUid);
+        const remoteStatus = String(remote?.status || '').toUpperCase();
+        if (remote?.txHash) {
+          const submitted = saveTokenPriceSyncRecovery(pending.tokenAddress, {
+            ...pending, txHash: remote.txHash, status: remoteStatus || 'SUBMITTED',
+          });
+          void runPriceVerification(submitted, { resumed: true });
+        } else if (['CONFIRMED', 'CANCELLED', 'FAILED', 'ORPHANED'].includes(remoteStatus)) {
+          await synchronizePriceFromBackend(pending);
+        } else if (remoteStatus === 'PENDING') {
+          await submitPreparedWithWallet(pending);
+        } else {
+          setPriceSyncStatus('attention');
+          setPriceSyncMessage('The saved price request has an unexpected status. No wallet transaction was sent.');
+        }
       }
     } catch (error) {
-      setPriceError(getErrorMessage(error, 'The current price could not be updated. Please try again.'));
+      const saved = loadTokenPriceSyncRecovery(tokenContractAddress, { chainUid: tokenChainUid, userKey: token.userKey });
+      if (saved && !saved.txHash) {
+        // Preserve the pending intent; only an unsigned request may be cancelled.
+        setPriceSyncStatus('attention');
+        setPriceSyncMessage(saved.walletSubmissionStartedAt
+          ? 'MetaMask was opened, but no transaction hash was captured. Check wallet activity; do not resend or cancel this request if it may have been broadcast.'
+          : 'Your price request was saved but the wallet action did not finish. No new transaction will be sent automatically.');
+      }
+      setPriceError(getErrorMessage(error, 'The price change could not be prepared or sent.'));
     } finally {
       setUpdatingPrice(false);
     }
@@ -705,7 +1265,7 @@ export default function TokenDetailsPage() {
                 </StatusBadge>
               ) : null}
               <span className="token-dashboard-header__network-chip">
-                <NetworkIcon chain={tokenChainRecord} chainId={tokenChainId} name={network} size="xs" />
+                <NetworkIcon chain={tokenChainPresentation || undefined} chainId={tokenChainId} name={network} size="xs" />
                 <span>{network}</span>
               </span>
             </div>
@@ -723,7 +1283,7 @@ export default function TokenDetailsPage() {
           <div className="token-dashboard-header__price token-dashboard-header__price--editable">
             <div className="token-dashboard-header__price-label">
               <small>Current investor price</small>
-              <button type="button" onClick={openPriceEditor} aria-label="Edit current investor price">
+              <button type="button" onClick={openPriceEditor} disabled={priceSyncStatus !== 'idle'} aria-label="Edit current investor price">
                 <PencilLine size={15} /> Edit Price
               </button>
             </div>
@@ -738,6 +1298,16 @@ export default function TokenDetailsPage() {
             </strong>
             {onchainPriceStatus === 'unset' ? <em className="token-dashboard-header__price-note is-warning">Price activation required before trading</em> : null}
             {onchainPriceStatus === 'unavailable' ? <em className="token-dashboard-header__price-note">Live price check unavailable</em> : null}
+            {priceSyncStatus !== 'idle' ? (
+              <em className={`token-dashboard-header__price-note ${priceSyncStatus === 'attention' ? 'is-warning' : ''}`} role="status">
+                {priceSyncStatus === 'awaiting' ? 'Awaiting confirmation' : 'Price update needs attention'}: {priceSyncMessage}
+                {(() => {
+                  const saved = loadTokenPriceSyncRecovery(tokenContractAddress, { chainUid: tokenChainUid, userKey: token.userKey });
+                  const explorerLink = transactionExplorerUrl(saved?.txHash, saved?.chainId || tokenChainId);
+                  return explorerLink ? <> {' '}<a href={explorerLink} target="_blank" rel="noopener noreferrer">View saved transaction on explorer</a></> : null;
+                })()}
+              </em>
+            ) : null}
           </div>
           {hasInitialPrice ? (
             <div className="token-dashboard-pricing__initial">
@@ -746,6 +1316,34 @@ export default function TokenDetailsPage() {
             </div>
           ) : null}
         </div>
+        <div className="token-dashboard-header__automation">
+          <span className="token-dashboard-header__automation-icon" aria-hidden="true">
+            <Settings2 size={18} />
+          </span>
+          <div className="token-dashboard-header__automation-copy">
+            <div>
+              <strong>Automatic Price Updates</strong>
+              <span className="token-dashboard-header__automation-badge">{registeredServiceWallet ? 'Configured' : 'Optional'}</span>
+            </div>
+            <span>{registeredServiceWallet ? 'Your Service Wallet is set up for automatic price updates. You can also update prices manually at any time.' : 'Configure a Service Wallet to automatically update asset prices. You can also update prices manually at any time.'}</span>
+          </div>
+          <div className="token-dashboard-header__automation-actions">
+            <Link
+              to={botConfigurationLink}
+              className="token-dashboard-header__automation-link token-dashboard-header__automation-button"
+            >
+              Bot Configuration
+            </Link>
+            <button
+              type="button"
+              className="token-dashboard-header__automation-button"
+              onClick={() => setPriceAutomationOpen(true)}
+              aria-haspopup="dialog"
+            >
+              Manage Service Wallet
+            </button>
+          </div>
+        </div>
       </header>
 
       {setupNeedsTransferActivation ? (
@@ -753,6 +1351,19 @@ export default function TokenDetailsPage() {
           Transfers are still paused, so investors cannot receive or transfer this asset yet. Finish Setup retries only the missing activation step and will not create another asset.
         </InfoCallout>
       ) : null}
+
+      <IssuerPriceHistory
+        compact
+        key={`${token.userKey}-${token.selectedChainUid}-${token.tokenUid || routeTokenId}`}
+        userKey={token.userKey}
+        chainUid={tokenChainUid}
+        selectedChainUid={token.selectedChainUid}
+        tokenUid={token.tokenUid || routeTokenId}
+        symbol={paymentSymbol}
+        tokenName={paymentTokenMetadata.name}
+        imageUrl={paymentTokenMetadata.imageUrl}
+        chainId={tokenChainId}
+      />
 
       <div className="token-dashboard-grid token-dashboard-grid--simplified">
         <section className="token-dashboard-card">
@@ -842,7 +1453,6 @@ export default function TokenDetailsPage() {
               emptyLabel="Contract address not available yet"
               explorerUrl={tokenExplorer}
               compact
-              showCopyText
               copyLabel="Copy asset contract address"
             />
             <AddressDisplay
@@ -935,29 +1545,105 @@ export default function TokenDetailsPage() {
       </section>
 
       <Modal
+        open={priceAutomationOpen}
+        onClose={() => setPriceAutomationOpen(false)}
+        title="Price update settings"
+        trapFocus
+        className="token-price-automation-modal"
+        bodyClassName="token-price-automation-modal__body"
+        footer={(
+          <Button variant="primary" onClick={() => setPriceAutomationOpen(false)}>
+            Done
+          </Button>
+        )}
+      >
+        <div className="token-price-automation-modal__intro">
+          <span className="token-price-automation-modal__intro-icon" aria-hidden="true">
+            <Settings2 size={19} />
+          </span>
+          <div>
+            <strong>Choose how you want to manage future price updates</strong>
+            <p>
+              You can still update prices manually. Add an authorized Service Wallet to enable automatic price updates.
+            </p>
+          </div>
+        </div>
+        <PriceUpdatesCard
+          serviceWalletAlwaysEnabled
+          botConfigurationLink={botConfigurationLink}
+          serviceWalletAddress={serviceWalletAddress}
+          onServiceWalletAddressChange={(value) => {
+            setServiceWalletAddress(value);
+            if (
+              serviceWalletPendingSyncAddress &&
+              serviceWalletPendingSyncAddress.toLowerCase() !== String(value || '').trim().toLowerCase()
+            ) {
+              setServiceWalletPendingSyncAddress('');
+            }
+            setServiceWalletError('');
+            setServiceWalletSuccess('');
+          }}
+          currentServiceWalletAddress={registeredServiceWallet}
+          serviceWalletNetworkName={tokenChainPresentation?.chainName || tokenChainPresentation?.networkName || tokenChain.name}
+          serviceWalletSubmitting={serviceWalletSubmitting}
+          serviceWalletRevoking={serviceWalletRevoking}
+          serviceWalletExternalError={serviceWalletError}
+          serviceWalletSuccessMessage={serviceWalletSuccess}
+          serviceWalletNeedsSync={Boolean(serviceWalletPendingSyncAddress)}
+          serviceWalletNetworkMismatch={Boolean(
+            !serviceWalletLoading &&
+            !serviceWalletSubmitting &&
+            !serviceWalletRevoking &&
+            !serviceWalletPendingSyncAddress &&
+            onchainServiceWallet !== null &&
+            onchainServiceWallet.toLowerCase() !== registeredServiceWallet.toLowerCase()
+          )}
+          onServiceWalletSubmit={handleServiceWalletRegistration}
+          onServiceWalletRevoke={handleServiceWalletRevoke}
+          walletFieldId="asset-service-wallet-address"
+        />
+      </Modal>
+
+      <Modal
         open={priceEditorOpen}
         onClose={closePriceEditor}
-        title="Update investor price"
+        title="Update Price"
         trapFocus
         className="token-price-editor"
         footer={(
           <>
-            <Button variant="secondary" onClick={closePriceEditor} disabled={updatingPrice}>Cancel</Button>
-            <Button
-              onClick={handlePriceUpdate}
-              loading={updatingPrice}
-              disabled={updatingPrice || Boolean(priceValidationError) || !newPrice || priceUnchanged}
-            >
-              Update Price
+            <Button variant="secondary" onClick={closePriceEditor} disabled={updatingPrice && priceSyncStatus !== 'awaiting'}>
+              {priceSyncStatus === 'idle' ? 'Cancel' : 'Close'}
             </Button>
+            {priceSyncStatus === 'idle' ? (
+              <Button
+                onClick={handlePriceUpdate}
+                loading={updatingPrice}
+                disabled={updatingPrice || Boolean(priceValidationError) || !newPrice || priceUnchanged}
+              >Update Price</Button>
+            ) : null}
           </>
         )}
       >
         <div className="token-price-editor__intro">
-          <p>Set the price investors will use for new purchases and redemptions. Your approved organization wallet will ask you to confirm the change. The starting price will not be changed.</p>
+          {priceSyncStatus === 'idle' ? (
+            <p>
+              Set a new price for future purchases and redemptions.
+              Click <strong>Update Price</strong> to open MetaMask, where you can review the request and choose to confirm or reject it.
+              The new price will be visible to investors only after you confirm the transaction in MetaMask. Your initial price will remain unchanged.
+            </p>
+          ) : (
+            <p>Your current investor price stays unchanged until the blockchain confirms the update. Your initial price will remain unchanged.</p>
+          )}
         </div>
+        {priceSyncStatus === 'attention' ? (
+          <div className="token-price-editor__guidance" role="status" aria-live="polite">
+            <strong>Before you continue</strong>
+            <p>{priceSyncMessage}</p>
+          </div>
+        ) : null}
         <div className="token-price-editor__snapshot" aria-label="Token price comparison">
-          <div><span>Starting price</span><strong><TokenPriceValue value={initialPrice} suffix={` ${paymentSymbol}`} /></strong><small>Original price</small></div>
+          <div><span>Initial Price</span><strong><TokenPriceValue value={initialPrice} suffix={` ${paymentSymbol}`} /></strong><small>Original price</small></div>
           <div><span>Current investor price</span><strong><TokenPriceValue value={currentPrice} suffix={` ${paymentSymbol}`} /></strong><small>Price used now</small></div>
         </div>
         <Input
@@ -977,7 +1663,7 @@ export default function TokenDetailsPage() {
           trailing={<span className="token-price-editor__currency">{paymentSymbol}</span>}
           error={priceError || priceValidationError}
           hint={`Enter the price in ${paymentSymbol}. The payment token cannot be changed.`}
-          disabled={updatingPrice}
+          disabled={updatingPrice || priceSyncStatus !== 'idle'}
           required
         />
         <div className={`token-price-editor__change is-${priceChange?.direction || 'neutral'}`}>
