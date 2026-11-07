@@ -38,6 +38,11 @@ import { CurrencyAmount } from '@/components/common/CurrencyAmount';
 import { TokenPriceValue } from '@/components/common/TokenPriceValue';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { PriceHistoryGraph } from '@/components/price-history/PriceHistoryGraph';
+import { IssuerPriceHistory } from '@/components/price-history/IssuerPriceHistory';
+import { web3Config } from '@/config/web3';
+import { useAuthStore } from '@/store/auth.store';
+import { useNetworkStore, networkUserKey } from '@/store/network.store';
 import { ROUTES } from '@/config/routes';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { usePaymentTokenMetadata } from '@/hooks/usePaymentTokenMetadata';
@@ -254,6 +259,9 @@ function OfferingStatusPanel({ token, onPrimaryAction, onSecondaryAction, onInve
 
 export default function MarketplaceTokenDetailsPage() {
   const { tokenId } = useParams();
+  const user = useAuthStore((state) => state.user);
+  const activeChainId = useNetworkStore((state) => state.activeChainByUser[networkUserKey(user)] || null);
+  const activeChainUid = useNetworkStore((state) => state.activeChainUidByUser[networkUserKey(user)] || '');
   const navigate = useNavigate();
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -273,6 +281,8 @@ export default function MarketplaceTokenDetailsPage() {
     enabled: Boolean(token),
   });
   const paymentSymbol = paymentToken.symbol || token?.currency || '—';
+  const assetChainUid = token?.chainUid || web3Config.getChainRecordById(token?.chainId)?.chainUid || '';
+  const selectedChainUid = activeChainUid || web3Config.getChainRecordById(activeChainId)?.chainUid || '';
 
   const loadOffering = async () => {
     const offering = await investorMarketplaceService.getOffering(tokenId);
@@ -510,6 +520,33 @@ export default function MarketplaceTokenDetailsPage() {
                 <SnapshotCard label="Maximum holdings">{token.maxBalance == null ? '—' : `${displayNumber(token.maxBalance)} ${token.symbol}`}</SnapshotCard>
               </div>
             </section>
+
+            <PriceHistoryGraph
+              viewer="investor"
+              key={`${networkUserKey(user)}-${token.id}-${assetChainUid}-${selectedChainUid}`}
+              userKey={networkUserKey(user)}
+              chainUid={assetChainUid}
+              selectedChainUid={selectedChainUid}
+              tokenUid={token.id}
+              tokenAddress={token.tokenAddress}
+              chainId={token.chainId}
+              symbol={paymentSymbol}
+              tokenName={paymentToken.name}
+              imageUrl={paymentToken.imageUrl}
+            />
+            <IssuerPriceHistory
+              viewer="investor"
+              key={`history-table-${networkUserKey(user)}-${token.id}-${assetChainUid}-${selectedChainUid}`}
+              userKey={networkUserKey(user)}
+              chainUid={assetChainUid}
+              selectedChainUid={selectedChainUid}
+              tokenUid={token.id}
+              tokenAddress={token.tokenAddress}
+              chainId={token.chainId}
+              symbol={paymentSymbol}
+              tokenName={paymentToken.name}
+              imageUrl={paymentToken.imageUrl}
+            />
 
             <section className="marketplace-investment-section marketplace-investment-overview__about" aria-labelledby="marketplace-about-title">
               <h2 id="marketplace-about-title">About This Investment</h2>

@@ -14,8 +14,9 @@ test('step-three help avoids repeating the completed issuer registration prerequ
 test('status and next owner are grouped above either primary CTA', () => {
   assert.match(tracker, /const hasActions = Boolean\(action \|\| secondaryAction\);/);
   assert.match(tracker, /const statusMeta = \([\s\S]*investment-journey__status[\s\S]*investment-journey__owner[\s\S]*\);/);
-  assert.match(tracker, /!hasActions \? statusMeta : null/);
-  assert.match(tracker, /\{hasActions \? \(\s*<div className="investment-journey__actions-panel">\s*\{statusMeta\}\s*<div className="investment-journey__actions">\s*\{action\}\s*\{secondaryAction\}/);
+  // Status stays in the right panel even without a CTA; the CTA itself is optional.
+  assert.doesNotMatch(tracker, /!hasActions \? statusMeta : null/);
+  assert.match(tracker, /<div className="investment-journey__actions-panel">\s*\{statusMeta\}\s*\{hasActions \? \(\s*<div className="investment-journey__actions">\s*\{action\}\s*\{secondaryAction\}/);
   assert.match(details, />Complete Verification<\/Button>/);
   assert.match(details, />Invest Now<\/Button>/);
 });

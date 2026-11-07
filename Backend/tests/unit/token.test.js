@@ -81,7 +81,8 @@ test('token compliance schema accepts an empty country list as no geographic res
 });
 
 test('current token price update accepts a positive value with up to 18 decimals', () => {
-  assert.equal(schemas.tokenPriceUpdate.validate({ currentTokenPrice: '12.345678' }).error, undefined);
+  assert.equal(schemas.tokenPriceUpdate.validate({ currentTokenPrice: '12.345678', priceUpdateUid: '70000000-0000-4000-8000-000000000001', txHash: `0x${'a'.repeat(64)}` }).error, undefined);
+  assert.ok(schemas.tokenPriceUpdate.validate({ currentTokenPrice: '12.345678' }).error);
   assert.ok(schemas.tokenPriceUpdate.validate({ currentTokenPrice: 0 }).error);
   assert.ok(schemas.tokenPriceUpdate.validate({ currentTokenPrice: -1 }).error);
 });
@@ -107,6 +108,7 @@ test('saving the launch price initializes the current token price to the same va
 test('creating a token draft assigns the Platform Controller before any wizard step is saved', async () => {
   let creationData;
   const service = new TokenService({
+    config: { platformControllerAddress: PLATFORM_CONTROLLER },
     repository: {
       findByUserUid: async () => null,
       createForOrganization: async (_organization, _userUid, data) => {
@@ -127,21 +129,27 @@ test('only the owning issuer can update a deployed token current price without c
     status: 'deployed', isActive: true, initialTokenPrice: '1.00', currentTokenPrice: '1.00',
   };
   let update;
+  let history;
   const service = new TokenService({
     repository: {
       findByUserUid: async () => token,
+      lockPriceByOwner: async () => ({ ...token, previousPrice: '1.00' }),
       updateCurrentPriceByOwner: async (userUid, tokenUid, currentTokenPrice) => {
         update = { userUid, tokenUid, currentTokenPrice };
         return { ...token, currentTokenPrice };
       },
     },
     organizationRepository: { findByUserUid: async () => organization },
+    priceUpdateRepository: { createLegacy: async (data, connection) => { assert.equal(connection.transaction, true); history = data; } },
+    transactionRunner: (work) => work({ transaction: true }),
   });
 
   const result = await service.updateCurrentPrice(issuer, { currentTokenPrice: 2.75 });
   assert.deepEqual(update, { userUid: issuer.userUid, tokenUid: token.tokenUid, currentTokenPrice: 2.75 });
   assert.equal(result.initialTokenPrice, '1.00');
   assert.equal(result.currentTokenPrice, 2.75);
+  assert.equal(history.oldPrice, '1.00');
+  assert.equal(history.newPrice, '2.75');
 });
 
 test('current price cannot be updated for another organization token', async () => {

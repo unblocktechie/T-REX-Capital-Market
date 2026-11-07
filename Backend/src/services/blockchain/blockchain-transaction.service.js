@@ -13,6 +13,16 @@ const CONTROLLER_ABI = [
   'function getTokenInfo(address token) view returns (address issuer,uint8 tokenDecimals,uint256 price,bool controllerIsAgent)',
   'function quoteBuy(address token,uint256 tokenAmount) view returns (uint256 paymentAmount,uint256 price,uint8 tokenDecimals,address issuer)',
   'function quoteRedeem(address token,uint256 tokenAmount) view returns (uint256 paymentAmount,uint256 price,uint8 tokenDecimals,address issuer)',
+  'function PRICE_DECIMALS() view returns (uint8)',
+  'function eip712Domain() view returns (bytes1 fields,string name,string version,uint256 chainId,address verifyingContract,bytes32 salt,uint256[] extensions)',
+  'function nonces(address signer) view returns (uint256)',
+  'function serviceWalletOf(address token) view returns (address)',
+  'function setServiceWallet(address serviceWallet)',
+  'function setPrice(address token,uint256 newPrice)',
+  'function setPriceOnBehalfOf(address token,uint256 newPrice,uint256 deadline,uint8 v,bytes32 r,bytes32 s)',
+  'function tokenPrice(address token) view returns (uint256)',
+  'event ServiceWalletUpdated(address indexed executor,address indexed token,address oldServiceWallet,address indexed newServiceWallet)',
+  'event TokenPriceUpdated(address indexed token,uint256 oldPrice,uint256 newPrice)',
   'event TokensRedeemed(address indexed investor,address indexed token,address indexed issuer,uint256 tokenAmount,uint256 paymentAmount,uint256 price)',
 ];
 const MULTI_PAYMENT_CONTROLLER_ABI = [

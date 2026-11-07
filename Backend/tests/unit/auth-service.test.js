@@ -59,10 +59,11 @@ const verifiedIdentity = {
   roleActive: true,
 };
 
-const createVerificationService = ({ identity = verifiedIdentity, tokenRecord = { tokenUid: 'token-1', userUid: 'user-1' } } = {}) => {
+const createVerificationService = ({ identity = verifiedIdentity, tokenRecord = { tokenUid: 'token-1', userUid: 'user-1' }, verificationTeamNotificationService } = {}) => {
   const state = { verified: false, used: false, lastLogin: false };
   const executor = { name: 'test-transaction' };
   const service = new AuthService({
+    verificationTeamNotificationService,
     userRepository: {
       findByUid: async () => ({ userUid: 'user-1' }),
       findAuthIdentityByUid: async () => identity,
@@ -88,6 +89,15 @@ const createVerificationService = ({ identity = verifiedIdentity, tokenRecord = 
   });
   return { service, state };
 };
+
+test('successful verification queues team notice inside the verification transaction', async () => {
+  let queued = false;
+  const { service, state } = createVerificationService({ verificationTeamNotificationService: {
+    enqueue: async (user, connection) => { assert.equal(user.roleName, 'Investor'); assert.equal(connection.name, 'test-transaction'); queued = true; },
+  } });
+  await service.verifyEmail('raw-token');
+  assert.ok(queued && state.verified && state.used);
+});
 
 test('email verification consumes the token and returns a normal authenticated session', async () => {
   const { service, state } = createVerificationService();

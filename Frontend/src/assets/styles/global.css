@@ -5329,7 +5329,11 @@ body,
   border-radius: inherit;
   background: linear-gradient(90deg, rgba(167, 213, 255, 0.25), #f4f8ff, #a7d5ff);
   box-shadow: 0 0 12px rgba(167, 213, 255, 0.65);
-  animation: trex-progress 2.8s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+  /* Move continuously within the track, reversing at its ends. The indicator
+     never disappears even when a route takes longer than one animation cycle. */
+  will-change: transform;
+  /* All loader instances share a phase across bootstrap / route transitions. */
+  animation: trex-progress 1.8s ease-in-out infinite alternate;
   animation-delay: var(--trex-progress-delay, 0s);
 }
 
@@ -5513,8 +5517,10 @@ body,
 }
 
 @keyframes trex-progress {
-  0% { transform: translateX(-120%); }
-  100% { transform: translateX(340%); }
+  /* The segment is 42% of the track: 138% of its own width reaches the right
+     edge without entering the clipped area. Alternate reverses smoothly. */
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(138%, 0, 0); }
 }
 
 @keyframes trex-ambient-float {
@@ -6843,6 +6849,16 @@ body,
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
 }
 
+/* Keep full profile wallet text visible while retaining a separate copy control. */
+.compact-address--full .compact-address__value {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.compact-address--full .compact-address__copy {
+  align-self: flex-start;
+}
+
 .compact-address__copy {
   display: inline-grid;
   width: 24px;
@@ -7793,195 +7809,6 @@ button.issuer-dashboard-live-metric:disabled {
   .issuer-dashboard-action-item__icon {
     width: 34px;
     height: 34px;
-  }
-}
-
-/* Issuer dashboard — compact, state-aware operational layout.
-   Scoped overrides retain the existing shared theme and all other dashboards. */
-.issuer-dashboard-live .issuer-dashboard-hero-live {
-  display: block;
-  min-width: 0;
-  overflow: visible;
-  padding: clamp(18px, 2vw, 24px);
-  border-color: var(--border);
-  background: var(--surface);
-  box-shadow: var(--shadow-sm);
-}
-.issuer-dashboard-live .issuer-dashboard-hero-live::after {
-  display: none;
-}
-.issuer-dashboard-hero-live__content {
-  min-width: 0;
-}
-.issuer-dashboard-live .issuer-dashboard-hero-live h2 {
-  margin: 0 0 6px;
-  font-size: clamp(22px, 2.4vw, 30px);
-  line-height: 1.2;
-  overflow-wrap: anywhere;
-}
-.issuer-dashboard-live .issuer-dashboard-hero-live__eyebrow {
-  margin-bottom: 6px;
-  font-size: 12px;
-  letter-spacing: 0.02em;
-  text-transform: none;
-}
-.issuer-dashboard-live .issuer-dashboard-hero-live__intro {
-  margin: 0;
-  color: var(--text-soft);
-  font-size: 13.5px;
-  line-height: 1.5;
-}
-.issuer-dashboard-live .issuer-dashboard-hero-live__badges {
-  margin: 10px 0;
-}
-.issuer-dashboard-asset-line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
-  margin-top: 12px;
-  min-width: 0;
-}
-.issuer-dashboard-asset-line > strong,
-.issuer-dashboard-asset-line__name {
-  color: var(--text);
-  font-size: clamp(15px, 1.7vw, 19px);
-  font-weight: 750;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-}
-.issuer-dashboard-asset-line__name {
-  display: block;
-  margin-top: 9px;
-}
-.issuer-dashboard-asset-line__network {
-  display: inline-flex;
-  align-items: center;
-  max-width: 100%;
-  min-width: 0;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface-muted);
-  padding: 4px 9px;
-  color: var(--text-soft);
-  font-size: 12px;
-  overflow-wrap: anywhere;
-}
-.issuer-dashboard-live .issuer-dashboard-hero-live__actions {
-  margin-top: 15px;
-  gap: 9px;
-}
-.issuer-dashboard-live .issuer-dashboard-live-metric {
-  min-height: 112px;
-  padding: 15px;
-  box-shadow: var(--shadow-sm);
-}
-.issuer-dashboard-live .issuer-dashboard-live-metric__copy strong {
-  white-space: normal;
-  overflow-wrap: anywhere;
-  font-size: clamp(22px, 2vw, 29px);
-}
-.issuer-dashboard-live .issuer-dashboard-live-metric__copy > span {
-  line-height: 1.45;
-}
-.issuer-dashboard-live__actions-section,
-.issuer-dashboard-live__setup-section {
-  display: block;
-  min-width: 0;
-}
-.issuer-dashboard-live__actions-section > .issuer-dashboard-action-card,
-.issuer-dashboard-live__setup-section > .issuer-dashboard-workflow-card {
-  width: 100%;
-  height: auto;
-  min-height: 0;
-}
-.issuer-dashboard-live__actions-section .issuer-dashboard-action-list {
-  margin-top: 12px;
-}
-.issuer-dashboard-live__actions-section .issuer-dashboard-action-item {
-  grid-template-columns: 38px minmax(0, 1fr) auto;
-  gap: 10px;
-}
-.issuer-dashboard-live__actions-section .issuer-dashboard-action-item__cta {
-  grid-column: 3;
-  grid-row: 1 / span 2;
-  align-self: center;
-  white-space: nowrap;
-}
-.issuer-dashboard-action-empty {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 12px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 11px;
-  background: var(--surface-muted);
-  color: var(--text-soft);
-  font-size: 13px;
-  line-height: 1.5;
-}
-.issuer-dashboard-action-empty svg {
-  flex: 0 0 auto;
-}
-.issuer-dashboard-live .issuer-dashboard-list-empty {
-  min-height: 0;
-  padding: 26px 12px;
-}
-.issuer-dashboard-live__activity-grid > * {
-  min-width: 0;
-}
-.issuer-dashboard-live button:focus-visible {
-  outline: 2px solid var(--primary-500);
-  outline-offset: 3px;
-}
-.issuer-dashboard-state-panel {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 20px;
-  min-width: 0;
-}
-.issuer-dashboard-state-panel > svg {
-  flex: 0 0 auto;
-  color: var(--text-muted);
-}
-.issuer-dashboard-state-panel h2 {
-  margin: 0 0 5px;
-  font-size: 18px;
-}
-.issuer-dashboard-state-panel p {
-  margin: 0;
-  color: var(--text-soft);
-  font-size: 13px;
-  line-height: 1.6;
-}
-.issuer-dashboard-loading-card {
-  display: grid;
-  gap: 12px;
-  padding: 20px;
-  min-width: 0;
-}
-@media (max-width: 680px) {
-  .issuer-dashboard-live .issuer-dashboard-hero-live h2 {
-    font-size: 24px;
-  }
-  .issuer-dashboard-live .issuer-dashboard-asset-line {
-    align-items: flex-start;
-  }
-  .issuer-dashboard-live__actions-section .issuer-dashboard-action-item {
-    grid-template-columns: 36px minmax(0, 1fr);
-  }
-  .issuer-dashboard-live__actions-section .issuer-dashboard-action-item__cta {
-    grid-column: 2;
-    grid-row: auto;
-    justify-self: start;
-    white-space: normal;
-  }
-  .issuer-dashboard-live .issuer-dashboard-compact-row__main strong,
-  .issuer-dashboard-live .issuer-dashboard-compact-row__main small {
-    overflow-wrap: anywhere;
-    white-space: normal;
   }
 }
 
@@ -11108,6 +10935,163 @@ button.issuer-dashboard-live-metric:disabled {
 }
 
 /* ========================================================================== 
+   Mobile header network control refinement
+   - Never shows a clipped/broken chain label on narrow phones.
+   - The network icon remains a 44px tap target; tapping it opens the full
+     viewport-anchored menu where the complete chain name is always visible.
+   - Gives the wallet control the reclaimed width without changing desktop UI.
+   ========================================================================== */
+@media (max-width: 520px) {
+  .app-shell:not(.app-shell--onboarding) .app-network-switcher {
+    width: 44px;
+    min-width: 44px;
+    max-width: 44px;
+    flex: 0 0 44px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .app-network-switcher > button {
+    position: relative;
+    width: 44px;
+    min-width: 44px;
+    max-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+    gap: 0;
+    padding: 5px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .app-network-switcher__label,
+  .app-shell:not(.app-shell--onboarding) .app-network-switcher__status-icon--chevron {
+    display: none;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .app-network-switcher__status-icon--loading,
+  .app-shell:not(.app-shell--onboarding) .app-network-switcher__status-icon--locked {
+    position: absolute;
+    right: 3px;
+    bottom: 3px;
+    width: 12px;
+    height: 12px;
+    padding: 1px;
+    border-radius: 999px;
+    background: #fff;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .app-network-switcher__icon {
+    width: 30px;
+    height: 30px;
+    flex-basis: 30px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .app-network-switcher__attention {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 7px;
+    height: 7px;
+    border: 1.5px solid #fff;
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.12);
+  }
+
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control {
+    max-width: 150px;
+    flex: 1 1 120px;
+  }
+}
+
+@media (max-width: 390px) {
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control {
+    max-width: none;
+    flex: 1 1 auto;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control > button > span:nth-child(2) small {
+    display: none;
+  }
+}
+
+@media (max-width: 340px) {
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control > button > span:nth-child(2) {
+    display: none;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control {
+    width: 44px;
+    min-width: 44px;
+    max-width: 44px;
+    flex: 0 0 44px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .header-wallet-control > button {
+    width: 44px;
+    min-width: 44px;
+    justify-content: center;
+    padding: 5px !important;
+  }
+}
+
+/* Bot Configuration: protect the issuer header when the left sidebar reduces the
+   usable space at laptop/tablet widths. The full title remains in the page. */
+@media (min-width: 901px) and (max-width: 1220px) {
+  .app-header--bot-configuration .app-header__leading {
+    flex: 1 1 auto;
+    min-width: 44px;
+  }
+  .app-header--bot-configuration .header-page-title {
+    display: none;
+  }
+  .app-header--bot-configuration .app-header__actions {
+    flex: 0 1 auto;
+    min-width: 0;
+    gap: 8px;
+  }
+  .app-header--bot-configuration .app-network-switcher > button {
+    max-width: 158px;
+    gap: 6px;
+  }
+  .app-header--bot-configuration .app-network-switcher__label {
+    min-width: 0;
+    overflow: hidden;
+  }
+  .app-header--bot-configuration .app-network-switcher__label small {
+    display: none;
+  }
+  .app-header--bot-configuration .app-network-switcher__label strong {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .app-header--bot-configuration .header-wallet-control > button {
+    max-width: 164px;
+    min-width: 0;
+  }
+  .app-header--bot-configuration .account-menu__trigger {
+    min-width: 46px;
+    width: 46px;
+    padding: 4px;
+    justify-content: center;
+  }
+  .app-header--bot-configuration .account-menu__summary,
+  .app-header--bot-configuration .account-menu__chevron {
+    display: none;
+  }
+}
+
+/* Investor profile wallet: match the size, weight, and typeface of other profile values. */
+.admin-investor-detail-wallet .compact-address {
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+}
+.admin-investor-detail-wallet .compact-address__value {
+  font-family: inherit;
+}
+
+
+/* Ported UI/responsive refinements from frontend-without-bot-and-api-code.
+   Existing bot, price-history, admin and API style rules above are preserved. */
+/* ========================================================================== 
    Mobile header: icon-only network trigger (<=680px).
    Preserve the accessible network name, restrictions and full dropdown.
    The wallet retains its existing responsive truncation and actions.
@@ -11441,8 +11425,50 @@ button.issuer-dashboard-live-metric:disabled {
 .issuer-dashboard-live .issuer-dashboard-live-metric {
   grid-template-columns: 40px minmax(0, 1fr);
 }
+/* Restore the dashboard-only card sizing and keyboard focus rules present
+   in the non-bot frontend; do not change shared Card or button components. */
+.issuer-dashboard-live__actions-section,
+.issuer-dashboard-live__setup-section {
+  display: block;
+  min-width: 0;
+}
+.issuer-dashboard-live__actions-section > .issuer-dashboard-action-card,
+.issuer-dashboard-live__setup-section > .issuer-dashboard-workflow-card {
+  width: 100%;
+  height: auto;
+  min-height: 0;
+}
+.issuer-dashboard-live__actions-section .issuer-dashboard-action-list {
+  margin-top: 12px;
+}
+.issuer-dashboard-live .issuer-dashboard-list-empty {
+  min-height: 0;
+  padding: 26px 12px;
+}
+.issuer-dashboard-live button:focus-visible {
+  outline: 2px solid var(--primary-500);
+  outline-offset: 3px;
+}
+/* Keep the CTA at the far right of the same row as the action text.
+   Use a third column rather than letting the button wrap beneath the copy. */
+.issuer-dashboard-live__actions-section .issuer-dashboard-action-item {
+  grid-template-columns: 38px minmax(0, 1fr) max-content;
+  align-items: center;
+}
+.issuer-dashboard-live__actions-section .issuer-dashboard-action-item__icon {
+  grid-column: 1;
+  grid-row: 1;
+}
+.issuer-dashboard-live__actions-section .issuer-dashboard-action-item__copy {
+  grid-column: 2;
+  grid-row: 1;
+}
 /* The entire Action Center row is the interactive button; this is its CTA face. */
 .issuer-dashboard-live__actions-section .issuer-dashboard-action-item__cta {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+  white-space: nowrap;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -11584,49 +11610,181 @@ button.issuer-dashboard-live-metric:disabled {
   }
 }
 
-/* Keep all onboarding header actions accessible on small screens now that both
-   onboarding flows expose the network selector on every step. */
+@media (max-width: 680px) {
+  .issuer-dashboard-live__actions-section .issuer-dashboard-action-item {
+    grid-template-columns: 36px minmax(0, 1fr);
+  }
+  .issuer-dashboard-live__actions-section .issuer-dashboard-action-item__cta {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: start;
+    white-space: normal;
+  }
+}
+/* 2026-10-30: Action Center adapts to the available workspace width, including
+   when the sidebar is open on tablet-sized viewports. */
+@container app-main (max-width: 690px) {
+  .issuer-dashboard-live__actions-section .issuer-dashboard-action-item {
+    grid-template-columns: 38px minmax(0, 1fr);
+    align-items: start;
+  }
+  .issuer-dashboard-live__actions-section .issuer-dashboard-action-item__icon {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+  .issuer-dashboard-live__actions-section .issuer-dashboard-action-item__copy {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .issuer-dashboard-live__actions-section .issuer-dashboard-action-item__cta {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: start;
+    width: fit-content;
+    max-width: 100%;
+    white-space: normal;
+  }
+}
+
+/* Onboarding: keep network selection accessible on narrow phones without
+   changing the workspace header's existing responsive layout. */
 @media (max-width: 720px) {
-  .app-header--onboarding {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    grid-template-areas:
-      'brand brand account'
-      'network wallet wallet';
-    align-content: center;
-    column-gap: 10px;
-    row-gap: 8px;
-    height: auto;
-    min-height: 112px;
-    padding-block: 10px;
+  .app-shell--onboarding .app-header--onboarding {
+    gap: 8px;
   }
 
-  .app-header--onboarding .onboarding-header__brand {
-    grid-area: brand;
+  .app-shell--onboarding .onboarding-header__account {
+    min-width: 0;
+    gap: 6px;
   }
 
-  .app-header--onboarding .onboarding-header__account {
-    display: contents;
+  .app-shell--onboarding .app-network-switcher,
+  .app-shell--onboarding .app-network-switcher > button {
+    width: 44px;
+    min-width: 44px;
+    max-width: 44px;
+    flex: 0 0 44px;
   }
 
-  .app-header--onboarding .app-network-switcher {
-    grid-area: network;
-    width: 100%;
-  }
-
-  .app-header--onboarding .app-network-switcher > button {
-    width: 100%;
-    max-width: none;
+  .app-shell--onboarding .app-network-switcher > button {
     min-height: 44px;
+    justify-content: center;
+    gap: 0;
+    padding: 5px;
   }
 
-  .app-header--onboarding .header-wallet-control {
-    grid-area: wallet;
-    justify-self: end;
+  .app-shell--onboarding .app-network-switcher__label,
+  .app-shell--onboarding .app-network-switcher__status-icon--chevron {
+    display: none;
   }
 
-  .app-header--onboarding .account-menu {
-    grid-area: account;
-    justify-self: end;
+  .app-shell--onboarding .app-network-switcher > [role='menu'] {
+    position: fixed;
+    top: calc(69px + env(safe-area-inset-top));
+    right: 12px;
+    left: 12px;
+    width: auto;
+    max-height: calc(100dvh - 84px - env(safe-area-inset-top));
+    overflow-y: auto;
+    margin-top: 0;
+  }
+
+  .app-shell--onboarding .header-wallet-control {
+    max-width: 145px;
+    flex: 0 1 auto;
+  }
+
+  .app-shell--onboarding .header-wallet-control > button {
+    min-width: 0;
+  }
+
+  .app-shell--onboarding .account-menu__trigger {
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+    padding: 4px;
+  }
+
+  .app-shell--onboarding .account-menu__summary,
+  .app-shell--onboarding .account-menu__chevron {
+    display: none;
+  }
+
+  .app-shell--onboarding .account-menu__panel {
+    position: fixed;
+    top: calc(69px + env(safe-area-inset-top));
+    right: 12px;
+  }
+}
+
+@media (max-width: 520px) {
+  .app-shell--onboarding .onboarding-header__brand .trex-logo__copy {
+    display: none;
+  }
+}
+
+@media (max-width: 390px) {
+  .app-shell--onboarding .header-wallet-control > button > span:nth-child(2) {
+    display: none;
+  }
+  .app-shell--onboarding .header-wallet-control > button {
+    width: 44px;
+    justify-content: center;
+    padding: 5px;
+  }
+}
+
+/* Tablet header: preserve a readable network name/lock controls when the
+   wallet and account controls share the same navigation row. */
+@media (min-width: 681px) and (max-width: 1180px) {
+  .app-shell:not(.app-shell--onboarding) .app-header__leading {
+    min-width: 0;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .app-header__actions {
+    min-width: 0;
+    gap: 8px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .app-network-switcher {
+    width: 194px;
+    min-width: 194px;
+    max-width: 194px;
+    flex: 0 0 194px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .app-network-switcher > button {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    gap: 6px;
+    padding-inline: 8px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .app-network-switcher__label {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .app-network-switcher__label strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+/* Retain the network name instead of squeezing it against the lock icon on
+   small tablets; the page title remains available in the page body. */
+@media (min-width: 681px) and (max-width: 820px) {
+  .app-shell:not(.app-shell--onboarding) .header-page-title {
+    min-width: 0;
+    max-width: 150px;
+  }
+
+  .app-shell:not(.app-shell--onboarding) .header-page-title strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }

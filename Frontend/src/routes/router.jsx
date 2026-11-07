@@ -32,11 +32,17 @@ const ChainAccessPage = lazy(() => import('@/pages/common/ChainAccessPage'));
 const InvestorsRoutePage = lazy(() => import('@/pages/investors/InvestorsRoutePage'));
 const IssuerInvestorSubscriptionReviewPage = lazy(() => import('@/pages/issuer/IssuerInvestorSubscriptionReviewPage'));
 const IssuerInvestorManagementPage = lazy(() => import('@/pages/issuer/IssuerInvestorManagementPage'));
+const IssuerInvestorDirectoryPage = lazy(() => import('@/pages/issuer/IssuerInvestorDirectoryPage'));
 const IssuerTransactionHistoryPage = lazy(() => import('@/pages/issuer/IssuerTransactionHistoryPage'));
+const IssuerRedemptionsPage = lazy(() => import('@/pages/issuer/IssuerRedemptionsPage'));
 const IssuerRedemptionDetailPage = lazy(() => import('@/pages/issuer/IssuerRedemptionDetailPage'));
+const IssuerApiKeysPage = lazy(() => import('@/pages/issuer/IssuerApiKeysPage'));
 const MarketplacePage = lazy(() => import('@/pages/investor-portal/MarketplacePage'));
 const InvestorMyInvestmentPage = lazy(() => import('@/pages/investor-portal/InvestorMyInvestmentPage'));
+const InvitationsPage = lazy(() => import('@/pages/investor-portal/InvitationsPage'));
 const MarketplaceTokenDetailsPage = lazy(() => import('@/pages/investor-portal/MarketplaceTokenDetailsPage'));
+const MyApplicationsPage = lazy(() => import('@/pages/investor-portal/MyApplicationsPage'));
+const PortfolioPage = lazy(() => import('@/pages/investor-portal/PortfolioPage'));
 const AssetManagementPage = lazy(() => import('@/pages/investor-portal/AssetManagementPage'));
 const WalletManagementPage = lazy(() => import('@/pages/wallet/WalletManagementPage'));
 const ApplicationDetailsPage = lazy(() => import('@/pages/investor-portal/ApplicationDetailsPage'));
@@ -55,6 +61,7 @@ const ReviewDeployPage = lazy(() => import('@/pages/tokens/ReviewDeployPage'));
 const DeploymentProcessingPage = lazy(() => import('@/pages/tokens/DeploymentProcessingPage'));
 const DeploymentSuccessPage = lazy(() => import('@/pages/tokens/DeploymentSuccessPage'));
 const TokenDetailsPage = lazy(() => import('@/pages/tokens/TokenDetailsPage'));
+const TokenPriceHistoryPage = lazy(() => import('@/pages/tokens/TokenPriceHistoryPage'));
 const OrganizationEntryPage = lazy(() => import('@/pages/organization/OrganizationEntryPage'));
 const CompanyInformationPage = lazy(() => import('@/pages/organization/CompanyInformationPage'));
 const JurisdictionPage = lazy(() => import('@/pages/organization/JurisdictionPage'));
@@ -69,9 +76,15 @@ const AdminDashboardPage = lazy(() => import('@/pages/admin/AdminDashboardPage')
 const ReviewQueuePage = lazy(() => import('@/pages/admin/ReviewQueuePage'));
 const AdminOrganizationsPage = lazy(() => import('@/pages/admin/AdminOrganizationsPage'));
 const AdminNetworksPage = lazy(() => import('@/pages/admin/AdminNetworksPage')); 
+const AdminIssuerApiKeySettingsPage = lazy(() => import('@/pages/admin/AdminIssuerApiKeySettingsPage'));
+const AdminTeamNotificationsPage = lazy(() => import('@/pages/admin/AdminTeamNotificationsPage'));
+const AdminMonitoringListsPage = lazy(() => import('@/pages/admin/AdminMonitoringListsPage'));
+const AdminInvestorDetailPage = lazy(() => import('@/pages/admin/AdminInvestorDetailPage'));
 const OrganizationReviewPage = lazy(() => import('@/pages/admin/OrganizationReviewPage'));
 const AdminProfilePage = lazy(() => import('@/pages/admin/AdminProfilePage'));
 
+// Keep old bookmarks functioning without mounting the retired standalone pages.
+// The actual investment forms live inside Manage Investments now.
 function InvestorMyInvestmentLegacyRedirect({ tab }) {
   const location = useLocation();
   const params = new URLSearchParams(location.search);
@@ -175,6 +188,12 @@ export const router = createBrowserRouter([
               { path: 'reviews', element: withAdminSuspense(<ReviewQueuePage />) },
               { path: 'organizations', element: withAdminSuspense(<AdminOrganizationsPage />) },
               { path: 'networks', element: withAdminSuspense(<AdminNetworksPage />) },
+              { path: 'api-key-settings', element: withAdminSuspense(<AdminIssuerApiKeySettingsPage />) },
+              { path: 'team-notifications', element: withAdminSuspense(<AdminTeamNotificationsPage />) },
+              { path: 'investors', element: withAdminSuspense(<AdminMonitoringListsPage kind="investors" />) },
+              { path: 'investors/:userUid', element: withAdminSuspense(<AdminInvestorDetailPage />) },
+              { path: 'tokens', element: withAdminSuspense(<AdminMonitoringListsPage kind="tokens" />) },
+              { path: 'investor-applications', element: withAdminSuspense(<AdminMonitoringListsPage kind="applications" />) },
               { path: 'organizations/:organizationId', element: withAdminSuspense(<OrganizationReviewPage />) },
               { path: 'profile', element: withAdminSuspense(<AdminProfilePage />) },
               { path: 'users', element: <Navigate to={ROUTES.adminReviewQueue} replace /> },
@@ -227,10 +246,12 @@ export const router = createBrowserRouter([
                     ],
                   },
                   { path: 'tokens/:tokenAddress/success', element: withWorkspaceSuspense(<DeploymentSuccessPage />) },
+                  { path: 'tokens/:tokenAddress/price-history', element: withWorkspaceSuspense(<TokenPriceHistoryPage />) },
                   { path: 'tokens/:tokenAddress', element: withWorkspaceSuspense(<TokenDetailsPage />) },
                   { path: 'investors/:requestId', element: withWorkspaceSuspense(<IssuerInvestorSubscriptionReviewPage />) },
                   { path: 'investor-management', element: withWorkspaceSuspense(<IssuerInvestorManagementPage />) },
                   { path: 'investor-directory', element: <Navigate to={ROUTES.issuerInvestorManagementTab('investors')} replace /> },
+                  { path: 'api-keys', element: withWorkspaceSuspense(<IssuerApiKeysPage />) },
                   { path: 'transactions', element: withWorkspaceSuspense(<IssuerTransactionHistoryPage />) },
                   { path: 'redemptions', element: <Navigate to={ROUTES.issuerInvestorManagementTab('redemption-requests')} replace /> },
                   { path: 'redemptions/:redemptionUid', element: withWorkspaceSuspense(<IssuerRedemptionDetailPage />) },

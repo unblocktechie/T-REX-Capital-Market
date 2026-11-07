@@ -17,6 +17,7 @@ import {
   createInitialOrganization,
 } from '@/services/organizationStorageService';
 import { organizationUiStateService } from '@/services/organizationUiStateService';
+import { updateTokenServiceWallet } from '@/services/issuer/tokenServiceWallet.utils';
 import { useAuthStore } from '@/store/auth.store';
 import { networkUserKey, useNetworkStore } from '@/store/network.store';
 
@@ -445,6 +446,40 @@ export function useOrganization({ enabled: queryEnabled = true } = {}) {
     return response;
   }, [queryClient, selectedOrganizationQueryKey]);
 
+  const syncServiceWallet = useCallback(
+    async (serviceWalletAddress, chainUid = selectedChainUid, tokenUid) => {
+      const normalizedAddress = String(serviceWalletAddress || '').trim();
+      const normalizedChainUid = String(chainUid || selectedChainUid || '').trim();
+      if (!String(tokenUid || '').trim()) {
+        throw new Error('A deployed token must be selected to synchronize a Service Wallet.');
+      }
+      if (!normalizedChainUid) {
+        const error = new Error('Choose a network before saving the Service Wallet.');
+        error.code = 'SELECTED_CHAIN_REQUIRED';
+        throw error;
+      }
+
+      const response = await organizationApi.syncServiceWallet(
+        normalizedAddress,
+        normalizedChainUid,
+        tokenUid,
+      );
+
+      // Only update this token's verified entry; never change the legacy
+      // organization-wide cache or another token's wallet.
+      const targetQueryKey = organizationChainQueryKey(normalizedChainUid);
+      queryClient.setQueryData(targetQueryKey, (current = createInitialOrganization()) => ({
+        ...current,
+        tokenServiceWallets: updateTokenServiceWallet(
+          current.tokenServiceWallets, tokenUid, normalizedChainUid, normalizedAddress,
+        ),
+      }));
+
+      return response;
+    },
+    [queryClient, selectedChainUid],
+  );
+
   return {
     organization,
     isLoading: enabled && query.isPending,
@@ -461,5 +496,6 @@ export function useOrganization({ enabled: queryEnabled = true } = {}) {
     setCurrentStep,
     submit,
     markUserNotified,
+    syncServiceWallet,
   };
 }

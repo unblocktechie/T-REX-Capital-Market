@@ -9,6 +9,9 @@ import { cn } from '@/utils/cn';
 import { adminRouteMeta } from './admin.navigation';
 
 const getMeta = (pathname) => {
+  if (pathname.startsWith('/admin/investors/') && pathname !== ROUTES.adminInvestors) {
+    return { title: 'Investor Details', description: 'Investor account and activity across networks.' };
+  }
   if (pathname.startsWith('/admin/organizations/') && pathname !== ROUTES.adminOrganizations) {
     return { title: 'Organization Review', description: 'Review entity, ownership, wallet, documents, and risk.' };
   }

@@ -6,6 +6,7 @@ const CHAIN_ERROR_MESSAGES = Object.freeze({
   INVALID_SELECTED_CHAIN: 'The selected network is no longer available. Refresh the network list and choose another network.',
   CHAIN_NOT_FOUND: 'The selected network is unavailable or inactive. Choose another available network.',
   SELECTED_CHAIN_MISMATCH: 'This action belongs to a different network. Switch to the network shown for this item, then try again.',
+  SERVICE_WALLET_ONCHAIN_MISMATCH: 'The Service Wallet saved on-chain does not match this address yet. Confirm the wallet transaction on the selected network, wait for it to finish, then try syncing again.',
   RESOURCE_NOT_FOUND_ON_SELECTED_CHAIN: 'This item is not available on the selected network. Return to the list and choose an item from this network.',
   CHAIN_LOCKED: 'This network is locked for your account. Open Network Access and unlock it before continuing.',
   CHAIN_IDENTITY_REQUIRED: 'This network must be unlocked before you can continue.',

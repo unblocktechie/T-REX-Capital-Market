@@ -3,6 +3,7 @@ import {
   createInitialOrganization,
 } from '@/services/organizationStorageService';
 import { organizationUiStateService } from '@/services/organizationUiStateService';
+import { normalizeTokenServiceWallets } from '@/services/issuer/tokenServiceWallet.utils';
 
 const STEP_NUMBER = Object.freeze({
   companyinformation: 1,
@@ -148,6 +149,14 @@ export const mapOrganization = (data) => {
     organizationUiStateService.getHighestStepReached(organizationUid),
   );
   organizationUiStateService.setHighestStepReached(organizationUid, highestStepReached);
+  const selectedServiceWalletAddress = text(
+    data.serviceWalletAddress,
+    data.selectedChainServiceWalletAddress,
+    data.selectedChainServiceWallet?.serviceWalletAddress,
+    data.selectedChainServiceWallet?.address,
+    data.serviceWallet?.serviceWalletAddress,
+    data.serviceWallet?.address,
+  );
 
   return {
     version: 2,
@@ -210,6 +219,10 @@ export const mapOrganization = (data) => {
       data.organizationWallet?.network,
       data.wallet?.network,
     ),
+    tokenServiceWallets: normalizeTokenServiceWallets(data.tokenServiceWallets),
+    serviceWalletAddress: /^0x0{40}$/i.test(selectedServiceWalletAddress)
+      ? ''
+      : selectedServiceWalletAddress,
     // Keep the legacy organization contract address for backward-compatible
     // backend records only. Chain-aware issuer UI and writes must use
     // selectedChainIdentity.identityAddress instead.

@@ -1,6 +1,7 @@
 const { execute } = require('../database/connection');
 const { createUid } = require('../utils/token');
 const { sqlInteger } = require('../utils/sql');
+const { orderBy } = require('../utils/admin-sort');
 
 const parseJsonArray = (value) => {
   if (Array.isArray(value)) return value;
@@ -123,6 +124,8 @@ class ChainRepository {
   }
 
   async listAdmin(options = {}, executor) {
+    const order = orderBy(options, Object.fromEntries(['chainName','chainCode','chainId','networkName','isActive','isDefault','displayOrder','createdAt','updatedAt'].map(k => [k, `\`${k}\``])),
+      '`isDefault` DESC,`displayOrder`,`chainName`,`chainUid`', '`chainUid`');
     const page = Math.max(1, Number(options.page) || 1);
     const limit = Math.max(1, Math.min(100, Number(options.limit) || 20));
     const offset = (page - 1) * limit;
@@ -140,7 +143,7 @@ class ChainRepository {
     const count = await execute(`SELECT COUNT(*) AS \`total\` FROM \`chainMaster\` WHERE ${where}`, params, executor);
     const rows = await execute(
       `SELECT * FROM \`chainMaster\` WHERE ${where}
-       ORDER BY \`isDefault\` DESC, \`displayOrder\`, \`chainName\`
+       ORDER BY ${order}
        LIMIT ${sqlInteger(limit, { min: 1, name: 'limit' })}
        OFFSET ${sqlInteger(offset, { name: 'offset' })}`,
       params, executor,

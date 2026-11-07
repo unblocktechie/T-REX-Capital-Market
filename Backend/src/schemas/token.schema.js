@@ -61,6 +61,8 @@ const tokenSubmit = Joi.object({
 });
 
 const tokenPriceUpdate = Joi.object({
+  priceUpdateUid: Joi.string().guid({ version: 'uuidv4' }).required(),
+  txHash: Joi.string().trim().pattern(/^0x[a-fA-F0-9]{64}$/).required(),
   currentTokenPrice: Joi.number()
     .positive()
     .precision(18)
@@ -68,11 +70,47 @@ const tokenPriceUpdate = Joi.object({
     .required(),
 });
 
+const tokenDirectPricePrepare = tokenPriceUpdate.fork(['txHash', 'priceUpdateUid'], (field) => field.forbidden());
+
+const positiveDecimalPrice = Joi.alternatives().try(
+  Joi.number().positive().precision(18).max(999999999999999999),
+  Joi.string().trim().pattern(/^(?:0|[1-9][0-9]{0,17})(?:\.[0-9]{1,18})?$/),
+).required();
+
+const tokenPriceRelayPrepare = Joi.object({ price: positiveDecimalPrice });
+
+const bytes32 = Joi.string().trim().pattern(/^0x[a-fA-F0-9]{64}$/);
+const tokenPriceRelaySubmit = Joi.object({
+  tokenAddress: evmAddress.required(),
+  newPriceRaw: Joi.string().trim().pattern(/^[1-9][0-9]{0,77}$/).required(),
+  nonce: Joi.string().trim().pattern(/^(?:0|[1-9][0-9]{0,77})$/).required(),
+  deadline: Joi.number().integer().positive().required(),
+  v: Joi.number().integer().valid(0, 1, 27, 28).required(),
+  r: bytes32.required(),
+  s: bytes32.required(),
+});
+
+const tokenPriceUpdateParams = Joi.object({ priceUpdateUid: uid.required() });
+const tokenPriceHistoryQuery = Joi.object({
+  tokenUid: Joi.string().guid({ version: 'uuidv4' }),
+  page: Joi.number().integer().min(1).default(1),
+  limit: Joi.number().integer().min(1).max(100).default(20),
+  search: Joi.string().trim().max(100).allow('').default(''),
+  source: Joi.string().valid('all', 'manual', 'automated', 'legacy', 'blockchain').default('all'),
+  status: Joi.string().valid('all', 'PENDING', 'SUBMITTED', 'CONFIRMED', 'FAILED', 'CANCELLED', 'EXPIRED', 'ORPHANED', 'APPLIED').default('all'),
+});
+
 module.exports = {
+  tokenPriceRecovery: Joi.object({ txHash: bytes32, confirmNotBroadcast: Joi.boolean().default(false) }),
+  tokenDirectPricePrepare,
   tokenInformation,
   tokenClaims,
   tokenCompliance,
   tokenGovernance,
   tokenSubmit,
   tokenPriceUpdate,
+  tokenPriceRelayPrepare,
+  tokenPriceRelaySubmit,
+  tokenPriceUpdateParams,
+  tokenPriceHistoryQuery,
 };

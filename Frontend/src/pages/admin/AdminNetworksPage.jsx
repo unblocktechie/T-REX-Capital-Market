@@ -1258,7 +1258,7 @@ function NetworkTable({ chains, onEdit }) {
   return (
     <>
       <div className="hidden overflow-visible rounded-2xl border border-slate-200 bg-white lg:block">
-        <table className="w-full table-fixed border-collapse text-left text-sm">
+        <table className="admin-data-table w-full table-fixed border-collapse text-left text-sm">
           <thead className="bg-slate-50 text-xs font-bold uppercase tracking-[.06em] text-slate-500">
             <tr>
               <th className="w-[28%] px-4 py-3.5">Network</th><th className="w-[12%] px-4 py-3.5">Chain ID</th><th className="w-[11%] px-4 py-3.5">Currency</th><th className="w-[14%] px-4 py-3.5">Environment</th><th className="w-[13%] px-4 py-3.5">Status</th><th className="w-[10%] px-4 py-3.5">Tokens</th><th className="w-[12%] px-4 py-3.5 text-right">Actions</th>
@@ -1361,7 +1361,7 @@ function NetworkSelector({ chains, selected, onChange }) {
 function PaymentTokenList({ tokens, onEdit, onDelete }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="hidden grid-cols-[1.45fr_1fr_.58fr_.58fr_.7fr_auto] gap-3 border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-bold uppercase tracking-[.08em] text-slate-500 md:grid">
+      <div className="admin-grid-table-header hidden grid-cols-[1.45fr_1fr_.58fr_.58fr_.7fr_auto] gap-3 border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-bold uppercase tracking-[.08em] text-slate-500 md:grid">
         <span>Token</span><span>Contract</span><span>Purchase</span><span>Redeem</span><span>Status</span><span>Actions</span>
       </div>
       {(tokens.data || []).map((token) => {

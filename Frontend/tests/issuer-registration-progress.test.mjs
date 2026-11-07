@@ -76,7 +76,7 @@ test('keeps the existing two signature rows and appends registration within the 
   assert.match(modal, /<span>\{claim\.label\}<\/span>/);
   assert.match(modal, /<small>\{step\.complete \? 'Confirmed' : step\.active \? 'Confirm now' : 'Next'\}<\/small>/);
   assert.match(modal, /<div className=\{`issuer-claim-progress-registration is-\$\{registration\.state\}`\}>/);
-  assert.match(modal, /<span>Registration<\/span>/);
+  assert.match(modal, /<span>Register investor<\/span>/);
   assert.match(modal, /\{status === ISSUER_CLAIM_SIGNING_STATUS\.SIGNING \? \(/);
   assert.match(modal, /\{status === ISSUER_CLAIM_SIGNING_STATUS\.VERIFYING \? \(/);
   assert.match(modal, /\{verifiedSignatures \? \(/);

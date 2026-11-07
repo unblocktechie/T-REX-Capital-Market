@@ -146,7 +146,6 @@ export function InvestmentJourneyTracker({ journey, action = null, secondaryActi
         <div className="investment-journey__current-copy">
           <div className="investment-journey__current-headline">
             <h3>{journey.title}</h3>
-            {!hasActions ? statusMeta : null}
           </div>
           <p>{journey.message}</p>
           {journey.next ? (
@@ -156,15 +155,15 @@ export function InvestmentJourneyTracker({ journey, action = null, secondaryActi
             </div>
           ) : null}
         </div>
-        {hasActions ? (
-          <div className="investment-journey__actions-panel">
-            {statusMeta}
+        <div className="investment-journey__actions-panel">
+          {statusMeta}
+          {hasActions ? (
             <div className="investment-journey__actions">
               {action}
               {secondaryAction}
             </div>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
       </div>
 
       <div className="investment-journey__progress" aria-hidden="true">

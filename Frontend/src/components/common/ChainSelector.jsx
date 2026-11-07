@@ -4,6 +4,7 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
+  LoaderCircle,
   Network,
   ShieldCheck,
 } from 'lucide-react';
@@ -20,6 +21,10 @@ export function ChainSelector({
   description = 'Choose the network for this action.',
   disabled = false,
   onlyUnlocked = false,
+  onUnlock,
+  canUnlock,
+  unlockingChainUid = '',
+  pollUnlockUid = '',
   error = '',
   id = 'chain-selector',
 }) {
@@ -94,19 +99,32 @@ export function ChainSelector({
       setOpen(false);
       triggerRef.current?.focus();
     };
-    const reposition = () => updateMenuPosition();
+    // Close the portaled menu as soon as its underlying page/container starts
+    // moving. Scrolling the dropdown's own option list must remain possible.
+    const isInsideMenu = (event) => menuRef.current?.contains(event.target);
+    const closeOnPageScroll = (event) => {
+      if (!isInsideMenu(event)) setOpen(false);
+    };
+    const closeOnScrollIntent = (event) => {
+      if (!isInsideMenu(event)) setOpen(false);
+    };
+    const repositionOnResize = () => updateMenuPosition();
 
     document.addEventListener('pointerdown', handleOutside);
     document.addEventListener('keydown', handleEscape);
-    window.addEventListener('resize', reposition);
-    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', repositionOnResize);
+    window.addEventListener('scroll', closeOnPageScroll, true);
+    document.addEventListener('wheel', closeOnScrollIntent, { capture: true, passive: true });
+    document.addEventListener('touchmove', closeOnScrollIntent, { capture: true, passive: true });
 
     return () => {
       window.cancelAnimationFrame(frame);
       document.removeEventListener('pointerdown', handleOutside);
       document.removeEventListener('keydown', handleEscape);
-      window.removeEventListener('resize', reposition);
-      window.removeEventListener('scroll', reposition, true);
+      window.removeEventListener('resize', repositionOnResize);
+      window.removeEventListener('scroll', closeOnPageScroll, true);
+      document.removeEventListener('wheel', closeOnScrollIntent, true);
+      document.removeEventListener('touchmove', closeOnScrollIntent, true);
     };
   }, [open, selectedIndex, updateMenuPosition]);
 
@@ -140,6 +158,8 @@ export function ChainSelector({
   };
 
   const handleMenuKeyDown = (event) => {
+    // Unlock is its own button. Never treat its Enter/Space as a selection.
+    if (event.target.closest?.('[data-chain-unlock]')) return;
     if (!chains.length) return;
     if (event.key === 'ArrowDown') {
       event.preventDefault();
@@ -250,9 +270,14 @@ export function ChainSelector({
               const image = resolveMasterImageUrl(chain);
               const isSelected = chain.chainUid === value;
               const locked = onlyUnlocked && !chain.isUnlocked;
+              const isCreating = chain.identityStatus === 'CREATING';
+              const isUnlocking = unlockingChainUid === chain.chainUid;
+              const isPolling = pollUnlockUid === chain.chainUid;
+              const unlockBusy = isCreating || isUnlocking || isPolling;
+              const unlockDisabled = unlockBusy || (canUnlock ? !canUnlock(chain) : false);
               return (
+                <div key={chain.chainUid} className={cn('flex min-w-0 items-center gap-1 rounded-xl pr-1 transition', isSelected && 'bg-blue-50/80')}>
                 <button
-                  key={chain.chainUid}
                   ref={(node) => { optionRefs.current[index] = node; }}
                   type="button"
                   role="option"
@@ -262,10 +287,10 @@ export function ChainSelector({
                   onMouseEnter={() => { if (!locked) setActiveIndex(index); }}
                   onClick={() => chooseChain(chain)}
                   className={cn(
-                    'flex w-full min-w-0 items-center gap-3 rounded-xl px-3 py-2.5 text-left outline-none transition',
+                    'flex min-w-0 flex-1 items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-left outline-none transition sm:gap-3 sm:px-3',
                     'hover:bg-slate-50 focus:bg-slate-50 focus:ring-2 focus:ring-inset focus:ring-[var(--primary-500)]',
                     isSelected && 'bg-blue-50/80',
-                    locked && 'cursor-not-allowed opacity-50 hover:bg-transparent',
+                    locked && 'cursor-not-allowed opacity-60 hover:bg-transparent',
                     index === activeIndex && !locked && !isSelected && 'bg-slate-50',
                   )}
                 >
@@ -282,7 +307,7 @@ export function ChainSelector({
                         {getEnvironmentLabel(chain)}
                       </span>
                       {chain.isDefault ? <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">Default</span> : null}
-                      {locked ? <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">Locked</span> : null}
+                      {locked ? <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">{isCreating || isPolling ? 'Setting up' : chain.identityStatus === 'FAILED' ? 'Setup failed' : 'Locked'}</span> : null}
                     </span>
                   </span>
                   {isSelected ? (
@@ -291,6 +316,20 @@ export function ChainSelector({
                     </span>
                   ) : null}
                 </button>
+                {locked && typeof onUnlock === 'function' ? (
+                  <button
+                    type="button"
+                    data-chain-unlock
+                    disabled={unlockDisabled}
+                    onClick={() => onUnlock(chain)}
+                    className="min-h-9 shrink-0 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
+                    aria-label={`${chain.identityStatus === 'FAILED' ? 'Retry unlocking' : 'Unlock'} ${chain.chainName}`}
+                    title={unlockDisabled && !unlockBusy ? 'Network unlock is currently unavailable' : undefined}
+                  >
+                    {unlockBusy ? <LoaderCircle size={14} className="mx-auto animate-spin" aria-hidden="true" /> : chain.identityStatus === 'FAILED' ? 'Retry' : 'Unlock'}
+                  </button>
+                ) : null}
+                </div>
               );
             }) : (
               <div className="px-4 py-7 text-center">

@@ -123,6 +123,45 @@ class TokenRepository {
     return this.findByUserUid(userUid, executor);
   }
 
+  async lockPriceByOwner(userUid, tokenUid, executor) {
+    const rows = await execute(`SELECT t.*, CAST(COALESCE(currentTokenPrice, initialTokenPrice) AS CHAR) AS previousPrice
+      FROM tokenMaster t WHERE userUid=? AND tokenUid=? AND isDeleted=0 LIMIT 1 FOR UPDATE`,
+    [userUid, tokenUid], executor);
+    return rows[0] || null;
+  }
+
+  async updateCurrentPriceByTokenUid(tokenUid, currentTokenPrice, executor) {
+    const result = await execute(
+      `UPDATE \`tokenMaster\` SET \`currentTokenPrice\`=?,\`updatedAt\`=UTC_TIMESTAMP(3)
+       WHERE \`tokenUid\`=? AND \`status\`='deployed' AND \`isActive\`=1 AND \`isDeleted\`=0`,
+      [currentTokenPrice, tokenUid], executor,
+    );
+    return result.affectedRows > 0;
+  }
+
+  async findDeployedByAddress(tokenAddress, chainUid, executor) {
+    const rows = await execute(
+      `SELECT t.*, o.\`userUid\` AS \`issuerUserUid\`, o.\`walletAddress\` AS \`issuerWalletAddress\`
+       FROM \`tokenMaster\` t
+       INNER JOIN \`organizationMaster\` o ON o.\`organizationUid\`=t.\`organizationUid\` AND o.\`isDeleted\`=0
+       WHERE LOWER(t.\`tokenAddress\`)=LOWER(?) AND t.\`chainUid\`=? AND t.\`status\`='deployed'
+         AND t.\`isActive\`=1 AND t.\`isDeleted\`=0 LIMIT 1`,
+      [tokenAddress, chainUid], executor,
+    );
+    return rows[0] || null;
+  }
+
+  async listDeployedByChainUid(chainUid, executor) {
+    return execute(
+      `SELECT t.*, o.\`userUid\` AS \`issuerUserUid\`, o.\`walletAddress\` AS \`issuerWalletAddress\`
+       FROM \`tokenMaster\` t
+       INNER JOIN \`organizationMaster\` o ON o.\`organizationUid\`=t.\`organizationUid\` AND o.\`isDeleted\`=0
+       WHERE t.\`chainUid\`=? AND t.\`status\`='deployed' AND t.\`tokenAddress\` IS NOT NULL
+         AND t.\`isActive\`=1 AND t.\`isDeleted\`=0 ORDER BY t.\`deployedAtBlock\`,t.\`tokenUid\``,
+      [chainUid], executor,
+    );
+  }
+
   async updateDeploymentByUserUid(userUid, data, executor) {
     const entries = Object.entries(data).filter(([field, value]) => tokenFields.includes(field) && value !== undefined);
     if (!entries.length) return this.findByUserUid(userUid, executor);

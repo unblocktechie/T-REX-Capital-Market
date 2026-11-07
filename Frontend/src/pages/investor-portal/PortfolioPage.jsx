@@ -1,3 +1,4 @@
+import { PriceValue } from '@/components/common/PriceValue';
 import { paymentContextOf } from '@/config/payment-tokens';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -14,6 +15,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { formatUnits } from 'viem';
 import { portfolioAssetKey } from '@/utils/portfolioAssetKey';
+import { resolvePortfolioValuationPrice } from '@/utils/portfolioValuationPrice';
 import {
   getOrStartPortfolioLiveRead,
   portfolioBalanceIdentity,
@@ -363,6 +365,7 @@ export default function PortfolioPage({ embedded = false } = {}) {
     let purchaseCount = 0;
     let verifiedBalances = 0;
     let pricedBalances = 0;
+    let referencePricedBalances = 0;
 
     overviewData.items.forEach((token) => {
       const payment = paymentContextOf(token);
@@ -386,13 +389,14 @@ export default function PortfolioPage({ embedded = false } = {}) {
       const balanceState = overviewData.walletBalances[portfolioAssetKey(token)];
       if (balanceState?.status === 'ready') {
         verifiedBalances += 1;
-        const currentPrice = overviewData.platformPrices[portfolioAssetKey(token)]?.status === 'ready'
-          ? overviewData.platformPrices[portfolioAssetKey(token)].value
-          : '';
-        const walletValue = multiplyDecimalValuesExact(balanceState.balance, currentPrice);
+        const valuationPrice = resolvePortfolioValuationPrice(
+          token, overviewData.platformPrices[portfolioAssetKey(token)],
+        );
+        const walletValue = multiplyDecimalValuesExact(balanceState.balance, valuationPrice.value);
         if (walletValue !== null) {
           walletValues.push(walletValue);
           pricedBalances += 1;
+          if (valuationPrice.status === 'reference') referencePricedBalances += 1;
         }
       }
     });
@@ -415,6 +419,7 @@ export default function PortfolioPage({ embedded = false } = {}) {
       purchaseCount,
       verifiedBalances,
       pricedBalances,
+      referencePricedBalances,
     };
   }, [overviewData]);
 
@@ -502,7 +507,7 @@ export default function PortfolioPage({ embedded = false } = {}) {
                 </ResponsiveTooltip>
               )}
             </strong>
-            <small>{loading ? 'Checking live balances' : overview.mixedCurrencies ? mixedPaymentTokenSymbols : `Live balance × current price, ${summaryScope}`}</small>
+            <small>{loading ? 'Checking live balances' : overview.mixedCurrencies ? mixedPaymentTokenSymbols : overview.referencePricedBalances ? `Estimate uses reported or initial price where live price is unavailable, ${summaryScope}` : estimatedCurrentValueDisplay.display ? `Live balance × current price, ${summaryScope}` : 'Estimate unavailable until a balance and price can be checked'}</small>
           </div>
         </Card>
         <Card className="investor-portfolio-summary__card">
@@ -606,7 +611,8 @@ export default function PortfolioPage({ embedded = false } = {}) {
                   const paymentSymbol = paymentContext.paymentTokenSymbol || token.currency || 'payment token';
                   const balanceState = walletBalances[portfolioAssetKey(token)] || walletBalanceState('loading');
                   const currentPriceState = platformPrices[portfolioAssetKey(token)] || { status: 'loading', value: '', reason: '' };
-                  const currentPrice = currentPriceState.status === 'ready' ? currentPriceState.value : '';
+                  const valuationPrice = resolvePortfolioValuationPrice(token, currentPriceState);
+                  const currentPrice = valuationPrice.value;
                   const estimatedValueExact = balanceState.status === 'ready' && currentPriceState.status === 'ready'
                     ? multiplyDecimalValuesExact(balanceState.balance, currentPrice)
                     : null;
@@ -674,7 +680,9 @@ export default function PortfolioPage({ embedded = false } = {}) {
                             </ResponsiveTooltip>
                           )}
                         </strong>
-                        <small>{balanceState.status === 'ready' && currentPrice ? 'Current balance × live current price' : currentPriceState.reason || 'Available after live balance and price are verified'}</small>
+                        <small>{balanceState.status === 'ready' && currentPrice
+                          ? valuationPrice.status === 'reference' ? valuationPrice.reason : 'Current balance × live current price'
+                          : balanceState.status !== 'ready' ? balanceState.reason || 'Checking your wallet balance' : valuationPrice.reason}</small>
                       </div>
 
                       <div className="investor-portfolio-cell investor-portfolio-token-price">
@@ -695,14 +703,14 @@ export default function PortfolioPage({ embedded = false } = {}) {
                                     chainUid={token?.chainUid}
                                     chainId={token?.chainId}
                                   >
-                                    {currentPriceDisplay.display}
+                                    <PriceValue value={currentPrice} />
                                   </PaymentCurrencyAmount>
                                 </ResponsiveTooltip>
                               )
                               : 'Unavailable'}
                         </strong>
-                        {currentPriceState.status === 'ready' ? null : (
-                          <small>{currentPriceState.reason || 'Live price unavailable'}</small>
+                        {valuationPrice.status === 'ready' ? null : (
+                          <small>{valuationPrice.reason || 'Live price unavailable'}</small>
                         )}
                         <small>
                           Initial price{' '}
@@ -712,7 +720,7 @@ export default function PortfolioPage({ embedded = false } = {}) {
                               ariaLabel={initialPriceDisplay.isAbbreviated ? `Initial price. Exact value ${initialPriceLabel}` : undefined}
                               className="investor-portfolio-inline-precision-trigger"
                             >
-                              <span>{initialPriceDisplay.display} {paymentSymbol}</span>
+                              <PriceValue value={resolveInitialTokenPriceExact(token)} suffix={` ${paymentSymbol}`} />
                             </ResponsiveTooltip>
                           ) : '—'}
                         </small>

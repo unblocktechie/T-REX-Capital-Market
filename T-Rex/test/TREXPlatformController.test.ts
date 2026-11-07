@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { ethers } from 'hardhat';
+import { ethers, upgrades } from 'hardhat';
 import { loadFixture } from '@nomicfoundation/hardhat-network-helpers';
 import { HardhatEthersSigner } from '@nomicfoundation/hardhat-ethers/signers';
 
@@ -22,6 +22,13 @@ describe('TREXPlatformController', () => {
   // 10 per whole T-REX token, in PRICE_DECIMALS-precision units.
   const PRICE = ethers.parseUnits('10', PRICE_DECIMALS);
 
+  // Deploys behind a UUPS proxy exactly like production; the plugin also
+  // validates the implementation is upgrade-safe.
+  async function deployController(initialOwner: string, paymentTokens: string[], from?: HardhatEthersSigner) {
+    const Controller = await ethers.getContractFactory('TREXPlatformController', from);
+    return upgrades.deployProxy(Controller, [initialOwner, paymentTokens], { kind: 'uups' });
+  }
+
   async function deployFixture() {
     const [deployer, platformOwner, issuer, investor, other] = await ethers.getSigners();
 
@@ -32,8 +39,7 @@ describe('TREXPlatformController', () => {
     const MockTRexToken = await ethers.getContractFactory('MockTRexToken');
     const trexToken = await MockTRexToken.connect(issuer).deploy('Security Token', 'SEC', TOKEN_DECIMALS);
 
-    const Controller = await ethers.getContractFactory('TREXPlatformController');
-    const controller = await Controller.deploy(platformOwner.address, [await usdt.getAddress(), await usdc.getAddress()]);
+    const controller = await deployController(platformOwner.address, [await usdt.getAddress(), await usdc.getAddress()]);
 
     // Issuer wires the controller in as an Agent — this is the one-time,
     // per-token setup step the issuer performs; everything after this is
@@ -58,7 +64,7 @@ describe('TREXPlatformController', () => {
   //                       CONSTRUCTOR
   // ===========================================================
 
-  describe('constructor', () => {
+  describe('initialize', () => {
     it('sets the initial owner and whitelists the initial payment tokens', async () => {
       const {
         platformOwner, usdt, usdc, controller,
@@ -70,35 +76,92 @@ describe('TREXPlatformController', () => {
     });
 
     it('reverts on a zero-address owner', async () => {
-      const { usdt } = await loadFixture(deployFixture);
-      const Controller = await ethers.getContractFactory('TREXPlatformController');
-      await expect(Controller.deploy(ethers.ZeroAddress, [await usdt.getAddress()])).to.be.revertedWithCustomError(
-        Controller,
+      const { usdt, controller } = await loadFixture(deployFixture);
+      await expect(deployController(ethers.ZeroAddress, [await usdt.getAddress()])).to.be.revertedWithCustomError(
+        controller,
         'ZeroAddress',
       );
     });
 
     it('reverts on a zero-address initial payment token', async () => {
-      const { platformOwner } = await loadFixture(deployFixture);
-      const Controller = await ethers.getContractFactory('TREXPlatformController');
-      await expect(Controller.deploy(platformOwner.address, [ethers.ZeroAddress])).to.be.revertedWithCustomError(
-        Controller,
+      const { platformOwner, controller } = await loadFixture(deployFixture);
+      await expect(deployController(platformOwner.address, [ethers.ZeroAddress])).to.be.revertedWithCustomError(
+        controller,
         'ZeroAddress',
       );
     });
 
     it('deploys fine with no initial payment tokens, to be added later', async () => {
       const { platformOwner } = await loadFixture(deployFixture);
-      const Controller = await ethers.getContractFactory('TREXPlatformController');
-      const controller = await Controller.deploy(platformOwner.address, []);
+      const controller = await deployController(platformOwner.address, []);
       expect(await controller.paymentTokens()).to.deep.equal([]);
     });
 
     it('leaves the deployer as owner when initialOwner is the deployer', async () => {
       const { deployer, usdt } = await loadFixture(deployFixture);
-      const Controller = await ethers.getContractFactory('TREXPlatformController', deployer);
-      const controller = await Controller.deploy(deployer.address, [await usdt.getAddress()]);
+      const controller = await deployController(deployer.address, [await usdt.getAddress()], deployer);
       expect(await controller.owner()).to.equal(deployer.address);
+    });
+
+    it('cannot be initialized twice, through the proxy or on the implementation', async () => {
+      const { platformOwner, controller } = await loadFixture(deployFixture);
+      await expect(controller.initialize(platformOwner.address, [])).to.be.revertedWith(
+        'Initializable: contract is already initialized',
+      );
+
+      const implementation = await ethers.getContractAt(
+        'TREXPlatformController',
+        await upgrades.erc1967.getImplementationAddress(await controller.getAddress()),
+      );
+      await expect(implementation.initialize(platformOwner.address, [])).to.be.revertedWith(
+        'Initializable: contract is already initialized',
+      );
+    });
+  });
+
+  // ===========================================================
+  //                        UPGRADES
+  // ===========================================================
+
+  describe('upgrades', () => {
+    it('keeps the proxy address and all state across an upgrade, then runs the V2 reinitializer', async () => {
+      const {
+        platformOwner, issuer, usdt, usdc, trexToken, controller,
+      } = await loadFixture(deployFixture);
+      const proxyAddress = await controller.getAddress();
+      expect(await controller.version()).to.equal('1.0.0');
+      await controller.connect(issuer).setServiceWallet(platformOwner.address, await trexToken.getAddress());
+
+      const V2 = await ethers.getContractFactory('TREXPlatformControllerV2Mock', platformOwner);
+      // V2's reinitializer must NOT re-run the parent initializers, which the
+      // plugin flags by default; storage-layout checks still apply.
+      const upgraded = await upgrades.upgradeProxy(proxyAddress, V2, {
+        call: { fn: 'initializeV2', args: [42] },
+        unsafeAllow: ['missing-initializer', 'missing-initializer-call'],
+      });
+
+      expect(await upgraded.getAddress()).to.equal(proxyAddress);
+      expect(await upgraded.version()).to.equal('2.0.0');
+      expect(await upgraded.newFeatureValue()).to.equal(42n);
+      expect(await upgraded.owner()).to.equal(platformOwner.address);
+      expect(await upgraded.tokenPrice(await trexToken.getAddress())).to.equal(PRICE);
+      expect(await upgraded.paymentTokens()).to.deep.equal([await usdt.getAddress(), await usdc.getAddress()]);
+      expect(await upgraded.serviceWalletOf(await trexToken.getAddress())).to.equal(platformOwner.address);
+      // Still the same Agent on the token — no re-wiring needed.
+      expect(await trexToken.isAgent(proxyAddress)).to.equal(true);
+      await expect(upgraded.initializeV2(7)).to.be.revertedWith('Initializable: contract is already initialized');
+    });
+
+    it('only lets the owner upgrade', async () => {
+      const { issuer, other, controller } = await loadFixture(deployFixture);
+      const V2 = await ethers.getContractFactory('TREXPlatformControllerV2Mock');
+      const newImplementation = await V2.deploy();
+
+      for (const caller of [issuer, other]) {
+        await expect(controller.connect(caller).upgradeTo(await newImplementation.getAddress())).to.be.revertedWith(
+          'Ownable: caller is not the owner',
+        );
+      }
     });
   });
 
@@ -228,6 +291,153 @@ describe('TREXPlatformController', () => {
       await expect(
         controller.connect(issuer).setPrice(await controller.getAddress(), PRICE),
       ).to.be.revertedWithCustomError(controller, 'InvalidToken');
+    });
+  });
+
+  describe('setPriceOnBehalfOf', () => {
+    const SET_PRICE_TYPES = {
+      SetPrice: [
+        { name: 'token', type: 'address' },
+        { name: 'newPrice', type: 'uint256' },
+        { name: 'nonce', type: 'uint256' },
+        { name: 'deadline', type: 'uint256' },
+      ],
+    };
+
+    async function signSetPrice(
+      signer: HardhatEthersSigner | ReturnType<typeof ethers.Wallet.createRandom>,
+      controller: any,
+      token: string,
+      newPrice: bigint,
+      deadline: bigint,
+      nonce?: bigint,
+    ) {
+      const { chainId } = await ethers.provider.getNetwork();
+      const signature = await signer.signTypedData(
+        {
+          name: 'TREXPlatformController',
+          version: '1',
+          chainId,
+          verifyingContract: await controller.getAddress(),
+        },
+        SET_PRICE_TYPES,
+        {
+          token, newPrice, nonce: nonce ?? await controller.nonces(signer.address), deadline,
+        },
+      );
+      return ethers.Signature.from(signature);
+    }
+
+    async function serviceWalletFixture() {
+      const base = await deployFixture();
+      const serviceWallet = ethers.Wallet.createRandom();
+      await base.controller.connect(base.issuer).setServiceWallet(serviceWallet.address, await base.trexToken.getAddress());
+      const deadline = BigInt((await ethers.provider.getBlock('latest'))!.timestamp + 3600);
+      return { ...base, serviceWallet, deadline };
+    }
+
+    it('lets a relayer set the price with the issuer service wallet signature', async () => {
+      const {
+        other, serviceWallet, controller, trexToken, deadline,
+      } = await loadFixture(serviceWalletFixture);
+      const token = await trexToken.getAddress();
+      const newPrice = ethers.parseUnits('15', PRICE_DECIMALS);
+      const sig = await signSetPrice(serviceWallet, controller, token, newPrice, deadline);
+
+      await expect(controller.connect(other).setPriceOnBehalfOf(token, newPrice, deadline, sig.v, sig.r, sig.s))
+        .to.emit(controller, 'TokenPriceUpdated')
+        .withArgs(token, PRICE, newPrice);
+
+      expect(await controller.tokenPrice(token)).to.equal(newPrice);
+      expect(await controller.nonces(serviceWallet.address)).to.equal(1n);
+    });
+
+    it('emits ServiceWalletUpdated on register and revoke', async () => {
+      const {
+        issuer, other, controller, trexToken,
+      } = await loadFixture(deployFixture);
+      const token = await trexToken.getAddress();
+
+      await expect(controller.connect(issuer).setServiceWallet(other.address, token))
+        .to.emit(controller, 'ServiceWalletUpdated')
+        .withArgs(issuer.address, token, ethers.ZeroAddress, other.address);
+      await expect(controller.connect(issuer).setServiceWallet(ethers.ZeroAddress, token))
+        .to.emit(controller, 'ServiceWalletUpdated')
+        .withArgs(issuer.address, token, other.address, ethers.ZeroAddress);
+    });
+
+    it('rejects a replayed signature', async () => {
+      const {
+        serviceWallet, controller, trexToken, deadline,
+      } = await loadFixture(serviceWalletFixture);
+      const token = await trexToken.getAddress();
+      const newPrice = ethers.parseUnits('15', PRICE_DECIMALS);
+      const sig = await signSetPrice(serviceWallet, controller, token, newPrice, deadline);
+
+      await controller.setPriceOnBehalfOf(token, newPrice, deadline, sig.v, sig.r, sig.s);
+      await expect(controller.setPriceOnBehalfOf(token, newPrice, deadline, sig.v, sig.r, sig.s))
+        .to.be.revertedWithCustomError(controller, 'InvalidServiceWalletSignature');
+    });
+
+    it('rejects an expired signature', async () => {
+      const {
+        serviceWallet, controller, trexToken,
+      } = await loadFixture(serviceWalletFixture);
+      const token = await trexToken.getAddress();
+      const deadline = BigInt((await ethers.provider.getBlock('latest'))!.timestamp - 1);
+      const sig = await signSetPrice(serviceWallet, controller, token, PRICE, deadline);
+
+      await expect(controller.setPriceOnBehalfOf(token, PRICE, deadline, sig.v, sig.r, sig.s))
+        .to.be.revertedWithCustomError(controller, 'SignatureExpired')
+        .withArgs(deadline);
+    });
+
+    it('rejects signatures from the main wallet, the platform owner, or any unregistered wallet', async () => {
+      const {
+        issuer, platformOwner, other, controller, trexToken, deadline,
+      } = await loadFixture(serviceWalletFixture);
+      const token = await trexToken.getAddress();
+
+      for (const signer of [issuer, platformOwner, other]) {
+        const sig = await signSetPrice(signer, controller, token, PRICE, deadline);
+        await expect(controller.setPriceOnBehalfOf(token, PRICE, deadline, sig.v, sig.r, sig.s))
+          .to.be.revertedWithCustomError(controller, 'InvalidServiceWalletSignature')
+          .withArgs(token, signer.address);
+      }
+    });
+
+    it('rejects a signature whose fields do not match the submitted price', async () => {
+      const {
+        serviceWallet, controller, trexToken, deadline,
+      } = await loadFixture(serviceWalletFixture);
+      const token = await trexToken.getAddress();
+      const sig = await signSetPrice(serviceWallet, controller, token, PRICE, deadline);
+
+      await expect(controller.setPriceOnBehalfOf(token, PRICE + 1n, deadline, sig.v, sig.r, sig.s))
+        .to.be.revertedWithCustomError(controller, 'InvalidServiceWalletSignature');
+    });
+
+    it('rejects once the issuer revokes the service wallet', async () => {
+      const {
+        issuer, serviceWallet, controller, trexToken, deadline,
+      } = await loadFixture(serviceWalletFixture);
+      const token = await trexToken.getAddress();
+      const sig = await signSetPrice(serviceWallet, controller, token, PRICE, deadline);
+
+      await controller.connect(issuer).setServiceWallet(ethers.ZeroAddress, token);
+      await expect(controller.setPriceOnBehalfOf(token, PRICE, deadline, sig.v, sig.r, sig.s))
+        .to.be.revertedWithCustomError(controller, 'InvalidServiceWalletSignature');
+    });
+
+    it('applies the same price validation as setPrice', async () => {
+      const {
+        serviceWallet, controller, trexToken, deadline,
+      } = await loadFixture(serviceWalletFixture);
+      const token = await trexToken.getAddress();
+      const sig = await signSetPrice(serviceWallet, controller, token, 0n, deadline);
+
+      await expect(controller.setPriceOnBehalfOf(token, 0n, deadline, sig.v, sig.r, sig.s))
+        .to.be.revertedWithCustomError(controller, 'InvalidPrice');
     });
   });
 

@@ -77,6 +77,9 @@ const isInvestorChainScopedRequest = (url = '') => {
 
 const isIssuerChainScopedRequest = (url = '') => {
   const path = requestPath(url);
+  if (path === '/organizations/me/api-key-policy-options' || path === '/organizations/me/api-keys' || path.startsWith('/organizations/me/api-keys/')) {
+    return false;
+  }
   return (
     path === '/organizations' ||
     path.startsWith('/organizations/') ||
@@ -222,13 +225,19 @@ export const setupAxiosInterceptors = () => {
 
         const user = useAuthStore.getState().user;
         const normalizedRole = String(user?.role || user?.roleName || '').trim().toLowerCase();
-        if (normalizedRole === 'investor' || normalizedRole === 'issuer') {
+        if (
+          !config.skipSelectedChainHeader &&
+          (normalizedRole === 'investor' || normalizedRole === 'issuer')
+        ) {
           const networkState = useNetworkStore.getState();
           const selectedChainUid =
             networkState.getActiveChainUid(user) ||
             web3Config.getChainRecordById(networkState.getActiveChainId(user))?.chainUid ||
             '';
-          if (selectedChainUid) config.headers['X-Chain-Uid'] = selectedChainUid;
+          // Explicitly pinned transaction requests must keep their original network even if the UI changes.
+          if (selectedChainUid && !config.headers?.has?.('X-Chain-Uid')) {
+            config.headers['X-Chain-Uid'] = selectedChainUid;
+          }
         }
       }
 

@@ -1,8 +1,8 @@
-// One canonical destination for investor token operations. Keep legacy route
-// helpers as aliases so existing callers open the embedded operation tabs.
+// Legacy operation helpers keep calling code on the canonical embedded operation page.
 const investorOperationRoute = (tab, interestUid) => {
-  const params = new URLSearchParams({ tab });
+  const params = new URLSearchParams();
   if (interestUid) params.set('interestUid', interestUid);
+  params.set('tab', tab);
   return `/app/asset-management?${params.toString()}`;
 };
 
@@ -20,8 +20,20 @@ export const ROUTES = Object.freeze({
   investorMyInvestment: '/app/my-investment',
   investorMyInvestmentTab: (tab = 'my-application') => `/app/my-investment?tab=${tab}`,
   assetManagement: '/app/asset-management',
-  assetManagementAction: (tab = 'invest', interestUid = '') => investorOperationRoute(tab, interestUid),
+  // A single entry point for the embedded investment actions. Keep the
+  // application UID so the destination never selects a different holding.
+  assetManagementAction: (options = {}, legacyInterestUid = '') => {
+    const { interestUid = '', tokenUid = '', tab = 'invest' } = typeof options === 'string'
+      ? { tab: options, interestUid: legacyInterestUid }
+      : (options || {});
+    const params = new URLSearchParams();
+    if (interestUid) params.set('interestUid', interestUid);
+    if (tokenUid) params.set('tokenUid', tokenUid);
+    params.set('tab', ['invest', 'send', 'redeem'].includes(tab) ? tab : 'invest');
+    return `/app/asset-management?${params.toString()}`;
+  },
   walletManagement: '/app/wallet',
+  issuerApiKeys: '/app/api-keys',
   applicationDetail: (interestUid = ':interestUid') => `/app/applications/${interestUid}`,
   applicationClaim: (interestUid = ':interestUid') => `/app/applications/${interestUid}/submit-claim`,
   purchaseToken: (interestUid = ':interestUid') => investorOperationRoute('invest', interestUid),
@@ -33,6 +45,7 @@ export const ROUTES = Object.freeze({
   tokenDeploying: '/app/tokens/new/deploying',
   tokenSuccess: (tokenAddress = ':tokenAddress') => `/app/tokens/${tokenAddress}/success`,
   tokenDetails: (tokenAddress = ':tokenAddress') => `/app/tokens/${tokenAddress}`,
+  tokenPriceHistory: (tokenAddress = ':tokenAddress') => `/app/tokens/${tokenAddress}/price-history`,
   identity: '/app/identity',
   compliance: '/app/compliance',
   investors: '/app/investors',
@@ -56,6 +69,12 @@ export const ROUTES = Object.freeze({
   adminReviewQueue: '/admin/reviews',
   adminOrganizations: '/admin/organizations',
   adminNetworks: '/admin/networks',
+  adminIssuerApiKeySettings: '/admin/api-key-settings',
+  adminTeamNotifications: '/admin/team-notifications',
+  adminInvestors: '/admin/investors',
+  adminInvestor: (userUid = ':userUid') => `/admin/investors/${userUid}`,
+  adminTokens: '/admin/tokens',
+  adminInvestorApplications: '/admin/investor-applications',
   adminOrganizationReview: (organizationId = ':organizationId') => `/admin/organizations/${organizationId}`,
   adminUsers: '/admin/users',
   adminAuditLogs: '/admin/audit-logs',

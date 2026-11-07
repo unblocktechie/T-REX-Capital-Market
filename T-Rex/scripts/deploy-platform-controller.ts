@@ -13,8 +13,13 @@ import { NonceManager } from './lib/nonce-manager';
  * issuer's token from here on. Each issuer still has to run
  * wire-platform-controller.ts once per token to actually let it operate.
  *
- * Requires `npm run compile` to have been run first, so the artifact this
- * address comes from actually exists on disk.
+ * Deploys the implementation, then an ERC1967Proxy pointing at it that
+ * calls `initialize` in the same transaction. The PROXY address is what gets
+ * saved as `platformController` and wired into tokens; later versions are
+ * rolled out with upgrade-platform-controller.ts and keep that address.
+ *
+ * Requires `npm run compile` to have been run first, so the artifacts these
+ * addresses come from actually exist on disk.
  *
  * Network + payment tokens come from networks.json (see network-config.ts) —
  * pass --network <name> (defaults to "sepolia"). The RPC URL and deployer
@@ -35,6 +40,21 @@ const artifactPath = path.join(
   'TREXPlatformController.sol',
   'TREXPlatformController.json',
 );
+
+const proxyArtifactPath = path.join(
+  __dirname,
+  '..',
+  'artifacts',
+  '@openzeppelin',
+  'contracts',
+  'proxy',
+  'ERC1967',
+  'ERC1967Proxy.sol',
+  'ERC1967Proxy.json',
+);
+
+// keccak256('eip1967.proxy.implementation') - 1
+const IMPLEMENTATION_SLOT = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc';
 
 async function main() {
   const networkConfig = loadNetworkConfig(parseNetworkArg());
@@ -72,20 +92,41 @@ async function main() {
 
   const existing = deployment.platform.platformController;
   let controllerAddress: string;
+  let implementationAddress: string;
   if (existing && (await provider.getCode(existing)) !== '0x') {
-    console.log(`\nSkipping deploy — TREXPlatformController already deployed at ${existing}`);
+    const slot = await provider.getStorage(existing, IMPLEMENTATION_SLOT);
+    if (BigInt(slot) === 0n) {
+      // Pre-proxy controller: can't be upgraded in place, and replacing it
+      // means every token must add the new address as an Agent again.
+      throw new Error(
+        `platformController ${existing} is the legacy non-upgradeable controller. To migrate, move it to `
+        + `platform.platformControllerLegacy in ${deploymentsPath}, clear platform.platformController, and re-run.`,
+      );
+    }
     controllerAddress = existing;
+    implementationAddress = ethers.getAddress(ethers.dataSlice(slot, 12));
+    console.log(`\nSkipping deploy — TREXPlatformController proxy already deployed at ${existing}`);
   } else {
     const artifact = JSON.parse(fs.readFileSync(artifactPath, 'utf8'));
-    const factory = new ethers.ContractFactory(artifact.abi, artifact.bytecode, deployer);
+    const proxyArtifact = JSON.parse(fs.readFileSync(proxyArtifactPath, 'utf8'));
     const nonces = new NonceManager(provider, deployer.address);
-    const controller = await factory.deploy(platformOwnerAddress, paymentTokenAddresses, { nonce: await nonces.take() });
-    const receipt = await controller.deploymentTransaction()?.wait();
-    controllerAddress = await controller.getAddress();
-    console.log(`\n  -> TREXPlatformController deployed at ${controllerAddress} (tx ${receipt?.hash})`);
+
+    const implementationFactory = new ethers.ContractFactory(artifact.abi, artifact.bytecode, deployer);
+    const implementation = await implementationFactory.deploy({ nonce: await nonces.take() });
+    const implementationReceipt = await implementation.deploymentTransaction()?.wait();
+    implementationAddress = await implementation.getAddress();
+    console.log(`\n  -> Implementation deployed at ${implementationAddress} (tx ${implementationReceipt?.hash})`);
+
+    const initData = implementationFactory.interface.encodeFunctionData('initialize', [platformOwnerAddress, paymentTokenAddresses]);
+    const proxyFactory = new ethers.ContractFactory(proxyArtifact.abi, proxyArtifact.bytecode, deployer);
+    const proxy = await proxyFactory.deploy(implementationAddress, initData, { nonce: await nonces.take() });
+    const proxyReceipt = await proxy.deploymentTransaction()?.wait();
+    controllerAddress = await proxy.getAddress();
+    console.log(`  -> TREXPlatformController proxy deployed at ${controllerAddress} (tx ${proxyReceipt?.hash})`);
   }
 
   deployment.platform.platformController = controllerAddress;
+  deployment.platform.platformControllerImplementation = implementationAddress;
   deployment.platform.paymentTokens = paymentTokenAddresses;
   deployment.platform.platformControllerOwner = platformOwnerAddress;
   fs.writeFileSync(deploymentsPath, JSON.stringify(deployment, null, 2));

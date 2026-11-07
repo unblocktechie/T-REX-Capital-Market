@@ -23,6 +23,11 @@ export function MainLayout() {
     user?.role === ROLES.investor ? user : null,
   );
   const location = useLocation();
+  const appNetwork = useAppNetwork({
+    pathname: location.pathname,
+    allowInvestorOnboardingNetworkSelection: !investorAccess.isSubmitted && !investorAccess.isApproved,
+  });
+
   const isIssuer = user?.role === ROLES.issuer;
   const isInvestor = user?.role === ROLES.investor;
   const isVerifiedSuccessPage = location.pathname === ROUTES.organizationVerified;
@@ -34,7 +39,6 @@ export function MainLayout() {
     isInvestor &&
     (!investorAccess.isWorkspaceUnlocked || isInvestorOnboardingPage);
   const onboardingOnly = issuerOnboardingOnly || investorOnboardingOnly;
-  const appNetwork = useAppNetwork({ pathname: location.pathname, onboardingOnly });
   // Issuer and investor workspaces use a mix of React Query and imperative loaders.
   // Remount the active route when chainUid changes so chain-scoped detail state,
   // pagination, and pending local actions cannot leak across networks.

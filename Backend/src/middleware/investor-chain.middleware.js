@@ -10,6 +10,28 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 const createRequireInvestorChain = (chainRuntimeService) => asyncHandler(async (req, res, next) => {
   if (!['Investor', 'Issuer'].includes(req.user?.roleName)) return next();
 
+  // Server-to-server issuer keys select a public network number, not a platform identifier.
+  // Leave existing interactive JWT requests unchanged.
+  if (req.auth?.type === 'issuerApiKey') {
+    const publicId = String(req.get('X-Chain-Id') || '').trim();
+    if (!publicId) {
+      throw new ApiError(400, 'Send X-Chain-Id with the public chain ID of your token.',
+        [{ field: 'headers.x-chain-id', message: 'X-Chain-Id is required for issuer API-key requests.' }],
+        'SELECTED_CHAIN_REQUIRED');
+    }
+    if (!/^[1-9][0-9]*$/.test(publicId) || !Number.isSafeInteger(Number(publicId))) {
+      throw new ApiError(422, 'X-Chain-Id must be a positive decimal integer.',
+        [{ field: 'headers.x-chain-id', message: 'For example, use 11155111 for Ethereum Sepolia.' }],
+        'INVALID_SELECTED_CHAIN');
+    }
+    req.selectedChain = await chainRuntimeService.byChainId(Number(publicId));
+    const legacyUid = String(req.get('X-Chain-Uid') || '').trim();
+    if (legacyUid && legacyUid.toLowerCase() !== req.selectedChain.chainUid.toLowerCase()) {
+      throw new ApiError(409, 'The supplied chain headers select different networks.', undefined, 'SELECTED_CHAIN_MISMATCH');
+    }
+    return next();
+  }
+
   const chainUid = String(req.get('X-Chain-Uid') || '').trim();
   if (!chainUid) {
     throw new ApiError(

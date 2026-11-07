@@ -60,6 +60,7 @@ import { getWalletErrorMessage } from '@/utils/wallet';
 import { getWalletFundingIssue } from '@/utils/walletFunding';
 import { getInvestmentActionContext } from '@/utils/investmentPurchase';
 import { getInvestmentJourney } from '@/utils/investmentJourney';
+import { reconcileInvestmentHistory } from '@/utils/investmentHistoryReconciliation';
 import { formatDecimalForDisplay, multiplyDecimalStrings } from '@/utils/currency';
 import { resolveCurrentTokenPriceExact } from '@/utils/tokenPrice';
 
@@ -73,6 +74,7 @@ const PURCHASE_STATUS = Object.freeze({
 });
 
 const HISTORY_POLL_INTERVAL_MS = 7_000;
+const HISTORY_RECONCILIATION_WINDOW_MS = 5 * 60_000;
 const HISTORY_SEARCH_DEBOUNCE_MS = 400;
 const HISTORY_LIMIT = 5;
 
@@ -268,6 +270,13 @@ const historyHasActiveRows = (rows) => (
   && rows.some((row) => normalizeStatus(row?.canonicalStatus) === 'SUBMITTED')
 );
 
+const mergeObservedPurchase = (current, response, txHash, tokenUid) => canonicalTransactionAsPurchase({
+  ...(paymentHashOf(current).toLowerCase() === txHash.toLowerCase() ? current : {}),
+  ...response,
+  tokenUid,
+  transactionHash: response?.transactionHash || response?.txHash || txHash,
+});
+
 export default function PurchaseTokenPage({
   interestUid: interestUidOverride,
   embedded = false,
@@ -279,6 +288,9 @@ export default function PurchaseTokenPage({
   const { application, token, loading, error, ready } = useRegisteredInvestmentAction(interestUid, { initialApplication });
   const [tokenAmountInput, setTokenAmountInput] = useState('');
   const [purchase, setPurchase] = useState(null);
+  // Keep the latest submitted transaction visible in history even when the
+  // investor starts entering their next investment amount.
+  const [lastSubmittedPurchase, setLastSubmittedPurchase] = useState(null);
   const [broadcastTxHash, setBroadcastTxHash] = useState('');
   const [, setPurchaseError] = useState('');
   const [, setPurchaseErrorCode] = useState('');
@@ -334,12 +346,15 @@ export default function PurchaseTokenPage({
     }).sort((a, b) => String(b.observedAt).localeCompare(String(a.observedAt)))[0];
     if (!observed) return undefined;
     setBroadcastTxHash(observed.txHash);
-    setPurchase(canonicalTransactionAsPurchase({
+    const restoredPurchase = canonicalTransactionAsPurchase({
       chainId: observed.chainId,
+      tokenUid: historyTokenUid,
       transactionHash: observed.txHash,
       status: 'SUBMITTED',
       createdAt: observed.observedAt,
-    }));
+    });
+    setPurchase(restoredPurchase);
+    setLastSubmittedPurchase(restoredPurchase);
 
     let active = true;
     const sync = async () => {
@@ -352,7 +367,8 @@ export default function PurchaseTokenPage({
         });
         if (!active) return;
         const status = normalizeStatus(next?.status);
-        setPurchase(canonicalTransactionAsPurchase({ ...next, transactionHash: next?.transactionHash || observed.txHash }));
+        setPurchase((current) => mergeObservedPurchase(current, next, observed.txHash, historyTokenUid));
+        setLastSubmittedPurchase((current) => mergeObservedPurchase(current, next, observed.txHash, historyTokenUid));
         if (status === 'CONFIRMED' || status === 'FAILED') {
           clearObservedWalletTransaction(observed);
           setBroadcastTxHash('');
@@ -761,7 +777,8 @@ export default function PurchaseTokenPage({
         if (status === 'CONFIRMED' || status === 'FAILED') {
           clearObservedWalletTransaction({ chainId, txHash, expectedAction: 'INVEST' });
           setBroadcastTxHash('');
-          setPurchase(canonicalTransactionAsPurchase({ ...observed, transactionHash: observed?.transactionHash || txHash }));
+          setPurchase((current) => mergeObservedPurchase(current, observed, txHash, historyTokenUid));
+          setLastSubmittedPurchase((current) => mergeObservedPurchase(current, observed, txHash, historyTokenUid));
           setPurchaseHistoryRefreshVersion((value) => value + 1);
           if (status === 'CONFIRMED') investorPortfolioService.refreshAfterCompletedActivity().catch(() => {});
           return;
@@ -771,7 +788,9 @@ export default function PurchaseTokenPage({
         if (!cancelled && statusCode >= 400 && statusCode < 500) {
           clearObservedWalletTransaction({ chainId, txHash, expectedAction: 'INVEST' });
           setBroadcastTxHash('');
-          setPurchase(canonicalTransactionAsPurchase({ chainId, transactionHash: txHash, status: 'FAILED', createdAt: new Date().toISOString() }));
+          const failed = { chainId, tokenUid: historyTokenUid, transactionHash: txHash, status: 'FAILED' };
+          setPurchase((current) => mergeObservedPurchase(current, failed, txHash, historyTokenUid));
+          setLastSubmittedPurchase((current) => mergeObservedPurchase(current, failed, txHash, historyTokenUid));
           return;
         }
       } finally {
@@ -814,6 +833,7 @@ export default function PurchaseTokenPage({
     if (canonicalStatus !== 'CONFIRMED' && canonicalStatus !== 'FAILED') return;
 
     setPurchase(canonicalMatch);
+    setLastSubmittedPurchase(canonicalMatch);
     setBroadcastTxHash('');
     clearObservedWalletTransaction({
       chainId: canonicalMatch?.chainId || purchase?.chainId || context.chainId,
@@ -833,25 +853,44 @@ export default function PurchaseTokenPage({
     purchaseHistory,
   ]);
 
-  useEffect(() => {
-    if (!ready || !historyTokenUid || !historyHasActiveRows(purchaseHistory)) return undefined;
-    let timer = null;
+  // Do not stop checking simply because the activity API has no row yet.
+  // The wallet result and the activity index can become visible at different times.
+  const recentPurchaseForHistory = clean(lastSubmittedPurchase?.tokenUid) === historyTokenUid
+    ? lastSubmittedPurchase : null;
+  const reconciledHistory = reconcileInvestmentHistory(purchaseHistory, recentPurchaseForHistory, {
+    page: purchaseHistoryPage,
+    search: purchaseHistorySearchDebounced,
+    status: purchaseHistoryStatus,
+    limit: HISTORY_LIMIT,
+  });
+  const recentPurchaseStatus = normalizeStatus(recentPurchaseForHistory?.canonicalStatus);
+  const recentPurchaseTime = new Date(recentPurchaseForHistory?.createdAt || 0).getTime();
+  const historyNeedsPolling = historyHasActiveRows(purchaseHistory) || (
+    reconciledHistory.needsReconciliation
+    && (recentPurchaseStatus === 'SUBMITTED'
+      || (Number.isFinite(recentPurchaseTime)
+        && Date.now() - recentPurchaseTime < HISTORY_RECONCILIATION_WINDOW_MS))
+  );
 
+  useEffect(() => {
+    if (!ready || !historyTokenUid || !historyNeedsPolling) return undefined;
     const poll = () => {
       if (!document.hidden) void loadPurchaseHistory({ mode: 'poll' });
     };
 
-    timer = window.setInterval(poll, HISTORY_POLL_INTERVAL_MS);
+    const timer = window.setInterval(poll, HISTORY_POLL_INTERVAL_MS);
     const handleVisibilityChange = () => {
       if (!document.hidden) poll();
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', poll);
 
     return () => {
-      if (timer) window.clearInterval(timer);
+      window.clearInterval(timer);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', poll);
     };
-  }, [historyTokenUid, loadPurchaseHistory, purchaseHistory, ready]);
+  }, [historyTokenUid, historyNeedsPolling, loadPurchaseHistory, ready]);
 
   const handleHistorySearchChange = (event) => {
     setPurchaseHistorySearch(event.target.value.slice(0, 100));
@@ -1031,9 +1070,9 @@ export default function PurchaseTokenPage({
         expectedAction: 'INVEST',
         interestUid,
       });
-      setBroadcastTxHash(txHash);
-      setPurchase(canonicalTransactionAsPurchase({
+      const submittedPurchase = canonicalTransactionAsPurchase({
         chainId,
+        tokenUid,
         transactionHash: txHash,
         status: 'SUBMITTED',
         tokenAmountFormatted: result?.quote?.tokenAmount || normalizedTokenAmount,
@@ -1043,7 +1082,12 @@ export default function PurchaseTokenPage({
         paymentAmountFormatted: result?.quote?.paymentAmountFormatted || platformQuote?.paymentAmountFormatted,
         priceFormatted: result?.quote?.priceFormatted || platformQuote?.priceFormatted,
         createdAt: new Date().toISOString(),
-      }));
+      });
+      setBroadcastTxHash(txHash);
+      setPurchase(submittedPurchase);
+      setLastSubmittedPurchase(submittedPurchase);
+      // Render the submitted transaction immediately, even if indexing has not started.
+      refreshPurchaseHistory();
       toast.success('Investment submitted', {
         description: 'Your investment was submitted. No additional action is needed while the confirmation is completed.',
       });
@@ -1059,13 +1103,17 @@ export default function PurchaseTokenPage({
         if (status === 'CONFIRMED') {
           clearObservedWalletTransaction({ chainId, txHash, expectedAction: 'INVEST' });
           setBroadcastTxHash('');
-          setPurchase(canonicalTransactionAsPurchase({ ...observed, transactionHash: observed?.transactionHash || txHash }));
+          const confirmedPurchase = mergeObservedPurchase(submittedPurchase, observed, txHash, tokenUid);
+          setPurchase(confirmedPurchase);
+          setLastSubmittedPurchase(confirmedPurchase);
           investorPortfolioService.refreshAfterCompletedActivity().catch(() => {});
           toast.success('Investment confirmed', { description: 'Your investment was confirmed and added to your history.' });
         } else if (status === 'FAILED') {
           clearObservedWalletTransaction({ chainId, txHash, expectedAction: 'INVEST' });
           setBroadcastTxHash('');
-          setPurchase(canonicalTransactionAsPurchase({ ...observed, transactionHash: observed?.transactionHash || txHash }));
+          const failedPurchase = mergeObservedPurchase(submittedPurchase, observed, txHash, tokenUid);
+          setPurchase(failedPurchase);
+          setLastSubmittedPurchase(failedPurchase);
           toast.error('Investment failed', { description: 'The investment could not be completed. No automatic retry was sent.' });
         }
       } catch (syncError) {
@@ -1073,12 +1121,11 @@ export default function PurchaseTokenPage({
         if (statusCode >= 400 && statusCode < 500) {
           clearObservedWalletTransaction({ chainId, txHash, expectedAction: 'INVEST' });
           setBroadcastTxHash('');
-          setPurchase(canonicalTransactionAsPurchase({
-            chainId,
-            transactionHash: txHash,
-            status: 'FAILED',
-            createdAt: new Date().toISOString(),
-          }));
+          const failedPurchase = mergeObservedPurchase(submittedPurchase, {
+            chainId, tokenUid, status: 'FAILED',
+          }, txHash, tokenUid);
+          setPurchase(failedPurchase);
+          setLastSubmittedPurchase(failedPurchase);
           toast.error('Investment could not be matched', {
             description: sanitizeUserFacingMessage(getErrorMessage(syncError, 'The submitted confirmation does not match this investment.')),
           });
@@ -1284,7 +1331,10 @@ export default function PurchaseTokenPage({
     ?? purchaseHistoryMeta?.pagination?.pages
     ?? (historyTotal ? Math.ceil(historyTotal / HISTORY_LIMIT) : 1),
   ) || 1);
-  const historyIsActive = historyHasActiveRows(purchaseHistory);
+  const displayedPurchaseHistory = reconciledHistory.rows;
+  const displayedHistoryTotal = historyTotal + (reconciledHistory.recentRowAdded ? 1 : 0);
+  const historyIsActive = historyHasActiveRows(purchaseHistory)
+    || (reconciledHistory.needsReconciliation && recentPurchaseStatus === 'SUBMITTED');
   const purchaseJourney = getInvestmentJourney({
     status: 'ready_to_invest',
     viewerRole: 'investor',
@@ -1649,8 +1699,9 @@ export default function PurchaseTokenPage({
         </div>
 
         <div className="investor-token-purchase-history__summary">
-          <span>{historyTotal} purchase{historyTotal === 1 ? '' : 's'}</span>
+          <span>{displayedHistoryTotal} purchase{displayedHistoryTotal === 1 ? '' : 's'}</span>
           {historyIsActive ? <span className="is-live"><Clock3 size={13} /> Active purchases are updating</span> : null}
+          {!historyIsActive && reconciledHistory.recentRowAdded ? <span className="is-live"><Clock3 size={13} /> Syncing investment history</span> : null}
         </div>
 
         {purchaseHistoryError ? (
@@ -1664,11 +1715,11 @@ export default function PurchaseTokenPage({
           </div>
         ) : null}
 
-        {purchaseHistoryLoading && !purchaseHistory.length ? (
+        {purchaseHistoryLoading && !displayedPurchaseHistory.length ? (
           <div className="investor-token-purchase-history__loading" aria-label="Loading investment history">
             <span /><span /><span />
           </div>
-        ) : purchaseHistory.length ? (
+        ) : displayedPurchaseHistory.length ? (
           <div className="investor-token-purchase-history__table" role="table" aria-label={`${token.symbol} investment history`}>
             <div className="investor-token-purchase-history__table-head" role="row">
               <span role="columnheader">Date</span>
@@ -1678,7 +1729,7 @@ export default function PurchaseTokenPage({
               <span role="columnheader">Payment</span>
             </div>
 
-            {purchaseHistory.map((row, index) => {
+            {displayedPurchaseHistory.map((row, index) => {
               const rowUid = purchaseUidOf(row) || `purchase-${index}`;
               const rowStatus = purchaseHistoryStatusMeta(row?.status, row?.canonicalStatus);
               const rowPaymentHash = paymentHashOf(row);

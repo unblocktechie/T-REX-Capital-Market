@@ -2,11 +2,12 @@ const { execute } = require('../database/connection');
 const { createUid } = require('../utils/token');
 const { identifier } = require('./base.repository');
 const { sqlInteger } = require('../utils/sql');
+const { ApiError } = require('../core/errors/api-error');
 
 const organizationFields = [
   'legalCompanyName', 'entityTypeUid', 'registrationNumber', 'streetAddress', 'countryUid', 'stateUid',
   'cityUid', 'postalCode', 'countryOfIncorporationUid', 'dateOfIncorporation', 'taxIdentificationNumber',
-  'industryUid', 'businessActivity', 'website', 'walletAddress', 'currentStep', 'isDraft', 'status', 'submittedAt',
+  'industryUid', 'businessActivity', 'website', 'walletAddress', 'serviceWalletAddress', 'currentStep', 'isDraft', 'status', 'submittedAt',
   'rejectionReason', 'rejectionCount', 'canResubmit', 'isUserNotified',
   'onboardingChainUid', 'contractAddress', 'contractTxnHash', 'contractTxnMessage',
 ];
@@ -166,6 +167,67 @@ class OrganizationRepository {
       executor,
     );
     return this.findByOrganizationUid(organizationUid, executor);
+  }
+
+  async findServiceWallet(tokenUid, chainUid, executor) {
+    const rows = await execute(
+      `SELECT * FROM \`tokenServiceWallet\`
+       WHERE \`tokenUid\` = ? AND \`chainUid\` = ? AND \`isDeleted\` = 0 LIMIT 1`,
+      [tokenUid, chainUid],
+      executor,
+    );
+    return rows[0] || null;
+  }
+
+  async upsertServiceWallet(data, executor) {
+    await execute(
+      `INSERT INTO \`tokenServiceWallet\`
+        (\`tokenServiceWalletUid\`,\`tokenUid\`,\`tokenAddress\`,\`organizationUid\`,\`chainUid\`,\`chainId\`,\`controllerAddress\`,
+         \`mainWalletAddress\`,\`serviceWalletAddress\`,\`sourceTxHash\`,\`sourceBlockNumber\`,
+         \`sourceBlockHash\`,\`sourceLogIndex\`,\`verifiedAt\`)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(3))
+       ON DUPLICATE KEY UPDATE
+         \`chainId\`=VALUES(\`chainId\`),\`controllerAddress\`=VALUES(\`controllerAddress\`),
+         \`mainWalletAddress\`=VALUES(\`mainWalletAddress\`),\`serviceWalletAddress\`=VALUES(\`serviceWalletAddress\`),
+         \`sourceTxHash\`=COALESCE(VALUES(\`sourceTxHash\`),\`sourceTxHash\`),
+         \`sourceBlockNumber\`=COALESCE(VALUES(\`sourceBlockNumber\`),\`sourceBlockNumber\`),
+         \`sourceBlockHash\`=COALESCE(VALUES(\`sourceBlockHash\`),\`sourceBlockHash\`),
+         \`sourceLogIndex\`=COALESCE(VALUES(\`sourceLogIndex\`),\`sourceLogIndex\`),
+         \`verifiedAt\`=UTC_TIMESTAMP(3),\`isActive\`=TRUE,\`isDeleted\`=FALSE,\`updatedAt\`=UTC_TIMESTAMP(3)`,
+      [
+        createUid(), data.tokenUid, data.tokenAddress, data.organizationUid, data.chainUid, data.chainId, data.controllerAddress,
+        data.mainWalletAddress, data.serviceWalletAddress || null, data.sourceTxHash || null,
+        data.sourceBlockNumber ?? null, data.sourceBlockHash || null, data.sourceLogIndex ?? null,
+      ],
+      executor,
+    );
+    return this.findServiceWallet(data.tokenUid, data.chainUid, executor);
+  }
+
+  async findServiceWalletToken(organizationUid, chainUid, tokenUid, executor) {
+    const rows = await execute(`SELECT * FROM tokenMaster WHERE organizationUid=? AND chainUid=?
+      AND isDeleted=0 ${tokenUid ? 'AND tokenUid=?' : ''} LIMIT 2`,
+    [organizationUid, chainUid, ...(tokenUid ? [tokenUid] : [])], executor);
+    if (rows.length > 1) throw ApiError.badRequest('tokenUid is required when the organization has multiple tokens on this chain.');
+    return rows[0] || null;
+  }
+
+  async listServiceWalletsByChain(chainUid, executor) {
+    return execute(
+      `SELECT sw.*, o.\`userUid\` FROM \`tokenServiceWallet\` sw
+       INNER JOIN \`organizationMaster\` o ON o.\`organizationUid\`=sw.\`organizationUid\` AND o.\`isDeleted\`=0
+       WHERE sw.\`chainUid\`=? AND sw.\`isDeleted\`=0`,
+      [chainUid], executor,
+    );
+  }
+
+  async clearServiceWalletEventMetadataFromBlock(chainId, blockNumber, executor) {
+    return execute(
+      `UPDATE \`tokenServiceWallet\` SET \`sourceTxHash\`=NULL,\`sourceBlockNumber\`=NULL,
+         \`sourceBlockHash\`=NULL,\`sourceLogIndex\`=NULL,\`updatedAt\`=UTC_TIMESTAMP(3)
+       WHERE \`chainId\`=? AND \`sourceBlockNumber\`>=? AND \`isDeleted\`=0`,
+      [chainId, blockNumber], executor,
+    );
   }
 
   async listBeneficialOwners(organizationUid, executor) {

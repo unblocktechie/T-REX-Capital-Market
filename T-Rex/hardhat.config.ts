@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import '@nomicfoundation/hardhat-toolbox';
+import '@openzeppelin/hardhat-upgrades';
 import { HardhatUserConfig } from 'hardhat/config';
 
 // Compiles contracts/**/*.sol (our own custom modules) — the T-REX and

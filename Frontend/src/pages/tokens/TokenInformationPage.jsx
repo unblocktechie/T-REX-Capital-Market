@@ -4,12 +4,13 @@ import { usePaymentTokens } from '@/hooks/usePaymentTokens';
 import { supportsPaymentAction, paymentContextOf } from '@/config/payment-tokens';
 import { web3Config } from '@/config/web3';
 import { ChainSelector } from '@/components/common/ChainSelector';
-import { useMyChains } from '@/hooks/useChains';
+import { useMyChains, useUnlockChain } from '@/hooks/useChains';
 import { AlertTriangle, ArrowRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { tokenApi } from '@/api/tokens';
+import { NETWORK_UNLOCK_FAILED_MESSAGE } from '@/utils/networkAccessMessages';
 import { TokenIcon } from '@/components/common/TokenIcon';
 import { resolveMasterImageUrl } from '@/utils/masterImage';
 import {
@@ -42,6 +43,7 @@ import {
 } from '@/utils/tokenIssuance';
 import { tokenLogoToFile } from '@/utils/tokenLogo';
 import { buildTokenIssuanceNetworkMismatchMessage } from '@/utils/tokenIssuanceNetwork';
+import { canUnlockNetwork } from '@/utils/networkMenu';
 
 const DECIMAL_OPTIONS = ['2', '6', '8', '18'].map((value) => ({ label: value, value }));
 
@@ -76,7 +78,16 @@ export default function TokenInformationPage() {
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [serverErrors, setServerErrors] = useState({});
-  const userChains = useMyChains();
+  const [unlockingChainUid, setUnlockingChainUid] = useState('');
+  const [pollUnlockUid, setPollUnlockUid] = useState('');
+  const unlock = useUnlockChain();
+  const userChains = useMyChains({
+    refetchInterval: (query) => (
+      pollUnlockUid || (query.state.data || []).some((chain) => chain.identityStatus === 'CREATING')
+        ? 4_000
+        : false
+    ),
+  });
   const selectedChain = (userChains.data || []).find((item) => item.chainUid === data.chainUid) || web3Config.getChainRecordByUid(data.chainUid);
   const selectedAppChain = appNetwork.activeChain;
   const assetNetworkMismatch = Boolean(
@@ -112,6 +123,54 @@ export default function TokenInformationPage() {
     paymentTokenDecimals,
   });
   useDocumentTitle('Asset Details');
+
+  useEffect(() => {
+    if (!pollUnlockUid) return;
+    const chain = (userChains.data || []).find((item) => item.chainUid === pollUnlockUid);
+    if (chain && (chain.isUnlocked || ['CREATED', 'FAILED'].includes(chain.identityStatus))) {
+      setPollUnlockUid('');
+    }
+  }, [pollUnlockUid, userChains.data]);
+
+  const isUnlockBlocked = Boolean(
+    creationLocked || appNetwork.isNetworkLocked || appNetwork.isNetworkLockLoading ||
+    appNetwork.isNetworkUnlockBlocked,
+  );
+  const canUnlockAssetChain = (chain) => canUnlockNetwork(chain, {
+    selectionLocked: isUnlockBlocked || saving,
+    accessLoading: userChains.isPending,
+    accessError: userChains.isError,
+    mutationPending: unlock.isPending,
+    pollingUid: pollUnlockUid,
+  });
+  const unlockAssetChain = async (chain) => {
+    if (!canUnlockAssetChain(chain)) return;
+    setUnlockingChainUid(chain.chainUid);
+    try {
+      await unlock.mutateAsync(chain.chainUid);
+      setPollUnlockUid(chain.chainUid);
+      toast.success(`${chain.chainName} setup started`, {
+        description: 'Your network identity is being created. This list will update automatically.',
+      });
+    } catch (error) {
+      const code = String(
+        error?.response?.data?.code || error?.response?.data?.error?.code || error?.code || '',
+      ).toUpperCase();
+      if (code === 'CHAIN_IDENTITY_CREATION_IN_PROGRESS') {
+        setPollUnlockUid(chain.chainUid);
+        void userChains.refetch();
+        toast.info(`${chain.chainName} setup is in progress`, {
+          description: 'The network list will refresh automatically; no second request is needed.',
+        });
+      } else {
+        toast.error(`Could not unlock ${chain.chainName}`, {
+          description: NETWORK_UNLOCK_FAILED_MESSAGE,
+        });
+      }
+    } finally {
+      setUnlockingChainUid('');
+    }
+  };
 
   useEffect(() => {
     hydrateWalletDefaults(organizationWallet);
@@ -184,6 +243,8 @@ export default function TokenInformationPage() {
     }
     if (Object.keys(errors).length) return;
 
+    // No deployed token address exists at this step. Token-scoped authorization
+    // is configured after deployment in the asset's Price update settings.
     setSaving(true);
     try {
       const formData = new FormData();
@@ -300,6 +361,10 @@ export default function TokenInformationPage() {
                 chains={userChains.data || []}
                 value={data.chainUid || ''}
                 onlyUnlocked
+                onUnlock={unlockAssetChain}
+                canUnlock={canUnlockAssetChain}
+                unlockingChainUid={unlockingChainUid}
+                pollUnlockUid={pollUnlockUid}
                 disabled={creationLocked || saving || userChains.isPending}
                 label="Asset network"
                 description={
@@ -314,7 +379,7 @@ export default function TokenInformationPage() {
                   (userChains.isError
                     ? 'Unable to load your network access.'
                     : !selectedChain?.isUnlocked
-                      ? 'Unlock this network from Network Access before creating an asset.'
+                      ? 'Unlock this network from the list above before creating an asset.'
                       : '')
                 }
                 onChange={(event) => {
@@ -524,6 +589,13 @@ export default function TokenInformationPage() {
                 />
               </div>
             </FieldWrapper>
+
+            <div className="issuance-form-grid__full-help price-updates-deferred-note" role="note">
+              <strong>Automatic price updates</strong>{' '}
+              A Service Wallet is registered separately for each asset after deployment.
+              You can configure it from that asset’s Price update settings once its contract address is available.
+              Manual price updates remain available.
+            </div>
 
             <FieldWrapper
               className="issuance-field--full"

@@ -276,6 +276,29 @@ const signingErrorCopy = (error) => {
   };
 };
 
+/** Wallet prompts are explained using the approved check, not its array position. */
+const getWalletConfirmationCopy = (claim) => {
+  const label = String(claim?.label || '').trim();
+  const normalized = label.toLowerCase();
+
+  if (normalized === 'identity check') {
+    return {
+      title: 'Confirm Identity Verification',
+      description: "Review and confirm the investor's identity verification in your wallet.",
+    };
+  }
+  if (normalized === 'investment eligibility') {
+    return {
+      title: 'Confirm Investment Eligibility',
+      description: "Review and confirm the investor's investment eligibility in your wallet.",
+    };
+  }
+  return {
+    title: `Confirm ${label || 'Investor Check'}`,
+    description: 'Review and confirm this investor check in your wallet.',
+  };
+};
+
 /** Reuse the signature progress UI for registration instead of starting a new flow. */
 function IssuerApprovalProgress({ claims, collectedClaims, activeClaimIndex, status, registrationConfirmed, registrationPending }) {
   const progress = getIssuerApprovalProgress({
@@ -287,17 +310,38 @@ function IssuerApprovalProgress({ claims, collectedClaims, activeClaimIndex, sta
     registrationPending,
   });
   const registration = progress.registration;
+  const registrationStageReached = status === 'SIGNED' || registration.state !== 'upcoming';
+  const currentStepNumber = registrationStageReached
+    ? progress.totalCount
+    : status === ISSUER_CLAIM_SIGNING_STATUS.VERIFYING
+      ? Math.max(1, claims.length)
+      : Math.min(progress.totalCount, Math.max(1, activeClaimIndex >= 0 ? activeClaimIndex + 1 : progress.completedCount + 1));
+
   return (
     <>
-      <div
-        className="issuer-claim-progress-bar"
-        role="progressbar"
-        aria-label="Claim signatures and investor registration"
-        aria-valuemin={0}
-        aria-valuemax={progress.totalCount}
-        aria-valuenow={progress.completedCount}
-      >
-        <span style={{ width: `${Math.max(8, progress.percentage)}%` }} />
+      <div className="issuer-claim-progress-tracker">
+        <div
+          className="issuer-claim-progress-segments"
+          role="progressbar"
+          aria-label="Investor verification and registration progress"
+          aria-valuemin={0}
+          aria-valuemax={progress.totalCount}
+          aria-valuenow={progress.completedCount}
+          aria-valuetext={`${progress.completedCount} of ${progress.totalCount} steps completed`}
+        >
+          {progress.signatures.map((step, index) => (
+            <span
+              key={`${claims[index]?.claimTopic ?? 'check'}-${index}`}
+              className={`issuer-claim-progress-segment ${step.complete ? 'is-complete' : currentStepNumber === index + 1 ? 'is-active' : 'is-upcoming'}`}
+              aria-hidden="true"
+            />
+          ))}
+          <span
+            className={`issuer-claim-progress-segment is-${registration.state === 'complete' ? 'complete' : registration.state === 'pending' ? 'pending' : registration.state === 'failed' ? 'failed' : registrationStageReached ? 'active' : 'upcoming'}`}
+            aria-hidden="true"
+          />
+        </div>
+        <span className="issuer-claim-progress-caption" aria-live="polite">Step {currentStepNumber} of {progress.totalCount}</span>
       </div>
       <div className="issuer-claim-progress-list" aria-label="Issuer approval progress">
         {claims.map((claim, index) => {
@@ -318,7 +362,7 @@ function IssuerApprovalProgress({ claims, collectedClaims, activeClaimIndex, sta
               : registration.state === 'failed'
                 ? <AlertTriangle size={16} />
                 : <Circle size={16} />}
-          <span>Registration</span>
+          <span>Register investor</span>
           <small>{registration.label}</small>
         </div>
       </div>
@@ -596,6 +640,7 @@ export function VerifyIdentityClaimsModal({
   };
 
   const currentClaim = activeClaimIndex >= 0 ? claims[activeClaimIndex] : null;
+  const walletConfirmationCopy = getWalletConfirmationCopy(currentClaim);
   const errorCopy = signingErrorCopy(signingError);
   // A chain confirmation can arrive from page polling before the local call resolves.
   // Only show it as complete after signatures are verified (never from a hash alone).
@@ -623,7 +668,7 @@ export function VerifyIdentityClaimsModal({
               disabled={isBusy || verificationLoading || organizationLoading || Boolean(configurationError) || !wallet.isConnected || !walletMatches}
             >
               {isBusy ? <LoaderCircle className="issuer-claim-spin" size={15} /> : <ShieldCheck size={15} />}
-              {verificationLoading ? 'Checking status…' : isBusy ? 'Waiting for wallet…' : `Approve ${claims.length || ''} Check${claims.length === 1 ? '' : 's'} & Register`}
+              {verificationLoading ? 'Checking status…' : isBusy ? 'Waiting for wallet…' : 'Verify & Register Investor'}
             </Button>
           </>
         );
@@ -632,7 +677,7 @@ export function VerifyIdentityClaimsModal({
     <Modal
       open={open}
       onClose={close}
-      title="Step 2 · Verify claims & register investor"
+      title="Step 2 · Verify & Register Investor"
       className="issuer-claim-signature-modal sm:max-w-lg"
       bodyClassName="issuer-claim-signature-modal__body"
       trapFocus
@@ -652,8 +697,8 @@ export function VerifyIdentityClaimsModal({
             <div className="issuer-claim-explainer" role="note">
               <Info size={18} aria-hidden="true" />
               <div>
-                <strong>{claims.length} approval signature{claims.length === 1 ? '' : 's'} + 1 registration transaction</strong>
-                <p>You will confirm {claims.length === 2 ? 'two approval signatures' : `${claims.length} approval signatures`} in MetaMask, then complete one Identity Registry registration transaction. The signatures do not move funds. Your issuer wallet only pays the gas fee for the registration transaction, and the investor submits their own claim afterward.</p>
+                <strong>{claims.length} Signature{claims.length === 1 ? '' : 's'} + 1 Registration</strong>
+                <p>First, sign {claims.length === 1 ? 'the required investor check' : `all ${claims.length} investor checks`} in your wallet. Then register the investor on-chain. Signatures do not transfer funds; only registration requires a network gas fee. The investor submits their own claims afterward.</p>
               </div>
             </div>
 
@@ -699,19 +744,31 @@ export function VerifyIdentityClaimsModal({
 
             <div className="issuer-claim-list-section">
               <div className="issuer-claim-list-section__heading">
-                <span>Checks to approve ({claims.length})</span>
-                <small>Then one registry transaction</small>
+                <span>Verification &amp; Registration</span>
               </div>
-              <div className="issuer-claim-list">
-                {claims.map((claim) => (
-                  <div key={`${claim.claimTopic ?? 'invalid'}-${claim.index}`} className="issuer-claim-list__item">
-                    <span className="issuer-claim-list__check"><Check size={13} /></span>
+              <div className="issuer-claim-list" role="list" aria-label="Verification and registration steps">
+                {claims.map((claim, index) => (
+                  <div key={`${claim.claimTopic ?? 'invalid'}-${claim.index}`} className="issuer-claim-list__item" role="listitem">
+                    <span className="issuer-claim-list__step" aria-hidden="true">{index + 1}</span>
                     <div>
-                      <strong>{claim.label}</strong>
+                      <div className="issuer-claim-list__title">
+                        <strong>{claim.label}</strong>
+                        <span className="issuer-claim-list__type">Wallet signature</span>
+                      </div>
                       <small>{claim.description}</small>
                     </div>
                   </div>
                 ))}
+                <div className="issuer-claim-list__item issuer-claim-list__item--registration" role="listitem">
+                  <span className="issuer-claim-list__step issuer-claim-list__step--registration" aria-hidden="true">{claims.length + 1}</span>
+                  <div>
+                    <div className="issuer-claim-list__title">
+                      <strong>Register investor</strong>
+                      <span className="issuer-claim-list__type issuer-claim-list__type--registration">On-chain transaction</span>
+                    </div>
+                    <small>After all claim approvals, confirm the registration in your wallet. Network gas fees apply.</small>
+                  </div>
+                </div>
               </div>
             </div>
           </>
@@ -720,11 +777,8 @@ export function VerifyIdentityClaimsModal({
         {status === ISSUER_CLAIM_SIGNING_STATUS.SIGNING ? (
           <div className="issuer-claim-signing-state" aria-live="polite">
             <span className="issuer-claim-signing-state__spinner"><LoaderCircle size={30} /></span>
-            <strong>Confirm this check in your wallet</strong>
-            <p>
-              {currentClaim?.label || 'The current check'} is ready to confirm.
-              {claims.length > 1 ? ` Check ${activeClaimIndex + 1} of ${claims.length}.` : ''}
-            </p>
+            <strong>{walletConfirmationCopy.title}</strong>
+            <p>{walletConfirmationCopy.description}</p>
             <IssuerApprovalProgress
               claims={claims}
               collectedClaims={collectedClaims}
@@ -769,15 +823,18 @@ export function VerifyIdentityClaimsModal({
         ) : null}
 
         {verifiedSignatures ? (
-          <div className="issuer-claim-result-state issuer-claim-result-state--success" aria-live="polite">
-            <span className="issuer-claim-result-state__icon"><CheckCircle2 size={26} /></span>
-            <strong>{registered ? 'Issuer steps complete — awaiting investor claims' : 'Claim signatures verified'}</strong>
-            <p>{registered
-              ? 'The investor’s profile has been successfully verified.'
-              : status === 'REGISTERING' ? 'Opening the issuer-wallet registration transaction. Confirm it in MetaMask and pay the network gas.'
+          <div className={status === 'REGISTERING' ? 'issuer-claim-signing-state' : 'issuer-claim-result-state issuer-claim-result-state--success'} aria-live="polite">
+            {status === 'REGISTERING'
+              ? <span className="issuer-claim-signing-state__spinner"><LoaderCircle size={30} /></span>
+              : <span className="issuer-claim-result-state__icon"><CheckCircle2 size={26} /></span>}
+            <strong>{status === 'REGISTERING' ? 'Register Investor On-Chain' : registered ? 'Issuer steps complete — awaiting investor claims' : 'Claim signatures verified'}</strong>
+            <p>{status === 'REGISTERING'
+              ? "Confirm the registration transaction in your wallet to add the verified investor to the token's Identity Registry."
+              : registered
+                ? 'The investor’s profile has been successfully verified.'
                 : status === 'REGISTRY_PENDING' || registrationPending ? 'Registration was submitted and is awaiting blockchain verification. Do not send a duplicate transaction.'
                   : registrationIssue || 'Claim signatures are saved. Complete the one Identity Registry registration transaction to finish your issuer step.'}</p>
-            <span className="issuer-claim-status-pill">{registered ? 'Issuer step: Completed' : 'Issuer step: Pending registration'}</span>
+            {status !== 'REGISTERING' ? <span className="issuer-claim-status-pill">{registered ? 'Issuer step: Completed' : 'Issuer step: Pending registration'}</span> : null}
             <IssuerApprovalProgress
               claims={claims}
               collectedClaims={collectedClaims}

@@ -66,7 +66,17 @@ const investmentInvitationEmail = ({
   }),
 });
 
+const verifiedAccountTeamEmail = ({ fullName, email, roleName }) => ({
+  subject: `New ${roleName} verified on ${env.appName}`,
+  text: `A new ${roleName} has verified their email. Name: ${fullName}. Email: ${email}. Email verification does not imply completed onboarding or approval.`,
+  html: layout({ preheader: 'A new account has verified its email.', title: `New ${roleName} verified`,
+    greeting: 'Hello team,', content: `${fullName} (${email}) has verified their email as an ${roleName}. Email verification does not imply completed onboarding or approval.`,
+    buttonText: 'Open platform', buttonUrl: env.frontendUrl,
+    footer: 'Platform account notification. No credentials are included in this message.' }),
+});
+
 module.exports = {
+  verifiedAccountTeamEmail,
   verificationEmail,
   passwordResetEmail,
   investmentInvitationEmail,

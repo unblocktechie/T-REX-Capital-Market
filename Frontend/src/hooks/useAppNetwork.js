@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useConnection } from 'wagmi';
 import { ROLES } from '@/config/permissions';
@@ -7,7 +7,6 @@ import { web3Config } from '@/config/web3';
 import { useAuth } from '@/hooks/useAuth';
 import {
   chainConfigQueryOptions,
-  myChainsQueryKey,
   useChainConfig,
   useMyChains,
   usePublicChains,
@@ -18,7 +17,7 @@ import {
   getTokenRecordChainUid,
   useMyToken,
 } from '@/hooks/useMyToken';
-import { useOrganization } from '@/hooks/useOrganization';
+import { organizationChainQueryKey, useOrganization } from '@/hooks/useOrganization';
 import { useNetworkStore, networkUserKey } from '@/store/network.store';
 import { useUiStore } from '@/store/ui.store';
 import { isTokenCreationLocked } from '@/utils/tokenCreationLock';
@@ -53,35 +52,28 @@ const isChainScopedQuery = (query) => {
 const cancelChainScopedQueries = (queryClient) =>
   queryClient.cancelQueries({ predicate: isChainScopedQuery });
 
-export function useAppNetwork({ pathname = '', onboardingOnly = false } = {}) {
+export function useAppNetwork({ pathname = '', allowInvestorOnboardingNetworkSelection = true } = {}) {
   const queryClient = useQueryClient();
   const { user, isAuthenticated } = useAuth();
   const isIssuer = user?.role === ROLES.issuer;
   const isInvestor = user?.role === ROLES.investor;
-  const previousOnboardingOnly = useRef(onboardingOnly);
+  // Draft onboarding is chain-agnostic until submission. Unlike an existing
+  // token/investor identity, a draft may choose any supported public network
+  // without making an unlock request or discarding its saved form sections.
+  const isOnboardingDraftRoute =
+    (isIssuer && [
+      ROUTES.organizationCompany,
+      ROUTES.organizationJurisdiction,
+      ROUTES.organizationUbo,
+      ROUTES.organizationDocuments,
+      ROUTES.organizationReview,
+    ].includes(pathname)) ||
+    (isInvestor && allowInvestorOnboardingNetworkSelection && pathname === ROUTES.investors);
   const publicChains = usePublicChains();
   const myChains = useMyChains({
     enabled: Boolean(isAuthenticated && (isIssuer || isInvestor)),
     retry: false,
-    // Keep an unlock initiated from the header (or another page) current until
-    // the backend reports a final identity status.
-    refetchInterval: (query) =>
-      (query.state.data || []).some((chain) => chain.identityStatus === 'CREATING')
-        ? 4_000
-        : false,
   });
-  // MainLayout stays mounted as an onboarding user enters the workspace.
-  // React Query would otherwise keep the pre-submit /chains/me LOCKED rows for
-  // up to staleTime (even if the selected chain was created during submission).
-  // Cover both onboarding flows without changing the unlock permissions.
-  useEffect(() => {
-    const justCompletedOnboarding = previousOnboardingOnly.current && !onboardingOnly;
-    previousOnboardingOnly.current = onboardingOnly;
-    if (justCompletedOnboarding && isAuthenticated && (isIssuer || isInvestor)) {
-      void queryClient.invalidateQueries({ queryKey: myChainsQueryKey });
-    }
-  }, [isAuthenticated, isIssuer, isInvestor, onboardingOnly, queryClient]);
-
   const userKey = networkUserKey(user);
   const persistedChainId = useNetworkStore((state) => state.activeChainByUser[userKey] || null);
   const persistedChainUid = useNetworkStore((state) => state.activeChainUidByUser[userKey] || '');
@@ -143,14 +135,11 @@ export function useAppNetwork({ pathname = '', onboardingOnly = false } = {}) {
     !lockedChainId &&
     issuerToken.isPending,
   );
-  // Match the safety guard used on Network Access. The menu may remain open
-  // while switching is locked, but must never bypass the issuer token guard.
+  // Refuse additional unlock requests when the issuer's token state cannot be
+  // verified. This guard also applies to the header's network-access dropdown.
   const isNetworkUnlockBlocked = Boolean(
-    isIssuer && (
-      isNetworkLocked ||
-      isNetworkLockLoading ||
-      (hasIssuerChainSelection && issuerToken.isError)
-    ),
+    isNetworkLocked || isNetworkLockLoading ||
+    (isIssuer && hasIssuerChainSelection && issuerToken.isError),
   );
 
   const accountChainId = useMemo(() => {
@@ -171,6 +160,20 @@ export function useAppNetwork({ pathname = '', onboardingOnly = false } = {}) {
 
     return null;
   }, [isIssuer, isInvestor, organization, investorProfile.state, publicRows]);
+
+  // A submitted investor has already picked an onboarding chain. Keep that
+  // backend-recorded chain distinct from a merely selected network: if the
+  // chain-access cache has not caught up yet, the header must not offer a
+  // redundant Unlock action for the investor's own onboarding network.
+  const investorOnboardingChainUid = isInvestor &&
+    ['SUBMITTED', 'APPROVED'].includes(String(investorProfile.state?.backendStatus || '').toUpperCase())
+    ? String(
+        investorProfile.state?.chainUid ||
+        investorProfile.state?.wallet?.chainUid ||
+        investorProfile.state?.investorProfile?.chainUid ||
+        '',
+      ).trim()
+    : '';
 
   const unlockedChains = useMemo(
     () => mineRows.filter((chain) => chain.isUnlocked || chain.identityStatus === 'CREATED'),
@@ -193,19 +196,15 @@ export function useAppNetwork({ pathname = '', onboardingOnly = false } = {}) {
 
   const selectableChains = useMemo(() => {
     if (isNetworkLocked) return lockedChain ? [lockedChain] : [];
-    // Onboarding selects from the supported public catalogue; unlocking an
-    // identity is a separate, post-onboarding operation.
-    if (onboardingOnly) return publicRows;
+    if (isOnboardingDraftRoute) return publicRows;
 
     const source = unlockedChains.length ? unlockedChains : [];
     const next = [...source];
     if (accountChain && !next.some((chain) => chain.chainId === accountChain.chainId)) next.unshift(accountChain);
     return next;
-  }, [accountChain, isNetworkLocked, lockedChain, onboardingOnly, publicRows, unlockedChains]);
+  }, [accountChain, isNetworkLocked, isOnboardingDraftRoute, lockedChain, publicRows, unlockedChains]);
 
-  // Review-step wallet requirements must not override a freshly selected
-  // onboarding network from the shared header.
-  const contextualChainId = onboardingOnly ? null : numberOrNull(walletRequiredChainId);
+  const contextualChainId = numberOrNull(walletRequiredChainId);
   const persistedValid = numberOrNull(persistedChainId)
     && (selectableChains.some((chain) => chain.chainId === Number(persistedChainId)) || !selectableChains.length)
     ? Number(persistedChainId)
@@ -226,11 +225,12 @@ export function useAppNetwork({ pathname = '', onboardingOnly = false } = {}) {
     pathname === ROUTES.tokenDeploying ? contextualChainId : null;
   const activeChainId = deploymentContextChainId
     || lockedChainId
-    || contextualChainId
-    || persistedValid
+    || (isOnboardingDraftRoute ? persistedValid : contextualChainId)
+    || (isOnboardingDraftRoute ? contextualChainId : persistedValid)
     || accountChainId
     || fallbackUnlocked?.chainId
     || connectedSupportedChainId
+    || (isOnboardingDraftRoute ? fallbackPublic?.chainId : null)
     || null;
 
   const activeChain = firstMatch(publicRows, (chain) => chain.chainId === activeChainId)
@@ -362,9 +362,9 @@ export function useAppNetwork({ pathname = '', onboardingOnly = false } = {}) {
       (!isIssuer && !isInvestor) ||
       isNetworkLocked ||
       isNetworkLockLoading ||
+      isOnboardingDraftRoute ||
       !connectedSupportedChainId ||
-      !mineRows.length ||
-      onboardingOnly
+      !mineRows.length
     ) return undefined;
 
     const walletChain = mineRows.find(
@@ -395,8 +395,8 @@ export function useAppNetwork({ pathname = '', onboardingOnly = false } = {}) {
     isIssuer,
     isNetworkLockLoading,
     isNetworkLocked,
+    isOnboardingDraftRoute,
     mineRows,
-    onboardingOnly,
     queryClient,
     setActiveChainId,
     user,
@@ -408,10 +408,10 @@ export function useAppNetwork({ pathname = '', onboardingOnly = false } = {}) {
       || firstMatch(publicRows, (chain) => chain.chainId === Number(chainId));
     if (!nextChain?.chainUid) return false;
 
-    // Match the final-review selector during onboarding: choosing a published
-    // supported network does not require an unlocked identity (or a chain
-    // configuration fetch). Workspace changes retain the existing guard.
-    if (!onboardingOnly) {
+    // Initial onboarding selection is only a local choice. Like the final
+    // review selector, it must not depend on an identity/network unlock or a
+    // chain runtime that may not exist until the application is approved.
+    if (!isOnboardingDraftRoute) {
       await queryClient.fetchQuery(chainConfigQueryOptions(nextChain.chainUid));
     }
 
@@ -419,13 +419,24 @@ export function useAppNetwork({ pathname = '', onboardingOnly = false } = {}) {
     const chainChanged = Boolean(previousChainUid && previousChainUid !== nextChain.chainUid);
     if (chainChanged) await cancelChainScopedQueries(queryClient);
 
+    if (chainChanged && isIssuer && isOnboardingDraftRoute) {
+      // Organization draft fields are account-level, not tied to the network
+      // chosen for the first ONCHAINID. Keep the saved sections visible while
+      // the organization query switches to its new chain-specific cache key.
+      const previousOrganization = queryClient.getQueryData(organizationChainQueryKey(previousChainUid));
+      if (previousOrganization && !queryClient.getQueryData(organizationChainQueryKey(nextChain.chainUid))) {
+        queryClient.setQueryData(organizationChainQueryKey(nextChain.chainUid), previousOrganization);
+      }
+    }
+
     setActiveChainId(user, nextChain.chainId, nextChain.chainUid);
 
     return true;
   };
 
   const hasEstablishedNetwork = Boolean(
-    lockedChain || accountChain || unlockedChains.length || persistedValid || connectedSupportedChainId || (onboardingOnly && publicRows.length),
+    lockedChain || accountChain || unlockedChains.length || persistedValid || connectedSupportedChainId ||
+    (isOnboardingDraftRoute && activeChain),
   );
 
   return {
@@ -438,14 +449,16 @@ export function useAppNetwork({ pathname = '', onboardingOnly = false } = {}) {
     selectableChains,
     publicChains: publicRows,
     myChains: mineRows,
-    refetchMyChains: myChains.refetch,
-    isNetworkAccessLoading: myChains.isPending,
-    isNetworkAccessError: myChains.isError,
-    isNetworkUnlockBlocked,
+    investorOnboardingChainUid,
+    isOnboardingDraftRoute,
     chooseChain,
     hasEstablishedNetwork,
     isNetworkLocked,
     isNetworkLockLoading,
+    isNetworkUnlockBlocked,
+    isNetworkAccessLoading: myChains.isPending,
+    isNetworkAccessError: myChains.isError,
+    refetchMyChains: myChains.refetch,
     lockedChainId,
     isLoading:
       publicChains.isPending ||

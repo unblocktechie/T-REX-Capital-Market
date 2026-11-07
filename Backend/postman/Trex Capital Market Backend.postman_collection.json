@@ -2322,6 +2322,29 @@
           ]
         },
         {
+          "name": "Prepare Manual Token Price",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Chain-Uid", "value": "{{chainUid}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\"currentTokenPrice\": \"{{currentTokenPrice}}\"}" },
+            "url": "{{baseUrl}}/api/v1/tokens/me/price/prepare"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "if (pm.response.code === 200) pm.collectionVariables.set('priceUpdateUid', pm.response.json().data.priceUpdateUid);"
+          ] } }]
+        },
+        {
+          "name": "Cancel Unsigned Manual Token Price",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-Chain-Uid", "value": "{{chainUid}}" }],
+            "url": "{{baseUrl}}/api/v1/tokens/me/price/{{priceUpdateUid}}/cancel"
+          }
+        },
+        {
           "name": "Update Current Token Price",
           "request": {
             "method": "PATCH",
@@ -2333,7 +2356,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"currentTokenPrice\": {{currentTokenPrice}}\n}",
+              "raw": "{\n  \"priceUpdateUid\": \"{{priceUpdateUid}}\",\n  \"currentTokenPrice\": {{currentTokenPrice}},\n  \"txHash\": \"{{priceUpdateTxHash}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2341,7 +2364,7 @@
               }
             },
             "url": "{{baseUrl}}/api/v1/tokens/me/price",
-            "description": "Issuer-only. Updates the owning deployed token currentTokenPrice without changing initialTokenPrice. New transaction intents snapshot this value."
+            "description": "Issuer-only. Set priceUpdateTxHash to the frontend setPrice transaction hash. Verifies the on-chain update and reuses the indexer history record. HTTP 202 means retry the same hash later; HTTP 200 retains the token response. initialTokenPrice never changes."
           },
           "event": [
             {
@@ -2349,10 +2372,10 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Current token price is updated', () => pm.response.to.have.status(200));",
+                  "pm.test('Price verification accepted', () => pm.expect(pm.response.code).to.be.oneOf([200, 202]));",
                   "const data = pm.response.json().data;",
-                  "pm.expect(Number(data.currentTokenPrice)).to.eql(Number(pm.collectionVariables.get('currentTokenPrice')));",
-                  "pm.expect(data.initialTokenPrice).to.not.eql(undefined);"
+                  "if (pm.response.code === 200) { pm.expect(data.currentTokenPrice).to.not.eql(undefined); pm.expect(data.initialTokenPrice).to.not.eql(undefined); }",
+                  "if (pm.response.code === 202) { pm.expect(data.status).to.be.oneOf(['PENDING', 'SUBMITTED']); }"
                 ]
               }
             }

@@ -25,6 +25,8 @@ const { TokenPurchaseRepository } = require('../repositories/token-purchase.repo
 const { TokenRedemptionRepository } = require('../repositories/token-redemption.repository');
 const { TokenTransferRepository } = require('../repositories/token-transfer.repository');
 const { BlockchainTransactionRepository } = require('../repositories/blockchain-transaction.repository');
+const { TokenPriceUpdateRepository } = require('../repositories/token-price-update.repository');
+const { IssuerApiKeyRepository } = require('../repositories/issuer-api-key.repository');
 const { InvestorInvitationRepository } = require('../repositories/investor-invitation.repository');
 const { WalletOwnershipRepository } = require('../repositories/wallet-ownership.repository');
 const { UserService } = require('../services/user.service');
@@ -44,7 +46,6 @@ const { TokenDeploymentAttemptService } = require('../services/token-deployment-
 const { InvestorService } = require('../services/investor.service');
 const { InvestmentService } = require('../services/investment.service');
 const { ApplicationJourneyService } = require('../services/application-journey.service');
-const { TokenHolderSummaryService } = require('../services/blockchain/token-holder-summary.service');
 const { IssuerClaimService } = require('../services/issuer-claim.service');
 const { InvestorClaimService } = require('../services/investor-claim.service');
 const { ClaimSignatureService } = require('../services/blockchain/claim-signature.service');
@@ -67,6 +68,9 @@ const { TokenTransferService } = require('../services/token-transfer.service');
 const { BlockchainTransactionService } = require('../services/blockchain/blockchain-transaction.service');
 const { MultiChainBlockchainTransactionService } = require('../services/blockchain/multi-chain-blockchain-transaction.service');
 const { BlockchainTransactionIndexerService } = require('../services/blockchain/blockchain-transaction-indexer.service');
+const { TokenPriceUpdateService } = require('../services/token-price-update.service');
+const { IssuerApiKeyService } = require('../services/issuer-api-key.service');
+const { TokenPriceIndexerService } = require('../services/blockchain/token-price-indexer.service');
 const { MultiChainRunnerService } = require('../services/blockchain/multi-chain-runner.service');
 const { InvestorInvitationService } = require('../services/investor-invitation.service');
 const { TokenImageService } = require('../services/common/token-image.service');
@@ -76,6 +80,7 @@ const { ClaimRecoveryRunner } = require('../jobs/claim-recovery.runner');
 const { ClaimIndexerRunner } = require('../jobs/claim-indexer.runner');
 const { IdentityRegistryReconciliationRunner } = require('../jobs/identity-registry-reconciliation.runner');
 const { BlockchainTransactionIndexerRunner } = require('../jobs/blockchain-transaction-indexer.runner');
+const { TokenPriceIndexerRunner } = require('../jobs/token-price-indexer.runner');
 const emailService = require('../services/common/email.service');
 const { createCrudController } = require('../api/v1/controllers/crud.controller');
 const { createAuthController } = require('../api/v1/controllers/auth.controller');
@@ -96,7 +101,9 @@ const { createBlockchainTransactionController } = require('../api/v1/controllers
 const { createInvestorInvitationController } = require('../api/v1/controllers/investor-invitation.controller');
 const { createChainController } = require('../api/v1/controllers/chain.controller');
 const { createPaymentTokenAdminController } = require('../api/v1/controllers/payment-token-admin.controller');
+const { createIssuerApiKeyController } = require('../api/v1/controllers/issuer-api-key.controller');
 const { createAuthenticate } = require('../middleware/authenticate.middleware');
+const { createIssuerPriceAuthenticate } = require('../middleware/issuer-api-key-auth.middleware');
 const { createAuthorize } = require('../middleware/authorize.middleware');
 const { createRequireInvestorChain } = require('../middleware/investor-chain.middleware');
 
@@ -128,6 +135,11 @@ const tokenPurchaseRepository = new TokenPurchaseRepository();
 const tokenRedemptionRepository = new TokenRedemptionRepository();
 const tokenTransferRepository = new TokenTransferRepository();
 const blockchainTransactionRepository = new BlockchainTransactionRepository();
+const tokenPriceUpdateRepository = new TokenPriceUpdateRepository();
+const issuerApiKeyRepository = new IssuerApiKeyRepository();
+const { TokenPriceApiRateLimitRepository } = require('../repositories/token-price-api-rate-limit.repository');
+const { TokenPriceApiRateLimitService } = require('../services/token-price-api-rate-limit.service');
+const { createIssuerPriceRateLimiter } = require('../middleware/rate-limit.middleware');
 const investorInvitationRepository = new InvestorInvitationRepository();
 const walletOwnershipRepository = new WalletOwnershipRepository();
 const masterImageService = new TokenImageService();
@@ -172,7 +184,18 @@ const roleService = new RoleService(roleRepository, userRepository, permissionRe
 const menuService = new MenuService(menuRepository, permissionRepository);
 const permissionService = new PermissionService(permissionRepository, roleRepository, menuRepository);
 const settingService = new GeneralSettingService(settingRepository);
-const authService = new AuthService({ userRepository, roleRepository, authTokenRepository, emailService });
+const { AdminPlatformRepository } = require('../repositories/admin-platform.repository');
+const { AdminPlatformService } = require('../services/admin-platform.service');
+const { TokenHolderBalanceService } = require('../services/blockchain/token-holder-balance.service');
+const { VerificationTeamNotificationService } = require('../services/verification-team-notification.service');
+const { VerificationTeamNotificationRunner } = require('../jobs/verification-team-notification.runner');
+const adminPlatformService = new AdminPlatformService({ repository: new AdminPlatformRepository(), settingRepository,
+  getPriceUpdateService: () => tokenPriceUpdateService,
+  holderBalanceService: new TokenHolderBalanceService({ chainRepository }),
+  getInvestmentService: () => investmentService });
+const verificationTeamNotificationService = new VerificationTeamNotificationService({ settingRepository, emailService });
+const verificationTeamNotificationRunner = new VerificationTeamNotificationRunner(verificationTeamNotificationService);
+const authService = new AuthService({ userRepository, roleRepository, authTokenRepository, emailService, verificationTeamNotificationService });
 const locationService = new LocationService(locationRepository);
 const organizationService = new OrganizationService({
   repository: organizationRepository,
@@ -189,6 +212,7 @@ const organizationAdminService = new OrganizationAdminService(
   { chainRuntimeService, userChainIdentityService },
 );
 const tokenService = new TokenService({
+  priceUpdateRepository: tokenPriceUpdateRepository,
   repository: tokenRepository,
   organizationRepository,
   optionRepository: tokenOptionRepository,
@@ -322,10 +346,44 @@ const blockchainTransactionIndexerService = new MultiChainRunnerService({
   },
 });
 const blockchainTransactionIndexerRunner = new BlockchainTransactionIndexerRunner(blockchainTransactionIndexerService);
-const tokenHolderSummaryService = new TokenHolderSummaryService({ chainRepository });
+const { IssuerApiKeyPolicyService } = require('../services/issuer-api-key-policy.service');
+const issuerApiKeyPolicyService = new IssuerApiKeyPolicyService({ settingRepository });
+const tokenPriceUpdateService = new TokenPriceUpdateService({
+  policyService: issuerApiKeyPolicyService,
+  investmentRepository,
+  tokenRepository,
+  organizationRepository,
+  repository: tokenPriceUpdateRepository,
+  chainRuntimeService,
+  settingRepository,
+});
+const issuerApiKeyService = new IssuerApiKeyService({
+  policyService: issuerApiKeyPolicyService,
+  settingRepository,
+  repository: issuerApiKeyRepository,
+  userRepository,
+  organizationRepository,
+});
+const authenticate = createAuthenticate(userRepository);
+const issuerPriceAuthenticate = createIssuerPriceAuthenticate({
+  jwtAuthenticate: authenticate,
+  apiKeyService: issuerApiKeyService,
+});
+const tokenPriceIndexerService = new MultiChainRunnerService({
+  chainRuntimeService, settingRepository, name: 'Token price indexer',
+  factory: (config) => new TokenPriceIndexerService({
+    settingRepository,
+    checkpointRepository: claimIndexerRepository,
+    priceRepository: tokenPriceUpdateRepository,
+    tokenRepository,
+    organizationRepository,
+    config,
+  }),
+});
+const tokenPriceIndexerRunner = new TokenPriceIndexerRunner(tokenPriceIndexerService);
 const investmentService = new InvestmentService({
   journeyService: applicationJourneyService,
-  getHolderSummary: token => tokenHolderSummaryService.summary(token),
+  getHolderSummary: async token => (await adminPlatformService.tokenHolders(token)).holderSummary,
   repository: investmentRepository,
   tokenRepository,
   investorRepository,
@@ -400,8 +458,9 @@ const controllers = {
   settings: createCrudController(settingService, { singular: 'General setting', plural: 'General settings', uidParam: 'settingUid' }),
   locations: createLocationController(locationService),
   organizations: createOrganizationController(organizationService, organizationOptionRepository),
+  issuerApiKeys: createIssuerApiKeyController(issuerApiKeyService),
   organizationAdmin: createOrganizationAdminController(organizationAdminService),
-  tokens: createTokenController(tokenService, tokenOptionRepository, paymentTokenRegistryService),
+  tokens: createTokenController(tokenService, tokenOptionRepository, paymentTokenRegistryService, tokenPriceUpdateService),
   deploymentAttempts: createDeploymentAttemptController(tokenDeploymentAttemptService),
   investors: createInvestorController(investorService, investorOptionRepository),
   investments: createInvestmentController(investmentService),
@@ -425,6 +484,7 @@ const controllers = {
 module.exports = {
   controllers,
   services: {
+    adminPlatformService,
     authService, userService, roleService, menuService, permissionService, settingService,
     locationService, organizationService, organizationAdminService, organizationIdentityService,
     tokenService, tokenDeploymentAttemptService, tokenImageService, tokenDeploymentReceiptService,
@@ -436,7 +496,8 @@ module.exports = {
     paymentTokenRegistryService,
     chainRuntimeService, chainAdminService, chainPublicConfigurationService, paymentTokenAdminService, userChainIdentityService,
     tokenTransferService,
-    blockchainTransactionService, blockchainTransactionIndexerService,
+    blockchainTransactionService, blockchainTransactionIndexerService, tokenPriceUpdateService, tokenPriceIndexerService,
+    issuerApiKeyService,
     investorInvitationService,
   },
   repositories: {
@@ -450,17 +511,23 @@ module.exports = {
     tokenPurchaseRepository,
     tokenRedemptionRepository,
     tokenTransferRepository,
-    blockchainTransactionRepository,
+    blockchainTransactionRepository, tokenPriceUpdateRepository, issuerApiKeyRepository,
     investorInvitationRepository,
   },
   jobs: {
+    verificationTeamNotificationRunner,
     trexDeploymentSyncRunner,
     claimRecoveryRunner,
     claimIndexerRunner,
     identityRegistryReconciliationRunner,
     blockchainTransactionIndexerRunner,
+    tokenPriceIndexerRunner,
   },
-  authenticate: createAuthenticate(userRepository),
+  authenticate,
+  issuerPriceAuthenticate,
+  issuerPriceRateLimit: createIssuerPriceRateLimiter(new TokenPriceApiRateLimitService({
+    repository: new TokenPriceApiRateLimitRepository(), ownerRepository: issuerApiKeyRepository, settingRepository,
+  })),
   authorize: createAuthorize(permissionRepository),
   requireInvestorChain,
 };

@@ -29,6 +29,7 @@
     "express-rate-limit": "^8.0.1",
     "helmet": "^8.1.0",
     "i18n-iso-countries": "^7.14.0",
+    "ipaddr.js": "^2.5.0",
     "joi": "^18.0.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2",

@@ -1,4 +1,4 @@
-import { Building2, Briefcase, Coins, History, LayoutDashboard, Network, Store, UsersRound, WalletCards } from 'lucide-react';
+import { Building2, Briefcase, Coins, History, LayoutDashboard, Store, UsersRound, WalletCards } from 'lucide-react';
 import { PERMISSIONS, ROLES } from './permissions';
 import { ROUTES } from './routes';
 
@@ -22,13 +22,7 @@ export const navigationGroups = Object.freeze([
         dynamicOrganization: true,
         roles: [ROLES.issuer],
       },
-      {
-        label: 'Network Access',
-        shortLabel: 'Networks',
-        to: ROUTES.chainAccess,
-        icon: Network,
-        permission: PERMISSIONS.dashboardView,
-      },
+      // Network Access is available via the network selector, not the sidebar.
       {
         label: 'Token Management',
         shortLabel: 'Token Management',
@@ -54,6 +48,7 @@ export const navigationGroups = Object.freeze([
         permission: PERMISSIONS.dashboardView,
         roles: [ROLES.issuer],
       },
+      // Bot Configuration is reachable through Token Management and Price Update Settings.
       {
         label: 'Marketplace',
         shortLabel: 'Marketplace',
@@ -136,5 +131,6 @@ export const routeMeta = Object.freeze({
   [ROUTES.portfolio]: { title: 'Portfolio', description: 'See what you hold, its estimated value and your investment history' },
   [ROUTES.assetManagement]: { title: 'Manage Investments', description: 'Invest, send, or redeem assets you are approved to hold' },
   [ROUTES.walletManagement]: { title: 'Wallet Management', description: 'View wallet and token balances across supported networks' },
+  [ROUTES.issuerApiKeys]: { title: 'Bot Configuration', description: 'Manage API keys, bot network security, price limits, and update schedules' },
   [ROUTES.profile]: { title: 'Investor Profile', description: 'Your identity, investment information, documents, and registered wallet' },
 });

@@ -1,0 +1,56 @@
+/* A single, admin-only typography contract for every table heading.
+ * Table headers are a mix of text and sortable buttons. Styling only the thead
+ * left the buttons visibly lighter than ordinary column labels.
+ * These rules deliberately leave row content, badges, sort icons, and layout alone.
+ */
+:where(.trex-admin-workspace) table thead th,
+.admin-data-table thead th {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+  letter-spacing: 0.055em;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+/* Sortable labels must inherit the EXACT same typography as static headers. */
+:where(.trex-admin-workspace) table thead th :is(button, span),
+.admin-data-table thead th :is(button, span) {
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+}
+
+:where(.trex-admin-workspace) table thead th button:is(:hover, :focus-visible),
+.admin-data-table thead th button:is(:hover, :focus-visible) {
+  color: #1d4ed8;
+}
+
+/* Non-semantic, desktop grid headers and the admin history grid receive the
+ * same contract. The history view's small-screen card layout is unchanged. */
+.trex-admin-workspace .admin-grid-table-header,
+.admin-grid-table-header,
+.price-history-panel--admin .price-history-column-headings {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+  letter-spacing: 0.055em;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+/* All actual admin navigation/actions use a pointer cursor. The admin modals
+ * portal to document.body, so include them when the admin workspace is active.
+ * Do not make status chips or disabled buttons look interactive. */
+body:has(.trex-admin-workspace) :is(a[href], button:not(:disabled), [role="button"]:not([aria-disabled="true"]), select:not(:disabled), summary) {
+  cursor: pointer;
+}
+body:has(.trex-admin-workspace) :is(button:disabled, [aria-disabled="true"]) {
+  cursor: not-allowed;
+}

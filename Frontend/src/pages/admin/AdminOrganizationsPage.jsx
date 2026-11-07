@@ -1,33 +1,37 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Building2, ChevronLeft, ChevronRight, Search } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Search } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { adminApi } from '@/api/admin';
-import { AdminOrganizationList } from '@/components/admin/AdminOrganizationList';
+import { AdminOrganizationList, OrganizationFilters } from '@/components/admin/AdminOrganizationList';
+import { MonitoringPagination } from '@/components/admin/AdminMonitoringParts';
 import { AdminPanel } from '@/components/admin/AdminPanel';
 import { ReviewQueueSkeleton } from '@/components/admin/AdminSkeletons';
 import { ROUTES } from '@/config/routes';
 import { useDebounce } from '@/hooks/useDebounce';
+import { filterOrganizationsByQuery } from '@/utils/adminOrganizationSearch';
+import { sortAdminOrganizationsPage } from '@/utils/adminOrganizationSort';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 
-const initialFilters = { search: '', walletSearch: '', status: 'all', sortDirection: 'desc' };
+const initialFilters = { search: '', status: 'all', sortBy: 'submittedAt', sortDirection: 'desc' };
 
 export default function AdminOrganizationsPage() {
   useDocumentTitle('Organizations');
   const navigate = useNavigate();
+  const location = useLocation();
   const [filters, setFilters] = useState(initialFilters);
   const [page, setPage] = useState(1);
   const debouncedSearch = useDebounce(filters.search, 250);
-  const debouncedWalletSearch = useDebounce(filters.walletSearch, 250);
   const params = useMemo(
     () => ({
       page,
       pageSize: 20,
       status: filters.status,
       sortBy: 'submittedAt',
-      sortDirection: filters.sortDirection,
+      // The API only supports date sorting. Other fields are sorted on the loaded page.
+      sortDirection: filters.sortBy === 'submittedAt' ? filters.sortDirection : 'desc',
     }),
-    [page, filters.status, filters.sortDirection],
+    [page, filters.status, filters.sortBy, filters.sortDirection],
   );
   const query = useQuery({
     queryKey: ['admin', 'organizations', 'directory', params],
@@ -35,30 +39,37 @@ export default function AdminOrganizationsPage() {
     placeholderData: (previous) => previous,
   });
 
-  const visibleOrganizations = useMemo(() => {
-    const term = debouncedSearch.trim().toLowerCase();
-    const walletTerm = debouncedWalletSearch.trim().toLowerCase();
-    const rows = query.data?.items || [];
-    return rows.filter((organization) => {
-      const matchesOrganization = !term || [organization.name, organization.registrationNumber]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(term));
-      const matchesWallet = !walletTerm || String(organization.wallet?.address || '')
-        .toLowerCase()
-        .includes(walletTerm);
-      return matchesOrganization && matchesWallet;
-    });
-  }, [query.data?.items, debouncedSearch, debouncedWalletSearch]);
+  const visibleOrganizations = useMemo(
+    () => sortAdminOrganizationsPage(
+      filterOrganizationsByQuery(query.data?.items || [], debouncedSearch),
+      filters.sortBy,
+      filters.sortDirection,
+    ),
+    [query.data?.items, debouncedSearch, filters.sortBy, filters.sortDirection],
+  );
 
   const updateFilter = (key, value) => {
     setFilters((current) => ({ ...current, [key]: value }));
-    if (key !== 'search') setPage(1);
+    setPage(1);
+  };
+
+  const changeSort = (column) => {
+    setFilters((current) => ({
+      ...current,
+      sortBy: column,
+      sortDirection: current.sortBy === column
+        ? (current.sortDirection === 'asc' ? 'desc' : 'asc')
+        : (column === 'submittedAt' ? 'desc' : 'asc'),
+    }));
+    setPage(1);
   };
 
   const resetFilters = () => {
     setFilters(initialFilters);
     setPage(1);
   };
+  const meta = query.data?.meta;
+  const pagination = meta ? { page: meta.page, limit: meta.pageSize, total: meta.total, totalPages: meta.totalPages } : null;
 
   return (
     <div className="space-y-6">
@@ -68,25 +79,31 @@ export default function AdminOrganizationsPage() {
         <p className="mt-3 mb-0 text-sm leading-6 text-slate-500 sm:text-base">Browse submitted, resubmitted, approved, and rejected issuer organizations returned by the admin API.</p>
       </header>
 
-      <AdminPanel
-        title="Organization directory"
-        description={`${query.data?.meta?.total || 0} organizations available for review.`}
-        action={<span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700"><Building2 className="size-3.5" />Issuer entities</span>}
-        bodyClassName="p-3 sm:p-4"
-      >
+      <AdminPanel bodyClassName="p-4 sm:p-5">
+        <OrganizationFilters
+          filters={filters}
+          onSearchChange={(value) => updateFilter('search', value)}
+          onStatusChange={(value) => updateFilter('status', value)}
+          onResetFilters={resetFilters}
+          onRefresh={() => query.refetch()}
+          refreshing={query.isFetching}
+        />
+      </AdminPanel>
+
+      <AdminPanel bodyClassName="p-3 sm:p-5">
         {query.isLoading ? (
           <ReviewQueueSkeleton />
+        ) : query.isError ? (
+          <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">
+            Could not load organizations. <button type="button" className="font-semibold underline" onClick={() => query.refetch()}>Try again</button>
+          </div>
         ) : (
           <>
             <AdminOrganizationList
               organizations={visibleOrganizations}
               filters={filters}
-              onSearchChange={(value) => updateFilter('search', value)}
-              onStatusChange={(value) => updateFilter('status', value)}
-              onWalletSearchChange={(value) => updateFilter('walletSearch', value)}
-              onSortDirectionChange={(value) => updateFilter('sortDirection', value)}
-              onResetFilters={resetFilters}
-              onRowClick={(organization) => navigate(ROUTES.adminOrganizationReview(organization.id))}
+              onSortChange={changeSort}
+              onRowClick={(organization) => navigate(ROUTES.adminOrganizationReview(organization.id), { state: { from: location.pathname } })}
             />
 
             {!visibleOrganizations.length ? (
@@ -101,21 +118,8 @@ export default function AdminOrganizationsPage() {
             ) : null}
           </>
         )}
-        <Pagination meta={query.data?.meta} onPageChange={setPage} />
+        {!query.isError && <MonitoringPagination pagination={pagination} onChange={setPage} pending={query.isFetching} />}
       </AdminPanel>
-    </div>
-  );
-}
-
-function Pagination({ meta, onPageChange }) {
-  if (!meta || meta.totalPages <= 1) return null;
-  return (
-    <div className="mt-4 flex flex-col gap-3 border-t border-slate-200 px-1 pt-4 sm:flex-row sm:items-center sm:justify-between">
-      <p className="m-0 text-xs text-slate-500">Page <strong className="text-slate-800">{meta.page}</strong> of {meta.totalPages} · {meta.total} organizations</p>
-      <div className="flex items-center gap-2">
-        <button type="button" disabled={meta.page <= 1} onClick={() => onPageChange(meta.page - 1)} className="inline-flex min-h-9 items-center gap-1 rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-600 disabled:opacity-40"><ChevronLeft className="size-4" />Previous</button>
-        <button type="button" disabled={meta.page >= meta.totalPages} onClick={() => onPageChange(meta.page + 1)} className="inline-flex min-h-9 items-center gap-1 rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-600 disabled:opacity-40">Next<ChevronRight className="size-4" /></button>
-      </div>
     </div>
   );
 }

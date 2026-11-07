@@ -121,8 +121,11 @@ async function main() {
     // --- Our own contracts (source lives in this repo's contracts/) ---
     {
       name: 'TREXPlatformController',
-      address: platform.platformController,
-      constructorArguments: [platform.platformControllerOwner, platform.paymentTokens],
+      // Proxy deployments: verify the implementation (no constructor args);
+      // explorers detect the ERC-1967 proxy in front of it. Legacy
+      // deployments have no implementation entry and took ctor args.
+      address: platform.platformControllerImplementation || platform.platformController,
+      constructorArguments: platform.platformControllerImplementation ? [] : [platform.platformControllerOwner, platform.paymentTokens],
       contract: 'contracts/platform/TREXPlatformController.sol:TREXPlatformController',
     },
     {

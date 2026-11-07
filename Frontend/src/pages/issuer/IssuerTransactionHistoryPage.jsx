@@ -101,6 +101,7 @@ function WalletCell({ value, issuerAddresses, label }) {
       {isIssuerWallet ? <small>Issuer wallet</small> : null}
       <CompactAddress
         value={value}
+        className="issuer-transaction-wallet-address"
         label={isIssuerWallet ? 'Issuer wallet' : 'Wallet address'}
         leading={6}
         trailing={5}
@@ -110,7 +111,7 @@ function WalletCell({ value, issuerAddresses, label }) {
 }
 
 export default function IssuerTransactionHistoryPage() {
-  useDocumentTitle('Transaction history');
+  useDocumentTitle('Activity History');
   const tokenRecord = useMyToken();
   const { organization } = useOrganization();
   const tokenName = getTokenRecordName(tokenRecord.token) || 'Investment asset';

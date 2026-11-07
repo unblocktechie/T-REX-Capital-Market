@@ -264,6 +264,39 @@ Returns the issuer's complete form, beneficial owners, and document metadata. Re
 
 No request body. Idempotently sets the current issuer organization's `isUserNotified` value to `true` (`1` in MySQL) and returns the updated organization. Returns `404` when the issuer has not started an organization form.
 
+### `PUT /organizations/me/service-wallet`
+
+After the issuer main wallet has successfully called `setServiceWallet(address)` on the selected
+chain's Platform Controller, synchronize the public service-wallet address with the backend:
+
+```json
+{
+  "serviceWalletAddress": "0x2222222222222222222222222222222222222222"
+}
+```
+
+The request requires `X-Chain-Uid`. The backend reads `serviceWalletOf(organization.walletAddress)`
+from that chain and saves the value only when it exactly matches the request. The address is stored
+per organization and chain; no service-wallet private key is accepted or stored. Send the zero
+address only after an on-chain revocation to clear the cached value.
+
+### Issuer API-key management
+
+These endpoints require the normal issuer JWT and do not require `X-Chain-Uid`:
+
+```text
+POST   /organizations/me/api-keys
+GET    /organizations/me/api-keys
+POST   /organizations/me/api-keys/{issuerApiKeyUid}/rotate
+DELETE /organizations/me/api-keys/{issuerApiKeyUid}
+```
+
+Create and rotate accept `name` and an optional `expiresInDays` from 1 to 730 (default 365).
+The plaintext `apiKey` is returned exactly once. The database stores only its SHA-256 hash, public
+identifier, masked suffix, fixed price scopes, expiry, last-use metadata and revocation state.
+Keys are restricted to the three relayed-price endpoints and cannot authenticate any other API.
+An approved organization may have at most five active keys.
+
 ### `PUT /organizations/me/company-information`
 
 ```json
@@ -423,6 +456,59 @@ The value must be greater than zero with no more than 18 decimal places. The upd
 `currentTokenPrice`; it never changes `initialTokenPrice`. New purchase and redemption operations use
 this value with the token's selected payment currency, while transfer intents snapshot it as the transfer-time valuation.
 Existing pending and completed transaction records retain their original price snapshot.
+
+This direct/legacy route remains available and unchanged. For backend-paid gas with an issuer-owned
+service-wallet signature, use the relayed flow below.
+
+The following three endpoints accept either a normal issuer JWT or a long-lived issuer API key in
+the same Bearer header. Issuer automation should use the API key plus `X-Chain-Uid`; see
+`docs/ISSUER-TOKEN-PRICE-API.md`. The API key authenticates the issuer system, while the EIP-712
+service-wallet signature authorizes the exact price instruction.
+
+### `POST /tokens/me/price-updates/prepare`
+
+Requires `X-Chain-Uid` and an active deployed token on that chain.
+
+```json
+{ "price": "1.5" }
+```
+
+The backend verifies token ownership and the service wallet registered in the selected Platform
+Controller, reads the controller's price precision and current service-wallet nonce, converts the
+price to raw units (`1.5` becomes `1500000` at six decimals), and returns the exact EIP-712
+`typedData`. The generated deadline is normally ten minutes from preparation.
+
+### `POST /tokens/me/price-updates`
+
+Submit only the prepared message fields and signature components:
+
+```json
+{
+  "tokenAddress": "0x3333333333333333333333333333333333333333",
+  "newPriceRaw": "1500000",
+  "nonce": "7",
+  "deadline": 1791360600,
+  "v": 27,
+  "r": "0x...32-byte-r...",
+  "s": "0x...32-byte-s..."
+}
+```
+
+The backend re-reads token ownership, service wallet, nonce, domain, and deadline; recovers the
+signer; applies a per-service-wallet rate limit; dry-runs `setPriceOnBehalfOf`; creates a `PENDING`
+record; and submits the transaction from the selected chain's configured gas wallet. A successful
+submission returns HTTP `202` with `status: SUBMITTED`, a `priceUpdateUid`, and `transactionHash`.
+It does not update `currentTokenPrice` yet.
+
+The chain-specific Platform Controller indexer waits for the configured confirmations, processes
+`TokenPriceUpdated`, changes the request to `CONFIRMED`, and then updates
+`tokenMaster.currentTokenPrice`. `ServiceWalletUpdated` independently repairs the chain-scoped
+organization cache if the frontend callback is missed.
+
+### `GET /tokens/me/price-updates/{priceUpdateUid}`
+
+Returns the issuer's selected-chain price request. Poll this endpoint until `CONFIRMED` or `FAILED`.
+Indexer recovery is independent of polling and survives browser/API restarts.
 
 ### `GET /tokens/me/image`
 

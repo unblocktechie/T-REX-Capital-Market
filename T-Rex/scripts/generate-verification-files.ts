@@ -80,7 +80,7 @@ async function main() {
   const explorerBrowserUrl: string | undefined = networksJson[networkName]?.explorerBrowserUrl?.replace(/\/$/, '');
 
   const targets: Target[] = [
-    { name: 'TREXPlatformController', address: p.platformController, kind: 'own', source: 'contracts/platform/TREXPlatformController.sol', contract: 'TREXPlatformController', args: [p.platformControllerOwner, p.paymentTokens] },
+    { name: 'TREXPlatformController', address: p.platformControllerImplementation || p.platformController, kind: 'own', source: 'contracts/platform/TREXPlatformController.sol', contract: 'TREXPlatformController', args: p.platformControllerImplementation ? [] : [p.platformControllerOwner, p.paymentTokens] },
     { name: 'IdFactoryAccessManager', address: p.idFactoryAccessManager, kind: 'own', source: 'contracts/platform/IdFactoryAccessManager.sol', contract: 'IdFactoryAccessManager', args: [p.identityFactory, p.idFactoryAccessManagerAdmin] },
     { name: 'CountryRestrictModule', address: p.complianceModules?.countryRestrict, kind: 'own', source: 'contracts/modules/CountryRestrictModule.sol', contract: 'CountryRestrictModule', args: [] },
     { name: 'MaxBalanceModule', address: p.complianceModules?.maxBalance, kind: 'own', source: 'contracts/modules/MaxBalanceModule.sol', contract: 'MaxBalanceModule', args: [] },

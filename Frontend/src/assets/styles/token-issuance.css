@@ -5673,22 +5673,6 @@
   font-weight: 500;
 }
 
-/* Small network identity chip: artwork from the backend chain record, then name. */
-.token-dashboard-header__status > .token-dashboard-header__network-chip {
-  padding: 4px 9px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface-subtle, #f8fafc);
-  white-space: nowrap;
-  max-width: 100%;
-}
-
-.token-dashboard-header__network-chip > span:last-child {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .token-dashboard-header__actions {
   display: flex;
   justify-content: flex-end;
@@ -5799,8 +5783,16 @@
   line-height: 1.55;
 }
 
-.token-dashboard-header__technical {
+.token-dashboard-header__technical-row {
   grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+}
+
+.token-dashboard-header__technical {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .token-dashboard-header__technical .issuance-address {
@@ -6042,13 +6034,15 @@
   gap: 11px;
 }
 
-.token-dashboard-permissions {
+.token-dashboard-permissions,
+.token-dashboard-country-list {
   display: flex;
   flex-wrap: wrap;
   gap: 7px;
 }
 
-.token-dashboard-permissions span {
+.token-dashboard-permissions span,
+.token-dashboard-country-list span {
   display: inline-flex;
   align-items: center;
   min-height: 29px;
@@ -6142,6 +6136,10 @@
   font-weight: 600;
   text-align: right;
   overflow-wrap: anywhere;
+}
+
+.token-dashboard-country-list {
+  padding-top: 13px;
 }
 
 .token-dashboard-deployment-grid {
@@ -6244,6 +6242,15 @@
 }
 
 @media (max-width: 620px) {
+  .token-dashboard-header__technical-row,
+  .token-dashboard-header__technical {
+    max-width: 100%;
+  }
+
+  .token-dashboard-header__technical > summary {
+    min-height: 40px;
+  }
+
   .deployment-complete-card,
   .token-dashboard-header {
     border-radius: 17px;
@@ -6435,6 +6442,37 @@
   color: var(--text-soft);
   font-size: 14px;
   line-height: 1.65;
+}
+
+/* Keep wallet-approval instructions clear without changing transaction behavior. */
+.token-price-editor__intro strong {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.token-price-editor__guidance {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--info-500) 25%, var(--border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--info-500) 6%, var(--surface));
+}
+
+.token-price-editor__guidance strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.token-price-editor__guidance p {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 
 .token-price-editor__snapshot {
@@ -7057,12 +7095,8 @@
   white-space: nowrap;
 }
 
-/* Keep the payment-token mark readable beside the 24px current price.
-   Scope this size to the issuer's price overview, not all token icons. */
 .token-dashboard-header__price-value > .token-icon {
-  flex: 0 0 24px;
-  width: 24px;
-  height: 24px;
+  flex: 0 0 auto;
 }
 
 .token-dashboard-header__price-value > span {
@@ -7190,6 +7224,1621 @@
   }
 }
 
+/* Issuer asset overview · backend-first network and settlement-token artwork.
+   Keep the status row compact on desktop and let the network identity take a
+   clean full row on very small screens instead of truncating the chain name. */
+.token-dashboard-header__network {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.token-dashboard-header__network > .network-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+}
+
+.token-dashboard-header__network > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.token-dashboard-header__price-value > .token-icon {
+  width: 16px;
+  height: 16px;
+  flex-basis: 16px;
+}
+
+@media (max-width: 480px) {
+  .token-dashboard-header__status {
+    gap: 8px;
+  }
+
+  .token-dashboard-header__network {
+    flex-basis: 100%;
+    width: 100%;
+  }
+
+  .token-dashboard-header__price-value {
+    white-space: normal;
+  }
+}
+
+/* Asset details: optional price-update configuration card.
+   This is presentation-only and intentionally does not alter token submission data. */
+.price-updates-card {
+  display: grid;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--surface-muted) 44%, var(--surface));
+}
+
+.price-updates-card__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  min-width: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 15px 16px 13px;
+}
+
+.price-updates-card__header-icon,
+.price-update-option__icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 10px;
+}
+
+.price-updates-card__header-icon {
+  width: 36px;
+  height: 36px;
+  background: color-mix(in srgb, var(--primary-500) 10%, var(--surface));
+  color: var(--primary-500);
+}
+
+.price-updates-card__header > div {
+  min-width: 0;
+}
+
+.price-updates-card__header h3,
+.price-update-option__title-row h4 {
+  margin: 0;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.price-updates-card__header h3 {
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.price-updates-card__header p,
+.price-update-option__summary p {
+  margin: 3px 0 0;
+  color: var(--text-soft);
+  line-height: 1.55;
+}
+
+.price-updates-card__header p {
+  max-width: 760px;
+  font-size: 11.5px;
+}
+
+.price-updates-card__options {
+  display: grid;
+  gap: 11px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.price-update-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1.04fr) minmax(260px, 0.96fr);
+  gap: 0;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--surface);
+}
+
+.price-update-option--manual {
+  border-color: color-mix(in srgb, var(--success-500) 22%, var(--border));
+  background: color-mix(in srgb, var(--success-500) 4%, var(--surface));
+}
+
+.price-update-option--automated {
+  border-color: color-mix(in srgb, var(--primary-500) 22%, var(--border));
+  background: color-mix(in srgb, var(--primary-500) 2.5%, var(--surface));
+  transition: border-color var(--transition), background var(--transition), box-shadow var(--transition);
+}
+
+.price-update-option--automated.is-enabled {
+  border-color: color-mix(in srgb, var(--primary-500) 50%, var(--border));
+  background: color-mix(in srgb, var(--primary-500) 4.5%, var(--surface));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-500) 6%, transparent);
+}
+
+.price-update-option__summary,
+.price-update-option__controls {
+  min-width: 0;
+  padding: 15px;
+}
+
+.price-update-option__summary {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-content: start;
+  gap: 11px;
+}
+
+.price-update-option__controls,
+.price-update-option > .price-update-option__features {
+  border-left: 1px solid var(--border);
+}
+
+.price-update-option__controls {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+.price-update-option__icon {
+  width: 38px;
+  height: 38px;
+}
+
+.price-update-option__icon--manual {
+  background: color-mix(in srgb, var(--success-500) 12%, var(--surface));
+  color: var(--success-500);
+}
+
+.price-update-option__icon--automated {
+  background: color-mix(in srgb, var(--primary-500) 11%, var(--surface));
+  color: var(--primary-500);
+}
+
+.price-update-option__title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.price-update-option__title-row h4 {
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.price-update-option__summary p {
+  max-width: 620px;
+  font-size: 11px;
+}
+
+.price-updates-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary-500) 9%, var(--surface));
+  padding: 3px 8px;
+  color: var(--primary-600, var(--primary-500));
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.price-updates-badge--success {
+  background: color-mix(in srgb, var(--success-500) 12%, var(--surface));
+  color: var(--success-600, var(--success-500));
+}
+
+.price-update-option__features {
+  display: grid;
+  align-content: center;
+  gap: 7px;
+  min-width: 0;
+  margin: 0;
+  padding: 15px;
+  list-style: none;
+}
+
+.price-update-option__features li {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  min-width: 0;
+  color: var(--text-soft);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+.price-updates-feature__icon {
+  display: inline-grid;
+  width: 17px;
+  height: 17px;
+  flex: 0 0 17px;
+  place-items: center;
+  margin-top: 0.5px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--success-500) 14%, var(--surface));
+  color: var(--success-500);
+}
+
+.price-update-option__features--compact {
+  gap: 6px;
+  padding: 0;
+}
+
+/* The automation settings show a short benefits heading without changing the two-column layout. */
+.price-updates-benefits {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+
+.price-updates-benefits > strong {
+  color: var(--text);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.price-updates-security-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  min-width: 0;
+  border-radius: 9px;
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+.price-updates-inline-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  margin-top: 10px;
+  background: color-mix(in srgb, var(--primary-500) 7%, var(--surface));
+  padding: 9px 10px;
+  color: var(--text-soft);
+}
+
+.price-updates-inline-note svg,
+.price-updates-security-note svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.price-updates-inline-note svg {
+  color: var(--primary-500);
+}
+
+.price-updates-deferred-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--primary-500) 18%, var(--border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--primary-500) 6%, var(--surface));
+  padding: 10px 11px;
+  color: var(--text-soft);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.price-updates-deferred-note svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--primary-500);
+}
+
+.price-updates-deferred-note span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.price-updates-deferred-note strong {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.price-updates-service-wallet {
+  display: grid;
+  grid-template-rows: 0fr;
+  min-width: 0;
+  opacity: 0.7;
+  transition: grid-template-rows var(--transition), opacity var(--transition);
+}
+
+.price-updates-service-wallet > .issuance-field {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.price-updates-service-wallet.is-enabled {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.price-updates-service-wallet.is-enabled > .issuance-field {
+  overflow: visible;
+}
+
+.price-updates-security-note {
+  border-left: 3px solid var(--warning-500);
+  background: color-mix(in srgb, var(--warning-500) 8%, var(--surface));
+  padding: 8px 9px;
+  color: var(--text-soft);
+}
+
+.price-updates-security-note svg {
+  color: var(--warning-500);
+}
+
+.price-update-option__controls .issuance-toggle-row {
+  min-height: 44px;
+}
+
+.price-update-option__controls .issuance-toggle-row strong {
+  font-size: 11.5px;
+}
+
+.price-update-option__controls .issuance-toggle-row small {
+  max-width: 420px;
+}
+
+@media (max-width: 900px) {
+  .price-update-option {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .price-update-option__controls,
+  .price-update-option > .price-update-option__features {
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
+
+  .price-update-option--manual > .price-update-option__features {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: start;
+  }
+}
+
+@media (max-width: 560px) {
+  .price-updates-card {
+    border-radius: 13px;
+  }
+
+  .price-updates-card__header {
+    padding: 13px;
+  }
+
+  .price-updates-card__options {
+    gap: 9px;
+    padding: 9px;
+  }
+
+  .price-update-option__summary,
+  .price-update-option__controls,
+  .price-update-option__features {
+    padding: 12px;
+  }
+
+  .price-update-option__summary {
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 9px;
+  }
+
+  .price-update-option__icon {
+    width: 34px;
+    height: 34px;
+  }
+
+  .price-update-option--manual > .price-update-option__features {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .price-update-option__controls .issuance-toggle-row {
+    align-items: flex-start;
+  }
+
+  .price-update-option__controls .issuance-switch {
+    margin-top: 1px;
+  }
+}
+
+@media (max-width: 380px) {
+  .price-updates-card__header-icon {
+    width: 34px;
+    height: 34px;
+  }
+
+  .price-updates-card__header p,
+  .price-update-option__summary p,
+  .price-update-option__features li,
+  .price-updates-inline-note,
+  .price-updates-security-note {
+    font-size: 10px;
+  }
+
+  .price-updates-deferred-note {
+    padding: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .price-update-option--automated,
+  .price-updates-service-wallet {
+    transition: none;
+  }
+}
+
+
+/* Price updates readability and off-state refinement.
+   Keep supporting text consistent with the surrounding issuance form at every breakpoint. */
+.price-updates-card__header p,
+.price-update-option__summary p {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.price-update-option__title-row h4 {
+  font-size: 13px;
+}
+
+.price-updates-badge {
+  font-size: 10.5px;
+}
+
+.price-update-option__features li,
+.price-updates-inline-note,
+.price-updates-security-note,
+.price-updates-deferred-note {
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.price-update-option__controls .issuance-toggle-row strong {
+  font-size: 12px;
+}
+
+.price-update-option__controls .issuance-toggle-row small {
+  max-width: 420px;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+/* Asset details: automated price-update entry point and responsive configuration dialog. */
+.token-dashboard-header__automation {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--primary-500) 18%, var(--border-strong));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--primary-500) 4%, var(--surface));
+  padding: 13px 14px;
+}
+
+.token-dashboard-header__automation-icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  place-items: center;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--primary-500) 10%, var(--surface));
+  color: var(--primary-600, var(--primary-500));
+}
+
+.token-dashboard-header__automation-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.token-dashboard-header__automation-copy > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.token-dashboard-header__automation-copy strong {
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.token-dashboard-header__automation-copy > span {
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.token-dashboard-header__automation-badge {
+  display: inline-flex;
+  min-height: 22px;
+  align-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary-500) 9%, var(--surface));
+  padding: 3px 8px;
+  color: var(--primary-600, var(--primary-500));
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* Keep Bot Configuration and Price Update Settings paired on the right of the asset panel. */
+.token-dashboard-header__automation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+  min-width: 0;
+}
+
+.token-dashboard-header__automation-link {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  padding: 8px 14px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-align: center;
+  text-decoration: none;
+  transition: background var(--transition), border-color var(--transition);
+}
+
+.token-dashboard-header__automation-link:hover {
+  background: var(--surface-muted);
+  border-color: var(--text-soft);
+  color: var(--text);
+}
+
+.token-dashboard-header__automation-link:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--primary-500) 32%, transparent);
+  outline-offset: 2px;
+}
+
+.token-dashboard-header__automation-button {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(133, 169, 208, 0.22);
+  border-radius: 10px;
+  background: linear-gradient(180deg, #162235 0%, #0d1729 100%);
+  padding: 8px 16px;
+  color: #f8fbff;
+  box-shadow: 0 7px 18px rgba(9, 17, 30, 0.16);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform var(--transition), border-color var(--transition), background var(--transition), box-shadow var(--transition);
+}
+
+.token-dashboard-header__automation-button:hover {
+  border-color: rgba(133, 190, 244, 0.4);
+  background: linear-gradient(180deg, #1d2d45 0%, #122039 100%);
+  box-shadow: 0 9px 22px rgba(9, 17, 30, 0.22);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.token-dashboard-header__automation-button:focus-visible {
+  border-color: #62b0f3;
+  background: linear-gradient(180deg, #1d2d45 0%, #122039 100%);
+  color: #ffffff;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(66, 164, 255, 0.2), 0 8px 20px rgba(9, 17, 30, 0.2);
+}
+
+.token-dashboard-header__automation-button:active {
+  transform: translateY(0);
+  box-shadow: 0 4px 12px rgba(9, 17, 30, 0.18);
+}
+
+.token-price-automation-modal__body {
+  display: grid;
+  gap: 14px;
+}
+
+.token-price-automation-modal__intro {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 11px;
+  align-items: start;
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--primary-500) 16%, var(--border));
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--primary-500) 5%, var(--surface));
+  padding: 12px 13px;
+}
+
+.token-price-automation-modal__intro-icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--primary-500) 10%, var(--surface));
+  color: var(--primary-500);
+}
+
+.token-price-automation-modal__intro > div {
+  min-width: 0;
+}
+
+.token-price-automation-modal__intro strong {
+  display: block;
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.token-price-automation-modal__intro p {
+  margin: 4px 0 0;
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+/* Keep the automation dialog footer fully opaque so scrolled form content never shows through beside the Done button. */
+.token-price-automation-modal > footer {
+  background: #f8fafc;
+  background-color: #f8fafc;
+  opacity: 1;
+  backdrop-filter: none;
+}
+
+@media (min-width: 640px) {
+  .token-price-automation-modal {
+    max-width: 920px;
+  }
+}
+
+@media (min-width: 521px) and (max-width: 1150px) {
+  .token-dashboard-header__automation-actions {
+    grid-column: 2 / -1;
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 520px) {
+  .token-dashboard-header__automation {
+    grid-template-columns: 40px minmax(0, 1fr);
+    align-items: start;
+    padding: 12px;
+  }
+
+  .token-dashboard-header__automation-actions {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .token-dashboard-header__automation-actions > * {
+    width: 100%;
+    min-width: 0;
+    min-height: 42px;
+    white-space: normal;
+    text-align: center;
+  }
+
+  .token-price-automation-modal__intro {
+    grid-template-columns: 36px minmax(0, 1fr);
+    padding: 11px;
+  }
+
+  .token-price-automation-modal__intro-icon {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+@media (max-width: 360px) {
+  .token-dashboard-header__automation {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .token-dashboard-header__automation-icon {
+    display: none;
+  }
+
+  .token-dashboard-header__automation-actions {
+    grid-column: 1;
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .token-dashboard-header__automation-button {
+    transition: none;
+  }
+}
+
+/* Asset price automation dialog: the dialog panel is the single scroll owner.
+   Keeping scrolling on the panel (instead of a nested body) prevents flex/grid content
+   from being clipped at compact desktop, tablet, and mobile sizes. Header and footer
+   remain sticky and fully opaque while every Service Wallet control stays reachable. */
+.token-price-automation-modal {
+  width: 100%;
+  max-width: 1040px !important;
+  height: min(800px, calc(100dvh - 40px));
+  max-height: calc(100dvh - 40px);
+  min-height: 0;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+  scroll-padding-top: 76px;
+  scroll-padding-bottom: 88px;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+.token-price-automation-modal > header {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  flex: 0 0 auto;
+  background: #ffffff;
+  background-color: #ffffff;
+  box-shadow: 0 1px 0 var(--border);
+}
+
+.token-price-automation-modal__body {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  flex: 0 0 auto !important;
+  min-height: auto !important;
+  overflow: visible !important;
+  padding: 20px 22px 28px;
+}
+
+.token-price-automation-modal > footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  flex: 0 0 auto;
+  margin-top: auto;
+  background: #f8fafc;
+  background-color: #f8fafc;
+  opacity: 1;
+  backdrop-filter: none;
+  box-shadow: 0 -8px 22px rgba(15, 23, 42, 0.07);
+}
+
+/* Give the Service Wallet configuration more room on large screens. */
+@media (min-width: 901px) {
+  .token-price-automation-modal .price-updates-card__options {
+    gap: 14px;
+    padding: 14px;
+  }
+
+  .token-price-automation-modal .price-update-option {
+    grid-template-columns: minmax(0, 0.9fr) minmax(390px, 1.1fr);
+  }
+
+  .token-price-automation-modal .price-update-option__summary,
+  .token-price-automation-modal .price-update-option__controls,
+  .token-price-automation-modal .price-update-option__features {
+    padding: 17px;
+  }
+
+  .token-price-automation-modal__intro {
+    grid-template-columns: 42px minmax(0, 1fr);
+    gap: 13px;
+    padding: 14px 16px;
+  }
+
+  .token-price-automation-modal__intro-icon {
+    width: 42px;
+    height: 42px;
+  }
+}
+
+/* Tablet and compact laptop heights still keep the body independently scrollable. */
+@media (min-width: 521px) and (max-width: 900px) {
+  .token-price-automation-modal {
+    height: calc(100dvh - 40px);
+    max-height: calc(100dvh - 40px);
+    scroll-padding-top: 72px;
+    scroll-padding-bottom: 84px;
+  }
+
+  .token-price-automation-modal__body {
+    gap: 16px;
+    padding: 18px 20px 28px;
+  }
+}
+
+@media (min-width: 521px) and (max-width: 639px) {
+  .token-price-automation-modal {
+    width: calc(100% - 16px);
+    height: calc(100dvh - 16px);
+    max-height: calc(100dvh - 16px);
+  }
+}
+
+@media (max-width: 520px) {
+  .token-price-automation-modal {
+    width: 100%;
+    height: calc(100dvh - 8px);
+    max-height: calc(100dvh - 8px);
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    scroll-padding-top: 70px;
+    scroll-padding-bottom: 96px;
+  }
+
+  .token-price-automation-modal__body {
+    flex: 0 0 auto !important;
+    min-height: auto !important;
+    height: auto;
+    gap: 12px;
+    overflow: visible !important;
+    padding: 16px 16px 26px;
+  }
+
+  .token-price-automation-modal > footer {
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+
+  .token-price-automation-modal > footer .button {
+    width: 100%;
+  }
+
+  .token-price-automation-modal .price-updates-service-wallet,
+  .token-price-automation-modal .price-updates-service-wallet input,
+  .token-price-automation-modal .price-updates-service-wallet__actions {
+    scroll-margin-top: 82px;
+    scroll-margin-bottom: 104px;
+  }
+
+  .token-price-automation-modal .price-updates-card__options {
+    padding: 8px;
+  }
+
+  .token-price-automation-modal .price-update-option__summary,
+  .token-price-automation-modal .price-update-option__controls,
+  .token-price-automation-modal .price-update-option__features {
+    padding: 11px;
+  }
+}
+
+/* Service Wallet registration / rotation controls inside the asset price automation dialog. */
+.price-updates-service-wallet__setup-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--primary-500) 18%, var(--border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--primary-500) 5%, var(--surface));
+}
+
+.price-updates-service-wallet__setup-heading > div {
+  min-width: 0;
+}
+
+.price-updates-service-wallet__setup-heading strong,
+.price-updates-service-wallet__setup-heading span {
+  display: block;
+}
+
+.price-updates-service-wallet__setup-heading strong {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.price-updates-service-wallet__setup-heading > div > span {
+  margin-top: 3px;
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.price-updates-service-wallet__status {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.11);
+  padding: 5px 8px;
+  color: #047857;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.price-updates-service-wallet__status.is-pending {
+  background: rgba(245, 158, 11, 0.12);
+  color: #92400e;
+}
+
+.price-updates-service-wallet__actions {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.price-updates-service-wallet__current {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  color: var(--text-soft);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.price-updates-service-wallet__current code {
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 11px;
+}
+
+.price-updates-service-wallet__success {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #047857;
+  font-weight: 650;
+}
+
+@media (max-width: 620px) {
+  .price-updates-service-wallet__setup-heading,
+  .price-updates-service-wallet__actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .price-updates-service-wallet__status {
+    align-self: flex-start;
+  }
+
+  .price-updates-service-wallet__actions .button {
+    width: 100%;
+  }
+}
+
+.price-updates-service-wallet__sync-note {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 5px;
+  color: #92400e;
+  font-weight: 650;
+}
+
+.price-updates-service-wallet__sync-note svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+/* Service Wallet lifecycle: responsive management actions and API-key independence guidance. */
+.price-updates-service-wallet__buttons {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.price-updates-api-key-note {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 10px;
+  border: 1px solid color-mix(in srgb, var(--primary-500) 18%, var(--border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--primary-500) 5%, var(--surface));
+  padding: 9px 10px;
+  color: var(--text-soft);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.price-updates-api-key-note svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--primary-500);
+}
+
+.price-updates-api-key-note span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.price-updates-api-key-note strong {
+  color: var(--text);
+  font-weight: 700;
+}
+
+/* Review & Create: show Service Wallet state without coupling it to API keys. */
+.review-service-wallet-summary {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+}
+
+.review-service-wallet-summary__status {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 34px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid color-mix(in srgb, var(--success-500) 22%, var(--border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--success-500) 7%, var(--surface));
+  padding: 5px 10px 5px 6px;
+  color: var(--success-700, #047857);
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.review-service-wallet-summary__status-icon {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--success-500) 13%, var(--surface));
+  color: var(--success-700, #047857);
+}
+
+.review-service-wallet-summary.is-disabled .review-service-wallet-summary__status {
+  border-color: var(--border);
+  background: var(--surface-muted);
+  color: var(--text-muted);
+}
+
+.review-service-wallet-summary .issuance-address {
+  width: 100%;
+  max-width: 100%;
+}
+
+.review-service-wallet-summary__note {
+  color: var(--text-soft);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 620px) {
+  .price-updates-service-wallet__buttons {
+    width: 100%;
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .price-updates-service-wallet__buttons .button {
+    width: 100%;
+  }
+
+  .review-service-wallet-summary__status {
+    width: 100%;
+    white-space: normal;
+  }
+}
+
+.price-updates-service-wallet__error-note {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 8px;
+  border: 1px solid color-mix(in srgb, var(--danger-500, #dc2626) 28%, var(--border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--danger-500, #dc2626) 6%, var(--surface));
+  padding: 9px 10px;
+  color: var(--danger-700, #b91c1c);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.price-updates-service-wallet__error-note svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.price-updates-service-wallet__error-note span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.review-service-wallet-summary__action {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid color-mix(in srgb, var(--primary-500) 22%, var(--border));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--primary-500) 6%, var(--surface));
+  padding: 7px 10px;
+  color: var(--primary-700, var(--primary-600));
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition), color var(--transition);
+}
+
+.review-service-wallet-summary__action:hover,
+.review-service-wallet-summary__action:focus-visible {
+  border-color: color-mix(in srgb, var(--primary-500) 42%, var(--border));
+  background: color-mix(in srgb, var(--primary-500) 11%, var(--surface));
+  color: var(--primary-700, var(--primary-600));
+  outline: none;
+}
+
+@media (max-width: 520px) {
+  .review-service-wallet-summary__action {
+    width: 100%;
+    min-height: 42px;
+  }
+}
+
+/* Price update settings: keep the working single-scroll-owner behavior while
+   presenting a compact, theme-aware scrollbar instead of the browser's bulky
+   default chrome. The scrollbar remains visible enough for mouse/trackpad users,
+   while touch scrolling continues to use the same native momentum behavior. */
+.token-price-automation-modal {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text-soft) 46%, transparent) transparent;
+}
+
+.token-price-automation-modal::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.token-price-automation-modal::-webkit-scrollbar-track {
+  background: transparent;
+  margin-block: 68px 72px;
+}
+
+.token-price-automation-modal::-webkit-scrollbar-thumb {
+  min-height: 48px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-soft) 42%, transparent);
+  background-clip: padding-box;
+}
+
+.token-price-automation-modal::-webkit-scrollbar-button,
+.token-price-automation-modal::-webkit-scrollbar-corner {
+  width: 0;
+  height: 0;
+  background: transparent;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .token-price-automation-modal::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--text-soft) 64%, transparent);
+    background-clip: padding-box;
+  }
+}
+
+@media (max-width: 900px) {
+  .token-price-automation-modal::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .token-price-automation-modal::-webkit-scrollbar-track {
+    margin-block: 64px 76px;
+  }
+
+  .token-price-automation-modal::-webkit-scrollbar-thumb {
+    border-width: 1px;
+  }
+}
+
+@media (max-width: 520px) {
+  .token-price-automation-modal::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+
+  .token-price-automation-modal::-webkit-scrollbar-track {
+    margin-block: 62px 84px;
+  }
+}
+
+/* Asset Service Wallet management: make edit/rotation actions explicit and keep
+   API-key management visually separate while preserving the existing flow. */
+.price-updates-service-wallet__actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.price-updates-service-wallet__current {
+  min-width: 0;
+  width: 100%;
+  align-self: stretch;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-muted);
+  padding: 9px 10px;
+}
+
+.price-updates-service-wallet__current code {
+  display: inline;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.price-updates-service-wallet__buttons {
+  width: 100%;
+  align-self: stretch;
+  justify-content: flex-end;
+}
+
+.price-updates-service-wallet__change-button {
+  background: linear-gradient(135deg, #0a1221, #0d1729);
+  border-color: rgba(18, 34, 57, 0.92);
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(9, 17, 30, 0.16);
+}
+
+.price-updates-service-wallet__change-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0d1729, #13233d);
+  border-color: #1b3558;
+  box-shadow: 0 10px 22px rgba(9, 17, 30, 0.22);
+}
+
+.price-updates-service-wallet__change-button:focus-visible {
+  outline: 3px solid color-mix(in srgb, #42a4ff 34%, transparent);
+  outline-offset: 2px;
+}
+
+.price-updates-api-key-note {
+  align-items: flex-start;
+  gap: 9px;
+  padding: 10px 11px;
+}
+
+.price-updates-api-key-note__content {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.price-updates-api-key-note__content > span {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.price-updates-api-key-note__cta {
+  min-height: 34px;
+  flex: 0 0 auto;
+  text-decoration: none;
+}
+
+@media (max-width: 760px) {
+  .price-updates-service-wallet__actions {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .price-updates-service-wallet__buttons {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .price-updates-service-wallet__buttons .button {
+    flex: 0 0 auto;
+    min-height: 40px;
+    height: auto;
+    padding-block: 8px;
+  }
+
+  .price-updates-api-key-note__content {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .price-updates-api-key-note__cta {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .price-updates-service-wallet__buttons {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .price-updates-service-wallet__buttons .button {
+    width: 100%;
+    flex-basis: auto;
+  }
+}
+
+.price-updates-service-wallet__current-status {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 6px;
+  color: #047857;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.price-updates-service-wallet__current-status svg {
+  flex: 0 0 auto;
+}
+
+/* Issuer direct-price verification: compact, accessible retry action. */
+.token-dashboard-price-retry {
+  margin-top: 8px;
+  padding: 8px 11px;
+  min-height: 36px;
+  max-width: 100%;
+  border: 1px solid var(--border-color, #cbd5e1);
+  border-radius: 9px;
+  background: var(--surface-primary, #fff);
+  color: var(--text-primary, #243347);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.35;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.token-dashboard-price-retry:hover { background: var(--surface-soft, #f6f8fa); }
+.token-dashboard-price-retry:focus-visible { outline: 2px solid #6c91f7; outline-offset: 2px; }
+
+.token-dashboard-header__price-note[role='status'] {
+  margin-top: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* Pending-first manual price recovery actions: keep natural height on mobile. */
+.token-dashboard-price-recovery {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+.token-dashboard-price-recovery .token-dashboard-price-retry {
+  flex: 0 1 auto;
+  margin-top: 8px;
+}
+.token-dashboard-price-recovery .token-dashboard-price-retry:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+@media (max-width: 520px) {
+  .token-dashboard-price-recovery {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .token-dashboard-price-recovery .token-dashboard-price-retry {
+    width: 100%;
+    flex-basis: auto;
+  }
+}
+
+/* Recover an existing wallet hash without another wallet prompt. */
+.token-dashboard-price-hash-recovery {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  max-width: 480px;
+  margin-top: 8px;
+}
+.token-dashboard-price-hash-recovery .app-form-control { min-width: 0; }
+.token-dashboard-price-hash-recovery input { width: 100%; min-width: 0; }
+.token-dashboard-price-hash-recovery .token-dashboard-price-retry {
+  justify-self: start;
+  margin-top: 0;
+}
+.token-dashboard-price-hash-recovery .token-dashboard-price-retry:disabled { opacity: 0.55; cursor: not-allowed; }
+@media (max-width: 520px) {
+  .token-dashboard-price-hash-recovery .token-dashboard-price-retry { justify-self: stretch; width: 100%; }
+}
+
+/* Verified mismatch feedback belongs to the Service Wallet section, not
+   above Manual Updates. Silent on-chain checks no longer shift the entire popup. */
+.price-updates-service-wallet__mismatch {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid #f3d39c;
+  border-radius: 9px;
+  background: #fffaf0;
+  color: #875410;
+  font-size: 11.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.price-updates-service-wallet__mismatch svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+/* Token-specific Price Update Settings: two clear, independent setup steps.
+   Keep all wallet registration/change/revoke actions and existing API navigation. */
+.price-updates-card--asset-settings {
+  background: var(--surface);
+}
+.price-updates-card--asset-settings .price-updates-card__options {
+  padding: 10px;
+}
+.price-updates-service-wallet__setup-heading--simple {
+  display: grid;
+  gap: 6px;
+  padding: 0 0 11px;
+  border: 0;
+  background: transparent;
+}
+.price-updates-service-wallet__step-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.price-updates-service-wallet__step-label > strong {
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text);
+  font-weight: 750;
+}
+.price-updates-service-wallet__setup-heading--simple > p {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+.price-updates-bot-setup {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--surface-muted) 44%, var(--surface));
+}
+.price-updates-bot-setup__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.price-updates-bot-setup__heading h4 {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.35;
+}
+.price-updates-bot-setup__status {
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: color-mix(in srgb, var(--primary-500) 8%, var(--surface));
+  color: var(--primary-600, var(--primary-500));
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.price-updates-bot-setup > p {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 11.5px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.price-updates-bot-setup__cta {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 37px;
+  text-decoration: none;
+}
+@media (max-width: 560px) {
+  .price-updates-card--asset-settings .price-updates-card__options { padding: 8px; }
+  .price-updates-bot-setup { padding: 12px; }
+  .price-updates-bot-setup__cta { width: 100%; justify-content: center; min-height: 42px; }
+}
+.price-updates-service-wallet__setup-heading--simple .price-updates-service-wallet__status {
+  margin-top: 0;
+  color: #047857;
+  background: rgba(16, 185, 129, 0.11);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+.price-updates-service-wallet__setup-heading--simple .price-updates-service-wallet__status.is-pending {
+  color: #92400e;
+  background: rgba(245, 158, 11, 0.12);
+}
+
+/* Keep the Service Wallet setup status flush-right in the automatic-update
+   column at all widths, including narrow/mobile card layouts. */
+.price-updates-card--asset-settings .price-updates-service-wallet__setup-heading--simple {
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+  justify-content: stretch;
+}
+.price-updates-card--asset-settings .price-updates-service-wallet__step-label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  gap: 8px;
+}
+.price-updates-card--asset-settings .price-updates-service-wallet__setup-heading--simple .price-updates-service-wallet__status {
+  justify-self: end;
+  align-self: center;
+  margin: 0;
+}
+
+
+/* Ported UI/responsive refinements from frontend-without-bot-and-api-code.
+   Existing bot, price-history, admin and API style rules above are preserved. */
 /* Token Management: compact issuer-facing overview. Deliberately scoped so
    wizard, admin and investor screens retain their existing presentation. */
 .token-dashboard-header--simplified {

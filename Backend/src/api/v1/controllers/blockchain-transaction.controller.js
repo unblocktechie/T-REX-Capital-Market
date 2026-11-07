@@ -7,10 +7,10 @@ const createBlockchainTransactionController = (service) => ({
     if (req.selectedChain && Number(req.body.chainId) !== Number(req.selectedChain.chainId)) {
       throw new ApiError(422, 'Transaction chain does not match the selected network.', undefined, 'SELECTED_CHAIN_MISMATCH');
     }
-    const transaction = service.present(await service.confirm(
+    const transaction = await service.confirm(
       req.user,
       withSelectedChainId(req.body, req.selectedChain),
-    ));
+    );
     let message = 'Blockchain transaction confirmed and recorded successfully.';
     if (transaction.status === 'SUBMITTED') message = 'Transaction submitted and awaiting blockchain confirmations.';
     if (transaction.status === 'FAILED') message = 'Blockchain transaction failed and was recorded.';

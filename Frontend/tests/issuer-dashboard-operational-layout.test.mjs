@@ -58,7 +58,8 @@ test('loading, errors and empty states never imply a completed setup or nonexist
 });
 
 test('issuer dashboard uses the dark hero for both pre-creation and deployed states', () => {
-  assert.match(css, /\.issuer-dashboard-live \.issuer-dashboard-hero-live\s*\{[^}]*background: var\(--surface\)/s);
+  // The deployed state uses the dark hero. Do not require the old light fallback.
+  assert.match(css, /\.issuer-dashboard-live \.issuer-dashboard-hero-live\[data-deployed\]\s*\{[^}]*background: linear-gradient/s);
   assert.match(css, /\.issuer-dashboard-live \.issuer-dashboard-hero-live\[data-deployed\]\s*\{[^}]*background: linear-gradient/s);
   assert.match(css, /\.issuer-dashboard-live \.issuer-dashboard-hero-live\[data-deployed="false"\]\s*\{[^}]*grid-template-columns: minmax\(0, 1\.35fr\) minmax\(185px, 0\.65fr\)/s);
   assert.match(css, /\.issuer-dashboard-live__actions-section > \.issuer-dashboard-action-card,[^}]*height: auto;/s);

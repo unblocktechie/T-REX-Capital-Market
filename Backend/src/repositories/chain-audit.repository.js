@@ -1,6 +1,7 @@
 const { execute } = require('../database/connection');
 const { createUid } = require('../utils/token');
 const { sqlInteger } = require('../utils/sql');
+const { orderBy } = require('../utils/admin-sort');
 
 class ChainAuditRepository {
   async record(data, executor) {
@@ -19,6 +20,8 @@ class ChainAuditRepository {
   }
 
   async list(chainUid, options = {}, executor) {
+    const order = orderBy(options, { createdAt: 'a.createdAt', operation: 'a.operation',
+      changedByName: 'u.fullName', changedByEmail: 'u.email' }, 'a.createdAt DESC,a.chainAuditUid DESC', 'a.chainAuditUid');
     const page = Math.max(1, Number(options.page) || 1);
     const limit = Math.max(1, Math.min(100, Number(options.limit) || 20));
     const offset = (page - 1) * limit;
@@ -27,7 +30,7 @@ class ChainAuditRepository {
         `SELECT a.*,u.\`fullName\` AS \`changedByName\`,u.\`email\` AS \`changedByEmail\`
          FROM \`chainMasterAudit\` a
          LEFT JOIN \`userMaster\` u ON u.\`userUid\`=a.\`changedByUserUid\`
-         WHERE a.\`chainUid\`=? ORDER BY a.\`createdAt\` DESC
+         WHERE a.\`chainUid\`=? ORDER BY ${order}
          LIMIT ${sqlInteger(limit, { min: 1, max: 100, name: 'limit' })}
          OFFSET ${sqlInteger(offset, { min: 0, name: 'offset' })}`,
         [chainUid], executor,

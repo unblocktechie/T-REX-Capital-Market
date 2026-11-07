@@ -105,7 +105,7 @@ export function Sidebar({ network }) {
           {navigationGroups.map((group) => {
             const visibleItems = group.items.filter(
               (item) =>
-                !hiddenSidebarRoutes.has(item.to) &&
+                !(user?.role === ROLES.issuer && hiddenSidebarRoutes.has(item.to)) &&
                 canSee(item.permission) &&
                 (!item.roles || item.roles.includes(user?.role)) &&
                 (!item.dynamicOrganization || user?.role === ROLES.issuer) &&

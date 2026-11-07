@@ -27,10 +27,12 @@ export function Header({ onboardingOnly = false, network: appNetwork }) {
   const walletRequiredChainId = useUiStore((state) => state.walletRequiredChainId);
   const effectiveWalletChainId = walletRequiredChainId || appNetwork?.activeChainId;
   const isNetworkAwareUser = user?.role === ROLES.issuer || user?.role === ROLES.investor;
+  // Issuer final review already includes its own network selector. Show the
+  // public-network choice in the header on earlier issuer and investor steps.
   const showNetworkSwitcher =
     Boolean(appNetwork) &&
     isNetworkAwareUser &&
-    (onboardingOnly || (location.pathname !== ROUTES.organizationReview && location.pathname !== ROUTES.investors));
+    location.pathname !== ROUTES.organizationReview;
   const [profileOpen, setProfileOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const profileRef = useRef(null);
@@ -194,7 +196,7 @@ export function Header({ onboardingOnly = false, network: appNetwork }) {
   }
 
   return (
-    <header className="app-header">
+    <header className={`app-header${location.pathname === ROUTES.issuerApiKeys ? ' app-header--bot-configuration' : ''}`}> 
       <div className="app-header__leading">
         <button
           className="icon-button menu-button"

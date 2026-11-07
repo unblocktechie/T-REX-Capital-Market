@@ -375,6 +375,14 @@ export function InvestorOnboardingProvider({ children }) {
       // exposing the workspace so the navbar never reuses that stale result.
       await queryClient.invalidateQueries({ queryKey: myChainsQueryKey });
       const fresh = await refreshFromServer();
+      // The header stays mounted across onboarding -> dashboard. Refresh its
+      // pre-submit /chains/me access cache so the onboarding network is not
+      // left showing an obsolete Unlock action after successful submission.
+      // Also refresh the dashboard's chain-scoped investor profile cache.
+      await Promise.allSettled([
+        queryClient.invalidateQueries({ queryKey: myChainsQueryKey }),
+        queryClient.invalidateQueries({ queryKey: ['investor', 'profile-data'] }),
+      ]);
       return { result, state: fresh };
     } finally {
       setSubmitting(false);

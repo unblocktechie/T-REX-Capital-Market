@@ -5,10 +5,43 @@ const { tokenImageUpload } = require('../../../middleware/token-image-upload.mid
 const schemas = require('../../../schemas/token.schema');
 const deploymentSchemas = require('../../../schemas/deployment-attempt.schema');
 
-const createTokenRouter = ({ controller, deploymentController, authenticate, authorize, requireInvestorChain }) => {
+const createTokenRouter = ({
+  controller, deploymentController, authenticate, issuerPriceAuthenticate, issuerPriceRateLimit, authorize, requireInvestorChain,
+}) => {
   const router = express.Router();
+  // These three routes alone allow either an interactive issuer JWT or a scoped issuer API key.
+  // All remaining token APIs continue to require the normal JWT below.
+  router.post(
+    '/me/price-updates/prepare',
+    issuerPriceAuthenticate('TOKEN_PRICE_PREPARE'),
+    issuerPriceRateLimit,
+    requireInvestorChain,
+    validate({ body: schemas.tokenPriceRelayPrepare }),
+    authorize,
+    asyncHandler(controller.preparePriceUpdate),
+  );
+  router.post(
+    '/me/price-updates',
+    issuerPriceAuthenticate('TOKEN_PRICE_SUBMIT'),
+    issuerPriceRateLimit,
+    requireInvestorChain,
+    validate({ body: schemas.tokenPriceRelaySubmit }),
+    authorize,
+    asyncHandler(controller.submitPriceUpdate),
+  );
+  router.get(
+    '/me/price-updates/:priceUpdateUid',
+    issuerPriceAuthenticate('TOKEN_PRICE_READ'),
+    issuerPriceRateLimit,
+    requireInvestorChain,
+    validate({ params: schemas.tokenPriceUpdateParams }),
+    authorize,
+    asyncHandler(controller.getPriceUpdate),
+  );
+
   router.use(authenticate);
   router.use(requireInvestorChain);
+  router.get('/me/price-history', validate({ query: schemas.tokenPriceHistoryQuery }), authorize, asyncHandler(controller.priceHistory));
   router.get('/me', authorize, asyncHandler(controller.getMine));
   router.put(
     '/me/information',
@@ -27,6 +60,13 @@ const createTokenRouter = ({ controller, deploymentController, authenticate, aut
     authorize,
     asyncHandler(controller.updatePrice),
   );
+  router.post('/me/price/prepare', validate({ body: schemas.tokenDirectPricePrepare }), authorize,
+    asyncHandler(controller.prepareDirectPrice));
+  // Disabled: price recovery is handled by the background indexer, not a Retry API.
+  // router.post('/me/price/:priceUpdateUid/retry', validate({ params: schemas.tokenPriceUpdateParams, body: schemas.tokenPriceRecovery }), authorize,
+  //   asyncHandler(controller.retryDirectPrice));
+  router.post('/me/price/:priceUpdateUid/cancel', validate({ params: schemas.tokenPriceUpdateParams, body: schemas.tokenPriceRecovery }), authorize,
+    asyncHandler(controller.cancelDirectPrice));
 
   // Two-phase deployment attempt lifecycle (must precede final submit conceptually).
   router.post(

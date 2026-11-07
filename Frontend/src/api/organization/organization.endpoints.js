@@ -13,4 +13,12 @@ export const ORGANIZATION_ENDPOINTS = Object.freeze({
     `/organizations/me/documents/${encodeURIComponent(documentUid)}/download`,
   submit: '/organizations/me/submit',
   userNotified: '/organizations/me/user-notified',
+  serviceWallet: '/organizations/me/service-wallet',
+  apiKeys: '/organizations/me/api-keys',
+  apiKeyPolicyOptions: '/organizations/me/api-key-policy-options',
+  apiKeyPolicy: (issuerApiKeyUid) => `/organizations/me/api-keys/${encodeURIComponent(issuerApiKeyUid)}/policy`,
+  apiKeyRotate: (issuerApiKeyUid) =>
+    `/organizations/me/api-keys/${encodeURIComponent(issuerApiKeyUid)}/rotate`,
+  apiKey: (issuerApiKeyUid) =>
+    `/organizations/me/api-keys/${encodeURIComponent(issuerApiKeyUid)}`,
 });

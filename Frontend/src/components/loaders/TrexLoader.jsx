@@ -4,7 +4,9 @@ import { cn } from '@/utils/cn';
 
 const ORBIT_OUTER_DURATION_MS = 7000;
 const ORBIT_INNER_DURATION_MS = 4600;
-const PROGRESS_DURATION_MS = 2800;
+// The back-and-forth indicator takes two legs to return to its start.
+const PROGRESS_LEG_DURATION_MS = 1800;
+const PROGRESS_CYCLE_MS = PROGRESS_LEG_DURATION_MS * 2;
 
 function getAnimationPhaseStyle() {
   const now = typeof performance !== 'undefined' && typeof performance.now === 'function'
@@ -14,7 +16,8 @@ function getAnimationPhaseStyle() {
   return {
     '--trex-orbit-outer-delay': `-${(now % ORBIT_OUTER_DURATION_MS) / 1000}s`,
     '--trex-orbit-inner-delay': `-${(now % ORBIT_INNER_DURATION_MS) / 1000}s`,
-    '--trex-progress-delay': `-${(now % PROGRESS_DURATION_MS) / 1000}s`,
+    // Resume at the same point and in the same direction after any loader remount.
+    '--trex-progress-delay': `-${(now % PROGRESS_CYCLE_MS) / 1000}s`,
   };
 }
 
@@ -53,8 +56,8 @@ export function TrexLoader({
       aria-live="polite"
       aria-label={`${title}. ${message}`}
     >
-      <div className="trex-loader__body">
-        <div className="trex-loader__visual" style={animationPhaseStyle} aria-hidden="true">
+      <div className="trex-loader__body" style={animationPhaseStyle}>
+        <div className="trex-loader__visual" aria-hidden="true">
           <span className="trex-loader__ambient trex-loader__ambient--one" />
           <span className="trex-loader__ambient trex-loader__ambient--two" />
           <span className="trex-loader__orbit trex-loader__orbit--outer">

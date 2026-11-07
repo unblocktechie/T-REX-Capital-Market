@@ -160,7 +160,7 @@ export default function IssuerRedemptionsPage({ embedded = false } = {}) {
           <h1>Redemptions</h1>
           <p>Review investor redemption requests, approve or reject each request, execute approved redemptions from the organization wallet, and track confirmation.</p>
         </div>
-        <Button variant="secondary" size="sm" icon={RefreshCw} loading={refreshing} onClick={() => load({ quiet: true })}>Refresh</Button>
+        <Button variant="secondary" icon={RefreshCw} loading={refreshing} onClick={() => load({ quiet: true })}>Refresh</Button>
       </header>
 
       <Card className="issuer-redemptions-toolbar-card">

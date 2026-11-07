@@ -14,14 +14,17 @@
       "maxBalance": "0xd128E07F166628E127ab1931bE3f9Aa198F24F1E",
       "maxInvestors": "0x390864C1Cd02BA8fc890f72f34C0fdffeC4A3C46"
     },
-    "platformController": "0xdf290bA0D8E84632A85FAc0CAE7bEa1Cf9c50556",
+    "platformControllerLegacy": "0xdf290bA0D8E84632A85FAc0CAE7bEa1Cf9c50556",
+    "platformController": "0x7CB9dC952d8f412D7d8fd9F6E2314a3e9701A4Ad",
     "paymentTokens": [
       "0x86B14D29A59b745bF08c42661322d13142d5eb49",
       "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
     ],
-    "platformControllerOwner": "0xDbBdcA99d568B54feaAb6c6D34e8f0093c509859",
+    "platformControllerOwnerLegacy": "0xDbBdcA99d568B54feaAb6c6D34e8f0093c509859",
     "idFactoryAccessManager": "0x03DF916C6Bbc9396B80fd7583567A6A1D5479846",
-    "idFactoryAccessManagerAdmin": "0xDbBdcA99d568B54feaAb6c6D34e8f0093c509859"
+    "idFactoryAccessManagerAdmin": "0xDbBdcA99d568B54feaAb6c6D34e8f0093c509859",
+    "platformControllerImplementation": "0x07c9e39E1A4311489B17c8f7206A3A9640b75485",
+    "platformControllerOwner": "0xDbBdcA99d568B54feaAb6c6D34e8f0093c509859"
   },
   "implementations": {
     "token": "0x0B2EeEfe34ADBF9cb412217E2548C6d450E13CdC",
